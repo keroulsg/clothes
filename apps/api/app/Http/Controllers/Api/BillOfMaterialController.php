@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\BillOfMaterial;
+use App\Models\GarmentModel;
 use App\Services\ProductionService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,7 @@ class BillOfMaterialController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $query = BillOfMaterial::where('tenant_id', $tenantId)->with(['garmentModel', 'items.inventoryItem']);
 
         if ($request->has('garment_model_id')) {
@@ -32,7 +33,7 @@ class BillOfMaterialController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $validated = $request->validate([
             'garment_model_id' => 'required|uuid',
             'version' => 'nullable|string',
@@ -49,6 +50,15 @@ class BillOfMaterialController extends Controller
             'items.*.waste_tolerance_percent' => 'nullable|numeric|min:0',
             'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
+
+        $model = GarmentModel::withoutGlobalScopes()->find($validated['garment_model_id']);
+        if (!$model || $model->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: موديل الملابس غير تابع لشركتك.',
+            ], 403);
+        }
 
         try {
             $data = $validated;
@@ -70,13 +80,16 @@ class BillOfMaterialController extends Controller
 
     public function approve(Request $request, string $id): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+        $bom = BillOfMaterial::where('tenant_id', $tenantId)->findOrFail($id);
+
         try {
-            $bom = $this->productionService->approveBom($id);
+            $approvedBom = $this->productionService->approveBom($bom->id);
 
             return response()->json([
                 'success' => true,
                 'message' => 'تم اعتماد إصدار الـ BOM وأرشفة الإصدارات السابقة بنجاح.',
-                'data' => $bom,
+                'data' => $approvedBom,
             ]);
         } catch (Exception $e) {
             return response()->json([

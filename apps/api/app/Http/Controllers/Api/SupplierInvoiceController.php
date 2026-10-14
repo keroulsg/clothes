@@ -50,7 +50,12 @@ class SupplierInvoiceController extends Controller
             'due_date' => 'nullable|date',
             'subtotal' => 'required|numeric|min:0.01',
             'tax_amount' => 'nullable|numeric|min:0',
+            'idempotency_key' => 'nullable|string|max:120',
         ]);
+
+        $tenantId = app('current_tenant_id');
+        $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
+        $validated['tenant_id'] = $tenantId;
 
         $invoice = $this->procurementService->matchAndCreateInvoice($validated);
 

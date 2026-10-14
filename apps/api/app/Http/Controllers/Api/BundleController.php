@@ -17,7 +17,7 @@ class BundleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $query = CuttingBundle::where('tenant_id', $tenantId)
             ->with(['productionOrder.garmentModel', 'color', 'size', 'stageLogs.productionStage']);
 
@@ -39,6 +39,9 @@ class BundleController extends Controller
 
     public function transfer(Request $request, string $id): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+        $bundle = CuttingBundle::where('tenant_id', $tenantId)->findOrFail($id);
+
         $validated = $request->validate([
             'to_stage_code' => 'required|string',
             'operator_name' => 'nullable|string',
@@ -51,7 +54,7 @@ class BundleController extends Controller
 
         try {
             $log = $this->productionService->transferBundleStage(
-                $id,
+                $bundle->id,
                 $validated['to_stage_code'],
                 $validated
             );

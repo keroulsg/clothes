@@ -56,6 +56,36 @@ class PurchaseOrderController extends Controller
             'items.*.tax_rate' => 'nullable|numeric|min:0',
         ]);
 
+        $tenantId = app('current_tenant_id');
+
+        $supplier = \App\Models\Supplier::withoutGlobalScopes()->find($validated['supplier_id']);
+        if (!$supplier || $supplier->tenant_id !== $tenantId) {
+            return response()->json([
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: المورد المحدد غير تابع لشركتك.',
+            ], 403);
+        }
+
+        $warehouse = \App\Models\Warehouse::withoutGlobalScopes()->find($validated['warehouse_id']);
+        if (!$warehouse || $warehouse->tenant_id !== $tenantId) {
+            return response()->json([
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: المخزن المحدد غير تابع لشركتك.',
+            ], 403);
+        }
+
+        foreach ($validated['items'] as $itemData) {
+            $item = \App\Models\InventoryItem::withoutGlobalScopes()->find($itemData['inventory_item_id']);
+            if (!$item || $item->tenant_id !== $tenantId) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أحد الأصناف المحددة في أمر الشراء غير تابع لشركتك.',
+                ], 403);
+            }
+        }
+
+        $validated['tenant_id'] = $tenantId;
+
         $po = $this->procurementService->createPurchaseOrder($validated);
 
         return response()->json([

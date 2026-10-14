@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CuttingBundle;
+use App\Models\InventoryItem;
+use App\Models\ProductionOrder;
 use App\Models\QualityInspection;
 use App\Services\ProductionService;
 use Exception;
@@ -17,7 +20,7 @@ class QualityInspectionController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $query = QualityInspection::where('tenant_id', $tenantId)
             ->with(['productionOrder.garmentModel', 'cuttingBundle', 'productionStage', 'defects']);
 
@@ -33,7 +36,7 @@ class QualityInspectionController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $validated = $request->validate([
             'production_order_id' => 'required|uuid',
             'cutting_bundle_id' => 'nullable|uuid',
@@ -53,6 +56,37 @@ class QualityInspectionController extends Controller
             'defects.*.quantity' => 'required|integer|min:1',
             'defects.*.corrective_action' => 'nullable|string',
         ]);
+
+        $prodOrder = ProductionOrder::withoutGlobalScopes()->find($validated['production_order_id']);
+        if (!$prodOrder || $prodOrder->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: أمر الإنتاج غير تابع لشركتك.',
+            ], 403);
+        }
+
+        if (!empty($validated['cutting_bundle_id'])) {
+            $bundle = CuttingBundle::withoutGlobalScopes()->find($validated['cutting_bundle_id']);
+            if (!$bundle || $bundle->tenant_id !== $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: بطاقة الحزمة غير تابعة لشركتك.',
+                ], 403);
+            }
+        }
+
+        if (!empty($validated['finished_goods_inventory_item_id'])) {
+            $fgItem = InventoryItem::withoutGlobalScopes()->find($validated['finished_goods_inventory_item_id']);
+            if (!$fgItem || $fgItem->tenant_id !== $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: صنف المنتج التام غير تابع لشركتك.',
+                ], 403);
+            }
+        }
 
         try {
             $data = $validated;

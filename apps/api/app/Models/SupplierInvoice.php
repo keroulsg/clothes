@@ -31,6 +31,7 @@ class SupplierInvoice extends Model
         'is_posted',
         'posted_at',
         'posted_by',
+        'idempotency_key',
     ];
 
     protected $casts = [

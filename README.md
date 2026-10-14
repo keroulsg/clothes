@@ -2,11 +2,11 @@
 
 نظام ERP SaaS متكامل لإدارة مصانع وورش ملابس الأطفال — من الصفر حتى الإطلاق التجاري.
 
-[![Laravel](https://img.shields.io/badge/Laravel-11-FF2D20?style=flat&logo=laravel)](https://laravel.com/)
+[![Laravel](https://img.shields.io/badge/Laravel-13-FF2D20?style=flat&logo=laravel)](https://laravel.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=flat&logo=vite)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Tests-Passing%20(24%20Tests%20%2F%20110%20Assertions)-success)](https://phpunit.de/)
+[![Tests](https://img.shields.io/badge/Tests-Passing%20(31%20Tests%20%2F%20150%20Assertions)-success)](https://phpunit.de/)
 
 ---
 
@@ -47,7 +47,7 @@
 ```text
 clothes/
 ├── apps/
-│   ├── api/             # Backend: Laravel 11, PHP 8.4, SQLite/MySQL, Multi-Tenant Architecture
+│   ├── api/             # Backend: Laravel 13, PHP 8.4, SQLite/MySQL, Multi-Tenant Architecture
 │   │   ├── app/
 │   │   │   ├── Http/Controllers/Api/   # RESTful APIs (Tenants, Catalog, Procurement, Production)
 │   │   │   ├── Models/                 # Eloquent Models with BelongsToTenant & TenantScope

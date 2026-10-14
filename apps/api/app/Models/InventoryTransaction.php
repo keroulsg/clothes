@@ -31,6 +31,7 @@ class InventoryTransaction extends Model
         'roll_number',
         'technical_notes',
         'user_id',
+        'idempotency_key',
     ];
 
     protected $casts = [

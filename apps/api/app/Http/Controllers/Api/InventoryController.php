@@ -81,7 +81,39 @@ class InventoryController extends Controller
             'batch_number' => 'nullable|string|max:100',
             'roll_number' => 'nullable|string|max:100',
             'technical_notes' => 'nullable|array',
+            'idempotency_key' => 'nullable|string|max:120',
         ]);
+
+        $tenantId = app('current_tenant_id');
+
+        // التحقق الصارم من ملكية الصنف للشركة الحالية ومنع التسلل بين الشركات
+        $item = InventoryItem::withoutGlobalScopes()->find($validated['inventory_item_id']);
+        if (!$item || $item->tenant_id !== $tenantId) {
+            return response()->json([
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: لا يمكن تسجيل حركة مخزنية لصنف غير تابع لشركتك.',
+            ], 403);
+        }
+
+        // استخراج مفتاح عدم التكرار من الـ Header أو الـ Body
+        $idempotencyKey = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
+        if ($idempotencyKey) {
+            $existing = InventoryTransaction::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('idempotency_key', $idempotencyKey)
+                ->first();
+
+            if ($existing) {
+                return response()->json([
+                    'message' => 'تم استرجاع الحركة المسجلة مسبقاً بنجاح (Idempotent Request).',
+                    'is_duplicate' => true,
+                    'transaction' => $existing,
+                ], 200);
+            }
+            $validated['idempotency_key'] = $idempotencyKey;
+        }
+
+        $validated['tenant_id'] = $tenantId;
 
         $transaction = $this->inventoryService->recordTransaction($validated);
 

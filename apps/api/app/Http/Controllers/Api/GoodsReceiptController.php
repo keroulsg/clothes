@@ -55,6 +55,18 @@ class GoodsReceiptController extends Controller
             'items.*.roll_numbers' => 'nullable|string|max:255',
         ]);
 
+        $tenantId = app('current_tenant_id');
+
+        $po = \App\Models\PurchaseOrder::withoutGlobalScopes()->find($validated['purchase_order_id']);
+        if (!$po || $po->tenant_id !== $tenantId) {
+            return response()->json([
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: أمر الشراء المحدد غير تابع لشركتك.',
+            ], 403);
+        }
+
+        $validated['tenant_id'] = $tenantId;
+
         $grn = $this->procurementService->receiveGoods($validated);
 
         return response()->json([

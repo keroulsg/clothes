@@ -10,7 +10,7 @@
 
 | المرحلة | الوصف | الحالة | نسبة الإنجاز | الاختبارات والتحقق الميداني |
 |---|---|---|---|---|
-| **المرحلة 0** | تأسيس المشروع وهيكل Monorepo والتوثيق والبيئة | **Verified** | 100% | تم بنجاح (`php 8.4`, `Laravel 11`, `React 19`, `Vite`) |
+| **المرحلة 0** | تأسيس المشروع وهيكل Monorepo والتوثيق والبيئة | **Verified** | 100% | تم بنجاح (`php 8.4`, `Laravel 13.x` (`^13.17`), `React 19`, `Vite`) |
 | **المرحلة 1** | نموذج Multi-Tenancy، عزل المستأجرين، الصلاحيات، واختبارات الأمان | **Verified** | 100% | نجاح 4 اختبارات عزل شركات بنسبة 100% (15 تأكيدًا) |
 | **المرحلة 2** | نظام التصميم (Design System) والواجهات التفاعلية (RTL/LTR) | **Verified** | 100% | تم بناء مكتبة المكونات وشاشات التحميل والفارغ والأخطاء |
 | **المرحلة 3** | البيانات الأساسية، الموديلات، وإدارة المخازن وحركات دفتر الأستاذ | **Verified** | 100% | نجاح 6 اختبارات للموديلات والمخازن والتزامن وتحويل الأقمشة (27 تأكيدًا) |
@@ -223,17 +223,95 @@ OK (24 tests, 110 assertions)
 Duration: 1.22s
 ```
 
+---
+
+## بوابة الأمان والمصادقة الصارمة قبل المرحلة 6 (Security Gate & Hardening)
+
+تم تنفيذ تدقيق ومراجعة أمنية شاملة ومعالجة كافة الثغرات المحتملة:
+
+### 1. المصادقة وعزل الشركات الصارم (Authentication & Tenant Isolation)
+- **حماية مسارات الـ API**: تفعيل المصادقة الصارمة باستخدام `auth:sanctum` بالتوازي مع `IdentifyTenant` على كافة مسارات بيانات وتشغيل الشركات.
+- **Fail-Closed في نطاق الاستعلام `TenantScope`**: في حال غياب هوية المستأجر (`current_tenant_id`)، يُطبق الاستعلام شرط `1 = 0` لمنع أي تسريب غير مقيد لبيانات الشركات.
+- **منع التلاعب بالترويسات والمعرفات (Anti-Tampering & IDOR Prevention)**: منع أي مستخدم من إرسال `X-Tenant-ID` يختلف عن شركته المسجلة (إرجاع `CrossTenantAccessDenied 403`).
+- **تدقيق حالة الحساب والاشتراك**: التحقق من أن المستخدم نشط (`is_active`) وأن الشركة ليست موقوفة (`suspended` / `cancelled`). بدء التسجيل الجديد كفترة تجريبية (`trial`) لا تعتبر اشتراكاً مدفوعاً مفعلاً تلقائياً.
+- **إضافة نقطة تسجيل الدخول `POST /api/v1/auth/login`**: للتحقق الآمن من بيانات المستخدمين وإصدار رموز الوصول (Sanctum Tokens).
+
+### 2. سلامة المخزون والعمليات المالية (Inventory & Financial Integrity)
+- **التحقق من ملكية الأصناف والمخازن**: رفض أي حركة مخزنية لأصناف أو مخازن لا تنتمي لنفس الشركة مع إرجاع `403`.
+- **حماية التزامن ومنع السباق (Race Condition Protection)**: استخدام `lockForUpdate()` والمعاملات الذرية `DB::transaction()` لمنع تضارب الأرصدة.
+- **منع التكرار (Idempotency Protection)**: إضافة دعم `idempotency_key` وهيدر `X-Idempotency-Key` لمنع تكرار الحركات المخزنية أو الفواتير المالية للموردين عند إعادة إرسال الطلبات.
+
+### 3. نتائج الاختبارات الفعلية للتحقق الأمني
+```bash
+php artisan test
+```
+**النتيجة الفعلية المثبتة:**
+```text
+   PASS  Tests\Feature\CatalogAndInventoryTest
+  ✓ can create garment model and auto generate variants
+  ✓ stock ledger updates balance and creates immutable transaction
+  ✓ negative stock issuance is blocked by default
+  ✓ fabric conversion formula meters to kg and vice versa
+  ✓ customer supplied materials are isolated from company owned assets
+  ✓ cross tenant isolation on models and inventory
+
+   PASS  Tests\Feature\ProcurementAndVendorTest
+  ✓ full procurement cycle order approve receive and invoice
+  ✓ partial receipt and preventing over receiving
+  ✓ quality inspection rejection and accepted quantity to stock
+  ✓ three way matching detects price variance
+  ✓ purchase return deducts stock and reduces supplier balance
+  ✓ cross tenant isolation on suppliers and procurement documents
+
+   PASS  Tests\Feature\ProductionAndCuttingTest
+  ✓ can create bom and approve version
+  ✓ full production cycle from order to cutting bundles and qc
+  ✓ cutting fails if production order not approved or fabric insufficient
+  ✓ bundle transfer detects scrap and quantity variance
+  ✓ customer supplied materials in cutting room are isolated
+  ✓ cross tenant isolation on production and cutting
+
+   PASS  Tests\Feature\SecurityGateTest
+  ✓ unauthenticated requests cannot access protected erp endpoints
+  ✓ tenant a cannot read or mutate tenant b records even with known ids
+  ✓ changing x tenant id header does not bypass isolation
+  ✓ cannot record inventory transaction for item belonging to another tenant
+  ✓ resending same inventory transaction does not cause duplicate posting
+  ✓ resending same supplier invoice does not cause duplicate financial posting
+  ✓ login flow and inactive or suspended account handling
+
+   PASS  Tests\Feature\TenantIsolationTest
+  ✓ can register new company with main branch
+  ✓ tenant a cannot view tenant b branches
+  ✓ tenant a cannot access tenant b branch by direct id
+  ✓ cross tenant header tampering is blocked
+
+   PASS  Tests\Feature\ExampleTest
+  ✓ that a basic feature test can be performed
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that a basic test can be performed
+
+Tests:    31 passed (150 assertions)
+Duration: 2.35s
+```
+
 ```bash
 npm.cmd run build
 ```
-**النتيجة الفعلية:**
-```
+**النتيجة الفعلية المثبتة:**
+```text
 > web@0.0.0 build
 > tsc -b && vite build
 
+vite v8.3.4 building client environment for production...
+transforming...
 ✓ 1940 modules transformed.
+rendering chunks...
+computing gzip size...
 dist/index.html                   0.45 kB │ gzip:   0.29 kB
 dist/assets/index-Ch1k70OM.css   43.57 kB │ gzip:   7.41 kB
 dist/assets/index-DQzRHzj_.js   391.99 kB │ gzip: 102.07 kB
-✓ built in 539ms
+
+✓ built in 749ms
 ```

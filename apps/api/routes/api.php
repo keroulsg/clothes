@@ -26,9 +26,10 @@ Route::prefix('v1')->group(function () {
 
     // المصادقة والتسجيل
     Route::post('/auth/register-company', [TenantController::class, 'register']);
+    Route::post('/auth/login', [TenantController::class, 'login']);
 
     // المسارات المحمية بعزل الشركات
-    Route::middleware([IdentifyTenant::class])->group(function () {
+    Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
 
         // الفروع ومواقع العمل

@@ -15,6 +15,7 @@ use App\Models\ProductionStage;
 use App\Models\QualityInspection;
 use App\Models\Size;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\InventoryService;
 use App\Services\ProductionService;
@@ -27,6 +28,8 @@ class ProductionAndCuttingTest extends TestCase
 
     protected Tenant $tenantA;
     protected Tenant $tenantB;
+    protected User $userA;
+    protected User $userB;
     protected Warehouse $warehouseFabA;
     protected Warehouse $warehouseFGA;
     protected InventoryItem $fabricItemA;
@@ -60,6 +63,24 @@ class ProductionAndCuttingTest extends TestCase
             'name' => 'مصنع الدلتا للملابس',
             'subdomain' => 'delta-apparel',
             'is_active' => true,
+        ]);
+
+        $this->userA = User::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مدير إنتاج النور',
+            'email' => 'prod-admin@alnoorkids.com',
+            'role' => 'company_owner',
+            'is_active' => true,
+            'password' => bcrypt('password123'),
+        ]);
+
+        $this->userB = User::create([
+            'tenant_id' => $this->tenantB->id,
+            'name' => 'مدير إنتاج الدلتا',
+            'email' => 'prod-admin@deltaapparel.com',
+            'role' => 'company_owner',
+            'is_active' => true,
+            'password' => bcrypt('password123'),
         ]);
 
         app()->instance('current_tenant_id', $this->tenantA->id);
@@ -179,7 +200,7 @@ class ProductionAndCuttingTest extends TestCase
             ],
         ];
 
-        $res = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $res = $this->actingAs($this->userA)
             ->postJson('/api/v1/boms', $payload);
 
         $res->assertStatus(201);
@@ -187,7 +208,7 @@ class ProductionAndCuttingTest extends TestCase
         $bomId = $res->json('data.id');
 
         // اعتماد الـ BOM
-        $approveRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $approveRes = $this->actingAs($this->userA)
             ->postJson("/api/v1/boms/{$bomId}/approve");
 
         $approveRes->assertStatus(200);
@@ -198,10 +219,10 @@ class ProductionAndCuttingTest extends TestCase
         $payloadV2 = $payload;
         $payloadV2['version'] = '2.0';
         $payloadV2['bom_code'] = 'BOM-TSH-V2';
-        $resV2 = $this->withHeader('X-Tenant-ID', $this->tenantA->id)->postJson('/api/v1/boms', $payloadV2);
+        $resV2 = $this->actingAs($this->userA)->postJson('/api/v1/boms', $payloadV2);
         $bomIdV2 = $resV2->json('data.id');
 
-        $this->withHeader('X-Tenant-ID', $this->tenantA->id)->postJson("/api/v1/boms/{$bomIdV2}/approve");
+        $this->actingAs($this->userA)->postJson("/api/v1/boms/{$bomIdV2}/approve");
 
         // التحقق من أرشفة الإصدار الأول وتفعيل الإصدار الثاني فقط
         $this->assertFalse(BillOfMaterial::find($bomId)->is_active);
@@ -233,7 +254,7 @@ class ProductionAndCuttingTest extends TestCase
             ],
         ];
 
-        $orderRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $orderRes = $this->actingAs($this->userA)
             ->postJson('/api/v1/production-orders', $orderPayload);
 
         $orderRes->assertStatus(201);
@@ -241,7 +262,7 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals(100, $orderRes->json('data.total_planned_quantity'));
 
         // 2. اعتماد أمر الإنتاج
-        $appRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $appRes = $this->actingAs($this->userA)
             ->postJson("/api/v1/production-orders/{$orderId}/approve");
         $appRes->assertStatus(200);
         $this->assertEquals('approved', $appRes->json('data.status'));
@@ -263,7 +284,7 @@ class ProductionAndCuttingTest extends TestCase
             'total_cut_pieces' => 100,
         ];
 
-        $cutRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $cutRes = $this->actingAs($this->userA)
             ->postJson('/api/v1/cutting-orders', $cutPayload);
 
         $cutRes->assertStatus(201);
@@ -291,7 +312,7 @@ class ProductionAndCuttingTest extends TestCase
             'scrap_quantity' => 0,
         ];
 
-        $transRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $transRes = $this->actingAs($this->userA)
             ->postJson("/api/v1/bundles/{$bundle->id}/transfer", $transferPayload);
 
         $transRes->assertStatus(200);
@@ -318,7 +339,7 @@ class ProductionAndCuttingTest extends TestCase
             ],
         ];
 
-        $qcRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $qcRes = $this->actingAs($this->userA)
             ->postJson('/api/v1/quality-inspections', $qcPayload);
 
         $qcRes->assertStatus(201);
@@ -329,7 +350,7 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals(98.0, (float) $this->finishedGoodItemA->current_balance);
 
         // التحقق من إحصائيات أمر الإنتاج (Metrics)
-        $metricsRes = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $metricsRes = $this->actingAs($this->userA)
             ->getJson("/api/v1/production-orders/{$orderId}/metrics");
 
         $metricsRes->assertStatus(200);
@@ -364,7 +385,7 @@ class ProductionAndCuttingTest extends TestCase
         ];
 
         // محاولة القص لأمر مسودة
-        $resDraft = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $resDraft = $this->actingAs($this->userA)
             ->postJson('/api/v1/cutting-orders', $cutPayload);
 
         $resDraft->assertStatus(422);
@@ -377,7 +398,7 @@ class ProductionAndCuttingTest extends TestCase
         $cutPayload['lay_length_meters'] = 5.0;
         $cutPayload['layers_count'] = 500; // 2500m
 
-        $resExcess = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $resExcess = $this->actingAs($this->userA)
             ->postJson('/api/v1/cutting-orders', $cutPayload);
 
         $resExcess->assertStatus(422);
@@ -430,7 +451,7 @@ class ProductionAndCuttingTest extends TestCase
             'output_accepted_quantity' => 22,
             'scrap_quantity' => 3,
         ];
-        $resBad = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $resBad = $this->actingAs($this->userA)
             ->postJson("/api/v1/bundles/{$bundle->id}/transfer", $badPayload);
         $resBad->assertStatus(422);
 
@@ -442,7 +463,7 @@ class ProductionAndCuttingTest extends TestCase
             'output_rejected_quantity' => 0,
             'scrap_quantity' => 2,
         ];
-        $resGood = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $resGood = $this->actingAs($this->userA)
             ->postJson("/api/v1/bundles/{$bundle->id}/transfer", $goodPayload);
 
         $resGood->assertStatus(200);
@@ -494,7 +515,7 @@ class ProductionAndCuttingTest extends TestCase
             'total_cut_pieces' => 100,
         ];
 
-        $res = $this->withHeader('X-Tenant-ID', $this->tenantA->id)
+        $res = $this->actingAs($this->userA)
             ->postJson('/api/v1/cutting-orders', $cutPayload);
 
         $res->assertStatus(201);
@@ -524,12 +545,12 @@ class ProductionAndCuttingTest extends TestCase
         ]);
 
         // يحاول المستأجر ب قراءة أو اعتماد أمر إنتاج المستأجر أ
-        $resShow = $this->withHeader('X-Tenant-ID', $this->tenantB->id)
+        $resShow = $this->actingAs($this->userB)
             ->getJson("/api/v1/production-orders/{$orderA->id}");
         $resShow->assertStatus(404);
 
         // قائمة أوامر المستأجر ب لا يظهر فيها أي أمر للمستأجر أ
-        $resList = $this->withHeader('X-Tenant-ID', $this->tenantB->id)
+        $resList = $this->actingAs($this->userB)
             ->getJson('/api/v1/production-orders');
         $resList->assertStatus(200);
         $this->assertCount(0, $resList->json('data'));

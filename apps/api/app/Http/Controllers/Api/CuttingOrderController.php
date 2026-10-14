@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CuttingOrder;
+use App\Models\InventoryItem;
+use App\Models\ProductionOrder;
+use App\Models\Warehouse;
 use App\Services\ProductionService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +20,7 @@ class CuttingOrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $orders = CuttingOrder::where('tenant_id', $tenantId)
             ->with(['productionOrder.garmentModel', 'warehouse', 'bundles'])
             ->orderBy('created_at', 'desc')
@@ -31,7 +34,7 @@ class CuttingOrderController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $validated = $request->validate([
             'production_order_id' => 'required|uuid',
             'pattern_id' => 'nullable|uuid',
@@ -53,6 +56,36 @@ class CuttingOrderController extends Controller
             'notes' => 'nullable|string',
             'bundle_configs' => 'nullable|array',
         ]);
+
+        // التحقق من ملكية أمر الإنتاج والمخزن والصنف للشركة الحالية
+        $prodOrder = ProductionOrder::withoutGlobalScopes()->find($validated['production_order_id']);
+        if (!$prodOrder || $prodOrder->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: أمر الإنتاج غير تابع لشركتك.',
+            ], 403);
+        }
+
+        $warehouse = Warehouse::withoutGlobalScopes()->find($validated['warehouse_id']);
+        if (!$warehouse || $warehouse->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: المخزن المحدد غير تابع لشركتك.',
+            ], 403);
+        }
+
+        if (!empty($validated['fabric_inventory_item_id'])) {
+            $fabricItem = InventoryItem::withoutGlobalScopes()->find($validated['fabric_inventory_item_id']);
+            if (!$fabricItem || $fabricItem->tenant_id !== $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: صنف القماش المحدد غير تابع لشركتك.',
+                ], 403);
+            }
+        }
 
         try {
             $data = $validated;
@@ -76,7 +109,7 @@ class CuttingOrderController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $order = CuttingOrder::where('tenant_id', $tenantId)
             ->with(['productionOrder.garmentModel', 'warehouse', 'bundles.stageLogs'])
             ->findOrFail($id);

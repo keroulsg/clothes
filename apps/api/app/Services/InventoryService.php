@@ -13,7 +13,7 @@ use InvalidArgumentException;
 class InventoryService
 {
     /**
-     * تسجيل حركة مخزنية رسمية في دفتر الأستاذ مع معالجة التزامن وحظر الرصيد السالب
+     * تسجيل حركة مخزنية رسمية في دفتر الأستاذ مع معالجة التزامن وحظر الرصيد السالب ومنع التكرار
      */
     public function recordTransaction(array $data): InventoryTransaction
     {
@@ -23,14 +23,36 @@ class InventoryService
             $unitCost = isset($data['unit_cost']) ? (float) $data['unit_cost'] : 0.0;
             $direction = strtoupper($data['direction']); // IN or OUT
             $transactionType = $data['transaction_type'];
+            $tenantId = $data['tenant_id'] ?? (app()->bound('current_tenant_id') ? app('current_tenant_id') : null);
+            $idempotencyKey = $data['idempotency_key'] ?? null;
 
             if ($quantity <= 0) {
                 throw new InvalidArgumentException('يجب أن تكون كمية الحركة المخزنية أكبر من الصفر.');
             }
 
             // قفل السجل لمنع تضارب التزامن (Race Condition Protection)
-            $item = InventoryItem::where('id', $itemId)->lockForUpdate()->firstOrFail();
-            $warehouse = Warehouse::where('id', $item->warehouse_id)->firstOrFail();
+            $item = InventoryItem::withoutGlobalScopes()->where('id', $itemId)->lockForUpdate()->firstOrFail();
+
+            // التحقق الصارم من ملكية الشركة للصنف والمخزن
+            if ($tenantId && $item->tenant_id !== $tenantId) {
+                throw new InvalidArgumentException('أمان: لا يمكن تسجيل حركة مخزنية لصنف ينتمي لشركة أخرى.');
+            }
+
+            $warehouse = Warehouse::withoutGlobalScopes()->where('id', $item->warehouse_id)->firstOrFail();
+            if ($warehouse->tenant_id !== $item->tenant_id) {
+                throw new InvalidArgumentException('أمان: المخزن المحدد لا ينتمي لنفس شركة الصنف المخزني.');
+            }
+
+            // التحقق من مفتاح عدم التكرار (Idempotency) لمنع الترحيل المخزني المكرر
+            if ($idempotencyKey) {
+                $existing = InventoryTransaction::withoutGlobalScopes()
+                    ->where('tenant_id', $item->tenant_id)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
 
             $balanceBefore = (float) $item->current_balance;
 
@@ -75,6 +97,7 @@ class InventoryService
                 'roll_number' => $data['roll_number'] ?? null,
                 'technical_notes' => $data['technical_notes'] ?? null,
                 'user_id' => $data['user_id'] ?? auth()->id(),
+                'idempotency_key' => $idempotencyKey,
             ]);
         });
     }

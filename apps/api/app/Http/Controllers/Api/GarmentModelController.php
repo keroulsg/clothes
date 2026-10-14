@@ -77,7 +77,20 @@ class GarmentModelController extends Controller
             ]);
 
             $sizes = Size::whereIn('id', $validated['size_ids'])->get();
+            if ($sizes->count() !== count($validated['size_ids'])) {
+                abort(response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أحد المقاسات المحددة غير تابع لشركتك.',
+                ], 403));
+            }
+
             $colors = Color::whereIn('id', $validated['color_ids'])->get();
+            if ($colors->count() !== count($validated['color_ids'])) {
+                abort(response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أحد الألوان المحددة غير تابع لشركتك.',
+                ], 403));
+            }
 
             $variants = [];
             foreach ($sizes as $size) {

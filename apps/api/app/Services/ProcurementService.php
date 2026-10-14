@@ -215,12 +215,47 @@ class ProcurementService
     {
         return DB::transaction(function () use ($data) {
             $tenantId = $data['tenant_id'] ?? app('current_tenant_id');
-            $po = PurchaseOrder::with('items')->where('id', $data['purchase_order_id'])->firstOrFail();
-            $supplier = Supplier::where('id', $po->supplier_id)->lockForUpdate()->firstOrFail();
+            $idempotencyKey = $data['idempotency_key'] ?? null;
 
-            $grn = isset($data['goods_receipt_note_id'])
-                ? GoodsReceiptNote::with('items')->where('id', $data['goods_receipt_note_id'])->first()
-                : null;
+            // منع التكرار المالي: التحقق من مفتاح عدم التكرار (Idempotency)
+            if ($idempotencyKey) {
+                $existing = SupplierInvoice::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
+
+            $po = PurchaseOrder::with('items')->withoutGlobalScopes()->where('id', $data['purchase_order_id'])->firstOrFail();
+            if ($po->tenant_id !== $tenantId) {
+                throw new InvalidArgumentException('أمان: أمر الشراء غير تابع لهذه الشركة.');
+            }
+
+            $supplier = Supplier::withoutGlobalScopes()->where('id', $po->supplier_id)->lockForUpdate()->firstOrFail();
+            if ($supplier->tenant_id !== $tenantId) {
+                throw new InvalidArgumentException('أمان: المورد غير تابع لهذه الشركة.');
+            }
+
+            // منع تكرار ترحيل نفس الفاتورة لنفس المورد منعاً لمضاعفة الالتزام المالي
+            $duplicateInvoice = SupplierInvoice::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('supplier_id', $supplier->id)
+                ->where('invoice_number', $data['invoice_number'])
+                ->first();
+
+            if ($duplicateInvoice) {
+                return $duplicateInvoice;
+            }
+
+            $grn = null;
+            if (isset($data['goods_receipt_note_id'])) {
+                $grn = GoodsReceiptNote::with('items')->withoutGlobalScopes()->where('id', $data['goods_receipt_note_id'])->first();
+                if ($grn && $grn->tenant_id !== $tenantId) {
+                    throw new InvalidArgumentException('أمان: إذن الاستلام غير تابع لهذه الشركة.');
+                }
+            }
 
             $invoiceSubtotal = (float) $data['subtotal'];
             $invoiceTax = isset($data['tax_amount']) ? (float) $data['tax_amount'] : ($invoiceSubtotal * 0.14);
@@ -265,6 +300,7 @@ class ProcurementService
                 'is_posted' => true,
                 'posted_at' => now(),
                 'posted_by' => $data['posted_by'] ?? auth()->id(),
+                'idempotency_key' => $idempotencyKey,
             ]);
 
             // إثبات الالتزام المالي الحقيقي للمورد

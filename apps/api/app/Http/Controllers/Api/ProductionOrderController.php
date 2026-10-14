@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\GarmentModel;
 use App\Models\ProductionOrder;
 use App\Services\ProductionService;
 use Exception;
@@ -17,7 +18,7 @@ class ProductionOrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $orders = ProductionOrder::where('tenant_id', $tenantId)
             ->with(['garmentModel', 'billOfMaterial', 'items.color', 'items.size'])
             ->orderBy('created_at', 'desc')
@@ -31,7 +32,7 @@ class ProductionOrderController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $validated = $request->validate([
             'garment_model_id' => 'required|uuid',
             'bill_of_material_id' => 'nullable|uuid',
@@ -45,11 +46,24 @@ class ProductionOrderController extends Controller
             'items.*.size_id' => 'required|uuid',
             'items.*.product_variant_id' => 'nullable|uuid',
             'items.*.planned_quantity' => 'required|integer|min:1',
+            'idempotency_key' => 'nullable|string|max:120',
         ]);
+
+        // التحقق من ملكية الموديل للشركة الحالية
+        $model = GarmentModel::withoutGlobalScopes()->find($validated['garment_model_id']);
+        if (!$model || $model->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'أمان: موديل الملابس غير تابع لشركتك.',
+            ], 403);
+        }
 
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
+
             $order = $this->productionService->createProductionOrder($data, $validated['items']);
 
             return response()->json([
@@ -67,7 +81,7 @@ class ProductionOrderController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        $tenantId = $request->header('X-Tenant-ID');
+        $tenantId = app('current_tenant_id');
         $order = ProductionOrder::where('tenant_id', $tenantId)
             ->with([
                 'garmentModel',
@@ -87,13 +101,18 @@ class ProductionOrderController extends Controller
 
     public function approve(Request $request, string $id): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+
+        // التحقق من ملكية أمر الإنتاج للشركة الحالية
+        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+
         try {
-            $order = $this->productionService->approveProductionOrder($id);
+            $approvedOrder = $this->productionService->approveProductionOrder($order->id);
 
             return response()->json([
                 'success' => true,
                 'message' => 'تم اعتماد أمر الإنتاج وأصبح جاهزاً لصالة القص والتشغيل.',
-                'data' => $order,
+                'data' => $approvedOrder,
             ]);
         } catch (Exception $e) {
             return response()->json([
@@ -105,8 +124,11 @@ class ProductionOrderController extends Controller
 
     public function metrics(string $id): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+
         try {
-            $metrics = $this->productionService->getProductionMetrics($id);
+            $metrics = $this->productionService->getProductionMetrics($order->id);
 
             return response()->json([
                 'success' => true,

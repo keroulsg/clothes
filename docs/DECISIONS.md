@@ -2,7 +2,7 @@
 
 ## ADR-001: هيكل المستودع المشترك (Monorepo Architecture)
 - **القرار:** استخدام Monorepo منظم يضم:
-  - `apps/api`: واجهة برمجة التطبيقات الخلفية والمنطق التشغيلي (Laravel 11+ REST API).
+  - `apps/api`: واجهة برمجة التطبيقات الخلفية والمنطق التشغيلي (Laravel 13.x REST API / `laravel/framework: ^13.17`).
   - `apps/web`: لوحة الإدارة المتكاملة للمصنع والمنصة (React 19 + TypeScript + Vite + Tailwind CSS).
   - `apps/storefront`: واجهة المتجر الإلكتروني المخصصة للمستهلكين لكل مصنع.
   - `packages/ui`: مكتبة مكونات التصميم المشتركة والـ Tokens.

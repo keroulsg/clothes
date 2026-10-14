@@ -194,4 +194,47 @@ class TenantController extends Controller
             'tenant' => $tenant,
         ]);
     }
+
+    /**
+     * تفعيل أو تجديد الاشتراك المدفوع للشركة
+     */
+    public function activateSubscription(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        $validated = $request->validate([
+            'plan_tier' => 'nullable|string|in:starter,professional,enterprise',
+            'payment_reference' => 'nullable|string|max:100',
+        ]);
+
+        $settings = $tenant->settings ?? [];
+        $planTier = $validated['plan_tier'] ?? $tenant->plan_tier;
+
+        $settings['subscription'] = [
+            'status' => 'active',
+            'is_paid' => true,
+            'plan_tier' => $planTier,
+            'activated_at' => now()->toIso8601String(),
+            'expires_at' => now()->addYear()->toIso8601String(),
+            'payment_reference' => $validated['payment_reference'] ?? ('PAY-' . strtoupper(Str::random(10))),
+        ];
+
+        $tenant->settings = $settings;
+        $tenant->status = 'active';
+        $tenant->plan_tier = $planTier;
+        $tenant->save();
+
+        return response()->json([
+            'message' => 'تم تفعيل الاشتراك التجاري بنجاح.',
+            'subscription' => $settings['subscription'],
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'status' => $tenant->status,
+                'plan_tier' => $tenant->plan_tier,
+                'is_paid' => true,
+            ],
+        ]);
+    }
 }

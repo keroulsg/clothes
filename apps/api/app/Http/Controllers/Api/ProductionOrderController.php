@@ -66,11 +66,28 @@ class ProductionOrderController extends Controller
 
             $order = $this->productionService->createProductionOrder($data, $validated['items']);
 
+            $statusCode = $order->wasRecentlyCreated ? 201 : 200;
+
             return response()->json([
                 'success' => true,
-                'message' => 'تم إنشاء أمر الإنتاج وتفصيل المقاسات بنجاح.',
+                'message' => $order->wasRecentlyCreated
+                    ? 'تم إنشاء أمر الإنتاج وتفصيل المقاسات بنجاح.'
+                    : 'تم استرجاع أمر الإنتاج المسجل مسبقاً (Replay Idempotency).',
+                'is_duplicate' => !$order->wasRecentlyCreated,
                 'data' => $order,
-            ], 201);
+            ], $statusCode);
+        } catch (\InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'Idempotency')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'IdempotencyConflict',
+                    'message' => $e->getMessage(),
+                ], 409);
+            }
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,

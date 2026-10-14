@@ -53,6 +53,7 @@ class GoodsReceiptController extends Controller
             'items.*.rejected_quantity' => 'nullable|numeric|min:0',
             'items.*.rejection_reason' => 'nullable|string|max:255',
             'items.*.roll_numbers' => 'nullable|string|max:255',
+            'idempotency_key' => 'nullable|string|max:120',
         ]);
 
         $tenantId = app('current_tenant_id');
@@ -66,13 +67,29 @@ class GoodsReceiptController extends Controller
         }
 
         $validated['tenant_id'] = $tenantId;
+        $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
-        $grn = $this->procurementService->receiveGoods($validated);
+        try {
+            $grn = $this->procurementService->receiveGoods($validated);
+        } catch (\InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'Idempotency')) {
+                return response()->json([
+                    'error' => 'IdempotencyConflict',
+                    'message' => $e->getMessage(),
+                ], 409);
+            }
+            throw $e;
+        }
+
+        $statusCode = $grn->wasRecentlyCreated ? 201 : 200;
 
         return response()->json([
-            'message' => 'تم استلام وفحص الخامات وترحيلها لدفتر المخزن بنجاح.',
+            'message' => $grn->wasRecentlyCreated
+                ? 'تم استلام وفحص الخامات وترحيلها لدفتر المخزن بنجاح.'
+                : 'تم استرجاع إذن الاستلام المسجل مسبقاً (Replay Idempotency).',
+            'is_duplicate' => !$grn->wasRecentlyCreated,
             'goods_receipt_note' => $grn,
-        ], 201);
+        ], $statusCode);
     }
 
     /**

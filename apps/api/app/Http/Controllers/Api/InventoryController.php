@@ -87,8 +87,8 @@ class InventoryController extends Controller
         $tenantId = app('current_tenant_id');
 
         // التحقق الصارم من ملكية الصنف للشركة الحالية ومنع التسلل بين الشركات
-        $item = InventoryItem::withoutGlobalScopes()->find($validated['inventory_item_id']);
-        if (!$item || $item->tenant_id !== $tenantId) {
+        $item = InventoryItem::where('tenant_id', $tenantId)->find($validated['inventory_item_id']);
+        if (!$item) {
             return response()->json([
                 'error' => 'CrossTenantAccessDenied',
                 'message' => 'أمان: لا يمكن تسجيل حركة مخزنية لصنف غير تابع لشركتك.',
@@ -98,29 +98,49 @@ class InventoryController extends Controller
         // استخراج مفتاح عدم التكرار من الـ Header أو الـ Body
         $idempotencyKey = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
         if ($idempotencyKey) {
-            $existing = InventoryTransaction::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->where('idempotency_key', $idempotencyKey)
-                ->first();
-
-            if ($existing) {
-                return response()->json([
-                    'message' => 'تم استرجاع الحركة المسجلة مسبقاً بنجاح (Idempotent Request).',
-                    'is_duplicate' => true,
-                    'transaction' => $existing,
-                ], 200);
-            }
             $validated['idempotency_key'] = $idempotencyKey;
         }
 
         $validated['tenant_id'] = $tenantId;
 
-        $transaction = $this->inventoryService->recordTransaction($validated);
+        try {
+            $transaction = $this->inventoryService->recordTransaction($validated);
 
-        return response()->json([
-            'message' => 'تم ترحيل الحركة المخزنية وتحديث رصيد دفتر الأستاذ بنجاح.',
-            'transaction' => $transaction,
-        ], 201);
+            $isDuplicate = false;
+            if ($idempotencyKey && $transaction->wasRecentlyCreated === false) {
+                $isDuplicate = true;
+            }
+
+            return response()->json([
+                'message' => $isDuplicate
+                    ? 'تم استرجاع الحركة المسجلة مسبقاً بنجاح (Idempotent Request).'
+                    : 'تم ترحيل الحركة المخزنية وتحديث رصيد دفتر الأستاذ بنجاح.',
+                'is_duplicate' => $isDuplicate,
+                'transaction' => $transaction,
+            ], $isDuplicate ? 200 : 201);
+        } catch (\InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'Idempotency')) {
+                return response()->json([
+                    'error' => 'IdempotencyConflict',
+                    'message' => $e->getMessage(),
+                ], 409);
+            }
+            if (str_contains($e->getMessage(), 'أمان:')) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => $e->getMessage(),
+                ], 403);
+            }
+            return response()->json([
+                'error' => 'InvalidTransaction',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'TransactionFailed',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     /**

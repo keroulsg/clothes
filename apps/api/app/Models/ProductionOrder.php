@@ -30,6 +30,7 @@ class ProductionOrder extends Model
         'status',
         'priority',
         'notes',
+        'idempotency_key',
     ];
 
     protected $casts = [

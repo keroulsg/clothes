@@ -119,6 +119,29 @@ class ProductionService
     public function createProductionOrder(array $data, array $items): ProductionOrder
     {
         return DB::transaction(function () use ($data, $items) {
+            $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+            if (empty($contextTenantId)) {
+                throw new InvalidArgumentException('أمان: سياق الشركة غير محدد. لا يمكن إنشاء أمر إنتاج دون سياق شركة موثق.');
+            }
+            if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+                throw new InvalidArgumentException('أمان: تعارض في سياق الشركة. tenant_id الممرر لا يطابق الشركة الموثقة.');
+            }
+            $tenantId = $contextTenantId;
+            $idempotencyKey = $data['idempotency_key'] ?? null;
+
+            if ($idempotencyKey) {
+                $existing = ProductionOrder::where('tenant_id', $tenantId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+                if ($existing) {
+                    $isMatch = ((string)$existing->garment_model_id === (string)$data['garment_model_id']);
+                    if (!$isMatch) {
+                        throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لأمر إنتاج مختلف.');
+                    }
+                    return $existing->load('items.color', 'items.size', 'garmentModel');
+                }
+            }
+
             $totalPlanned = 0;
             foreach ($items as $item) {
                 $qty = (int) $item['planned_quantity'];
@@ -128,27 +151,40 @@ class ProductionService
                 $totalPlanned += $qty;
             }
 
-            $order = ProductionOrder::create([
-                'tenant_id' => $data['tenant_id'],
-                'order_number' => $data['order_number'] ?? ('PO-PRD-' . date('Ym') . '-' . rand(100, 999)),
-                'garment_model_id' => $data['garment_model_id'],
-                'bill_of_material_id' => $data['bill_of_material_id'] ?? null,
-                'branch_id' => $data['branch_id'] ?? null,
-                'planned_start_date' => $data['planned_start_date'] ?? date('Y-m-d'),
-                'target_delivery_date' => $data['target_delivery_date'] ?? date('Y-m-d', strtotime('+15 days')),
-                'total_planned_quantity' => $totalPlanned,
-                'total_cut_quantity' => 0,
-                'total_completed_quantity' => 0,
-                'total_scrapped_quantity' => 0,
-                'total_rework_quantity' => 0,
-                'status' => 'draft',
-                'priority' => $data['priority'] ?? 'normal',
-                'notes' => $data['notes'] ?? null,
-            ]);
+            try {
+                $order = ProductionOrder::create([
+                    'tenant_id' => $tenantId,
+                    'order_number' => $data['order_number'] ?? ('PO-PRD-' . date('Ym') . '-' . rand(100, 999)),
+                    'garment_model_id' => $data['garment_model_id'],
+                    'bill_of_material_id' => $data['bill_of_material_id'] ?? null,
+                    'branch_id' => $data['branch_id'] ?? null,
+                    'planned_start_date' => $data['planned_start_date'] ?? date('Y-m-d'),
+                    'target_delivery_date' => $data['target_delivery_date'] ?? date('Y-m-d', strtotime('+15 days')),
+                    'total_planned_quantity' => $totalPlanned,
+                    'total_cut_quantity' => 0,
+                    'total_completed_quantity' => 0,
+                    'total_scrapped_quantity' => 0,
+                    'total_rework_quantity' => 0,
+                    'status' => 'draft',
+                    'priority' => $data['priority'] ?? 'normal',
+                    'notes' => $data['notes'] ?? null,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
+                    $existing = ProductionOrder::where('tenant_id', $tenantId)
+                        ->where('idempotency_key', $idempotencyKey)
+                        ->first();
+                    if ($existing) {
+                        return $existing->load('items.color', 'items.size', 'garmentModel');
+                    }
+                }
+                throw $e;
+            }
 
             foreach ($items as $item) {
                 ProductionOrderItem::create([
-                    'tenant_id' => $data['tenant_id'],
+                    'tenant_id' => $tenantId,
                     'production_order_id' => $order->id,
                     'product_variant_id' => $item['product_variant_id'] ?? null,
                     'color_id' => $item['color_id'],

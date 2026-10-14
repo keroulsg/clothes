@@ -74,6 +74,23 @@ class IdentifyTenant
                 ], 403);
             }
 
+            // 5. التحقق من انتهاء الفترة التجريبية (Trial Expiration Enforcement)
+            if ($user->role !== 'platform_admin' && $tenant->isTrialExpired()) {
+                $isAllowedForExpiredTrial = $request->is('api/v1/tenant/profile')
+                    || $request->is('api/v1/tenant/subscription*')
+                    || $request->is('api/v1/auth/*');
+
+                if (!$isAllowedForExpiredTrial) {
+                    return response()->json([
+                        'error' => 'TrialExpired',
+                        'message' => 'انتهت الفترة التجريبية للشركة. يرجى سداد وتفعيل الاشتراك لاستئناف العمليات.',
+                        'trial_ends_at' => $tenant->settings['subscription']['trial_ends_at'] ?? null,
+                        'subscription_status' => 'trial_expired',
+                        'action_required' => 'subscription_payment',
+                    ], 402);
+                }
+            }
+
             app()->instance('current_tenant_id', $tenantId);
         } else {
             return response()->json([

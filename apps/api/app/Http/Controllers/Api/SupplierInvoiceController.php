@@ -57,11 +57,26 @@ class SupplierInvoiceController extends Controller
         $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
         $validated['tenant_id'] = $tenantId;
 
-        $invoice = $this->procurementService->matchAndCreateInvoice($validated);
+        try {
+            $invoice = $this->procurementService->matchAndCreateInvoice($validated);
+        } catch (\InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'Idempotency')) {
+                return response()->json([
+                    'error' => 'IdempotencyConflict',
+                    'message' => $e->getMessage(),
+                ], 409);
+            }
+            throw $e;
+        }
+
+        $statusCode = $invoice->wasRecentlyCreated ? 201 : 200;
 
         return response()->json([
-            'message' => 'تم مطابقة فاتورة المورد وترحيل الالتزام المالي بنجاح.',
+            'message' => $invoice->wasRecentlyCreated
+                ? 'تم مطابقة فاتورة المورد وترحيل الالتزام المالي بنجاح.'
+                : 'تم استرجاع فاتورة المورد المسجلة مسبقاً (Replay Idempotency).',
+            'is_duplicate' => !$invoice->wasRecentlyCreated,
             'supplier_invoice' => $invoice,
-        ], 201);
+        ], $statusCode);
     }
 }

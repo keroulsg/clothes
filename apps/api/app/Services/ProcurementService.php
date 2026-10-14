@@ -118,32 +118,70 @@ class ProcurementService
     public function receiveGoods(array $data): GoodsReceiptNote
     {
         return DB::transaction(function () use ($data) {
-            $tenantId = $data['tenant_id'] ?? app('current_tenant_id');
+            $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+            if (empty($contextTenantId)) {
+                throw new InvalidArgumentException('أمان: سياق الشركة غير محدد. لا يمكن استلام بضائع دون سياق شركة موثق.');
+            }
+
+            if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+                throw new InvalidArgumentException('أمان: تعارض في سياق الشركة. tenant_id الممرر لا يطابق الشركة الموثقة.');
+            }
+
+            $tenantId = $contextTenantId;
+            $idempotencyKey = $data['idempotency_key'] ?? null;
+
+            // التحقق من مفتاح عدم التكرار (Idempotency) لإذن الاستلام
+            if ($idempotencyKey) {
+                $existing = GoodsReceiptNote::where('tenant_id', $tenantId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+                if ($existing) {
+                    $isMatch = ((string)$existing->purchase_order_id === (string)$data['purchase_order_id']);
+                    if (!$isMatch) {
+                        throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لإذن استلام مختلف.');
+                    }
+                    return $existing->load('items.inventoryItem', 'purchaseOrder');
+                }
+            }
+
             $poId = $data['purchase_order_id'];
 
             // قفل أمر الشراء لمنع تضارب التوريد المتزامن
-            $po = PurchaseOrder::where('id', $poId)->lockForUpdate()->firstOrFail();
+            $po = PurchaseOrder::where('tenant_id', $tenantId)->where('id', $poId)->lockForUpdate()->firstOrFail();
 
             if (!in_array($po->status, ['approved', 'partially_received'])) {
-                throw new Exception("لا يمكن الاستلام على أمر شراء بحالة [{$po->status}]. يجب أن يكون معتمداً أو مستلماً جزئياً.");
+                throw new Exception("لا يمكن الاستلام على أمر شراء بح حالة [{$po->status}]. يجب أن يكون معتمداً أو مستلماً جزئياً.");
             }
 
             $grnNumber = $data['grn_number'] ?? ('GRN-' . date('Ymd') . '-' . rand(100, 999));
 
-            $grn = GoodsReceiptNote::create([
-                'tenant_id' => $tenantId,
-                'grn_number' => $grnNumber,
-                'purchase_order_id' => $po->id,
-                'supplier_id' => $po->supplier_id,
-                'warehouse_id' => $data['warehouse_id'] ?? $po->warehouse_id,
-                'receipt_date' => $data['receipt_date'] ?? date('Y-m-d'),
-                'status' => 'posted',
-                'quality_inspector_name' => $data['quality_inspector_name'] ?? 'مهندس فحص الجودة',
-                'inspection_status' => $data['inspection_status'] ?? 'passed',
-                'delivery_note_number' => $data['delivery_note_number'] ?? null,
-                'notes' => $data['notes'] ?? null,
-                'received_by' => $data['received_by'] ?? auth()->id(),
-            ]);
+            try {
+                $grn = GoodsReceiptNote::create([
+                    'tenant_id' => $tenantId,
+                    'grn_number' => $grnNumber,
+                    'purchase_order_id' => $po->id,
+                    'supplier_id' => $po->supplier_id,
+                    'warehouse_id' => $data['warehouse_id'] ?? $po->warehouse_id,
+                    'receipt_date' => $data['receipt_date'] ?? date('Y-m-d'),
+                    'status' => 'posted',
+                    'quality_inspector_name' => $data['quality_inspector_name'] ?? 'مهندس فحص الجودة',
+                    'inspection_status' => $data['inspection_status'] ?? 'passed',
+                    'delivery_note_number' => $data['delivery_note_number'] ?? null,
+                    'notes' => $data['notes'] ?? null,
+                    'received_by' => $data['received_by'] ?? auth()->id(),
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
+                    $existing = GoodsReceiptNote::where('tenant_id', $tenantId)
+                        ->where('idempotency_key', $idempotencyKey)
+                        ->first();
+                    if ($existing) {
+                        return $existing->load('items.inventoryItem', 'purchaseOrder');
+                    }
+                }
+                throw $e;
+            }
 
             foreach ($data['items'] as $itemReceipt) {
                 $poItemId = $itemReceipt['purchase_order_item_id'];
@@ -195,6 +233,7 @@ class ProcurementService
                         'reference_type' => 'goods_receipt_note',
                         'reference_number' => $grn->grn_number,
                         'notes' => 'استلام خامات أمر شراء ' . $po->po_number,
+                        'idempotency_key' => $idempotencyKey ? "{$idempotencyKey}_item_{$poItem->id}" : null,
                     ]);
                 }
             }
@@ -214,33 +253,40 @@ class ProcurementService
     public function matchAndCreateInvoice(array $data): SupplierInvoice
     {
         return DB::transaction(function () use ($data) {
-            $tenantId = $data['tenant_id'] ?? app('current_tenant_id');
+            $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+            if (empty($contextTenantId)) {
+                throw new InvalidArgumentException('أمان: سياق الشركة غير محدد. لا يمكن تسجيل فاتورة مورد دون سياق شركة موثق.');
+            }
+            if (!empty($data['tenant_id']) && $data['tenant_id'] !== $contextTenantId) {
+                throw new InvalidArgumentException('أمان: تعارض في هوية الشركة الممررة.');
+            }
+            $tenantId = $contextTenantId;
             $idempotencyKey = $data['idempotency_key'] ?? null;
 
             // منع التكرار المالي: التحقق من مفتاح عدم التكرار (Idempotency)
             if ($idempotencyKey) {
-                $existing = SupplierInvoice::withoutGlobalScopes()
-                    ->where('tenant_id', $tenantId)
+                $existing = SupplierInvoice::where('tenant_id', $tenantId)
                     ->where('idempotency_key', $idempotencyKey)
                     ->first();
                 if ($existing) {
+                    $isMatch = ($existing->purchase_order_id === $data['purchase_order_id'])
+                        && ($existing->invoice_number === $data['invoice_number'])
+                        && (abs((float)$existing->subtotal - (float)$data['subtotal']) < 0.01);
+
+                    if (!$isMatch) {
+                        throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لفاتورة مورد مختلفة.');
+                    }
+
                     return $existing;
                 }
             }
 
-            $po = PurchaseOrder::with('items')->withoutGlobalScopes()->where('id', $data['purchase_order_id'])->firstOrFail();
-            if ($po->tenant_id !== $tenantId) {
-                throw new InvalidArgumentException('أمان: أمر الشراء غير تابع لهذه الشركة.');
-            }
+            $po = PurchaseOrder::with('items')->where('tenant_id', $tenantId)->where('id', $data['purchase_order_id'])->firstOrFail();
 
-            $supplier = Supplier::withoutGlobalScopes()->where('id', $po->supplier_id)->lockForUpdate()->firstOrFail();
-            if ($supplier->tenant_id !== $tenantId) {
-                throw new InvalidArgumentException('أمان: المورد غير تابع لهذه الشركة.');
-            }
+            $supplier = Supplier::where('tenant_id', $tenantId)->where('id', $po->supplier_id)->lockForUpdate()->firstOrFail();
 
             // منع تكرار ترحيل نفس الفاتورة لنفس المورد منعاً لمضاعفة الالتزام المالي
-            $duplicateInvoice = SupplierInvoice::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
+            $duplicateInvoice = SupplierInvoice::where('tenant_id', $tenantId)
                 ->where('supplier_id', $supplier->id)
                 ->where('invoice_number', $data['invoice_number'])
                 ->first();
@@ -251,7 +297,7 @@ class ProcurementService
 
             $grn = null;
             if (isset($data['goods_receipt_note_id'])) {
-                $grn = GoodsReceiptNote::with('items')->withoutGlobalScopes()->where('id', $data['goods_receipt_note_id'])->first();
+                $grn = GoodsReceiptNote::with('items')->where('tenant_id', $tenantId)->where('id', $data['goods_receipt_note_id'])->first();
                 if ($grn && $grn->tenant_id !== $tenantId) {
                     throw new InvalidArgumentException('أمان: إذن الاستلام غير تابع لهذه الشركة.');
                 }
@@ -281,33 +327,45 @@ class ProcurementService
 
             $internalRef = 'SINV-' . date('Ymd') . '-' . rand(100, 999);
 
-            $invoice = SupplierInvoice::create([
-                'tenant_id' => $tenantId,
-                'invoice_number' => $data['invoice_number'],
-                'internal_reference' => $internalRef,
-                'supplier_id' => $supplier->id,
-                'purchase_order_id' => $po->id,
-                'goods_receipt_note_id' => $grn?->id,
-                'invoice_date' => $data['invoice_date'] ?? date('Y-m-d'),
-                'due_date' => $data['due_date'] ?? date('Y-m-d', strtotime('+30 days')),
-                'subtotal' => round($invoiceSubtotal, 4),
-                'tax_amount' => round($invoiceTax, 4),
-                'total_amount' => round($invoiceTotal, 4),
-                'paid_amount' => 0.0,
-                'payment_status' => 'unpaid',
-                'matching_status' => $matchingStatus,
-                'variance_notes' => !empty($varianceNotes) ? implode('; ', $varianceNotes) : null,
-                'is_posted' => true,
-                'posted_at' => now(),
-                'posted_by' => $data['posted_by'] ?? auth()->id(),
-                'idempotency_key' => $idempotencyKey,
-            ]);
+            try {
+                $invoice = SupplierInvoice::create([
+                    'tenant_id' => $tenantId,
+                    'invoice_number' => $data['invoice_number'],
+                    'internal_reference' => $internalRef,
+                    'supplier_id' => $supplier->id,
+                    'purchase_order_id' => $po->id,
+                    'goods_receipt_note_id' => $grn?->id,
+                    'invoice_date' => $data['invoice_date'] ?? date('Y-m-d'),
+                    'due_date' => $data['due_date'] ?? date('Y-m-d', strtotime('+30 days')),
+                    'subtotal' => round($invoiceSubtotal, 4),
+                    'tax_amount' => round($invoiceTax, 4),
+                    'total_amount' => round($invoiceTotal, 4),
+                    'paid_amount' => 0.0,
+                    'payment_status' => 'unpaid',
+                    'matching_status' => $matchingStatus,
+                    'variance_notes' => !empty($varianceNotes) ? implode('; ', $varianceNotes) : null,
+                    'is_posted' => true,
+                    'posted_at' => now(),
+                    'posted_by' => $data['posted_by'] ?? auth()->id(),
+                    'idempotency_key' => $idempotencyKey,
+                ]);
 
-            // إثبات الالتزام المالي الحقيقي للمورد
-            $supplier->current_balance += $invoiceTotal;
-            $supplier->save();
+                // إثبات الالتزام المالي الحقيقي للمورد
+                $supplier->current_balance = (float) $supplier->current_balance + $invoiceTotal;
+                $supplier->save();
 
-            return $invoice;
+                return $invoice->load('supplier', 'purchaseOrder');
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
+                    $existing = SupplierInvoice::where('tenant_id', $tenantId)
+                        ->where('idempotency_key', $idempotencyKey)
+                        ->first();
+                    if ($existing) {
+                        return $existing->load('supplier', 'purchaseOrder');
+                    }
+                }
+                throw $e;
+            }
         });
     }
 
@@ -317,8 +375,15 @@ class ProcurementService
     public function processPurchaseReturn(array $data): PurchaseReturn
     {
         return DB::transaction(function () use ($data) {
-            $tenantId = $data['tenant_id'] ?? app('current_tenant_id');
-            $supplier = Supplier::where('id', $data['supplier_id'])->lockForUpdate()->firstOrFail();
+            $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+            if (empty($contextTenantId)) {
+                throw new InvalidArgumentException('أمان: سياق الشركة غير محدد. لا يمكن تسجيل مرتجع مشتريات دون سياق شركة موثق.');
+            }
+            if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+                throw new InvalidArgumentException('أمان: تعارض في هوية الشركة الممررة.');
+            }
+            $tenantId = $contextTenantId;
+            $supplier = Supplier::where('tenant_id', $tenantId)->where('id', $data['supplier_id'])->lockForUpdate()->firstOrFail();
 
             $returnNumber = $data['return_number'] ?? ('PRT-' . date('Ymd') . '-' . rand(100, 999));
             $totalReturn = 0;

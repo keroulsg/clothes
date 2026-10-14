@@ -26,6 +26,7 @@ class GoodsReceiptNote extends Model
         'delivery_note_number',
         'notes',
         'received_by',
+        'idempotency_key',
     ];
 
     protected $casts = [

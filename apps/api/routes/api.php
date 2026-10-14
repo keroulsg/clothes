@@ -24,13 +24,14 @@ Route::prefix('v1')->group(function () {
         ]);
     });
 
-    // المصادقة والتسجيل
-    Route::post('/auth/register-company', [TenantController::class, 'register']);
-    Route::post('/auth/login', [TenantController::class, 'login']);
+    // المصادقة والتسجيل مع الحماية من الهجمات بالتخمين (Rate Limiting)
+    Route::post('/auth/register-company', [TenantController::class, 'register'])->middleware('throttle:10,1');
+    Route::post('/auth/login', [TenantController::class, 'login'])->middleware('throttle:10,1');
 
     // المسارات المحمية بعزل الشركات
     Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
+        Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription']);
 
         // الفروع ومواقع العمل
         Route::get('/branches', [BranchController::class, 'index']);

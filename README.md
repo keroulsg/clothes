@@ -103,7 +103,7 @@ cd apps/api
 php artisan test
 ```
 **النتيجة:**
-`Pass: 24 tests, 110 assertions (100% passing)`.
+`Pass: 41 tests, 186 assertions (100% passing)`.
 
 ---
 

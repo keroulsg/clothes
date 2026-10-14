@@ -225,23 +225,48 @@ Duration: 1.22s
 
 ---
 
-## بوابة الأمان والمصادقة الصارمة قبل المرحلة 6 (Security Gate & Hardening)
+## بوابة الأمان والمصادقة الصارمة والمعالجة التصحيحية النهائية قبل المرحلة 6 (Final Security Gate Remediation)
 
-تم تنفيذ تدقيق ومراجعة أمنية شاملة ومعالجة كافة الثغرات المحتملة:
+تم إنجاز المراجعة التصحيحية الدقيقة والشاملة لبوابة الأمان وإغلاق كافة الثغرات وفق المتطلبات الإلزامية:
 
-### 1. المصادقة وعزل الشركات الصارم (Authentication & Tenant Isolation)
-- **حماية مسارات الـ API**: تفعيل المصادقة الصارمة باستخدام `auth:sanctum` بالتوازي مع `IdentifyTenant` على كافة مسارات بيانات وتشغيل الشركات.
-- **Fail-Closed في نطاق الاستعلام `TenantScope`**: في حال غياب هوية المستأجر (`current_tenant_id`)، يُطبق الاستعلام شرط `1 = 0` لمنع أي تسريب غير مقيد لبيانات الشركات.
-- **منع التلاعب بالترويسات والمعرفات (Anti-Tampering & IDOR Prevention)**: منع أي مستخدم من إرسال `X-Tenant-ID` يختلف عن شركته المسجلة (إرجاع `CrossTenantAccessDenied 403`).
-- **تدقيق حالة الحساب والاشتراك**: التحقق من أن المستخدم نشط (`is_active`) وأن الشركة ليست موقوفة (`suspended` / `cancelled`). بدء التسجيل الجديد كفترة تجريبية (`trial`) لا تعتبر اشتراكاً مدفوعاً مفعلاً تلقائياً.
-- **إضافة نقطة تسجيل الدخول `POST /api/v1/auth/login`**: للتحقق الآمن من بيانات المستخدمين وإصدار رموز الوصول (Sanctum Tokens).
+### 1. فرض التفرد الحقيقي لمفاتيح عدم التكرار (Real Unique Idempotency Constraints)
+- **الهجرة الجديدة `2026_10_15_000006_enforce_unique_idempotency_constraints.php`**:
+  - فحص البيانات التاريخية والتحقق من عدم وجود تكرارات سابقة قبل تطبيق القيد.
+  - فرض قيد فريد مركب `UNIQUE(['tenant_id', 'idempotency_key'])` على مستوى محرك قاعدة البيانات لجميع الجداول الحساسة:
+    1. `inventory_transactions`
+    2. `supplier_invoices`
+    3. `goods_receipt_notes`
+    4. `production_orders`
+  - السماح بقيم `NULL` المتعددة للعمليات التي لا تحدد مفتاحاً دون تعارض.
+  - عزل تام للمفاتيح بين الشركات (يمكن للشركة أ والشركة ب استخدام نفس المفتاح دون أي تداخل أو تسريب).
+  - كشف تعارض الحمولة (Payload Mismatch): عند إعادة إرسال نفس المفتاح بتفاصيل مختلفة يتم رفض الطلب فوراً برمز `409 Conflict` مع نوع الخطأ `IdempotencyConflict`.
+  - معالجة تعارضات التزامن (Race Conditions): عند حدوث تصادم فريد على مستوى قاعدة البيانات تحت التزامن الفعلي، تلتقط الخدمات `QueryException` وتسترجع السجل الفائز الأصلي بأمان دون مضاعفة الرصيد أو الالتزام المالي.
 
-### 2. سلامة المخزون والعمليات المالية (Inventory & Financial Integrity)
-- **التحقق من ملكية الأصناف والمخازن**: رفض أي حركة مخزنية لأصناف أو مخازن لا تنتمي لنفس الشركة مع إرجاع `403`.
-- **حماية التزامن ومنع السباق (Race Condition Protection)**: استخدام `lockForUpdate()` والمعاملات الذرية `DB::transaction()` لمنع تضارب الأرصدة.
-- **منع التكرار (Idempotency Protection)**: إضافة دعم `idempotency_key` وهيدر `X-Idempotency-Key` لمنع تكرار الحركات المخزنية أو الفواتير المالية للموردين عند إعادة إرسال الطلبات.
+### 2. تقوية وتحصين خدمة المخزون (InventoryService Hardening)
+- رفض تنفيذ أي حركة مخزنية إذا كان سياق الشركة مفقوداً (`InvalidArgumentException`).
+- مطابقة `tenant_id` الممرر مع سياق الشركة الموثق (`current_tenant_id`) وحظر أي محاولة تزوير أو تلاعب بالمعرفات.
+- التحقق الصارم من ملكية الصنف والمخزن واتساق علاقتهما بالشركة قبل الشروع في المعاملة.
+- صيانة المعاملات الذرية `DB::transaction` وأقفال السجلات `lockForUpdate` ومنع الرصيد السالب وفق إعدادات كل مخزن.
+- التراجع التام (Atomic Rollback) عند حدوث أي خطأ في منتصف المعاملة مع ضمان عدم بقاء أي قيد معلق أو تحديث جزئي للرصيد.
 
-### 3. نتائج الاختبارات الفعلية للتحقق الأمني
+### 3. فرض قواعد انتهاء الفترة التجريبية (Trial Expiration & Subscription Rules)
+- تطبيق التحقق الصارم من انتهاء `trial_ends_at` في طبقة الوسيط `IdentifyTenant`.
+- الفصل التام بين حالة تسجيل الشركة وحالة الاشتراك التجاري المدفوع (`is_paid`).
+- حظر الوصول لمسارات الـ ERP عند انتهاء التجربة برمز قياسي `402 Payment Required` مع تفاصيل الخطأ `TrialExpired`.
+- السماح بالمسارات الضرورية لإعادة التفعيل: الاستعلام عن الحساب `GET /api/v1/tenant/profile` ونقطة سداد وتفعيل الاشتراك `POST /api/v1/tenant/subscription/activate`.
+- الحفاظ على مسارات تسجيل الدخول مفتوحة دائماً دون حظر.
+
+### 4. تدقيق عدم التكرار المالي والمخزني ومكافحة هجمات التخمين
+- منع مضاعفة الالتزام المالي للموردين حتى لو أُعيد إرسال الفاتورة أو تكرر رقم الفاتورة.
+- منع تكرار أذون استلام البضائع (GRN) وتحديث المخزن للكمية المقبولة مرة واحدة فقط.
+- تفعيل Rate Limiting على مسار تسجيل الدخول `POST /api/v1/auth/login` وتسجيل الشركات `POST /api/v1/auth/register-company` بمعدل 10 طلبات في الدقيقة لمنع هجمات القوة الغاشمة (Brute Force).
+
+### 5. خط أنابيب التكامل المستمر (CI Workflow)
+- إضافة سير عمل GitHub Actions في `.github/workflows/ci.yml`:
+  - تشغيل اختبارات الأمان والـ ERP على بيئة PHP 8.4 مع SQLite وComposer.
+  - فحص الأنواع (Typecheck) وبناء الواجهة الأمامية عبر Node.js 20 وVite.
+
+### 6. نتائج الاختبارات الفعلية الشاملة
 ```bash
 php artisan test
 ```
@@ -279,6 +304,16 @@ php artisan test
   ✓ resending same inventory transaction does not cause duplicate posting
   ✓ resending same supplier invoice does not cause duplicate financial posting
   ✓ login flow and inactive or suspended account handling
+  ✓ inventory service rejects missing tenant context without mutations
+  ✓ inventory service rejects tenant id spoofing
+  ✓ idempotency payload mismatch returns 409 conflict
+  ✓ cross tenant idempotency key isolation
+  ✓ trial expiration rules and subscription activation
+  ✓ db level unique constraint blocks concurrent duplicate insertion
+  ✓ transaction rollback prevents partial state on mid execution failure
+  ✓ duplicate supplier invoice number prevents duplicate financial liability
+  ✓ goods receipt idempotency prevents duplicate stock addition
+  ✓ rate limiting protects login endpoint
 
    PASS  Tests\Feature\TenantIsolationTest
   ✓ can register new company with main branch
@@ -292,8 +327,8 @@ php artisan test
    PASS  Tests\Unit\ExampleTest
   ✓ that a basic test can be performed
 
-Tests:    31 passed (150 assertions)
-Duration: 2.35s
+Tests:    41 passed (186 assertions)
+Duration: 2.94s
 ```
 
 ```bash
@@ -313,5 +348,5 @@ dist/index.html                   0.45 kB │ gzip:   0.29 kB
 dist/assets/index-Ch1k70OM.css   43.57 kB │ gzip:   7.41 kB
 dist/assets/index-DQzRHzj_.js   391.99 kB │ gzip: 102.07 kB
 
-✓ built in 749ms
+✓ built in 743ms
 ```

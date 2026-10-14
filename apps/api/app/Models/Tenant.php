@@ -42,4 +42,46 @@ class Tenant extends Model
     {
         return $this->hasMany(AuditLog::class);
     }
+
+    public function isPaid(): bool
+    {
+        return (bool) ($this->settings['subscription']['is_paid'] ?? false);
+    }
+
+    public function isTrial(): bool
+    {
+        $subStatus = $this->settings['subscription']['status'] ?? null;
+        return $this->status === 'trial' || $subStatus === 'trial';
+    }
+
+    public function isTrialExpired(): bool
+    {
+        if ($this->isPaid()) {
+            return false;
+        }
+
+        $trialEndsAt = $this->settings['subscription']['trial_ends_at'] ?? null;
+        if (!$trialEndsAt) {
+            return false;
+        }
+
+        return now()->greaterThan(\Illuminate\Support\Carbon::parse($trialEndsAt));
+    }
+
+    public function hasActiveAccess(): bool
+    {
+        if (in_array($this->status, ['suspended', 'cancelled'])) {
+            return false;
+        }
+
+        if ($this->isPaid()) {
+            return true;
+        }
+
+        if ($this->isTrial()) {
+            return !$this->isTrialExpired();
+        }
+
+        return false;
+    }
 }

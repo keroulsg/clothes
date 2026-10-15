@@ -2600,5 +2600,120 @@ class SecurityGateTest extends TestCase
 
         $resMissingTx->assertStatus(401);
     }
+
+    /**
+     * اختبار أمان 43: إلزامية معرف الحدث المستقر في HMAC المعياري وعدم دمج الأحداث المختلفة لنفس الطلب
+     */
+    public function test_standard_hmac_requires_genuine_event_id_and_handles_distinct_events_for_same_order(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-HMAC-EVENT-ID',
+            'name' => 'مصنع التحقق من معرفات الأحداث',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'HMAC-ID-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+
+        // 1. إرسال إشعار بدون event_id وبدون transaction_id -> رفض 422 وعدم توليد معرف اصطناعي
+        $payloadMissingId = [
+            'event' => 'payment.completed',
+            'tenant_id' => $tenant->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+        ];
+        $bodyMissingId = json_encode($payloadMissingId);
+        $sigMissingId = hash_hmac('sha256', "{$now}.{$bodyMissingId}", $secret);
+
+        $resMissingId = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sigMissingId,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $bodyMissingId);
+
+        $resMissingId->assertStatus(422)
+            ->assertJsonPath('error', 'MalformedWebhookPayload');
+
+        // 2. إرسال event_id فارغ أو غير قياسي (Whitespace أو Array) -> رفض 422
+        $payloadEmptyId = $payloadMissingId;
+        $payloadEmptyId['event_id'] = '   ';
+        $bodyEmptyId = json_encode($payloadEmptyId);
+        $sigEmptyId = hash_hmac('sha256', "{$now}.{$bodyEmptyId}", $secret);
+
+        $resEmptyId = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sigEmptyId,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $bodyEmptyId);
+
+        $resEmptyId->assertStatus(422)->assertJsonPath('error', 'MalformedWebhookPayload');
+
+        // 3. إرسال حدث سداد أولي بمعرف حقيقي ومستقر -> 200 Success
+        $eventId1 = 'EVT-STABLE-FIRST-' . uniqid();
+        $payload1 = $payloadMissingId;
+        $payload1['event_id'] = $eventId1;
+        $body1 = json_encode($payload1);
+        $sig1 = hash_hmac('sha256', "{$now}.{$body1}", $secret);
+
+        $res1 = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig1,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body1);
+
+        $res1->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true);
+        $this->assertTrue((bool)$tenant->fresh()->is_paid);
+        $this->assertEquals('paid', $order->fresh()->status);
+
+        // 4. إعادة إرسال نفس الحدث الأول المتطابق (Identical Retry) -> 200 already_processed دون تكرار
+        $resReplay = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig1,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body1);
+
+        $resReplay->assertStatus(200)
+            ->assertJsonPath('status', 'already_processed')
+            ->assertJsonPath('is_paid', true)
+            ->assertJsonPath('event_id', $eventId1);
+
+        $this->assertEquals(1, \App\Models\ProcessedWebhookEvent::where('event_id', $eventId1)->count());
+
+        // 5. إرسال حدث منفصل ومستقل لنفس الطلب (Distinct Event) -> لا يتم دمجه في الحدث الأول
+        $eventId2 = 'EVT-STABLE-SECOND-' . uniqid();
+        $payload2 = $payloadMissingId;
+        $payload2['event_id'] = $eventId2;
+        $body2 = json_encode($payload2);
+        $sig2 = hash_hmac('sha256', "{$now}.{$body2}", $secret);
+
+        $res2 = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig2,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body2);
+
+        $res2->assertStatus(200)
+            ->assertJsonPath('status', 'already_completed')
+            ->assertJsonPath('is_paid', true);
+
+        // التحقق من تسجيل الحدثين ككيانين مستقلين في قاعدة البيانات دون دمج خاطئ
+        $this->assertEquals(1, \App\Models\ProcessedWebhookEvent::where('event_id', $eventId2)->count());
+        $this->assertEquals(2, \App\Models\ProcessedWebhookEvent::where('order_reference', $order->order_reference)->count());
+    }
 }
 

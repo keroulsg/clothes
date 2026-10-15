@@ -131,10 +131,13 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
             $executedQueries[] = $query->sql;
         });
 
-        // تشغيل cleanDatabase مع حرمان متغير الموافقة
-        $originalOptIn = env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+        $origOptIn = getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+        $origEnvOptIn = $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] ?? null;
+        $origServerOptIn = $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] ?? null;
+
         putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP=false');
         $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = 'false';
+        $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = 'false';
 
         try {
             $testInstance = new PostgresConcurrencyIntegrationTest('test_guard');
@@ -143,12 +146,22 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP', $e->getMessage());
         } finally {
-            if ($originalOptIn !== false && $originalOptIn !== null) {
-                putenv("ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP={$originalOptIn}");
-                $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $originalOptIn;
+            if ($origOptIn !== false && $origOptIn !== null) {
+                putenv("ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP={$origOptIn}");
             } else {
                 putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+            }
+
+            if ($origEnvOptIn !== null) {
+                $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origEnvOptIn;
+            } else {
                 unset($_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']);
+            }
+
+            if ($origServerOptIn !== null) {
+                $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origServerOptIn;
+            } else {
+                unset($_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']);
             }
         }
 
@@ -165,13 +178,21 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
         $origHost = config('database.connections.pgsql.host');
         $origPort = config('database.connections.pgsql.port');
         $origDatabase = config('database.connections.pgsql.database');
-        $origDb = env('PGSQL_DATABASE') ?? getenv('PGSQL_DATABASE');
-        $origOptIn = env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+        $origDb = getenv('PGSQL_DATABASE') ?: (env('PGSQL_DATABASE') ?? 'garmentos_test');
+        $origEnvDb = $_ENV['PGSQL_DATABASE'] ?? null;
+        $origServerDb = $_SERVER['PGSQL_DATABASE'] ?? null;
+
+        $origOptIn = getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+        $origEnvOptIn = $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] ?? null;
+        $origServerOptIn = $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] ?? null;
 
         putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP=true');
         $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = 'true';
+        $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = 'true';
+
         putenv('PGSQL_DATABASE=unreachable_test');
         $_ENV['PGSQL_DATABASE'] = 'unreachable_test';
+        $_SERVER['PGSQL_DATABASE'] = 'unreachable_test';
 
         config([
             'database.connections.pgsql.host' => '127.0.0.1',
@@ -193,21 +214,42 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
                 'database.connections.pgsql.database' => $origDatabase ?? 'garmentos_test',
             ]);
 
-            if ($origOptIn !== null && $origOptIn !== false) {
+            if ($origOptIn !== false && $origOptIn !== null) {
                 putenv("ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP={$origOptIn}");
-                $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origOptIn;
             } else {
                 putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+            }
+
+            if ($origEnvOptIn !== null) {
+                $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origEnvOptIn;
+            } else {
                 unset($_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']);
             }
 
-            if ($origDb !== null && $origDb !== false) {
+            if ($origServerOptIn !== null) {
+                $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origServerOptIn;
+            } else {
+                unset($_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']);
+            }
+
+            if ($origDb !== false && $origDb !== null) {
                 putenv("PGSQL_DATABASE={$origDb}");
-                $_ENV['PGSQL_DATABASE'] = $origDb;
             } else {
                 putenv('PGSQL_DATABASE=garmentos_test');
+            }
+
+            if ($origEnvDb !== null) {
+                $_ENV['PGSQL_DATABASE'] = $origEnvDb;
+            } else {
                 $_ENV['PGSQL_DATABASE'] = 'garmentos_test';
             }
+
+            if ($origServerDb !== null) {
+                $_SERVER['PGSQL_DATABASE'] = $origServerDb;
+            } else {
+                $_SERVER['PGSQL_DATABASE'] = 'garmentos_test';
+            }
+
             DB::purge('pgsql');
         }
     }

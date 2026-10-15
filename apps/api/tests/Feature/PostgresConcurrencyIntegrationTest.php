@@ -149,7 +149,13 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         ?string $pgsqlDatabase = null,
         mixed $allowOptIn = null
     ): void {
-        $rawEnv = $appEnv ?? (app()->environment() ?: (env('APP_ENV') ?? getenv('APP_ENV') ?? 'production'));
+        $rawEnv = $appEnv ?? (app()->environment() ?: (
+            isset($_ENV['APP_ENV'])
+                ? $_ENV['APP_ENV']
+                : (isset($_SERVER['APP_ENV'])
+                    ? $_SERVER['APP_ENV']
+                    : (getenv('APP_ENV') ?: env('APP_ENV', 'production')))
+        ));
         $env = is_string($rawEnv) ? trim($rawEnv) : (string) $rawEnv;
         if ($env !== 'testing') {
             throw new \RuntimeException(
@@ -159,7 +165,13 @@ class PostgresConcurrencyIntegrationTest extends TestCase
 
         $rawPgDb = $pgsqlDatabase !== null
             ? $pgsqlDatabase
-            : (env('PGSQL_DATABASE') ?? getenv('PGSQL_DATABASE') ?? ($_SERVER['PGSQL_DATABASE'] ?? null));
+            : (
+                isset($_ENV['PGSQL_DATABASE'])
+                    ? $_ENV['PGSQL_DATABASE']
+                    : (isset($_SERVER['PGSQL_DATABASE'])
+                        ? $_SERVER['PGSQL_DATABASE']
+                        : (getenv('PGSQL_DATABASE') ?: env('PGSQL_DATABASE')))
+            );
 
         if ($rawPgDb === null || !is_string($rawPgDb) || trim($rawPgDb) === '') {
             throw new \RuntimeException(
@@ -176,7 +188,13 @@ class PostgresConcurrencyIntegrationTest extends TestCase
 
         $rawOptIn = $allowOptIn !== null
             ? $allowOptIn
-            : (env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? ($_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] ?? null));
+            : (
+                isset($_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'])
+                    ? $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']
+                    : (isset($_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'])
+                        ? $_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']
+                        : (getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?: env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP')))
+            );
 
         $trimmedOptIn = is_string($rawOptIn) ? trim($rawOptIn) : $rawOptIn;
         $isOptInValid = ($trimmedOptIn === true || $trimmedOptIn === 'true' || $trimmedOptIn === 1 || $trimmedOptIn === '1');

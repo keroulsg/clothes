@@ -147,16 +147,20 @@ class PostgresConcurrencyIntegrationTest extends TestCase
     public static function assertSafeDestructiveCleanupDatabase(
         ?string $appEnv = null,
         ?string $pgsqlDatabase = null,
-        ?string $allowOptIn = null
+        mixed $allowOptIn = null
     ): void {
-        $env = $appEnv ?? (app()->environment() ?: (string) env('APP_ENV', 'production'));
+        $rawEnv = $appEnv ?? (app()->environment() ?: (env('APP_ENV') ?? getenv('APP_ENV') ?? 'production'));
+        $env = is_string($rawEnv) ? trim($rawEnv) : (string) $rawEnv;
         if ($env !== 'testing') {
             throw new \RuntimeException(
                 sprintf("Destructive PostgreSQL test database cleanup rejected: Application must be running in the 'testing' environment, currently '%s'.", $env)
             );
         }
 
-        $rawPgDb = $pgsqlDatabase !== null ? $pgsqlDatabase : env('PGSQL_DATABASE');
+        $rawPgDb = $pgsqlDatabase !== null
+            ? $pgsqlDatabase
+            : (env('PGSQL_DATABASE') ?? getenv('PGSQL_DATABASE') ?? ($_SERVER['PGSQL_DATABASE'] ?? null));
+
         if ($rawPgDb === null || !is_string($rawPgDb) || trim($rawPgDb) === '') {
             throw new \RuntimeException(
                 "Destructive PostgreSQL test database cleanup rejected: PGSQL_DATABASE must be explicitly configured and non-empty. Deriving the cleanup target from DB_DATABASE is forbidden."
@@ -170,14 +174,21 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             );
         }
 
-        $optIn = $allowOptIn !== null ? $allowOptIn : env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
-        if ($optIn !== 'true' && $optIn !== true) {
+        $rawOptIn = $allowOptIn !== null
+            ? $allowOptIn
+            : (env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? ($_SERVER['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] ?? null));
+
+        $trimmedOptIn = is_string($rawOptIn) ? trim($rawOptIn) : $rawOptIn;
+        $isOptInValid = ($trimmedOptIn === true || $trimmedOptIn === 'true' || $trimmedOptIn === 1 || $trimmedOptIn === '1');
+
+        if (!$isOptInValid) {
             throw new \RuntimeException(
                 "Destructive PostgreSQL test database cleanup rejected: Dedicated opt-in environment variable ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP must be explicitly set to 'true'."
             );
         }
 
         config(['database.connections.pgsql.database' => $pgDb]);
+        DB::purge('pgsql');
     }
 
     public function cleanDatabase(): void

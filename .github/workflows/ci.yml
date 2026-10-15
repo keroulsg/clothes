@@ -40,7 +40,7 @@ jobs:
       PGSQL_DATABASE: garmentos_test
       PGSQL_USERNAME: garmentos
       PGSQL_PASSWORD: secret_test_password
-      ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP: true
+      ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP: 'true'
       PAYMENT_WEBHOOK_SECRET: test_payment_webhook_secret_key_must_be_over_32_chars_long
       PLATFORM_ADMIN_ACTIVATION_KEY: test_platform_admin_super_secret_activation_key_32_chars
 
@@ -78,12 +78,13 @@ jobs:
             "REQUIRE_POSTGRES_CONCURRENCY_TESTS=true" \
             > .env
           cp .env .env.testing
+          echo "ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP=true" >> $GITHUB_ENV
 
       - name: Run Database Migrations on PostgreSQL
         run: php artisan migrate --database=pgsql -v --force
 
       - name: Run PostgreSQL Concurrency Integration Tests
-        run: php artisan test --filter=PostgresConcurrencyIntegrationTest
+        run: php artisan test --filter=PostgresConcurrencyIntegrationTest -v
 
       - name: Run Complete Backend Test Suite
         run: php artisan test

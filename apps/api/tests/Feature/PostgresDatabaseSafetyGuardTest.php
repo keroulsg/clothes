@@ -162,6 +162,9 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
      */
     public function test_clean_database_fails_clearly_and_does_not_swallow_exceptions(): void
     {
+        $origDb = env('PGSQL_DATABASE') ?? getenv('PGSQL_DATABASE');
+        $origOptIn = env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+
         putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP=true');
         $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = 'true';
         putenv('PGSQL_DATABASE=unreachable_test');
@@ -181,10 +184,23 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
             $testInstance = new PostgresConcurrencyIntegrationTest('test_error_handling');
             $testInstance->cleanDatabase();
         } finally {
-            putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
-            unset($_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']);
-            putenv('PGSQL_DATABASE');
-            unset($_ENV['PGSQL_DATABASE']);
+            if ($origOptIn !== null && $origOptIn !== false) {
+                putenv("ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP={$origOptIn}");
+                $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origOptIn;
+            } else {
+                putenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+                unset($_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP']);
+            }
+
+            if ($origDb !== null && $origDb !== false) {
+                putenv("PGSQL_DATABASE={$origDb}");
+                $_ENV['PGSQL_DATABASE'] = $origDb;
+                config(['database.connections.pgsql.database' => $origDb]);
+            } else {
+                putenv('PGSQL_DATABASE=garmentos_test');
+                $_ENV['PGSQL_DATABASE'] = 'garmentos_test';
+                config(['database.connections.pgsql.database' => 'garmentos_test']);
+            }
             DB::purge('pgsql');
         }
     }

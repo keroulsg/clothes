@@ -40,6 +40,7 @@ jobs:
       PGSQL_DATABASE: garmentos_test
       PGSQL_USERNAME: garmentos
       PGSQL_PASSWORD: secret_test_password
+      ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP: true
       PAYMENT_WEBHOOK_SECRET: test_payment_webhook_secret_key_must_be_over_32_chars_long
       PLATFORM_ADMIN_ACTIVATION_KEY: test_platform_admin_super_secret_activation_key_32_chars
 
@@ -69,6 +70,7 @@ jobs:
             "PGSQL_DATABASE=garmentos_test" \
             "PGSQL_USERNAME=garmentos" \
             "PGSQL_PASSWORD=secret_test_password" \
+            "ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP=true" \
             "PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long" \
             "STRIPE_WEBHOOK_SECRET=whsec_test_stripe_webhook_secret_key_over_32_characters" \
             "PAYMOB_HMAC_SECRET=test_paymob_hmac_secret_key_must_be_over_32_characters_long" \

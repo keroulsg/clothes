@@ -111,28 +111,79 @@ class PostgresConcurrencyIntegrationTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->isPostgresAvailable()) {
-            $this->cleanDatabase();
-        }
-
-        if (is_dir($this->tempDir)) {
-            $files = glob($this->tempDir . '/*');
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
-                }
+        try {
+            if ($this->isPostgresAvailable()) {
+                $this->cleanDatabase();
             }
-            rmdir($this->tempDir);
+        } finally {
+            if (is_dir($this->tempDir)) {
+                $files = glob($this->tempDir . '/*');
+                foreach ($files as $file) {
+                    if (is_file($file)) {
+                        unlink($file);
+                    }
+                }
+                rmdir($this->tempDir);
+            }
+
+            config(['database.default' => env('DB_CONNECTION', 'sqlite')]);
+            DB::purge('pgsql');
+
+            parent::tearDown();
         }
-
-        config(['database.default' => env('DB_CONNECTION', 'sqlite')]);
-        DB::purge('pgsql');
-
-        parent::tearDown();
     }
 
-    private function cleanDatabase(): void
+    /**
+     * Fail-closed safety guard for destructive PostgreSQL database cleanup.
+     *
+     * Aborts before executing any destructive query unless ALL of the following hold:
+     * 1. Application is running in the 'testing' environment.
+     * 2. PGSQL_DATABASE is explicitly configured (deriving from DB_DATABASE is forbidden).
+     * 3. Configured PostgreSQL database name ends with '_test'.
+     * 4. ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP=true is explicitly enabled.
+     *
+     * @throws \RuntimeException if any condition is missing or invalid.
+     */
+    public static function assertSafeDestructiveCleanupDatabase(
+        ?string $appEnv = null,
+        ?string $pgsqlDatabase = null,
+        ?string $allowOptIn = null
+    ): void {
+        $env = $appEnv ?? (app()->environment() ?: (string) env('APP_ENV', 'production'));
+        if ($env !== 'testing') {
+            throw new \RuntimeException(
+                sprintf("Destructive PostgreSQL test database cleanup rejected: Application must be running in the 'testing' environment, currently '%s'.", $env)
+            );
+        }
+
+        $rawPgDb = $pgsqlDatabase !== null ? $pgsqlDatabase : env('PGSQL_DATABASE');
+        if ($rawPgDb === null || !is_string($rawPgDb) || trim($rawPgDb) === '') {
+            throw new \RuntimeException(
+                "Destructive PostgreSQL test database cleanup rejected: PGSQL_DATABASE must be explicitly configured and non-empty. Deriving the cleanup target from DB_DATABASE is forbidden."
+            );
+        }
+
+        $pgDb = trim($rawPgDb);
+        if (!str_ends_with($pgDb, '_test')) {
+            throw new \RuntimeException(
+                sprintf("Destructive PostgreSQL test database cleanup rejected: Configured PostgreSQL database '%s' does not end with '_test'. Only isolated test databases ending with '_test' may be cleaned.", $pgDb)
+            );
+        }
+
+        $optIn = $allowOptIn !== null ? $allowOptIn : env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
+        if ($optIn !== 'true' && $optIn !== true) {
+            throw new \RuntimeException(
+                "Destructive PostgreSQL test database cleanup rejected: Dedicated opt-in environment variable ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP must be explicitly set to 'true'."
+            );
+        }
+
+        config(['database.connections.pgsql.database' => $pgDb]);
+    }
+
+    public function cleanDatabase(): void
     {
+        self::assertSafeDestructiveCleanupDatabase();
+
         try {
             $conn = DB::connection('pgsql');
             $conn->table('audit_logs')->delete();
@@ -148,7 +199,8 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             $conn->table('inventory_items')->delete();
             $conn->table('warehouses')->delete();
             $conn->table('tenants')->delete();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            throw new \RuntimeException("PostgreSQL test database cleanup failed: " . $e->getMessage(), 0, $e);
         }
     }
 

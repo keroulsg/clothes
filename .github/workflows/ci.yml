@@ -30,6 +30,19 @@ jobs:
       run:
         working-directory: apps/api
 
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+      PGSQL_HOST: 127.0.0.1
+      PGSQL_PORT: 5432
+      PGSQL_DATABASE: garmentos_test
+      PGSQL_USERNAME: garmentos
+      PGSQL_PASSWORD: secret_test_password
+      PAYMENT_WEBHOOK_SECRET: test_payment_webhook_secret_key_must_be_over_32_chars_long
+      PLATFORM_ADMIN_ACTIVATION_KEY: test_platform_admin_super_secret_activation_key_32_chars
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -46,21 +59,32 @@ jobs:
 
       - name: Prepare Test Environment
         run: |
-          cp .env.example .env.testing || touch .env.testing
-          echo "APP_ENV=testing" >> .env.testing
-          echo "APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=" >> .env.testing
-          echo "DB_CONNECTION=sqlite" >> .env.testing
-          echo "DB_DATABASE=:memory:" >> .env.testing
-          echo "PGSQL_HOST=127.0.0.1" >> .env.testing
-          echo "PGSQL_PORT=5432" >> .env.testing
-          echo "PGSQL_DATABASE=garmentos_test" >> .env.testing
-          echo "PGSQL_USERNAME=garmentos" >> .env.testing
-          echo "PGSQL_PASSWORD=secret_test_password" >> .env.testing
-          echo "PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long" >> .env.testing
-          echo "PLATFORM_ADMIN_ACTIVATION_KEY=test_platform_admin_super_secret_activation_key_32_chars" >> .env.testing
+          cat << 'EOF' > .env
+APP_ENV=testing
+APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
+DB_CONNECTION=sqlite
+DB_DATABASE=:memory:
+PGSQL_HOST=127.0.0.1
+PGSQL_PORT=5432
+PGSQL_DATABASE=garmentos_test
+PGSQL_USERNAME=garmentos
+PGSQL_PASSWORD=secret_test_password
+PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long
+PLATFORM_ADMIN_ACTIVATION_KEY=test_platform_admin_super_secret_activation_key_32_chars
+EOF
+          cp .env .env.testing
 
       - name: Run Database Migrations on PostgreSQL
-        run: php artisan migrate --database=pgsql --force
+        run: |
+          for i in $(seq 1 15); do
+            if php -r "try { new PDO('pgsql:host=127.0.0.1;port=5432;dbname=garmentos_test', 'garmentos', 'secret_test_password'); exit(0); } catch (Exception \$e) { exit(1); }"; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting for PostgreSQL service (attempt $i)..."
+            sleep 2
+          done
+          php artisan migrate --database=pgsql --force
 
       - name: Run Backend Tests
         run: php artisan test

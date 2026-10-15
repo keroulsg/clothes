@@ -32,6 +32,11 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="PGSQL_HOST" value="127.0.0.1"/>
+        <env name="PGSQL_PORT" value="5432"/>
+        <env name="PGSQL_DATABASE" value="garmentos_test"/>
+        <env name="PGSQL_USERNAME" value="garmentos"/>
+        <env name="PGSQL_PASSWORD" value="secret_test_password"/>
         <env name="PAYMENT_WEBHOOK_SECRET" value="test_payment_webhook_secret_key_must_be_over_32_chars_long"/>
         <env name="PLATFORM_ADMIN_ACTIVATION_KEY" value="test_platform_admin_super_secret_activation_key_32_chars"/>
     </php>

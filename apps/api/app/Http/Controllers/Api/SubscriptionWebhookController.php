@@ -265,7 +265,7 @@ class SubscriptionWebhookController extends Controller
             if ($isDuplicateEvent) {
                 // إعادة محاولة قراءة السجل المثبت بعد اكتمال المعاملة المتزامنة المنافسة
                 $committedEvent = null;
-                for ($attempt = 0; $attempt < 6; $attempt++) {
+                for ($attempt = 0; $attempt < 20; $attempt++) {
                     $committedEvent = ProcessedWebhookEvent::where('provider', $event->provider)
                         ->where('event_id', $event->eventId)
                         ->first();

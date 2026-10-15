@@ -17,11 +17,21 @@ class StandardHmacEventNormalizer implements PaymentEventNormalizerInterface
         }
 
         // 2. التحقق الصارم من وجود معرف حدث مستقر ورفض الغياب أو القيم الفارغة أو غير القياسية
-        $rawEventId = $payload['event_id'] ?? ($payload['transaction_id'] ?? null);
-        if ($rawEventId === null || !is_scalar($rawEventId) || trim((string)$rawEventId) === '' || is_bool($rawEventId)) {
-            throw new InvalidArgumentException('معرف الحدث (event_id) مفقود أو غير صالح أو فارغ في إشعار الدفع.');
+        $candidateId = null;
+        foreach (['event_id', 'transaction_id'] as $key) {
+            if (isset($payload[$key]) && is_scalar($payload[$key]) && !is_bool($payload[$key])) {
+                $trimmed = trim((string) $payload[$key]);
+                if ($trimmed !== '') {
+                    $candidateId = $trimmed;
+                    break;
+                }
+            }
         }
-        $eventId = trim((string) $rawEventId);
+
+        if ($candidateId === null) {
+            throw new InvalidArgumentException('معرف الحدث (event_id أو transaction_id) مفقود أو غير صالح أو فارغ في إشعار الدفع.');
+        }
+        $eventId = $candidateId;
 
         $rawAmount = $payload['amount'] ?? null;
         if ($rawAmount === null || !is_numeric($rawAmount) || (float)$rawAmount <= 0) {

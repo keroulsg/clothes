@@ -125,25 +125,29 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             rmdir($this->tempDir);
         }
 
+        config(['database.default' => env('DB_CONNECTION', 'sqlite')]);
+        DB::purge('pgsql');
+
         parent::tearDown();
     }
 
     private function cleanDatabase(): void
     {
         try {
-            DB::table('audit_logs')->delete();
-            DB::table('processed_webhook_events')->delete();
-            DB::table('subscription_payment_orders')->delete();
-            DB::table('supplier_invoices')->delete();
-            DB::table('goods_receipt_note_items')->delete();
-            DB::table('goods_receipt_notes')->delete();
-            DB::table('purchase_order_items')->delete();
-            DB::table('purchase_orders')->delete();
-            DB::table('suppliers')->delete();
-            DB::table('inventory_transactions')->delete();
-            DB::table('inventory_items')->delete();
-            DB::table('warehouses')->delete();
-            DB::table('tenants')->delete();
+            $conn = DB::connection('pgsql');
+            $conn->table('audit_logs')->delete();
+            $conn->table('processed_webhook_events')->delete();
+            $conn->table('subscription_payment_orders')->delete();
+            $conn->table('supplier_invoices')->delete();
+            $conn->table('goods_receipt_note_items')->delete();
+            $conn->table('goods_receipt_notes')->delete();
+            $conn->table('purchase_order_items')->delete();
+            $conn->table('purchase_orders')->delete();
+            $conn->table('suppliers')->delete();
+            $conn->table('inventory_transactions')->delete();
+            $conn->table('inventory_items')->delete();
+            $conn->table('warehouses')->delete();
+            $conn->table('tenants')->delete();
         } catch (\Throwable) {
         }
     }

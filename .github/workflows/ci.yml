@@ -87,7 +87,15 @@ jobs:
         run: php artisan test --filter=PostgresConcurrencyIntegrationTest
 
       - name: Run Complete Backend Test Suite
-        run: php artisan test
+        run: |
+          set +e
+          php artisan test --colors=never 2>&1 | tee /tmp/full_test.log
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          if [ $exit_code -ne 0 ]; then
+            echo "::error title=Backend Tests Failed::$(grep -E '(FAIL|Failed|Error|Exception)' /tmp/full_test.log | head -n 30 | tr '\r\n' ' ')"
+            exit $exit_code
+          fi
 
   frontend-build:
     name: Frontend TypeScript & Vite Build

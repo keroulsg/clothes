@@ -71,13 +71,17 @@ jobs:
             "PGSQL_PASSWORD=secret_test_password" \
             "PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long" \
             "PLATFORM_ADMIN_ACTIVATION_KEY=test_platform_admin_super_secret_activation_key_32_chars" \
+            "REQUIRE_POSTGRES_CONCURRENCY_TESTS=true" \
             > .env
           cp .env .env.testing
 
       - name: Run Database Migrations on PostgreSQL
         run: php artisan migrate --database=pgsql -v --force
 
-      - name: Run Backend Tests
+      - name: Run PostgreSQL Concurrency Integration Tests
+        run: php artisan test --filter=PostgresConcurrencyIntegrationTest
+
+      - name: Run Complete Backend Test Suite
         run: php artisan test
 
   frontend-build:

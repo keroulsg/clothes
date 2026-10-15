@@ -50,11 +50,43 @@ class SubscriptionPaymentOrder extends Model
 
     public function canAcceptPayment(): bool
     {
-        return in_array($this->status, ['pending', 'payment_attempt_failed', 'processing']) && !$this->isExpired();
+        return in_array($this->status, ['pending', 'payment_attempt_failed', 'processing'], true) && !$this->isExpired();
     }
 
     public function isAlreadyPaid(): bool
     {
         return $this->status === 'paid' || $this->status === 'completed';
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    public function canTransitionTo(string $targetStatus): bool
+    {
+        // 1. إذا كان الطلب مسدداً بالفعل: حالة نهائية غير قابلة للتراجع
+        if ($this->isAlreadyPaid()) {
+            return false;
+        }
+
+        // 2. إذا كان الطلب ملغى: حالة نهائية
+        if ($this->isCancelled()) {
+            return false;
+        }
+
+        // 3. إذا كان الطلب منتهي الصلاحية: لا يمكن سداده
+        if ($this->isExpired() && in_array($targetStatus, ['paid', 'completed'], true)) {
+            return false;
+        }
+
+        // 4. الحالات المسموح بها من pending أو payment_attempt_failed
+        return match ($targetStatus) {
+            'paid', 'completed' => $this->canAcceptPayment(),
+            'payment_attempt_failed' => in_array($this->status, ['pending', 'payment_attempt_failed'], true),
+            'expired' => true,
+            'cancelled' => in_array($this->status, ['pending', 'payment_attempt_failed'], true),
+            default => false,
+        };
     }
 }

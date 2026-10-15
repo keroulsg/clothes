@@ -29,6 +29,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [TenantController::class, 'login'])->middleware('throttle:10,1');
 
     // استلام إشعارات الدفع الموقعة من بوابات الدفع الإلكتروني (Verified Webhook)
+    Route::post('/subscriptions/webhook/stripe', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook'])->defaults('provider', 'stripe');
+    Route::post('/subscriptions/webhook/paymob', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook'])->defaults('provider', 'paymob');
     Route::post('/webhooks/subscription-payment', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
     Route::post('/subscriptions/webhook', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
 

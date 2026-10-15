@@ -1836,4 +1836,416 @@ class SecurityGateTest extends TestCase
             ->assertJsonPath('transaction.id', $idB)
             ->assertJsonPath('transaction.tenant_id', $this->tenantB->id);
     }
+
+    /**
+     * اختبار أمان 33: تطبيع إشعار Stripe Checkout Session الرسمي والتحقق من التوقيع والتفعيل الذري
+     */
+    public function test_genuine_stripe_checkout_session_completed_normalizes_and_activates_subscription(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-STRIPE-OFFICIAL',
+            'name' => 'مصنع الملابس المعتمد - سترايب',
+            'subdomain' => 'stripe-official-factory',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'STRIPE-OFFICIAL-ORD-' . uniqid(),
+            'plan_tier' => 'enterprise',
+            'amount' => 5000.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+        $payload = [
+            'id' => 'evt_test_checkout_' . uniqid(),
+            'object' => 'event',
+            'type' => 'checkout.session.completed',
+            'created' => $now,
+            'data' => [
+                'object' => [
+                    'id' => 'cs_test_session_123',
+                    'object' => 'checkout.session',
+                    'amount_total' => 500000, // 5000.00 EGP in minor units
+                    'currency' => 'egp',
+                    'payment_status' => 'paid',
+                    'status' => 'complete',
+                    'payment_intent' => 'pi_test_intent_999',
+                    'client_reference_id' => $order->order_reference,
+                    'metadata' => [
+                        'order_reference' => $order->order_reference,
+                    ],
+                ],
+            ],
+        ];
+
+        $rawBody = json_encode($payload);
+        $signature = hash_hmac('sha256', "{$now}.{$rawBody}", $secret);
+
+        $res = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$signature}",
+        ], $rawBody);
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true)
+            ->assertJsonPath('plan_tier', 'enterprise');
+
+        $this->assertEquals('paid', $order->fresh()->status);
+        $this->assertTrue((bool)$tenant->fresh()->is_paid);
+        $this->assertEquals('enterprise', $tenant->fresh()->plan_tier);
+    }
+
+    /**
+     * اختبار أمان 34: التحقق من كولباك Paymob الرسمي بحساب HMAC-SHA512 عبر 20 حقلاً معيارياً
+     */
+    public function test_genuine_paymob_transaction_callback_verifies_official_hmac_and_activates(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-PAYMOB-OFFICIAL',
+            'name' => 'مصنع النسيج - بيموب الرسمي',
+            'subdomain' => 'paymob-official-factory',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'PAYMOB-OFFICIAL-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $txId = rand(1000000, 9999999);
+        $payload = [
+            'type' => 'TRANSACTION',
+            'obj' => [
+                'id' => $txId,
+                'pending' => false,
+                'amount_cents' => 350000, // 3500.00 EGP in cents
+                'success' => true,
+                'is_auth' => false,
+                'is_capture' => false,
+                'is_standalone_payment' => true,
+                'is_voided' => false,
+                'is_refunded' => false,
+                'is_3d_secure' => true,
+                'integration_id' => 98765,
+                'order' => [
+                    'id' => 443322,
+                    'merchant_order_id' => $order->order_reference,
+                ],
+                'created_at' => '2026-10-15T12:00:00.000000',
+                'currency' => 'EGP',
+                'error_occured' => false,
+                'has_parent_transaction' => false,
+                'owner' => 500,
+                'source_data' => [
+                    'type' => 'card',
+                    'pan' => '2346',
+                    'sub_type' => 'MasterCard',
+                ],
+            ],
+        ];
+
+        $verifier = new \App\Services\Payment\PaymobWebhookVerifier();
+        $concatenated = $verifier->buildPaymobConcatenatedString($payload['obj']);
+        $this->assertNotNull($concatenated);
+
+        $hmacSha512 = hash_hmac('sha512', $concatenated, $secret);
+        $rawBody = json_encode($payload);
+
+        $res = $this->call('POST', '/api/v1/subscriptions/webhook/paymob?hmac=' . $hmacSha512, [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], $rawBody);
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true)
+            ->assertJsonPath('provider', 'paymob');
+
+        $this->assertEquals('paid', $order->fresh()->status);
+        $this->assertTrue((bool)$tenant->fresh()->is_paid);
+    }
+
+    /**
+     * اختبار أمان 35: الحالات السلبية لكولباك Paymob (توقيع غير صالح، حقول ناقصة، تعارض مبالغ)
+     */
+    public function test_paymob_callback_negative_cases_rejects_altered_data_and_invalid_hmac(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-PAYMOB-NEG',
+            'name' => 'مصنع الاختبارات السلبية بيموب',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'PAYMOB-NEG-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $payload = [
+            'type' => 'TRANSACTION',
+            'obj' => [
+                'id' => 888777,
+                'pending' => false,
+                'amount_cents' => 350000,
+                'success' => true,
+                'is_auth' => false,
+                'is_capture' => false,
+                'is_standalone_payment' => true,
+                'is_voided' => false,
+                'is_refunded' => false,
+                'is_3d_secure' => true,
+                'integration_id' => 98765,
+                'order' => [
+                    'id' => 443322,
+                    'merchant_order_id' => $order->order_reference,
+                ],
+                'created_at' => '2026-10-15T12:00:00.000000',
+                'currency' => 'EGP',
+                'error_occured' => false,
+                'has_parent_transaction' => false,
+                'owner' => 500,
+                'source_data' => [
+                    'type' => 'card',
+                    'pan' => '2346',
+                    'sub_type' => 'MasterCard',
+                ],
+            ],
+        ];
+
+        $rawBody = json_encode($payload);
+
+        // 1. توقيع HMAC مزور أو غير صحيح -> 401 InvalidSignature
+        $resBadHmac = $this->call('POST', '/api/v1/subscriptions/webhook/paymob?hmac=forged_invalid_hmac_sha512', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], $rawBody);
+        $resBadHmac->assertStatus(401)->assertJsonPath('error', 'InvalidSignature');
+
+        // 2. توقيع صحيح ولكن المبلغ في المعاملة مخالف للمطلوب في الطلب (1000 EGP vs 3500 EGP)
+        $payloadAltered = $payload;
+        $payloadAltered['obj']['amount_cents'] = 100000;
+        $verifier = new \App\Services\Payment\PaymobWebhookVerifier();
+        $concatenatedAltered = $verifier->buildPaymobConcatenatedString($payloadAltered['obj']);
+        $validAlteredSig = hash_hmac('sha512', $concatenatedAltered, $secret);
+
+        $resAmountMismatch = $this->call('POST', '/api/v1/subscriptions/webhook/paymob?hmac=' . $validAlteredSig, [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode($payloadAltered));
+        $resAmountMismatch->assertStatus(422)->assertJsonPath('error', 'AmountMismatch');
+    }
+
+    /**
+     * اختبار أمان 36: منع تفعيل الطلبات منتهية الصلاحية أو الملغاة ومعالجة الإشعارات المتأخرة
+     */
+    public function test_payment_order_state_transitions_reject_expired_and_cancelled_orders(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-EXPIRED-TEST',
+            'name' => 'مصنع الطلبات المنتهية',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        // 1. طلب منتهي الصلاحية الزمنية
+        $expiredOrder = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'EXPIRED-ORD-' . uniqid(),
+            'plan_tier' => 'starter',
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->subDay(), // منتهي بالأمس
+        ]);
+
+        $now = time();
+        $payload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-EXPIRED-01',
+            'order_reference' => $expiredOrder->order_reference,
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+        ];
+        $body = json_encode($payload);
+        $sig = hash_hmac('sha256', "{$now}.{$body}", $secret);
+
+        $resExpired = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body);
+
+        $resExpired->assertStatus(422)->assertJsonPath('error', 'OrderExpired');
+        $this->assertEquals('expired', $expiredOrder->fresh()->status);
+        $this->assertFalse((bool)$tenant->fresh()->is_paid);
+
+        // 2. طلب ملغى مسبقاً
+        $cancelledOrder = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'CANCELLED-ORD-' . uniqid(),
+            'plan_tier' => 'starter',
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'cancelled',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $payloadCancelled = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-CANCELLED-01',
+            'order_reference' => $cancelledOrder->order_reference,
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+        ];
+        $bodyCancelled = json_encode($payloadCancelled);
+        $sigCancelled = hash_hmac('sha256', "{$now}.{$bodyCancelled}", $secret);
+
+        $resCancelled = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sigCancelled,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $bodyCancelled);
+
+        $resCancelled->assertStatus(422)->assertJsonPath('error', 'OrderCancelled');
+        $this->assertEquals('cancelled', $cancelledOrder->fresh()->status);
+    }
+
+    /**
+     * اختبار أمان 37: إشعار يحاول تزوير هوية الشركة أو الباقة لا يتجاوز البيانات المعتمدة في الطلب
+     */
+    public function test_webhook_cannot_override_stored_tenant_or_plan(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenantVictim = Tenant::create([
+            'code' => 'TEN-VICTIM',
+            'name' => 'شركة الضحية',
+            'plan_tier' => 'starter',
+            'is_paid' => false,
+        ]);
+
+        $tenantAttacker = Tenant::create([
+            'code' => 'TEN-ATTACKER',
+            'name' => 'شركة المهاجم',
+            'plan_tier' => 'starter',
+            'is_paid' => false,
+        ]);
+
+        // طلب مسجل لشركة الضحية بباقة starter
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenantVictim->id,
+            'order_reference' => 'ORD-TAMPER-' . uniqid(),
+            'plan_tier' => 'starter',
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+        // محاولة إرسال إشعار يدعي تفعيل باقة enterprise أو يخص شركة المهاجم
+        $payload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-TAMPER-' . uniqid(),
+            'tenant_id' => $tenantAttacker->id, // شركة مختلفة!
+            'order_reference' => $order->order_reference,
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+            'plan_tier' => 'enterprise', // محاولة ترقية الباقة دون دفع قيمتها!
+        ];
+
+        $body = json_encode($payload);
+        $sig = hash_hmac('sha256', "{$now}.{$body}", $secret);
+
+        $res = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body);
+
+        $res->assertStatus(422)->assertJsonPath('error', 'TenantMismatch');
+
+        // شركة الضحية لم تُفعل بإشعار متعارض
+        $this->assertFalse((bool)$tenantVictim->fresh()->is_paid);
+        $this->assertEquals('starter', $tenantVictim->fresh()->plan_tier);
+
+        // شركة المهاجم لم تتأثر إطلاقاً
+        $this->assertFalse((bool)$tenantAttacker->fresh()->is_paid);
+
+        // واختبار تعارض الباقة (PlanMismatch) عندما تكون الشركة مطابقة لكن الباقة مزورة
+        $planTamperPayload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-PLAN-TAMPER-' . uniqid(),
+            'tenant_id' => $tenantVictim->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 2500.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+            'plan_tier' => 'enterprise', // مخالف لباقة starter المعتمدة في الطلب
+        ];
+        $planBody = json_encode($planTamperPayload);
+        $planSig = hash_hmac('sha256', "{$now}.{$planBody}", $secret);
+        $resPlan = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $planSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $planBody);
+
+        $resPlan->assertStatus(422)->assertJsonPath('error', 'PlanMismatch');
+        $this->assertFalse((bool)$tenantVictim->fresh()->is_paid);
+    }
+
+    /**
+     * اختبار أمان 38: المسارات السلبية لترقية صلاحيات مشرف المنصة (Platform Admin Authorization Negative Tests)
+     */
+    public function test_platform_admin_authorization_negative_paths(): void
+    {
+        // 1. محاولة تسجيل شركة جديدة وتمرير دور platform_admin في الطلب
+        $resReg = $this->postJson('/api/v1/auth/register-company', [
+            'company_name' => 'شركة محاولة الاختراق',
+            'owner_name' => 'مستخدم مخترق',
+            'email' => 'hacker@escalation.com',
+            'password' => 'Password123!',
+            'role' => 'platform_admin', // محاولة فرض الصلاحية العليا
+        ]);
+        $resReg->assertStatus(201);
+
+        $createdUser = User::where('email', 'hacker@escalation.com')->first();
+        $this->assertNotNull($createdUser);
+        $this->assertEquals('company_owner', $createdUser->role, 'يجب حظر تعيين دور platform_admin من واجهة التسجيل تماماً.');
+
+        // 2. مستخدم عادي مصادق عليه يحاول استدعاء مسار مشرف المنصة -> 403 Forbidden
+        $resForbidden = $this->actingAs($createdUser)->postJson('/api/v1/platform-admin/tenants/' . $this->tenantA->id . '/activate-subscription', [
+            'authorization_code' => 'any_code',
+        ]);
+        $resForbidden->assertStatus(403)->assertJsonPath('error', 'PlatformAdminOnly');
+
+        // 3. طلب غير مصادق عليه يستدعي مسار مشرف المنصة -> 403 Forbidden
+        $resUnauth = $this->postJson('/api/v1/platform-admin/tenants/' . $this->tenantA->id . '/activate-subscription', [
+            'authorization_code' => 'any_code',
+        ]);
+        $resUnauth->assertStatus(403)->assertJsonPath('error', 'PlatformAdminOnly');
+    }
 }
+

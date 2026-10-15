@@ -64,6 +64,9 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         parent::setUp();
 
         if (!$this->isPostgresAvailable()) {
+            if (env('REQUIRE_POSTGRES_CONCURRENCY_TESTS') === 'true' || env('REQUIRE_POSTGRES_TESTS') === 'true') {
+                $this->fail('PostgreSQL integration test environment is required (REQUIRE_POSTGRES_CONCURRENCY_TESTS=true), but PostgreSQL is unreachable on 127.0.0.1:5432.');
+            }
             $this->markTestSkipped('PostgreSQL is not reachable on 127.0.0.1:5432. Genuine multi-process concurrency tests require a running PostgreSQL instance (executed in CI environment).');
         }
 

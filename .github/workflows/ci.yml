@@ -87,12 +87,7 @@ jobs:
         run: php artisan test --filter=PostgresConcurrencyIntegrationTest
 
       - name: Run Complete Backend Test Suite
-        run: |
-          php artisan test 2>&1 | tee /tmp/test_suite.log || {
-            code=$?
-            echo "::error title=Step 9 Failed::$(tail -n 35 /tmp/test_suite.log | tr '\r\n' ' ')"
-            exit $code
-          }
+        run: php artisan test
 
   frontend-build:
     name: Frontend TypeScript & Vite Build

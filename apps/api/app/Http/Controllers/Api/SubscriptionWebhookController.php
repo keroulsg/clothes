@@ -263,16 +263,25 @@ class SubscriptionWebhookController extends Controller
             );
 
             if ($isDuplicateEvent) {
-                // إعادة قراءة السجل المثبت لتحديد حالته الحقيقية المؤكدة
-                $committedEvent = ProcessedWebhookEvent::where('provider', $event->provider)
-                    ->where('event_id', $event->eventId)
-                    ->first();
+                // إعادة محاولة قراءة السجل المثبت بعد اكتمال المعاملة المتزامنة المنافسة
+                $committedEvent = null;
+                for ($attempt = 0; $attempt < 6; $attempt++) {
+                    $committedEvent = ProcessedWebhookEvent::where('provider', $event->provider)
+                        ->where('event_id', $event->eventId)
+                        ->first();
+
+                    if ($committedEvent) {
+                        break;
+                    }
+
+                    usleep(25000); // 25ms delay allowing competing transaction to finish commit
+                }
 
                 if ($committedEvent) {
                     return $this->buildIdempotentResponse($committedEvent);
                 }
 
-                // إذا تعذر التحقق من نتيجة المعاملة المتزامنة بأمان، نرجع خطأ قابلاً لإعادة المحاولة دون ادعاء النجاح
+                // إذا تعذر التحقق من نتيجة المعاملة المتزامنة بأمان، نرجع خطأ 409 قابلاً لإعادة المحاولة دون ادعاء النجاح
                 return response()->json([
                     'error' => 'ConcurrentProcessingConflict',
                     'message' => 'يتم معالجة هذا الإشعار حالياً بشكل متزامن. يرجى إعادة المحاولة لاحقاً (Retryable Concurrency Conflict).',

@@ -47,4 +47,14 @@ class SubscriptionPaymentOrder extends Model
     {
         return $this->status === 'pending' && !$this->isExpired();
     }
+
+    public function canAcceptPayment(): bool
+    {
+        return in_array($this->status, ['pending', 'payment_attempt_failed', 'processing']) && !$this->isExpired();
+    }
+
+    public function isAlreadyPaid(): bool
+    {
+        return $this->status === 'paid' || $this->status === 'completed';
+    }
 }

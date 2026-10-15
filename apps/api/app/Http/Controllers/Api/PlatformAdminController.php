@@ -71,7 +71,6 @@ class PlatformAdminController extends Controller
                 'admin_email' => $adminUser->email,
                 'authorized_by' => $validated['authorized_by'],
                 'reason' => $validated['reason'],
-                'authorization_code_hash' => hash('sha256', $validated['authorization_code']),
                 'timestamp' => now()->toIso8601String(),
                 'ip_address' => $request->ip(),
             ];

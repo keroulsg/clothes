@@ -12,6 +12,7 @@ use App\Models\ProductionOrder;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Size;
+use App\Models\SubscriptionPaymentOrder;
 use App\Models\Supplier;
 use App\Models\SupplierInvoice;
 use App\Models\Tenant;
@@ -580,6 +581,7 @@ class SecurityGateTest extends TestCase
         $orderReference = $resPay->json('payment_order.order_reference');
         $amount = (float)$resPay->json('payment_order.amount');
         $webhookSecret = config('services.payment.webhook_secret');
+        $ts = now()->timestamp;
         $webhookPayload = [
             'event' => 'payment.completed',
             'event_id' => 'EVT-TEST-001',
@@ -589,10 +591,10 @@ class SecurityGateTest extends TestCase
             'currency' => 'EGP',
             'order_reference' => $orderReference,
             'status' => 'succeeded',
-            'timestamp' => now()->timestamp,
+            'timestamp' => $ts,
         ];
         $payloadJson = json_encode($webhookPayload);
-        $signature = hash_hmac('sha256', $payloadJson, $webhookSecret);
+        $signature = hash_hmac('sha256', "{$ts}.{$payloadJson}", $webhookSecret);
 
         $resWebhook = $this->call(
             'POST',
@@ -603,6 +605,7 @@ class SecurityGateTest extends TestCase
             [
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_X_SIGNATURE' => $signature,
+                'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
             ],
             $payloadJson
         );
@@ -963,7 +966,8 @@ class SecurityGateTest extends TestCase
             ->assertJsonPath('error', 'InvalidSignature');
 
         // 3. طلب Webhook صحيح وموقع رقمياً بـ HMAC-SHA256
-        $validSig = hash_hmac('sha256', $validPayloadJson, $webhookSecret);
+        $ts = $validPayload['timestamp'];
+        $validSig = hash_hmac('sha256', "{$ts}.{$validPayloadJson}", $webhookSecret);
         $resSuccess = $this->call(
             'POST',
             '/api/v1/subscriptions/webhook',
@@ -973,6 +977,7 @@ class SecurityGateTest extends TestCase
             [
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_X_SIGNATURE' => $validSig,
+                'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
             ],
             $validPayloadJson
         );
@@ -997,6 +1002,7 @@ class SecurityGateTest extends TestCase
             [
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_X_SIGNATURE' => $validSig,
+                'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
             ],
             $validPayloadJson
         );
@@ -1314,13 +1320,15 @@ class SecurityGateTest extends TestCase
         $resExpiredTs->assertStatus(401)->assertJsonPath('error', 'TimestampToleranceExceeded');
 
         // ج) اختبار طلب دفع غير موجود في النظام -> 422 PendingOrderNotFound
+        $ts = $badPayload['timestamp'];
         $fakeOrderPayload = $badPayload;
         $fakeOrderPayload['order_reference'] = 'ORD-DOES-NOT-EXIST-99999';
         $fakeJson = json_encode($fakeOrderPayload);
-        $fakeSig = hash_hmac('sha256', $fakeJson, $webhookSecret);
+        $fakeSig = hash_hmac('sha256', "{$ts}.{$fakeJson}", $webhookSecret);
         $resNotFound = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_X_SIGNATURE' => $fakeSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
         ], $fakeJson);
         $resNotFound->assertStatus(422)->assertJsonPath('error', 'PendingOrderNotFound');
 
@@ -1328,10 +1336,11 @@ class SecurityGateTest extends TestCase
         $mismatchTenantPayload = $badPayload;
         $mismatchTenantPayload['tenant_id'] = $this->tenantB->id; // شركة B لطلب شركة النورس!
         $mismatchJson = json_encode($mismatchTenantPayload);
-        $mismatchSig = hash_hmac('sha256', $mismatchJson, $webhookSecret);
+        $mismatchSig = hash_hmac('sha256', "{$ts}.{$mismatchJson}", $webhookSecret);
         $resTenantMismatch = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_X_SIGNATURE' => $mismatchSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
         ], $mismatchJson);
         $resTenantMismatch->assertStatus(422)->assertJsonPath('error', 'TenantMismatch');
 
@@ -1339,10 +1348,11 @@ class SecurityGateTest extends TestCase
         $wrongAmountPayload = $badPayload;
         $wrongAmountPayload['amount'] = 999.0; // المطلوب 3500
         $wrongAmtJson = json_encode($wrongAmountPayload);
-        $wrongAmtSig = hash_hmac('sha256', $wrongAmtJson, $webhookSecret);
+        $wrongAmtSig = hash_hmac('sha256', "{$ts}.{$wrongAmtJson}", $webhookSecret);
         $resAmtMismatch = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_X_SIGNATURE' => $wrongAmtSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
         ], $wrongAmtJson);
         $resAmtMismatch->assertStatus(422)->assertJsonPath('error', 'AmountMismatch');
 
@@ -1350,10 +1360,11 @@ class SecurityGateTest extends TestCase
         $failedStatusPayload = $badPayload;
         $failedStatusPayload['status'] = 'failed';
         $failedStatusJson = json_encode($failedStatusPayload);
-        $failedStatusSig = hash_hmac('sha256', $failedStatusJson, $webhookSecret);
+        $failedStatusSig = hash_hmac('sha256', "{$ts}.{$failedStatusJson}", $webhookSecret);
         $resFailedStatus = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_X_SIGNATURE' => $failedStatusSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
         ], $failedStatusJson);
         $resFailedStatus->assertStatus(422)->assertJsonPath('error', 'PaymentNotSuccessful');
         $this->assertFalse((bool)$tenant->fresh()->is_paid);
@@ -1575,5 +1586,254 @@ class SecurityGateTest extends TestCase
             ],
         ]);
         $resConflict->assertStatus(409)->assertJsonPath('error', 'IdempotencyConflict');
+    }
+
+    /**
+     * اختبار أمان 29: التحقق الرسمي من توقيع Stripe بمتجهات الاختبار الصارمة (Stripe Test Vectors)
+     */
+    public function test_stripe_webhook_verification_with_official_test_vectors(): void
+    {
+        config(['services.payment.provider' => 'stripe']);
+        $secret = config('services.payment.webhook_secret');
+
+        $tenant = Tenant::create([
+            'code' => 'TEN-STRIPE-VEC',
+            'name' => 'مصنع النيل سترايب',
+            'subdomain' => 'stripe-test',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'STRIPE-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.0,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+        $payload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-STRIPE-' . uniqid(),
+            'tenant_id' => $tenant->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 3500.0,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+            'plan_tier' => 'professional',
+        ];
+        $body = json_encode($payload);
+
+        // 1. ترويسة صحيحة تماماً بصيغة Stripe الرسمية t=...,v1=...
+        $validSig = hash_hmac('sha256', "{$now}.{$body}", $secret);
+        $resValid = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$validSig}",
+        ], $body);
+        $resValid->assertStatus(200)->assertJsonPath('status', 'success');
+
+        // 2. طابع وقت مفقود في ترويسة سترايب -> 401 MissingSignatureTimestamp
+        $resNoTs = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "v1={$validSig}",
+        ], $body);
+        $resNoTs->assertStatus(401)->assertJsonPath('error', 'MissingSignatureTimestamp');
+
+        // 3. طابع وقت غير رقمي/مشوه -> 401 MalformedSignatureTimestamp
+        $resBadTs = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t=not_a_number,v1={$validSig}",
+        ], $body);
+        $resBadTs->assertStatus(401)->assertJsonPath('error', 'MalformedSignatureTimestamp');
+
+        // 4. طابع وقت قديم تجاوز نافذة السماح (أكثر من 300 ثانية) -> 401 TimestampToleranceExceeded
+        $oldTs = $now - 350;
+        $oldSig = hash_hmac('sha256', "{$oldTs}.{$body}", $secret);
+        $resOld = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$oldTs},v1={$oldSig}",
+        ], $body);
+        $resOld->assertStatus(401)->assertJsonPath('error', 'TimestampToleranceExceeded');
+
+        // 5. طابع وقت مستقبلي يتجاوز انحراف الساعة (أكثر من 60 ثانية في المستقبل) -> 401 FutureTimestampToleranceExceeded
+        $futureTs = $now + 120;
+        $futureSig = hash_hmac('sha256', "{$futureTs}.{$body}", $secret);
+        $resFuture = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$futureTs},v1={$futureSig}",
+        ], $body);
+        $resFuture->assertStatus(401)->assertJsonPath('error', 'FutureTimestampToleranceExceeded');
+
+        // 6. جسم الطلب تم التلاعب به بعد التوقيع -> 401 InvalidSignature
+        $alteredBody = json_encode(array_merge($payload, ['amount' => 10.0]));
+        $resAltered = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$validSig}",
+        ], $alteredBody);
+        $resAltered->assertStatus(401)->assertJsonPath('error', 'InvalidSignature');
+    }
+
+    /**
+     * اختبار أمان 30: دورة حالات طلب الدفع تسمح بإعادة المحاولة بعد الفشل وتمنع مضاعفة السداد
+     */
+    public function test_payment_order_state_transitions_permit_retry_after_failed_attempt(): void
+    {
+        $tenant = Tenant::create([
+            'code' => 'TEN-RETRY-01',
+            'name' => 'مصنع المحاولات المتعددة',
+            'subdomain' => 'retry-apparel',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'ORD-RETRY-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.0,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $secret = config('services.payment.webhook_secret');
+        $now = time();
+
+        // 1. محاولة سداد أولى فاشلة من البوابة (مثلاً رصيد بطاقة العميل غير كافٍ)
+        $failedPayload = [
+            'event' => 'payment.failed',
+            'event_id' => 'EVT-FAIL-ATTEMPT-01',
+            'tenant_id' => $tenant->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 3500.0,
+            'currency' => 'EGP',
+            'status' => 'failed',
+            'timestamp' => $now,
+        ];
+        $failedJson = json_encode($failedPayload);
+        $failedSig = hash_hmac('sha256', "{$now}.{$failedJson}", $secret);
+
+        $resFail = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $failedSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $failedJson);
+
+        // يجب أن يُرفض السداد مع توثيق الفشل وإبقاء الطلب متاحاً لإعادة المحاولة (can_retry: true)
+        $resFail->assertStatus(422)
+            ->assertJsonPath('error', 'PaymentNotSuccessful')
+            ->assertJsonPath('can_retry', true);
+
+        $this->assertEquals('payment_attempt_failed', $order->fresh()->status);
+        $this->assertFalse((bool)$tenant->fresh()->is_paid);
+
+        // 2. العميل يعيد محاولة الدفع بنجاح لنفس رقم الطلب (Legitimate Payment Retry)
+        $successTs = $now + 5;
+        $successPayload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-SUCCESS-ATTEMPT-02',
+            'tenant_id' => $tenant->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 3500.0,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+            'plan_tier' => 'professional',
+            'timestamp' => $successTs,
+        ];
+        $successJson = json_encode($successPayload);
+        $successSig = hash_hmac('sha256', "{$successTs}.{$successJson}", $secret);
+
+        $resSuccess = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $successSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$successTs,
+        ], $successJson);
+
+        $resSuccess->assertStatus(200)->assertJsonPath('status', 'success');
+        $this->assertEquals('paid', $order->fresh()->status);
+        $this->assertTrue((bool)$tenant->fresh()->is_paid);
+
+        // 3. إشعار سداد إضافي مكرر لنفس الطلب المكتمل -> إقرار نجاح دون مضاعفة السجلات
+        $resDup = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $successSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$successTs,
+        ], $successJson);
+        $resDup->assertStatus(200);
+    }
+
+    /**
+     * اختبار أمان 31: منع المستخدمين العاديين من ترقية صلاحياتهم إلى مشرف منصة (Platform Admin Privilege Escalation Guard)
+     */
+    public function test_ordinary_user_cannot_elevate_role_to_platform_admin(): void
+    {
+        // مستخدم مسجل كمالك شركة
+        $user = $this->userA;
+
+        // محاولة تعديل الدور عبر الكود أو عبر النموذج المباشر
+        $this->expectException(\Illuminate\Auth\Access\AuthorizationException::class);
+        $this->expectExceptionMessage('PlatformAdminEscalationBlocked');
+
+        // محاولة المستخدم العادي ترقية نفسه
+        auth()->login($user);
+        $user->role = 'platform_admin';
+        $user->save();
+    }
+
+    /**
+     * اختبار أمان 32: التحقق من عدم تصادم أو تسرب مفاتيح Idempotency المتطابقة بين شركات مختلفة (Cross-Tenant Keyspace Isolation)
+     */
+    public function test_cross_tenant_idempotency_keys_cannot_collide_or_leak_records(): void
+    {
+        $sharedKey = 'CROSS-TENANT-SHARED-KEY-999';
+
+        // 1. الشركة A تسجل حركة مخزنية بالمفتاح المشترك
+        $resA = $this->actingAs($this->userA)->postJson('/api/v1/inventory/transactions', [
+            'inventory_item_id' => $this->itemA->id,
+            'transaction_type' => 'goods_receipt',
+            'direction' => 'IN',
+            'quantity' => 15.0,
+            'unit_cost' => 80.0,
+            'reference_type' => 'purchase_order',
+            'reference_number' => 'PO-A-1',
+            'idempotency_key' => $sharedKey,
+        ]);
+        $resA->assertStatus(201);
+        $idA = $resA->json('transaction.id');
+
+        // 2. الشركة B تسجل حركة مخزنية بنفس المفتاح تماماً دون أي حظر أو تعارض
+        $resB = $this->actingAs($this->userB)->postJson('/api/v1/inventory/transactions', [
+            'inventory_item_id' => $this->itemB->id,
+            'transaction_type' => 'goods_receipt',
+            'direction' => 'IN',
+            'quantity' => 25.0,
+            'unit_cost' => 120.0,
+            'reference_type' => 'purchase_order',
+            'reference_number' => 'PO-B-1',
+            'idempotency_key' => $sharedKey,
+        ]);
+        $resB->assertStatus(201);
+        $idB = $resB->json('transaction.id');
+
+        // التأكد من أن المعرّفين مختلفان تماماً ولا يوجد أي تسريب
+        $this->assertNotEquals($idA, $idB);
+
+        // 3. إعادة إرسال الشركة B لنفس المفتاح يعيد قيد الشركة B فقط ولا يرى قيد الشركة A نهائياً
+        $resReplayB = $this->actingAs($this->userB)->postJson('/api/v1/inventory/transactions', [
+            'inventory_item_id' => $this->itemB->id,
+            'transaction_type' => 'goods_receipt',
+            'direction' => 'IN',
+            'quantity' => 25.0,
+            'unit_cost' => 120.0,
+            'reference_type' => 'purchase_order',
+            'reference_number' => 'PO-B-1',
+            'idempotency_key' => $sharedKey,
+        ]);
+        $resReplayB->assertStatus(200)
+            ->assertJsonPath('transaction.id', $idB)
+            ->assertJsonPath('transaction.tenant_id', $this->tenantB->id);
     }
 }

@@ -42,4 +42,23 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Tenant::class);
     }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::saving(function (User $user) {
+            if ($user->isDirty('role') && $user->role === 'platform_admin') {
+                $authUser = auth()->user();
+                if ($authUser) {
+                    $originalRole = $authUser->getOriginal('role') ?? $authUser->role;
+                    if ($originalRole !== 'platform_admin') {
+                        throw new \Illuminate\Auth\Access\AuthorizationException('أمان: محاولة غير مصرح بها لترقية الحساب إلى مشرف منصة عام (PlatformAdminEscalationBlocked).');
+                    }
+                } elseif (!app()->runningInConsole()) {
+                    throw new \Illuminate\Auth\Access\AuthorizationException('أمان: لا يمكن إنشاء مشرف منصة عام دون مصادقة إدارية معتمدة.');
+                }
+            }
+        });
+    }
 }

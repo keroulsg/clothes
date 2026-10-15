@@ -133,6 +133,8 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         }
     }
 
+    public const GUARD_PARAM_NOT_SET = '__GUARD_PARAM_NOT_SET__';
+
     /**
      * Fail-closed safety guard for destructive PostgreSQL database cleanup.
      *
@@ -145,17 +147,19 @@ class PostgresConcurrencyIntegrationTest extends TestCase
      * @throws \RuntimeException if any condition is missing or invalid.
      */
     public static function assertSafeDestructiveCleanupDatabase(
-        ?string $appEnv = null,
-        ?string $pgsqlDatabase = null,
-        mixed $allowOptIn = null
+        mixed $appEnv = self::GUARD_PARAM_NOT_SET,
+        mixed $pgsqlDatabase = self::GUARD_PARAM_NOT_SET,
+        mixed $allowOptIn = self::GUARD_PARAM_NOT_SET
     ): void {
-        $rawEnv = $appEnv ?? (app()->environment() ?: (
-            isset($_ENV['APP_ENV'])
-                ? $_ENV['APP_ENV']
-                : (isset($_SERVER['APP_ENV'])
-                    ? $_SERVER['APP_ENV']
-                    : (getenv('APP_ENV') ?: env('APP_ENV', 'production')))
-        ));
+        $rawEnv = $appEnv !== self::GUARD_PARAM_NOT_SET
+            ? $appEnv
+            : (app()->environment() ?: (
+                isset($_ENV['APP_ENV'])
+                    ? $_ENV['APP_ENV']
+                    : (isset($_SERVER['APP_ENV'])
+                        ? $_SERVER['APP_ENV']
+                        : (getenv('APP_ENV') ?: env('APP_ENV', 'production')))
+            ));
         $env = is_string($rawEnv) ? trim($rawEnv) : (string) $rawEnv;
         if ($env !== 'testing') {
             throw new \RuntimeException(
@@ -163,7 +167,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             );
         }
 
-        $rawPgDb = $pgsqlDatabase !== null
+        $rawPgDb = $pgsqlDatabase !== self::GUARD_PARAM_NOT_SET
             ? $pgsqlDatabase
             : (
                 isset($_ENV['PGSQL_DATABASE'])
@@ -186,7 +190,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             );
         }
 
-        $rawOptIn = $allowOptIn !== null
+        $rawOptIn = $allowOptIn !== self::GUARD_PARAM_NOT_SET
             ? $allowOptIn
             : (
                 isset($_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'])

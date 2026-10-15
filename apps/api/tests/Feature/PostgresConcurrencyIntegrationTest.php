@@ -174,22 +174,23 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             fclose($pipes2[0]);
         }
 
+        $err1 = is_resource($proc1) ? stream_get_contents($pipes1[2]) : '';
+        $err2 = is_resource($proc2) ? stream_get_contents($pipes2[2]) : '';
+
         if (is_resource($proc1)) {
-            stream_get_contents($pipes1[1]);
             fclose($pipes1[1]);
             fclose($pipes1[2]);
             proc_close($proc1);
         }
 
         if (is_resource($proc2)) {
-            stream_get_contents($pipes2[1]);
             fclose($pipes2[1]);
             fclose($pipes2[2]);
             proc_close($proc2);
         }
 
-        $res1 = file_exists($outFile1) ? json_decode(file_get_contents($outFile1), true) : null;
-        $res2 = file_exists($outFile2) ? json_decode(file_get_contents($outFile2), true) : null;
+        $res1 = file_exists($outFile1) ? json_decode(file_get_contents($outFile1), true) : ['status' => 500, 'error' => 'NoOutput', 'stderr' => $err1];
+        $res2 = file_exists($outFile2) ? json_decode(file_get_contents($outFile2), true) : ['status' => 500, 'error' => 'NoOutput', 'stderr' => $err2];
 
         return [$res1, $res2];
     }

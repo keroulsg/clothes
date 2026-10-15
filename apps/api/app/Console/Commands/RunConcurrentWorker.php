@@ -31,6 +31,7 @@ class RunConcurrentWorker extends Command
         $headersRaw = $this->option('headers');
         $dbConnection = $this->option('db-connection');
         $databasePath = $this->option('database-path');
+        $sleepMs = (int) $this->option('sleep-ms');
 
         if ($dbConnection === 'pgsql') {
             config(['database.default' => 'pgsql']);

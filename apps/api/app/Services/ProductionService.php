@@ -319,7 +319,11 @@ class ProductionService
                         'idempotency_key' => $idempotencyKey,
                     ]);
                 } catch (QueryException $e) {
-                    if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
+                    $isUniqueViolation = $e->getCode() == 23000 
+                        || $e->getCode() === '23505' 
+                        || stripos($e->getMessage(), 'unique') !== false 
+                        || stripos($e->getMessage(), 'duplicate') !== false;
+                    if ($idempotencyKey && $isUniqueViolation) {
                         throw new IdempotencyCollisionException($idempotencyKey, $tenantId);
                     }
                     throw $e;

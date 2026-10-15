@@ -123,8 +123,11 @@ class InventoryService
                         'idempotency_key' => $idempotencyKey,
                     ]);
                 } catch (QueryException $e) {
-                    // في حال اصطدام طلبين متزامنين بنفس المفتاح: نطلق استثناء لإلغاء المعاملة وتراجع تحديث الرصيد تماماً!
-                    if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
+                    $isUniqueViolation = $e->getCode() == 23000 
+                        || $e->getCode() === '23505' 
+                        || stripos($e->getMessage(), 'unique') !== false 
+                        || stripos($e->getMessage(), 'duplicate') !== false;
+                    if ($idempotencyKey && $isUniqueViolation) {
                         throw new \App\Exceptions\IdempotencyCollisionException(
                             idempotencyKey: $idempotencyKey,
                             tenantId: $tenantId,

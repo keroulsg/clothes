@@ -314,6 +314,12 @@ php artisan test
   ✓ duplicate supplier invoice number prevents duplicate financial liability
   ✓ goods receipt idempotency prevents duplicate stock addition
   ✓ rate limiting protects login endpoint
+  ✓ client supplied payment reference cannot activate subscription without verification
+  ✓ cryptographic webhook payment activates subscription and handles idempotent replay
+  ✓ platform admin can manually activate subscription with auditable authorization
+  ✓ customer material tenant isolation foreign warehouse and consumption integrity
+  ✓ production order idempotency fingerprint detects changed payload and returns conflict
+  ✓ duplicate supplier invoice with conflicting amount or po returns conflict
 
    PASS  Tests\Feature\TenantIsolationTest
   ✓ can register new company with main branch
@@ -327,8 +333,8 @@ php artisan test
    PASS  Tests\Unit\ExampleTest
   ✓ that a basic test can be performed
 
-Tests:    41 passed (186 assertions)
-Duration: 2.94s
+Tests:    47 passed (241 assertions)
+Duration: 3.35s
 ```
 
 ```bash
@@ -348,5 +354,5 @@ dist/index.html                   0.45 kB │ gzip:   0.29 kB
 dist/assets/index-Ch1k70OM.css   43.57 kB │ gzip:   7.41 kB
 dist/assets/index-DQzRHzj_.js   391.99 kB │ gzip: 102.07 kB
 
-✓ built in 743ms
+✓ built in 1.15s
 ```

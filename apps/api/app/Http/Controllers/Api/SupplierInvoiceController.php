@@ -60,13 +60,16 @@ class SupplierInvoiceController extends Controller
         try {
             $invoice = $this->procurementService->matchAndCreateInvoice($validated);
         } catch (\InvalidArgumentException $e) {
-            if (str_contains($e->getMessage(), 'Idempotency')) {
+            if (str_contains($e->getMessage(), 'Idempotency') || str_contains($e->getMessage(), 'تعارض في فاتورة المورد')) {
                 return response()->json([
                     'error' => 'IdempotencyConflict',
                     'message' => $e->getMessage(),
                 ], 409);
             }
-            throw $e;
+            return response()->json([
+                'error' => 'ValidationError',
+                'message' => $e->getMessage(),
+            ], 422);
         }
 
         $statusCode = $invoice->wasRecentlyCreated ? 201 : 200;

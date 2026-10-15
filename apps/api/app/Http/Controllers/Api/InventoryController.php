@@ -206,4 +206,72 @@ class InventoryController extends Controller
             'customer_materials' => $materials,
         ]);
     }
+
+    /**
+     * استلام وإثبات أمانة خامات عميل بالمخزن
+     */
+    public function receiveCustomerMaterial(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_name' => 'required|string|max:255',
+            'fabric_name' => 'required|string|max:255',
+            'fabric_code' => 'nullable|string|max:100',
+            'gsm' => 'nullable|numeric|min:1',
+            'usable_width_meters' => 'nullable|numeric|min:0.1',
+            'received_meters' => 'required|numeric|min:0.01',
+            'warehouse_id' => 'required|uuid|exists:warehouses,id',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            $material = $this->inventoryService->receiveCustomerMaterial($validated);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'ValidationError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'تم استلام أمانة خامة العميل وتوثيق الرصيد بالمخزن بنجاح.',
+            'customer_material' => $material,
+        ], 201);
+    }
+
+    /**
+     * صرف جزء من أمانة خامة العميل مع حساب الهالك
+     */
+    public function consumeCustomerMaterial(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'consumed_meters' => 'required|numeric|min:0',
+            'waste_meters' => 'nullable|numeric|min:0',
+        ]);
+
+        $wasteMeters = (float) ($validated['waste_meters'] ?? 0.0);
+
+        try {
+            $material = $this->inventoryService->consumeCustomerMaterial($id, (float) $validated['consumed_meters'], $wasteMeters);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'error' => 'NotFound',
+                'message' => 'خامة العميل غير موجودة أو غير تابعة للشركة.',
+            ], 404);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'ValidationError',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'ConsumptionError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'تم صرف كمية خامة العميل وتحديث الأرصدة بنجاح.',
+            'customer_material' => $material,
+        ], 200);
+    }
 }

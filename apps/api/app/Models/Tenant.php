@@ -48,6 +48,11 @@ class Tenant extends Model
         return (bool) ($this->settings['subscription']['is_paid'] ?? false);
     }
 
+    public function getIsPaidAttribute(): bool
+    {
+        return $this->isPaid();
+    }
+
     public function isTrial(): bool
     {
         $subStatus = $this->settings['subscription']['status'] ?? null;

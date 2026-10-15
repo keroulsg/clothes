@@ -28,10 +28,16 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/register-company', [TenantController::class, 'register'])->middleware('throttle:10,1');
     Route::post('/auth/login', [TenantController::class, 'login'])->middleware('throttle:10,1');
 
+    // استلام إشعارات الدفع الموقعة من بوابات الدفع الإلكتروني (Verified Webhook)
+    Route::post('/webhooks/subscription-payment', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
+    Route::post('/subscriptions/webhook', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
+
     // المسارات المحمية بعزل الشركات
     Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
         Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription']);
+        Route::post('/platform-admin/tenants/{id}/subscription/manual-activate', [TenantController::class, 'adminManualActivate']);
+        Route::post('/admin/tenants/{id}/activate-subscription', [TenantController::class, 'adminManualActivate']);
 
         // الفروع ومواقع العمل
         Route::get('/branches', [BranchController::class, 'index']);
@@ -43,13 +49,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/models', [\App\Http\Controllers\Api\GarmentModelController::class, 'store']);
         Route::get('/models/{id}', [\App\Http\Controllers\Api\GarmentModelController::class, 'show']);
 
-        // المخازن ودفتر الأستاذ المخزني
+        // المخازن ودفتر الأستاذ المخزني وأمانات العملاء
         Route::get('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'warehouses']);
         Route::get('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'items']);
         Route::post('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'recordTransaction']);
         Route::get('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'transactions']);
         Route::post('/inventory/convert-fabric', [\App\Http\Controllers\Api\InventoryController::class, 'convertFabric']);
         Route::get('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'customerMaterials']);
+        Route::post('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'receiveCustomerMaterial']);
+        Route::post('/inventory/customer-materials/{id}/consume', [\App\Http\Controllers\Api\InventoryController::class, 'consumeCustomerMaterial']);
 
         // المشتريات والموردين وفحص الاستلام والفواتير
         Route::get('/suppliers', [\App\Http\Controllers\Api\SupplierController::class, 'index']);

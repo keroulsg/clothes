@@ -562,15 +562,53 @@ class SecurityGateTest extends TestCase
         $resProfile = $this->actingAs($userTrial)->getJson('/api/v1/tenant/profile');
         $resProfile->assertStatus(200);
 
-        // 3. تفعيل الاشتراك المدفوع عبر نقطة التفعيل
+        // 3. محاولة تفعيل الاشتراك المدفوع من قبل المستأجر مباشرة (يجب أن تظل معلقة الدفع وغير مفعلة)
         $resPay = $this->actingAs($userTrial)->postJson('/api/v1/tenant/subscription/activate', [
             'plan_tier' => 'professional',
             'payment_reference' => 'PAY-REF-998877',
         ]);
         $resPay->assertStatus(200)
-            ->assertJsonPath('tenant.is_paid', true);
+            ->assertJsonPath('tenant.is_paid', false)
+            ->assertJsonPath('tenant.subscription_status', 'payment_pending');
 
-        // 4. بعد سداد الاشتراك: إعادة فتح مسارات الـ ERP بنجاح كامل
+        // التحقق من أن مسارات ERP تظل محجوبة برمز 402 لأن الاشتراك لم يتم سداده فعلياً عبر بوابة الدفع
+        $resStillExpired = $this->actingAs($userTrial)->getJson('/api/v1/models');
+        $resStillExpired->assertStatus(402)
+            ->assertJsonPath('error', 'TrialExpired');
+
+        // 4. وصول إشعار Webhook مشفر وموثق من بوابة الدفع يفيد نجاح العملية
+        $webhookSecret = config('services.payment.webhook_secret', env('PAYMENT_WEBHOOK_SECRET', 'garmentos_payment_webhook_secret_key_2026'));
+        $webhookPayload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-TEST-001',
+            'tenant_id' => $tenantTrial->id,
+            'plan_tier' => 'professional',
+            'amount' => 5000.0,
+            'currency' => 'EGP',
+            'invoice_reference' => 'INV-WEBHOOK-TEST-001',
+            'status' => 'succeeded',
+            'timestamp' => now()->timestamp,
+        ];
+        $payloadJson = json_encode($webhookPayload);
+        $signature = hash_hmac('sha256', $payloadJson, $webhookSecret);
+
+        $resWebhook = $this->call(
+            'POST',
+            '/api/v1/subscriptions/webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_SIGNATURE' => $signature,
+            ],
+            $payloadJson
+        );
+        $resWebhook->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true);
+
+        // 5. بعد سداد الاشتراك الموثق عبر الـ Webhook: إعادة فتح مسارات الـ ERP بنجاح كامل
         $resAfterPay = $this->actingAs($userTrial)->getJson('/api/v1/models');
         $resAfterPay->assertStatus(200);
     }
@@ -788,5 +826,422 @@ class SecurityGateTest extends TestCase
         ]);
 
         $resBlocked->assertStatus(429);
+    }
+
+    /**
+     * اختبار أمان 18: منع تفعيل الاشتراك المدفوع ببيانات عميل وهمية أو مراجع غير موثقة
+     */
+    public function test_client_supplied_payment_reference_cannot_activate_subscription_without_verification(): void
+    {
+        $tenant = Tenant::create([
+            'code' => 'TEN-AHRAM-WEAR',
+            'name' => 'شركة ملابس الأهرام',
+            'subdomain' => 'ahram-wear',
+            'status' => 'active',
+            'plan_tier' => 'starter',
+            'is_paid' => false,
+            'settings' => [
+                'subscription' => [
+                    'status' => 'trial',
+                    'is_paid' => false,
+                    'trial_ends_at' => now()->subHours(2)->toIso8601String(),
+                ],
+            ],
+        ]);
+
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'مدير الحساب التجريبي',
+            'email' => 'trial-manager@ahram.com',
+            'password' => bcrypt('SecretPassword123!'),
+            'role' => 'tenant_admin',
+            'is_active' => true,
+        ]);
+
+        // 1. استدعاء بدون payment_reference
+        $resNoRef = $this->actingAs($user)->postJson('/api/v1/tenant/subscription/activate', [
+            'plan_tier' => 'professional',
+        ]);
+        $resNoRef->assertStatus(200)
+            ->assertJsonPath('tenant.is_paid', false)
+            ->assertJsonPath('is_paid', false)
+            ->assertJsonPath('subscription_status', 'payment_pending');
+
+        // مسارات ERP يجب أن تظل مغلقة 402
+        $resERP1 = $this->actingAs($user)->getJson('/api/v1/models');
+        $resERP1->assertStatus(402);
+
+        // 2. استدعاء بمرجع دفع مزور من قبل العميل
+        $resFakeRef = $this->actingAs($user)->postJson('/api/v1/tenant/subscription/activate', [
+            'plan_tier' => 'professional',
+            'payment_reference' => 'PAY-FAKEREF-999999999',
+        ]);
+        $resFakeRef->assertStatus(200)
+            ->assertJsonPath('tenant.is_paid', false)
+            ->assertJsonPath('is_paid', false);
+
+        // مسارات ERP تظل محجوبة تماماً
+        $resERP2 = $this->actingAs($user)->getJson('/api/v1/models');
+        $resERP2->assertStatus(402);
+    }
+
+    /**
+     * اختبار أمان 19: التحقق من التوقيع الرقمي للـ Webhook ومعالجة عدم التكرار (Idempotent Webhook)
+     */
+    public function test_cryptographic_webhook_payment_activates_subscription_and_handles_idempotent_replay(): void
+    {
+        $tenant = Tenant::create([
+            'code' => 'TEN-DELTA-WEAR',
+            'name' => 'مصنع الدلتا للملابس',
+            'subdomain' => 'delta-garments',
+            'status' => 'active',
+            'plan_tier' => 'starter',
+            'is_paid' => false,
+            'settings' => [
+                'subscription' => [
+                    'status' => 'trial',
+                    'is_paid' => false,
+                    'trial_ends_at' => now()->subDay()->toIso8601String(),
+                ],
+            ],
+        ]);
+
+        $webhookSecret = config('services.payment.webhook_secret', env('PAYMENT_WEBHOOK_SECRET', 'garmentos_payment_webhook_secret_key_2026'));
+
+        $validPayload = [
+            'event' => 'payment.succeeded',
+            'event_id' => 'EVT-WEBHOOK-DELTA-01',
+            'tenant_id' => $tenant->id,
+            'plan_tier' => 'professional',
+            'amount' => 6000.0,
+            'currency' => 'EGP',
+            'invoice_reference' => 'INV-DELTA-2026-001',
+            'status' => 'paid',
+            'timestamp' => now()->timestamp,
+        ];
+        $validPayloadJson = json_encode($validPayload);
+
+        // 1. طلب Webhook بدون توقيع رقمي -> رفض 401 MissingSignature
+        $resNoSig = $this->call(
+            'POST',
+            '/api/v1/subscriptions/webhook',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            $validPayloadJson
+        );
+        $resNoSig->assertStatus(401)
+            ->assertJsonPath('error', 'MissingSignature');
+
+        // 2. طلب Webhook بتوقيع مزور غير مطابق -> رفض 401 InvalidSignature
+        $resBadSig = $this->call(
+            'POST',
+            '/api/v1/subscriptions/webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_SIGNATURE' => 'invalid_forged_hmac_signature_hash',
+            ],
+            $validPayloadJson
+        );
+        $resBadSig->assertStatus(401)
+            ->assertJsonPath('error', 'InvalidSignature');
+
+        // 3. طلب Webhook صحيح وموقع رقمياً بـ HMAC-SHA256
+        $validSig = hash_hmac('sha256', $validPayloadJson, $webhookSecret);
+        $resSuccess = $this->call(
+            'POST',
+            '/api/v1/subscriptions/webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_SIGNATURE' => $validSig,
+            ],
+            $validPayloadJson
+        );
+        $resSuccess->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true);
+
+        // التحقق من تفعيل المستأجر وتسجيل عملية التدقيق في AuditLog
+        $this->assertTrue((bool)$tenant->fresh()->is_paid);
+        $this->assertDatabaseHas('audit_logs', [
+            'tenant_id' => $tenant->id,
+            'action' => 'subscription_activated_via_webhook',
+        ]);
+
+        // 4. إعادة إرسال نفس إشعار الدفع بنفس event_id (Idempotency Replay)
+        $resReplay = $this->call(
+            'POST',
+            '/api/v1/subscriptions/webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_SIGNATURE' => $validSig,
+            ],
+            $validPayloadJson
+        );
+        $resReplay->assertStatus(200)
+            ->assertJsonPath('status', 'already_processed');
+    }
+
+    /**
+     * اختبار أمان 20: تفعيل المشرف العام (Platform Admin) مع رفض المستخدمين العاديين
+     */
+    public function test_platform_admin_can_manually_activate_subscription_with_auditable_authorization(): void
+    {
+        $tenant = Tenant::create([
+            'code' => 'TEN-ELITE-MFG',
+            'name' => 'مصنع النخبة',
+            'subdomain' => 'elite-factory',
+            'status' => 'active',
+            'plan_tier' => 'starter',
+            'is_paid' => false,
+        ]);
+
+        $adminUser = User::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مشرف المنصة العام',
+            'email' => 'superadmin@garmentos.cloud',
+            'password' => bcrypt('AdminPassword123!'),
+            'role' => 'platform_admin',
+            'is_active' => true,
+        ]);
+
+        // 1. مستخدم عادي يحاول استدعاء نقطة تفعيل المشرف العام -> 403 Forbidden
+        $resForbidden = $this->actingAs($this->userA)->postJson("/api/v1/admin/tenants/{$tenant->id}/activate-subscription", [
+            'authorization_code' => 'AUTH-PLATFORM-EXEC-2026',
+            'reason' => 'تحويل بنكي مباشر معتمد',
+            'plan_tier' => 'enterprise',
+        ]);
+        $resForbidden->assertStatus(403)
+            ->assertJsonPath('error', 'PlatformAdminOnly');
+
+        // 2. مشرف المنصة العام ينفذ التفعيل الموثق
+        $resAdmin = $this->actingAs($adminUser)->postJson("/api/v1/admin/tenants/{$tenant->id}/activate-subscription", [
+            'authorization_code' => 'AUTH-PLATFORM-EXEC-2026',
+            'authorized_by' => 'CEO Office / Financial Director',
+            'reason' => 'تم استلام تحويل بنكي على حساب الشركة في البنك الأهلي',
+            'plan_tier' => 'enterprise',
+        ]);
+        $resAdmin->assertStatus(200)
+            ->assertJsonPath('status', 'activated')
+            ->assertJsonPath('tenant.is_paid', true)
+            ->assertJsonPath('tenant.plan_tier', 'enterprise');
+
+        $this->assertTrue((bool)$tenant->fresh()->is_paid);
+        $this->assertDatabaseHas('audit_logs', [
+            'tenant_id' => $tenant->id,
+            'action' => 'admin_manual_activation',
+        ]);
+    }
+
+    /**
+     * اختبار أمان 21: حماية خامات أمانات العملاء وعزل المستودعات ومنع الأرصدة السالبة
+     */
+    public function test_customer_material_tenant_isolation_foreign_warehouse_and_consumption_integrity(): void
+    {
+        // 1. محاولة استلام خامة عميل بمستودع تابع لشركة أخرى (Cross-Tenant Warehouse)
+        $resForeignWh = $this->actingAs($this->userA)->postJson('/api/v1/inventory/customer-materials', [
+            'warehouse_id' => $this->warehouseB->id, // مستودع الشركة B!
+            'customer_name' => 'عميل تصنيع للغير',
+            'fabric_name' => 'قماش قطن 100% سنغل ليكرا',
+            'received_meters' => 1000.0,
+        ]);
+        $resForeignWh->assertStatus(422);
+
+        // 2. استلام خامة عميل نظامياً لشركة A
+        $resValid = $this->actingAs($this->userA)->postJson('/api/v1/inventory/customer-materials', [
+            'warehouse_id' => $this->warehouseA->id,
+            'customer_name' => 'عميل تصنيع للغير',
+            'fabric_name' => 'قماش قطن 100% سنغل ليكرا',
+            'received_meters' => 500.0,
+        ]);
+        $resValid->assertStatus(201);
+        $materialId = $resValid->json('customer_material.id');
+
+        // 3. محاولة صرف كمية أكبر من المتاح (550 متر من أصل 500) -> يجب أن ترفض وتمنع الرصيد السالب
+        $resOver = $this->actingAs($this->userA)->postJson("/api/v1/inventory/customer-materials/{$materialId}/consume", [
+            'consumed_meters' => 550.0,
+            'waste_meters' => 10.0,
+        ]);
+        $resOver->assertStatus(422);
+
+        // 4. محاولة صرف بواسطة مستخدم شركة B لخامة تابعة لشركة A -> 404 (Scoping Isolation)
+        $resForeignConsume = $this->actingAs($this->userB)->postJson("/api/v1/inventory/customer-materials/{$materialId}/consume", [
+            'consumed_meters' => 50.0,
+            'waste_meters' => 2.0,
+        ]);
+        $resForeignConsume->assertStatus(404);
+
+        // 5. صرف صحيح بنجاح والتحقق من حساب الأرصدة
+        $resConsume = $this->actingAs($this->userA)->postJson("/api/v1/inventory/customer-materials/{$materialId}/consume", [
+            'consumed_meters' => 200.0,
+            'waste_meters' => 10.0,
+        ]);
+        $resConsume->assertStatus(200);
+
+        $mat = \App\Models\CustomerMaterial::findOrFail($materialId);
+        $this->assertEquals(200.0, (float) $mat->consumed_meters);
+        $this->assertEquals(10.0, (float) $mat->waste_meters);
+        $this->assertEquals(290.0, (float) $mat->remaining_meters);
+    }
+
+    /**
+     * اختبار أمان 22: التحقق من بصمة Idempotency لأمر الإنتاج ومقارنة كافة الحقول والكميات
+     */
+    public function test_production_order_idempotency_fingerprint_detects_changed_payload_and_returns_conflict(): void
+    {
+        $model = GarmentModel::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'MOD-TSH-FP-' . uniqid(),
+            'name' => 'تيشيرت صيفي مطبوع',
+            'season' => 'summer',
+            'year' => 2026,
+            'category' => 'tops',
+        ]);
+
+        $color = Color::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'أحمر زاهي',
+            'color_code' => '#FF0000',
+        ]);
+
+        $size = Size::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => '2Y',
+            'category' => 'kids',
+            'sort_order' => 1,
+        ]);
+
+        $idempKey = 'PO-FINGERPRINT-TEST-' . uniqid();
+
+        $basePayload = [
+            'garment_model_id' => $model->id,
+            'planned_start_date' => '2026-11-01',
+            'target_delivery_date' => '2026-11-15',
+            'priority' => 'high',
+            'items' => [
+                [
+                    'color_id' => $color->id,
+                    'size_id' => $size->id,
+                    'planned_quantity' => 100,
+                ],
+            ],
+            'idempotency_key' => $idempKey,
+        ];
+
+        // 1. الإنشاء الأول
+        $res1 = $this->actingAs($this->userA)
+            ->withHeader('X-Idempotency-Key', $idempKey)
+            ->postJson('/api/v1/production-orders', $basePayload);
+        $res1->assertStatus(201);
+        $createdId = $res1->json('data.id');
+
+        // 2. إعادة إرسال نفس الطلب بنفس الحقول والمقادير -> Replay 200
+        $resReplay = $this->actingAs($this->userA)
+            ->withHeader('X-Idempotency-Key', $idempKey)
+            ->postJson('/api/v1/production-orders', $basePayload);
+        $resReplay->assertStatus(200)
+            ->assertJsonPath('is_duplicate', true)
+            ->assertJsonPath('data.id', $createdId);
+
+        // 3. إعادة إرسال نفس المفتاح مع تغيير الكمية (100 -> 250) -> يجب أن يعود 409 IdempotencyConflict
+        $modifiedQtyPayload = $basePayload;
+        $modifiedQtyPayload['items'][0]['planned_quantity'] = 250;
+
+        $resConflictQty = $this->actingAs($this->userA)
+            ->withHeader('X-Idempotency-Key', $idempKey)
+            ->postJson('/api/v1/production-orders', $modifiedQtyPayload);
+        $resConflictQty->assertStatus(409)
+            ->assertJsonPath('error', 'IdempotencyConflict');
+
+        // 4. إعادة إرسال نفس المفتاح مع تغيير الأولوية -> 409 IdempotencyConflict
+        $modifiedPriorityPayload = $basePayload;
+        $modifiedPriorityPayload['priority'] = 'low';
+
+        $resConflictPri = $this->actingAs($this->userA)
+            ->withHeader('X-Idempotency-Key', $idempKey)
+            ->postJson('/api/v1/production-orders', $modifiedPriorityPayload);
+        $resConflictPri->assertStatus(409)
+            ->assertJsonPath('error', 'IdempotencyConflict');
+    }
+
+    /**
+     * اختبار أمان 23: تعارض فاتورة المورد المكررة مع أمر شراء أو مبالغ مالية مختلفة يعود 409
+     */
+    public function test_duplicate_supplier_invoice_with_conflicting_amount_or_po_returns_conflict(): void
+    {
+        $supplier = Supplier::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'SUP-TEST-CONFLICT-' . uniqid(),
+            'name' => 'شركة النيل للغزل والنسيج',
+            'is_active' => true,
+        ]);
+
+        $po1 = PurchaseOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouseA->id,
+            'po_number' => 'PO-CONF-001-' . uniqid(),
+            'order_date' => date('Y-m-d'),
+            'subtotal' => 5000.0,
+            'tax_amount' => 700.0,
+            'total_amount' => 5700.0,
+            'status' => 'approved',
+        ]);
+
+        $po2 = PurchaseOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouseA->id,
+            'po_number' => 'PO-CONF-002-' . uniqid(),
+            'order_date' => date('Y-m-d'),
+            'subtotal' => 8000.0,
+            'tax_amount' => 1120.0,
+            'total_amount' => 9120.0,
+            'status' => 'approved',
+        ]);
+
+        $invoiceNumber = 'INV-SERIES-CONFLICT-' . uniqid();
+
+        // 1. تسجيل الفاتورة الأولى بنجاح
+        $res1 = $this->actingAs($this->userA)->postJson('/api/v1/supplier-invoices', [
+            'purchase_order_id' => $po1->id,
+            'invoice_number' => $invoiceNumber,
+            'invoice_date' => date('Y-m-d'),
+            'subtotal' => 5000.0,
+            'tax_amount' => 700.0,
+        ]);
+        $res1->assertStatus(201);
+
+        // 2. إعادة إرسال نفس رقم الفاتورة لنفس المورد لكن بأمر شراء مختلف (PO2) -> يجب الرفض برمز 409
+        $resConflictPo = $this->actingAs($this->userA)->postJson('/api/v1/supplier-invoices', [
+            'purchase_order_id' => $po2->id,
+            'invoice_number' => $invoiceNumber,
+            'invoice_date' => date('Y-m-d'),
+            'subtotal' => 5000.0,
+            'tax_amount' => 700.0,
+        ]);
+        $resConflictPo->assertStatus(409)
+            ->assertJsonPath('error', 'IdempotencyConflict');
+
+        // 3. إعادة إرسال نفس رقم الفاتورة لنفس أمر الشراء لكن بمبلغ مختلف -> يجب الرفض برمز 409
+        $resConflictAmt = $this->actingAs($this->userA)->postJson('/api/v1/supplier-invoices', [
+            'purchase_order_id' => $po1->id,
+            'invoice_number' => $invoiceNumber,
+            'invoice_date' => date('Y-m-d'),
+            'subtotal' => 7500.0, // مبلغ متضارب
+            'tax_amount' => 1050.0,
+        ]);
+        $resConflictAmt->assertStatus(409)
+            ->assertJsonPath('error', 'IdempotencyConflict');
     }
 }

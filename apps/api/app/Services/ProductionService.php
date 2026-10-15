@@ -2,19 +2,25 @@
 
 namespace App\Services;
 
+use App\Exceptions\IdempotencyCollisionException;
 use App\Models\BillOfMaterial;
 use App\Models\BomItem;
+use App\Models\Branch;
 use App\Models\BundleStageLog;
 use App\Models\CuttingBundle;
 use App\Models\CuttingOrder;
 use App\Models\CustomerMaterial;
+use App\Models\GarmentModel;
+use App\Models\InventoryItem;
 use App\Models\Pattern;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderItem;
 use App\Models\ProductionStage;
 use App\Models\QualityDefect;
 use App\Models\QualityInspection;
+use App\Models\Warehouse;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -25,13 +31,93 @@ class ProductionService
     ) {}
 
     /**
-     * إنشاء باترون هندسي جديد للموديل
+     * حساب بصمة معيارية موحدة لطلب أمر الإنتاج للتحقق الدقيق من الـ Idempotency
+     */
+    public function calculateProductionOrderFingerprint(array $data, array $items): string
+    {
+        $normalizedItems = [];
+        foreach ($items as $item) {
+            $normalizedItems[] = [
+                'color_id' => (string) ($item['color_id'] ?? ''),
+                'size_id' => (string) ($item['size_id'] ?? ''),
+                'product_variant_id' => (string) ($item['product_variant_id'] ?? ''),
+                'planned_quantity' => (int) ($item['planned_quantity'] ?? 0),
+            ];
+        }
+
+        // ترتيب البنود ترتيباً ثابتاً لضمان عدم تأثر البصمة بترتيب المصفوفة
+        usort($normalizedItems, function ($a, $b) {
+            return strcmp(
+                $a['color_id'] . '|' . $a['size_id'] . '|' . $a['product_variant_id'],
+                $b['color_id'] . '|' . $b['size_id'] . '|' . $b['product_variant_id']
+            );
+        });
+
+        $canonical = [
+            'garment_model_id' => (string) ($data['garment_model_id'] ?? ''),
+            'bill_of_material_id' => !empty($data['bill_of_material_id']) ? (string) $data['bill_of_material_id'] : null,
+            'branch_id' => !empty($data['branch_id']) ? (string) $data['branch_id'] : null,
+            'planned_start_date' => isset($data['planned_start_date']) ? substr((string)$data['planned_start_date'], 0, 10) : null,
+            'target_delivery_date' => isset($data['target_delivery_date']) ? substr((string)$data['target_delivery_date'], 0, 10) : null,
+            'priority' => (string) ($data['priority'] ?? 'normal'),
+            'items' => $normalizedItems,
+        ];
+
+        return hash('sha256', json_encode($canonical, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * حساب البصمة لأمر إنتاج موجود وبنوده المخزنة
+     */
+    public function calculateExistingOrderFingerprint(ProductionOrder $order): string
+    {
+        $order->loadMissing('items');
+        $items = [];
+        foreach ($order->items as $item) {
+            $items[] = [
+                'color_id' => (string) $item->color_id,
+                'size_id' => (string) $item->size_id,
+                'product_variant_id' => (string) ($item->product_variant_id ?? ''),
+                'planned_quantity' => (int) $item->planned_quantity,
+            ];
+        }
+
+        $data = [
+            'garment_model_id' => (string) $order->garment_model_id,
+            'bill_of_material_id' => (string) $order->bill_of_material_id,
+            'branch_id' => (string) $order->branch_id,
+            'planned_start_date' => (string) $order->planned_start_date,
+            'target_delivery_date' => (string) $order->target_delivery_date,
+            'priority' => (string) $order->priority,
+        ];
+
+        return $this->calculateProductionOrderFingerprint($data, $items);
+    }
+
+    /**
+     * إنشاء باترون هندسي جديد للموديل مع التحقق الصارم من سياق الشركة والملكية
      */
     public function createPattern(array $data): Pattern
     {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+        if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+            throw new InvalidArgumentException('أمان: تعارض في سياق الشركة.');
+        }
+
+        // التحقق من تبعية الموديل للشركة الموثقة
+        $model = GarmentModel::where('tenant_id', $contextTenantId)
+            ->where('id', $data['garment_model_id'])
+            ->first();
+        if (!$model) {
+            throw new InvalidArgumentException('أمان: موديل الملابس غير موجود أو غير تابع للشركة الحالية.');
+        }
+
         return Pattern::create([
-            'tenant_id' => $data['tenant_id'],
-            'garment_model_id' => $data['garment_model_id'],
+            'tenant_id' => $contextTenantId,
+            'garment_model_id' => $model->id,
             'pattern_code' => $data['pattern_code'] ?? ('PAT-' . strtoupper(bin2hex(random_bytes(3)))),
             'pattern_name' => $data['pattern_name'],
             'version' => $data['version'] ?? '1.0',
@@ -50,7 +136,33 @@ class ProductionService
      */
     public function createBom(array $data, array $items): BillOfMaterial
     {
-        return DB::transaction(function () use ($data, $items) {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+        if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+            throw new InvalidArgumentException('أمان: تعارض في سياق الشركة.');
+        }
+
+        // التحقق من تبعية الموديل للشركة الموثقة
+        $model = GarmentModel::where('tenant_id', $contextTenantId)
+            ->where('id', $data['garment_model_id'])
+            ->first();
+        if (!$model) {
+            throw new InvalidArgumentException('أمان: موديل الملابس غير موجود أو غير تابع للشركة الحالية.');
+        }
+
+        // التحقق من تبعية كافة الأصناف المخزنية لنفس الشركة
+        foreach ($items as $item) {
+            $invItem = InventoryItem::where('tenant_id', $contextTenantId)
+                ->where('id', $item['inventory_item_id'])
+                ->first();
+            if (!$invItem) {
+                throw new InvalidArgumentException('أمان: الصنف المخزني غير موجود أو غير تابع للشركة الحالية.');
+            }
+        }
+
+        return DB::transaction(function () use ($data, $items, $contextTenantId, $model) {
             $totalEstimatedCost = 0.0;
 
             foreach ($items as $item) {
@@ -61,8 +173,8 @@ class ProductionService
             }
 
             $bom = BillOfMaterial::create([
-                'tenant_id' => $data['tenant_id'],
-                'garment_model_id' => $data['garment_model_id'],
+                'tenant_id' => $contextTenantId,
+                'garment_model_id' => $model->id,
                 'version' => $data['version'] ?? '1.0',
                 'bom_code' => $data['bom_code'] ?? ('BOM-' . strtoupper(bin2hex(random_bytes(3)))),
                 'name' => $data['name'],
@@ -74,7 +186,7 @@ class ProductionService
 
             foreach ($items as $item) {
                 BomItem::create([
-                    'tenant_id' => $data['tenant_id'],
+                    'tenant_id' => $contextTenantId,
                     'bill_of_material_id' => $bom->id,
                     'inventory_item_id' => $item['inventory_item_id'],
                     'color_id' => $item['color_id'] ?? null,
@@ -97,11 +209,20 @@ class ProductionService
      */
     public function approveBom(string $bomId): BillOfMaterial
     {
-        return DB::transaction(function () use ($bomId) {
-            $bom = BillOfMaterial::where('id', $bomId)->lockForUpdate()->firstOrFail();
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($bomId, $contextTenantId) {
+            $bom = BillOfMaterial::where('tenant_id', $contextTenantId)
+                ->where('id', $bomId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             // أرشفة أي BOM نشط سابق لنفس الموديل
-            BillOfMaterial::where('garment_model_id', $bom->garment_model_id)
+            BillOfMaterial::where('tenant_id', $contextTenantId)
+                ->where('garment_model_id', $bom->garment_model_id)
                 ->where('id', '!=', $bomId)
                 ->update(['is_active' => false]);
 
@@ -114,90 +235,125 @@ class ProductionService
     }
 
     /**
-     * إنشاء أمر إنتاج وتشغيل جديد مع تفصيل الألوان والمقاسات
+     * إنشاء أمر إنتاج وتشغيل جديد مع تفصيل الألوان والمقاسات وبصمة Idempotency دقيقة
      */
     public function createProductionOrder(array $data, array $items): ProductionOrder
     {
-        return DB::transaction(function () use ($data, $items) {
-            $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
-            if (empty($contextTenantId)) {
-                throw new InvalidArgumentException('أمان: سياق الشركة غير محدد. لا يمكن إنشاء أمر إنتاج دون سياق شركة موثق.');
-            }
-            if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
-                throw new InvalidArgumentException('أمان: تعارض في سياق الشركة. tenant_id الممرر لا يطابق الشركة الموثقة.');
-            }
-            $tenantId = $contextTenantId;
-            $idempotencyKey = $data['idempotency_key'] ?? null;
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد. لا يمكن إنشاء أمر إنتاج دون سياق شركة موثق.');
+        }
+        if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+            throw new InvalidArgumentException('أمان: تعارض في سياق الشركة. tenant_id الممرر لا يطابق الشركة الموثقة.');
+        }
+        $tenantId = $contextTenantId;
+        $idempotencyKey = $data['idempotency_key'] ?? null;
 
-            if ($idempotencyKey) {
-                $existing = ProductionOrder::where('tenant_id', $tenantId)
-                    ->where('idempotency_key', $idempotencyKey)
-                    ->first();
-                if ($existing) {
-                    $isMatch = ((string)$existing->garment_model_id === (string)$data['garment_model_id']);
-                    if (!$isMatch) {
-                        throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لأمر إنتاج مختلف.');
+        // التحقق من ملكية الموديل للشركة الموثقة
+        $model = GarmentModel::where('tenant_id', $tenantId)->where('id', $data['garment_model_id'])->first();
+        if (!$model) {
+            throw new InvalidArgumentException('أمان: موديل الملابس غير موجود أو غير تابع للشركة الحالية.');
+        }
+
+        // التحقق من ملكية شجرة الخامات (BOM) إذا مررت
+        if (!empty($data['bill_of_material_id'])) {
+            $bom = BillOfMaterial::where('tenant_id', $tenantId)->where('id', $data['bill_of_material_id'])->first();
+            if (!$bom) {
+                throw new InvalidArgumentException('أمان: شجرة الخامات (BOM) غير تابعة للشركة الحالية.');
+            }
+        }
+
+        // التحقق من ملكية الفرع إذا مرر
+        if (!empty($data['branch_id'])) {
+            $branch = Branch::where('tenant_id', $tenantId)->where('id', $data['branch_id'])->first();
+            if (!$branch) {
+                throw new InvalidArgumentException('أمان: الفرع غير تابع للشركة الحالية.');
+            }
+        }
+
+        // التحقق من صحة بنود أمر الإنتاج
+        $totalPlanned = 0;
+        foreach ($items as $item) {
+            $qty = (int) $item['planned_quantity'];
+            if ($qty <= 0) {
+                throw new InvalidArgumentException('كمية البند المخططة يجب أن تكون أكبر من الصفر.');
+            }
+            $totalPlanned += $qty;
+        }
+
+        $incomingFingerprint = $this->calculateProductionOrderFingerprint($data, $items);
+
+        // التحقق المسبق من مفتاح عدم التكرار (Idempotency)
+        if ($idempotencyKey) {
+            $existing = ProductionOrder::where('tenant_id', $tenantId)
+                ->where('idempotency_key', $idempotencyKey)
+                ->first();
+            if ($existing) {
+                $existingFingerprint = $this->calculateExistingOrderFingerprint($existing);
+                if ($incomingFingerprint !== $existingFingerprint) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً بحقول أو كميات مختلفة (IdempotencyConflict).');
+                }
+                return $existing->load('items.color', 'items.size', 'garmentModel');
+            }
+        }
+
+        try {
+            return DB::transaction(function () use ($data, $items, $tenantId, $idempotencyKey, $totalPlanned) {
+                try {
+                    $order = ProductionOrder::create([
+                        'tenant_id' => $tenantId,
+                        'order_number' => $data['order_number'] ?? ('PO-PRD-' . date('Ym') . '-' . rand(100, 999)),
+                        'garment_model_id' => $data['garment_model_id'],
+                        'bill_of_material_id' => $data['bill_of_material_id'] ?? null,
+                        'branch_id' => $data['branch_id'] ?? null,
+                        'planned_start_date' => $data['planned_start_date'] ?? date('Y-m-d'),
+                        'target_delivery_date' => $data['target_delivery_date'] ?? date('Y-m-d', strtotime('+15 days')),
+                        'total_planned_quantity' => $totalPlanned,
+                        'total_cut_quantity' => 0,
+                        'total_completed_quantity' => 0,
+                        'total_scrapped_quantity' => 0,
+                        'total_rework_quantity' => 0,
+                        'status' => 'draft',
+                        'priority' => $data['priority'] ?? 'normal',
+                        'notes' => $data['notes'] ?? null,
+                        'idempotency_key' => $idempotencyKey,
+                    ]);
+                } catch (QueryException $e) {
+                    if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
+                        throw new IdempotencyCollisionException($idempotencyKey, $tenantId);
                     }
-                    return $existing->load('items.color', 'items.size', 'garmentModel');
+                    throw $e;
                 }
-            }
 
-            $totalPlanned = 0;
-            foreach ($items as $item) {
-                $qty = (int) $item['planned_quantity'];
-                if ($qty <= 0) {
-                    throw new InvalidArgumentException('كمية البند المخططة يجب أن تكون أكبر من الصفر.');
+                foreach ($items as $item) {
+                    ProductionOrderItem::create([
+                        'tenant_id' => $tenantId,
+                        'production_order_id' => $order->id,
+                        'product_variant_id' => $item['product_variant_id'] ?? null,
+                        'color_id' => $item['color_id'],
+                        'size_id' => $item['size_id'],
+                        'planned_quantity' => (int) $item['planned_quantity'],
+                        'cut_quantity' => 0,
+                        'completed_quantity' => 0,
+                        'rejected_quantity' => 0,
+                    ]);
                 }
-                $totalPlanned += $qty;
-            }
 
-            try {
-                $order = ProductionOrder::create([
-                    'tenant_id' => $tenantId,
-                    'order_number' => $data['order_number'] ?? ('PO-PRD-' . date('Ym') . '-' . rand(100, 999)),
-                    'garment_model_id' => $data['garment_model_id'],
-                    'bill_of_material_id' => $data['bill_of_material_id'] ?? null,
-                    'branch_id' => $data['branch_id'] ?? null,
-                    'planned_start_date' => $data['planned_start_date'] ?? date('Y-m-d'),
-                    'target_delivery_date' => $data['target_delivery_date'] ?? date('Y-m-d', strtotime('+15 days')),
-                    'total_planned_quantity' => $totalPlanned,
-                    'total_cut_quantity' => 0,
-                    'total_completed_quantity' => 0,
-                    'total_scrapped_quantity' => 0,
-                    'total_rework_quantity' => 0,
-                    'status' => 'draft',
-                    'priority' => $data['priority'] ?? 'normal',
-                    'notes' => $data['notes'] ?? null,
-                    'idempotency_key' => $idempotencyKey,
-                ]);
-            } catch (\Illuminate\Database\QueryException $e) {
-                if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
-                    $existing = ProductionOrder::where('tenant_id', $tenantId)
-                        ->where('idempotency_key', $idempotencyKey)
-                        ->first();
-                    if ($existing) {
-                        return $existing->load('items.color', 'items.size', 'garmentModel');
-                    }
+                return $order->load('items.color', 'items.size', 'garmentModel');
+            });
+        } catch (IdempotencyCollisionException $e) {
+            $existing = ProductionOrder::where('tenant_id', $e->tenantId)
+                ->where('idempotency_key', $e->idempotencyKey)
+                ->first();
+            if ($existing) {
+                $existingFingerprint = $this->calculateExistingOrderFingerprint($existing);
+                if ($incomingFingerprint !== $existingFingerprint) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً بحقول أو كميات مختلفة (IdempotencyConflict).');
                 }
-                throw $e;
+                return $existing->load('items.color', 'items.size', 'garmentModel');
             }
-
-            foreach ($items as $item) {
-                ProductionOrderItem::create([
-                    'tenant_id' => $tenantId,
-                    'production_order_id' => $order->id,
-                    'product_variant_id' => $item['product_variant_id'] ?? null,
-                    'color_id' => $item['color_id'],
-                    'size_id' => $item['size_id'],
-                    'planned_quantity' => (int) $item['planned_quantity'],
-                    'cut_quantity' => 0,
-                    'completed_quantity' => 0,
-                    'rejected_quantity' => 0,
-                ]);
-            }
-
-            return $order->load('items');
-        });
+            throw $e;
+        }
     }
 
     /**
@@ -205,8 +361,16 @@ class ProductionService
      */
     public function approveProductionOrder(string $orderId): ProductionOrder
     {
-        return DB::transaction(function () use ($orderId) {
-            $order = ProductionOrder::where('id', $orderId)->lockForUpdate()->firstOrFail();
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($orderId, $contextTenantId) {
+            $order = ProductionOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $orderId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if ($order->status !== 'draft') {
                 throw new Exception("أمر الإنتاج في حالة [{$order->status}] ولا يمكن اعتماده.");
@@ -246,10 +410,25 @@ class ProductionService
      */
     public function executeCuttingOrder(array $data, array $bundleConfigs = []): CuttingOrder
     {
-        return DB::transaction(function () use ($data, $bundleConfigs) {
-            $prodOrder = ProductionOrder::where('id', $data['production_order_id'])
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($data, $bundleConfigs, $contextTenantId) {
+            $prodOrder = ProductionOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $data['production_order_id'])
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // التحقق من ملكية المستودع
+            $warehouseId = $data['warehouse_id'];
+            $warehouse = Warehouse::where('tenant_id', $contextTenantId)
+                ->where('id', $warehouseId)
+                ->first();
+            if (!$warehouse) {
+                throw new InvalidArgumentException('أمان: المستودع المحدد غير موجود أو غير تابع للشركة الحالية.');
+            }
 
             // منع صرف خامات لأمر غير معتمد
             if (!in_array($prodOrder->status, ['approved', 'cutting', 'in_progress'])) {
@@ -268,7 +447,6 @@ class ProductionService
             $fabricSource = $data['fabric_source'] ?? 'factory_owned';
             $fabricItemId = $data['fabric_inventory_item_id'] ?? null;
             $customerMaterialId = $data['customer_material_id'] ?? null;
-            $warehouseId = $data['warehouse_id'];
 
             // صرف القماش نظامياً من خلال خدمة المخزون أو رصيد أمانة العميل
             if ($fabricSource === 'factory_owned') {
@@ -276,9 +454,17 @@ class ProductionService
                     throw new InvalidArgumentException('يجب تحديد صنف القماش عند الصرف من خامات المصنع.');
                 }
 
+                // التحقق من ملكية الصنف للشركة
+                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)->where('id', $fabricItemId)->first();
+                if (!$fabricItem) {
+                    throw new InvalidArgumentException('أمان: صنف القماش غير تابع للشركة الحالية.');
+                }
+
                 // استدعاء خدمة المخزون لصرف كمية القماش الفعلية مع حظر السالب والتحقق من التزامن
                 $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
                     'inventory_item_id' => $fabricItemId,
+                    'warehouse_id' => $warehouseId,
                     'quantity' => $actualMeters,
                     'direction' => 'OUT',
                     'transaction_type' => 'production_issue',
@@ -290,22 +476,16 @@ class ProductionService
                     throw new InvalidArgumentException('يجب تحديد محضر أمانة خامة العميل عند الصرف من خامات العملاء.');
                 }
 
-                $customerMat = CustomerMaterial::where('id', $customerMaterialId)->lockForUpdate()->firstOrFail();
-                if ($customerMat->remaining_meters < $actualMeters) {
-                    throw new Exception("رصيد خامة العميل [{$customerMat->customer_name}] غير كافٍ. المتبقي: {$customerMat->remaining_meters} متر، المطلوب صرفه: {$actualMeters} متر.");
-                }
-
-                $customerMat->consumed_meters += $theoreticalMeters;
-                $customerMat->waste_meters += (($endLoss * $layersCount) + $remnant);
-                $customerMat->remaining_meters = $customerMat->received_meters - ($customerMat->consumed_meters + $customerMat->waste_meters);
-                $customerMat->save();
+                // استدعاء consumeCustomerMaterial الآمنة مع قفل السجل ومنع الأرصدة السالبة
+                $waste = ($endLoss * $layersCount) + $remnant;
+                $this->inventoryService->consumeCustomerMaterial($customerMaterialId, $theoreticalMeters, $waste);
             }
 
             $totalCutPieces = (int) ($data['total_cut_pieces'] ?? ($layersCount * count($prodOrder->items)));
 
             // إنشاء أمر القص
             $cuttingOrder = CuttingOrder::create([
-                'tenant_id' => $prodOrder->tenant_id,
+                'tenant_id' => $contextTenantId,
                 'cutting_order_number' => $data['cutting_order_number'] ?? ('CUT-' . date('Ym') . '-' . rand(1000, 9999)),
                 'production_order_id' => $prodOrder->id,
                 'pattern_id' => $data['pattern_id'] ?? null,
@@ -334,7 +514,7 @@ class ProductionService
             ]);
 
             // التأكد من توفر مراحل الإنتاج
-            $this->ensureDefaultStages($prodOrder->tenant_id);
+            $this->ensureDefaultStages($contextTenantId);
 
             // توليد بطاقات الحزم (Bundle Cards)
             $bundleNumber = 1;
@@ -342,7 +522,7 @@ class ProductionService
                 foreach ($bundleConfigs as $bCfg) {
                     $bundleQty = (int) $bCfg['quantity'];
                     CuttingBundle::create([
-                        'tenant_id' => $prodOrder->tenant_id,
+                        'tenant_id' => $contextTenantId,
                         'bundle_code' => 'BND-' . date('Ym') . '-' . str_pad((string)$bundleNumber, 4, '0', STR_PAD_LEFT) . '-' . rand(10, 99),
                         'cutting_order_id' => $cuttingOrder->id,
                         'production_order_id' => $prodOrder->id,
@@ -362,7 +542,7 @@ class ProductionService
                     while ($remaining > 0) {
                         $bundleQty = min($remaining, 20);
                         CuttingBundle::create([
-                            'tenant_id' => $prodOrder->tenant_id,
+                            'tenant_id' => $contextTenantId,
                             'bundle_code' => 'BND-' . date('Ym') . '-' . str_pad((string)$bundleNumber, 4, '0', STR_PAD_LEFT) . '-' . rand(10, 99),
                             'cutting_order_id' => $cuttingOrder->id,
                             'production_order_id' => $prodOrder->id,
@@ -396,14 +576,22 @@ class ProductionService
      */
     public function transferBundleStage(string $bundleId, string $toStageCode, array $operationData): BundleStageLog
     {
-        return DB::transaction(function () use ($bundleId, $toStageCode, $operationData) {
-            $bundle = CuttingBundle::where('id', $bundleId)->lockForUpdate()->firstOrFail();
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($bundleId, $toStageCode, $operationData, $contextTenantId) {
+            $bundle = CuttingBundle::where('tenant_id', $contextTenantId)
+                ->where('id', $bundleId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if ($bundle->status !== 'active' && $bundle->status !== 'rework') {
                 throw new Exception("الحزمة [{$bundle->bundle_code}] في حالة [{$bundle->status}] ولا يمكن نقلها للتشغيل.");
             }
 
-            $stage = ProductionStage::where('tenant_id', $bundle->tenant_id)
+            $stage = ProductionStage::where('tenant_id', $contextTenantId)
                 ->where('stage_code', $toStageCode)
                 ->firstOrFail();
 
@@ -420,7 +608,9 @@ class ProductionService
             // إذا كان هناك هالك نهائي، تخفيض كمية الحزمة وتحديث أمر الإنتاج
             if ($scrapQty > 0) {
                 $bundle->quantity -= $scrapQty;
-                ProductionOrder::where('id', $bundle->production_order_id)->increment('total_scrapped_quantity', $scrapQty);
+                ProductionOrder::where('tenant_id', $contextTenantId)
+                    ->where('id', $bundle->production_order_id)
+                    ->increment('total_scrapped_quantity', $scrapQty);
             }
 
             $bundle->current_stage_code = $toStageCode;
@@ -433,7 +623,7 @@ class ProductionService
 
             // تسجيل حركة التشغيل في سجل المراحل
             return BundleStageLog::create([
-                'tenant_id' => $bundle->tenant_id,
+                'tenant_id' => $contextTenantId,
                 'cutting_bundle_id' => $bundle->id,
                 'production_stage_id' => $stage->id,
                 'operation_type' => $operationData['operation_type'] ?? 'transfer',
@@ -450,11 +640,19 @@ class ProductionService
 
     /**
      * تسجيل فحص جودة رسمي لنقطة تفتيش محددة
-     * إذا كان فحص نهائي (final_audit) واجتاز بنجاح: يتم تحويل القطع السليمة إلى مخزن المنتج التام عبر InventoryService
      */
     public function recordQualityInspection(array $data, array $defects = []): QualityInspection
     {
-        return DB::transaction(function () use ($data, $defects) {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+        if (!empty($data['tenant_id']) && (string)$data['tenant_id'] !== (string)$contextTenantId) {
+            throw new InvalidArgumentException('أمان: تعارض في سياق الشركة.');
+        }
+        $tenantId = $contextTenantId;
+
+        return DB::transaction(function () use ($data, $defects, $tenantId) {
             $inspectedQty = (int) $data['inspected_quantity'];
             $passedQty = (int) $data['passed_quantity'];
             $rejectedQty = (int) ($data['rejected_quantity'] ?? 0);
@@ -464,12 +662,17 @@ class ProductionService
                 throw new InvalidArgumentException("مجموع كميات الفحص (المجاز: {$passedQty} + المرفوض: {$rejectedQty} + إعادة التشغيل: {$reworkQty}) لا يطابق إجمالي القطع المفحوصة: {$inspectedQty}.");
             }
 
+            $prodOrder = ProductionOrder::where('tenant_id', $tenantId)
+                ->where('id', $data['production_order_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $decision = $data['decision'] ?? ($rejectedQty > 0 ? 'rejected' : ($reworkQty > 0 ? 'rework_required' : 'passed'));
 
             $inspection = QualityInspection::create([
-                'tenant_id' => $data['tenant_id'],
+                'tenant_id' => $tenantId,
                 'inspection_number' => $data['inspection_number'] ?? ('QC-' . date('Ym') . '-' . rand(1000, 9999)),
-                'production_order_id' => $data['production_order_id'],
+                'production_order_id' => $prodOrder->id,
                 'cutting_bundle_id' => $data['cutting_bundle_id'] ?? null,
                 'production_stage_id' => $data['production_stage_id'] ?? null,
                 'inspector_name' => $data['inspector_name'],
@@ -485,7 +688,7 @@ class ProductionService
             // تسجيل بنود العيوب
             foreach ($defects as $defect) {
                 QualityDefect::create([
-                    'tenant_id' => $data['tenant_id'],
+                    'tenant_id' => $tenantId,
                     'quality_inspection_id' => $inspection->id,
                     'defect_type' => $defect['defect_type'],
                     'severity' => $defect['severity'] ?? 'minor',
@@ -494,11 +697,12 @@ class ProductionService
                 ]);
             }
 
-            $prodOrder = ProductionOrder::where('id', $data['production_order_id'])->lockForUpdate()->firstOrFail();
-
             // تحديث حالة الحزمة إن وجدت
             if (!empty($data['cutting_bundle_id'])) {
-                $bundle = CuttingBundle::where('id', $data['cutting_bundle_id'])->lockForUpdate()->first();
+                $bundle = CuttingBundle::where('tenant_id', $tenantId)
+                    ->where('id', $data['cutting_bundle_id'])
+                    ->lockForUpdate()
+                    ->first();
                 if ($bundle) {
                     if ($decision === 'rework_required') {
                         $bundle->status = 'rework';
@@ -527,7 +731,15 @@ class ProductionService
 
                 // تحديث المخزون للمنتج النهائي إذا توفر inventory_item_id للمنتج التام
                 if (!empty($data['finished_goods_inventory_item_id'])) {
+                    $fgItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('id', $data['finished_goods_inventory_item_id'])
+                        ->first();
+                    if (!$fgItem) {
+                        throw new InvalidArgumentException('أمان: صنف المنتج التام غير تابع للشركة الحالية.');
+                    }
+
                     $this->inventoryService->recordTransaction([
+                        'tenant_id' => $tenantId,
                         'inventory_item_id' => $data['finished_goods_inventory_item_id'],
                         'quantity' => $passedQty,
                         'direction' => 'IN',
@@ -547,7 +759,13 @@ class ProductionService
      */
     public function getProductionMetrics(string $productionOrderId): array
     {
-        $order = ProductionOrder::with(['items', 'cuttingOrders', 'bundles', 'qualityInspections.defects'])
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        $order = ProductionOrder::where('tenant_id', $contextTenantId)
+            ->with(['items', 'cuttingOrders', 'bundles', 'qualityInspections.defects'])
             ->findOrFail($productionOrderId);
 
         $totalPlanned = $order->total_planned_quantity;

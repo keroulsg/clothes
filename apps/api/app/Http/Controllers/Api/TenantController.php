@@ -196,7 +196,9 @@ class TenantController extends Controller
     }
 
     /**
-     * تفعيل أو تجديد الاشتراك المدفوع للشركة
+     * بدء عملية سداد الاشتراك أو طلب فاتورة دفع جديدة (Client-Initiated Payment Request)
+     * ملاحظة أمنية حاسمة: لا يمكن للمستخدم العادي تفعيل الاشتراك كمدفوع (is_paid = true)
+     * الدفع يتطلب تحقق خادم-إلى-خادم عبر Webhook موقّع أو موافقة إدارية معتمدة وموثقة.
      */
     public function activateSubscription(Request $request): JsonResponse
     {
@@ -205,29 +207,115 @@ class TenantController extends Controller
 
         $validated = $request->validate([
             'plan_tier' => 'nullable|string|in:starter,professional,enterprise',
-            'payment_reference' => 'nullable|string|max:100',
+            'payment_reference' => 'nullable|string|max:100', // تجاهل أي ادعاء بالدفع من العميل
         ]);
 
         $settings = $tenant->settings ?? [];
         $planTier = $validated['plan_tier'] ?? $tenant->plan_tier;
 
-        $settings['subscription'] = [
-            'status' => 'active',
-            'is_paid' => true,
+        $planPricing = [
+            'starter' => 2500.0,
+            'professional' => 5000.0,
+            'enterprise' => 10000.0,
+        ];
+        $amount = $planPricing[$planTier] ?? 5000.0;
+        $orderReference = 'ORD-' . strtoupper(Str::random(10));
+
+        // حفظ أمر الدفع المعلق مع الحفاظ الصارم على is_paid = false
+        $subscription = $settings['subscription'] ?? [];
+        $subscription['status'] = 'payment_pending';
+        $subscription['is_paid'] = false; // لا يتم تفعيل الدفع نهائياً من هذا المسار!
+        $subscription['pending_order'] = [
+            'order_reference' => $orderReference,
             'plan_tier' => $planTier,
-            'activated_at' => now()->toIso8601String(),
-            'expires_at' => now()->addYear()->toIso8601String(),
-            'payment_reference' => $validated['payment_reference'] ?? ('PAY-' . strtoupper(Str::random(10))),
+            'amount' => $amount,
+            'currency' => 'EGP',
+            'created_at' => now()->toIso8601String(),
+            'status' => 'awaiting_payment_provider_verification',
         ];
 
-        $tenant->settings = $settings;
+        $tenant->settings = array_merge($settings, ['subscription' => $subscription]);
+        $tenant->save();
+
+        return response()->json([
+            'message' => 'تم إنشاء طلب سداد الاشتراك بنجاح. يرجى استكمال عملية الدفع عبر بوابة الدفع المعتمدة.',
+            'is_paid' => false,
+            'subscription_status' => 'payment_pending',
+            'payment_order' => [
+                'order_reference' => $orderReference,
+                'plan_tier' => $planTier,
+                'amount' => $amount,
+                'currency' => 'EGP',
+                'checkout_url' => 'https://checkout.garmentos.cloud/pay/' . $orderReference,
+                'status' => 'pending_verification',
+            ],
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'status' => $tenant->status,
+                'plan_tier' => $tenant->plan_tier,
+                'is_paid' => false,
+                'subscription_status' => 'payment_pending',
+            ],
+        ], 200);
+    }
+
+    /**
+     * تفعيل يدوي استثنائي للاشتراك بواسطة المشرف العام فقط مع توثيق التدقيق (Platform Admin Manual Activation)
+     */
+    public function adminManualActivate(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || $user->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذه العملية محصورة حصراً على المشرف العام للمنصة (Platform Admin).',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|min:10|max:500',
+            'plan_tier' => 'nullable|string|in:starter,professional,enterprise',
+            'authorized_by' => 'required|string|max:255',
+        ]);
+
+        $tenant = Tenant::withoutGlobalScopes()->findOrFail($id);
+        $settings = $tenant->settings ?? [];
+        $subscription = $settings['subscription'] ?? [];
+        $planTier = $validated['plan_tier'] ?? $tenant->plan_tier;
+
+        $subscription['status'] = 'active';
+        $subscription['is_paid'] = true;
+        $subscription['plan_tier'] = $planTier;
+        $subscription['activated_at'] = now()->toIso8601String();
+        $subscription['expires_at'] = now()->addYear()->toIso8601String();
+        $subscription['manual_activation'] = [
+            'activated_by_user_id' => $user->id,
+            'authorized_by' => $validated['authorized_by'],
+            'reason' => $validated['reason'],
+            'timestamp' => now()->toIso8601String(),
+        ];
+
+        $oldValues = $tenant->settings['subscription'] ?? [];
+        $tenant->settings = array_merge($settings, ['subscription' => $subscription]);
         $tenant->status = 'active';
         $tenant->plan_tier = $planTier;
         $tenant->save();
 
+        \App\Models\AuditLog::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $user->id,
+            'action' => 'admin_manual_activation',
+            'auditable_type' => Tenant::class,
+            'auditable_id' => $tenant->id,
+            'old_values' => $oldValues,
+            'new_values' => $subscription['manual_activation'],
+            'ip_address' => $request->ip(),
+        ]);
+
         return response()->json([
-            'message' => 'تم تفعيل الاشتراك التجاري بنجاح.',
-            'subscription' => $settings['subscription'],
+            'status' => 'activated',
+            'message' => 'تم تفعيل اشتراك الشركة يدوياً بواسطة المشرف العام وتوثيق سجل الرقابة والتدقيق.',
             'tenant' => [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
@@ -235,6 +323,7 @@ class TenantController extends Controller
                 'plan_tier' => $tenant->plan_tier,
                 'is_paid' => true,
             ],
+            'subscription' => $subscription,
         ]);
     }
 }

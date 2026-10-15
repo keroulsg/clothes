@@ -106,6 +106,11 @@ class PaymobWebhookVerifier implements WebhookVerifierInterface
      */
     public function buildPaymobConcatenatedString(array $obj): ?string
     {
+        // التحقق من أن الكائن يمثل معاملة Paymob رسمية تحتوي على المعرفات الإلزامية الأساسية
+        if (!isset($obj['id']) || !isset($obj['amount_cents']) || !isset($obj['currency']) || !array_key_exists('success', $obj)) {
+            return null;
+        }
+
         $keys = [
             'amount_cents',
             'created_at',
@@ -133,11 +138,9 @@ class PaymobWebhookVerifier implements WebhookVerifierInterface
         foreach ($keys as $key) {
             $val = $this->extractNestedValue($obj, $key);
             if ($val === null) {
-                // إذا كان الحقل مفقوداً تماماً في الكائن لا يمكن توليد توقيع Paymob الرسمي
-                return null;
-            }
-
-            if (is_bool($val)) {
+                // حسب توثيق Paymob الرسمي: الحقول الفارغة أو null تعامل كنص فارغ ""
+                $result .= '';
+            } elseif (is_bool($val)) {
                 $result .= $val ? 'true' : 'false';
             } elseif ($val === 'true' || $val === 'false') {
                 $result .= $val;

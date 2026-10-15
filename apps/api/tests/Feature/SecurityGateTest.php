@@ -1594,7 +1594,7 @@ class SecurityGateTest extends TestCase
     public function test_stripe_webhook_verification_with_official_test_vectors(): void
     {
         config(['services.payment.provider' => 'stripe']);
-        $secret = config('services.payment.webhook_secret');
+        $secret = config('services.stripe.webhook_secret') ?? config('services.payment.webhook_secret');
 
         $tenant = Tenant::create([
             'code' => 'TEN-STRIPE-VEC',
@@ -1842,7 +1842,7 @@ class SecurityGateTest extends TestCase
      */
     public function test_genuine_stripe_checkout_session_completed_normalizes_and_activates_subscription(): void
     {
-        $secret = config('services.payment.webhook_secret');
+        $secret = config('services.stripe.webhook_secret') ?? config('services.payment.webhook_secret');
         $tenant = Tenant::create([
             'code' => 'TEN-STRIPE-OFFICIAL',
             'name' => 'مصنع الملابس المعتمد - سترايب',
@@ -1907,7 +1907,7 @@ class SecurityGateTest extends TestCase
      */
     public function test_genuine_paymob_transaction_callback_verifies_official_hmac_and_activates(): void
     {
-        $secret = config('services.payment.webhook_secret');
+        $secret = config('services.paymob.hmac_secret') ?? config('services.payment.webhook_secret');
         $tenant = Tenant::create([
             'code' => 'TEN-PAYMOB-OFFICIAL',
             'name' => 'مصنع النسيج - بيموب الرسمي',
@@ -1983,7 +1983,7 @@ class SecurityGateTest extends TestCase
      */
     public function test_paymob_callback_negative_cases_rejects_altered_data_and_invalid_hmac(): void
     {
-        $secret = config('services.payment.webhook_secret');
+        $secret = config('services.paymob.hmac_secret') ?? config('services.payment.webhook_secret');
         $tenant = Tenant::create([
             'code' => 'TEN-PAYMOB-NEG',
             'name' => 'مصنع الاختبارات السلبية بيموب',
@@ -2246,6 +2246,359 @@ class SecurityGateTest extends TestCase
             'authorization_code' => 'any_code',
         ]);
         $resUnauth->assertStatus(403)->assertJsonPath('error', 'PlatformAdminOnly');
+    }
+
+    /**
+     * اختبار أمان 39: الرد على الإشعارات المكررة يعكس بدقة الحالة الحقيقية المسجلة (فاشل أو منتهي)
+     */
+    public function test_duplicate_webhook_responses_faithfully_report_actual_failed_and_expired_status(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-STATUS-FIDELITY',
+            'name' => 'مصنع التحقق من دقة إعادة الإشعارات',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'FIDELITY-FAIL-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $ts = time();
+        $failedPayload = [
+            'event' => 'payment.failed',
+            'event_id' => 'EVT-FAIL-FIDELITY-' . uniqid(),
+            'tenant_id' => $tenant->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 3500.00,
+            'currency' => 'EGP',
+            'status' => 'failed',
+            'timestamp' => $ts,
+        ];
+        $body = json_encode($failedPayload);
+        $sig = hash_hmac('sha256', "{$ts}.{$body}", $secret);
+
+        // 1. الإرسال الأول لإشعار فاشل -> 422 PaymentNotSuccessful
+        $res1 = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
+        ], $body);
+
+        $res1->assertStatus(422)
+            ->assertJsonPath('error', 'PaymentNotSuccessful')
+            ->assertJsonPath('can_retry', true);
+        $this->assertFalse((bool)$tenant->fresh()->is_paid);
+
+        // 2. إعادة إرسال نفس الإشعار الفاشل المكرر -> يجب ألا يدعي النجاح إطلاقاً بل يعكس الفشل (422 و is_paid: false)
+        $resDuplicateFail = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $sig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
+        ], $body);
+
+        $resDuplicateFail->assertStatus(422)
+            ->assertJsonPath('error', 'PaymentNotSuccessful')
+            ->assertJsonPath('is_paid', false)
+            ->assertJsonPath('can_retry', true);
+        $this->assertFalse((bool)$tenant->fresh()->is_paid);
+
+        // 3. اختبار إعادة إرسال إشعار لطلب منتهي الصلاحية -> يعكس حالة الانتهاء (422 و is_paid: false)
+        $expiredOrder = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'FIDELITY-EXP-ORD-' . uniqid(),
+            'plan_tier' => 'starter',
+            'amount' => 1500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->subDay(),
+        ]);
+
+        $expiredPayload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-EXP-FIDELITY-' . uniqid(),
+            'tenant_id' => $tenant->id,
+            'order_reference' => $expiredOrder->order_reference,
+            'amount' => 1500.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+            'timestamp' => $ts,
+        ];
+        $expBody = json_encode($expiredPayload);
+        $expSig = hash_hmac('sha256', "{$ts}.{$expBody}", $secret);
+
+        $resExp1 = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $expSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
+        ], $expBody);
+        $resExp1->assertStatus(422)->assertJsonPath('error', 'OrderExpired');
+
+        // إعادة إرسال نفس الإشعار المنتهي -> 422 OrderExpired و is_paid: false
+        $resExpDuplicate = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $expSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$ts,
+        ], $expBody);
+
+        $resExpDuplicate->assertStatus(422)
+            ->assertJsonPath('error', 'OrderExpired')
+            ->assertJsonPath('is_paid', false)
+            ->assertJsonPath('can_retry', false);
+    }
+
+    /**
+     * اختبار أمان 40: التحقق الصارم من الأسرار المستقلة لكل مزود ورفض التوقيعات المتبادلة (Cross-Provider Rejection)
+     */
+    public function test_separate_provider_secrets_and_cross_provider_rejection(): void
+    {
+        $stripeSecret = 'whsec_dedicated_stripe_secret_32_characters_1111';
+        $paymobSecret = 'paymob_dedicated_secret_32_characters_2222';
+
+        config([
+            'services.stripe.webhook_secret' => $stripeSecret,
+            'services.paymob.hmac_secret' => $paymobSecret,
+        ]);
+
+        $tenant = Tenant::create([
+            'code' => 'TEN-CROSS-PROVIDER',
+            'name' => 'مصنع فحص أسرار المزودات',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'CROSS-ORD-' . uniqid(),
+            'plan_tier' => 'enterprise',
+            'amount' => 5000.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+        $payload = [
+            'id' => 'evt_cross_' . uniqid(),
+            'type' => 'checkout.session.completed',
+            'data' => [
+                'object' => [
+                    'id' => 'cs_cross_' . uniqid(),
+                    'amount_total' => 500000,
+                    'currency' => 'egp',
+                    'payment_status' => 'paid',
+                    'client_reference_id' => $order->order_reference,
+                ],
+            ],
+        ];
+        $rawBody = json_encode($payload);
+
+        // 1. توقيع بـ Paymob Secret مرسل إلى Stripe Route -> 401 InvalidSignature
+        $forgedSigWithWrongProviderSecret = hash_hmac('sha256', "{$now}.{$rawBody}", $paymobSecret);
+        $resWrongSecret = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$forgedSigWithWrongProviderSecret}",
+        ], $rawBody);
+
+        $resWrongSecret->assertStatus(401)->assertJsonPath('error', 'InvalidSignature');
+
+        // 2. توقيع بـ Stripe Secret الصحيح مرسل إلى Stripe Route -> 200 Success
+        $validSig = hash_hmac('sha256', "{$now}.{$rawBody}", $stripeSecret);
+        $resValid = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$validSig}",
+        ], $rawBody);
+
+        $resValid->assertStatus(200)->assertJsonPath('status', 'success');
+
+        // 3. سر المزود غير مهيأ (Fail-Closed) -> 500 ServerMisconfiguration
+        config([
+            'services.stripe.webhook_secret' => null,
+            'services.payment.stripe_webhook_secret' => null,
+        ]);
+        $resMissingSecret = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$validSig}",
+        ], $rawBody);
+
+        $resMissingSecret->assertStatus(500)->assertJsonPath('error', 'ServerMisconfiguration');
+
+        // 4. سر المزود ضعيف جداً -> 500 WeakSecretConfiguration
+        config(['services.stripe.webhook_secret' => 'short_weak_key']);
+        $resWeak = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$validSig}",
+        ], $rawBody);
+
+        $resWeak->assertStatus(500)->assertJsonPath('error', 'WeakSecretConfiguration');
+    }
+
+    /**
+     * اختبار أمان 41: رفض العملات غير المدعومة أو ذات الدقة العشرية غير المتوافقة ورفض غياب معرف الحدث في Stripe
+     */
+    public function test_stripe_rejects_unsupported_currency_precision_and_missing_event_id(): void
+    {
+        $stripeSecret = 'whsec_precision_test_secret_32_characters_1111';
+        config(['services.stripe.webhook_secret' => $stripeSecret]);
+
+        $tenant = Tenant::create([
+            'code' => 'TEN-STRIPE-PRECISION',
+            'name' => 'مصنع فحص دقة عملات سترايب',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'PRECISION-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+
+        // 1. عملة ذات دقة صفرية أو غير مدعومة مثل JPY -> رفض 422 MalformedWebhookPayload
+        $payloadUnsupportedCurrency = [
+            'id' => 'evt_jpy_' . uniqid(),
+            'type' => 'checkout.session.completed',
+            'data' => [
+                'object' => [
+                    'id' => 'cs_jpy_' . uniqid(),
+                    'amount_total' => 350000,
+                    'currency' => 'jpy', // عملة بدون كسور عشرية غير مدعومة في نظام السداد
+                    'payment_status' => 'paid',
+                    'client_reference_id' => $order->order_reference,
+                ],
+            ],
+        ];
+        $bodyJpy = json_encode($payloadUnsupportedCurrency);
+        $sigJpy = hash_hmac('sha256', "{$now}.{$bodyJpy}", $stripeSecret);
+
+        $resJpy = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$sigJpy}",
+        ], $bodyJpy);
+
+        $resJpy->assertStatus(422)->assertJsonPath('error', 'MalformedWebhookPayload');
+
+        // 2. إشعار Stripe يفتقد معرف الحدث الأصلي id -> رفض 422 MalformedWebhookPayload
+        $payloadMissingId = [
+            'type' => 'checkout.session.completed',
+            'data' => [
+                'object' => [
+                    'id' => 'cs_valid_' . uniqid(),
+                    'amount_total' => 350000,
+                    'currency' => 'egp',
+                    'payment_status' => 'paid',
+                    'client_reference_id' => $order->order_reference,
+                ],
+            ],
+        ];
+        $bodyMissingId = json_encode($payloadMissingId);
+        $sigMissingId = hash_hmac('sha256', "{$now}.{$bodyMissingId}", $stripeSecret);
+
+        $resMissingId = $this->call('POST', '/api/v1/subscriptions/webhook/stripe', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_STRIPE_SIGNATURE' => "t={$now},v1={$sigMissingId}",
+        ], $bodyMissingId);
+
+        $resMissingId->assertStatus(422)->assertJsonPath('error', 'MalformedWebhookPayload');
+    }
+
+    /**
+     * اختبار أمان 42: معالجة الحقول الاختيارية أو الفارغة في كولباك Paymob الرسمي وفق البروتوكول بدقة
+     */
+    public function test_paymob_handles_empty_or_null_canonical_fields_and_missing_transaction_id(): void
+    {
+        $paymobSecret = 'paymob_canonical_test_secret_32_characters_2222';
+        config(['services.paymob.hmac_secret' => $paymobSecret]);
+
+        $tenant = Tenant::create([
+            'code' => 'TEN-PAYMOB-CANONICAL',
+            'name' => 'مصنع اختبار الحقول الفارغة بيموب',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'CANONICAL-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 3500.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        // كائن معاملة يحتوي على حقول null كـ source_data.sub_type وحقول boolean false
+        $txId = rand(2000000, 8888888);
+        $payloadWithNulls = [
+            'type' => 'TRANSACTION',
+            'obj' => [
+                'id' => $txId,
+                'pending' => false,
+                'amount_cents' => 350000,
+                'success' => true,
+                'is_auth' => false,
+                'is_capture' => false,
+                'is_standalone_payment' => true,
+                'is_voided' => false,
+                'is_refunded' => false,
+                'is_3d_secure' => true,
+                'integration_id' => 12345,
+                'order' => [
+                    'id' => 998877,
+                    'merchant_order_id' => $order->order_reference,
+                ],
+                'created_at' => '2026-10-15T14:30:00.000000',
+                'currency' => 'EGP',
+                'error_occured' => false,
+                'has_parent_transaction' => false,
+                'owner' => 900,
+                'source_data' => [
+                    'type' => 'card',
+                    'pan' => '1234',
+                    'sub_type' => null, // قيمة null يجب دمجها كنص فارغ وفق البروتوكول
+                ],
+            ],
+        ];
+
+        $verifier = new \App\Services\Payment\PaymobWebhookVerifier();
+        $concatenated = $verifier->buildPaymobConcatenatedString($payloadWithNulls['obj']);
+        $this->assertNotNull($concatenated);
+
+        $hmacSha512 = hash_hmac('sha512', $concatenated, $paymobSecret);
+        $rawBody = json_encode($payloadWithNulls);
+
+        $res = $this->call('POST', '/api/v1/subscriptions/webhook/paymob?hmac=' . $hmacSha512, [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], $rawBody);
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true);
+
+        // 2. رفض كائن Paymob يفتقد معرف المعاملة id
+        $payloadMissingTx = $payloadWithNulls;
+        unset($payloadMissingTx['obj']['id']);
+        $concatenatedMissing = $verifier->buildPaymobConcatenatedString($payloadMissingTx['obj']);
+        $this->assertNull($concatenatedMissing, 'يجب رفض بناء السلسلة إذا كان معرف المعاملة مفقوداً.');
+
+        $resMissingTx = $this->call('POST', '/api/v1/subscriptions/webhook/paymob?hmac=' . $hmacSha512, [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], json_encode($payloadMissingTx));
+
+        $resMissingTx->assertStatus(401);
     }
 }
 

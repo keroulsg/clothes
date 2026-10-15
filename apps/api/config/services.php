@@ -35,9 +35,19 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
+    'paymob' => [
+        'hmac_secret' => env('PAYMOB_HMAC_SECRET'),
+    ],
+
     'payment' => [
         'webhook_secret' => env('PAYMENT_WEBHOOK_SECRET'),
         'provider' => env('PAYMENT_PROVIDER', 'paymob'),
+        'stripe_webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'paymob_hmac_secret' => env('PAYMOB_HMAC_SECRET'),
     ],
 
     'platform' => [

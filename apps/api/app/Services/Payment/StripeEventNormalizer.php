@@ -31,8 +31,12 @@ class StripeEventNormalizer implements PaymentEventNormalizerInterface
                 throw new InvalidArgumentException("حدث Stripe غير مدعوم للمعالجة المالية: [{$eventType}]");
             }
 
+            $eventId = $payload['id'] ?? null;
+            if (empty($eventId) || !is_string($eventId)) {
+                throw new InvalidArgumentException('معرف الحدث (id) مفقود أو غير صالح في إشعار Stripe.');
+            }
+
             $obj = $payload['data']['object'];
-            $eventId = (string) ($payload['id'] ?? ('evt_' . uniqid()));
 
             // استخراج مرجع الطلب الداخلي من metadata أو client_reference_id
             $orderReference = $obj['metadata']['order_reference'] 
@@ -43,14 +47,18 @@ class StripeEventNormalizer implements PaymentEventNormalizerInterface
                 throw new InvalidArgumentException('مرجع طلب الدفع (order_reference) مفقود في metadata أو client_reference_id لكائن Stripe.');
             }
 
+            $currency = strtoupper((string)($obj['currency'] ?? 'EGP'));
+            $supportedCurrencies = ['EGP', 'USD', 'EUR', 'GBP', 'AED', 'SAR'];
+            if (!in_array($currency, $supportedCurrencies, true)) {
+                throw new InvalidArgumentException("عملة المعاملة [{$currency}] غير مدعومة أو ذات دقة عشرية غير متوافقة مع النظام.");
+            }
+
             // استخراج المبلغ بدقة من minor units (cents) إلى major units
             $rawAmount = $obj['amount_total'] ?? ($obj['amount'] ?? null);
             if ($rawAmount === null || !is_numeric($rawAmount) || (float)$rawAmount <= 0) {
                 throw new InvalidArgumentException('مبلغ المعاملة غير صالح أو مفقود في كائن Stripe.');
             }
             $amount = round(((float)$rawAmount) / 100.0, 2);
-
-            $currency = strtoupper((string)($obj['currency'] ?? 'EGP'));
             $txId = (string)($obj['payment_intent'] ?? ($obj['id'] ?? null));
 
             $isSuccess = false;
@@ -90,23 +98,35 @@ class StripeEventNormalizer implements PaymentEventNormalizerInterface
             throw new InvalidArgumentException('مرجع طلب الدفع (order_reference) مفقود في إشعار الدفع.');
         }
 
-        $eventId = (string) ($payload['event_id'] ?? ($payload['id'] ?? ($orderReference . ':' . $eventType)));
+        $eventId = $payload['event_id'] ?? ($payload['id'] ?? null);
+        if (empty($eventId) || !is_string($eventId)) {
+            throw new InvalidArgumentException('معرف الحدث (event_id/id) مفقود في إشعار Stripe.');
+        }
+
+        $currency = strtoupper((string) ($payload['currency'] ?? 'EGP'));
+        $supportedCurrencies = ['EGP', 'USD', 'EUR', 'GBP', 'AED', 'SAR'];
+        if (!in_array($currency, $supportedCurrencies, true)) {
+            throw new InvalidArgumentException("عملة المعاملة [{$currency}] غير مدعومة أو ذات دقة عشرية غير متوافقة مع النظام.");
+        }
+
         $rawAmount = $payload['amount'] ?? null;
         if ($rawAmount === null || !is_numeric($rawAmount) || (float)$rawAmount <= 0) {
             throw new InvalidArgumentException('قيمة المبلغ غير صحيحة في إشعار الدفع.');
         }
 
         $amount = (float) $rawAmount;
-        $currency = strtoupper((string) ($payload['currency'] ?? 'EGP'));
         $txId = $payload['transaction_id'] ?? ($payload['provider_transaction_id'] ?? null);
         $status = strtolower((string) ($payload['status'] ?? ''));
 
-        $isSuccess = in_array($status, ['succeeded', 'paid', 'success', 'completed'], true) 
-            || ($eventType === 'payment.completed');
+        if ($status !== '') {
+            $isSuccess = in_array($status, ['succeeded', 'paid', 'success', 'completed'], true);
+        } else {
+            $isSuccess = in_array($eventType, ['payment.completed', 'payment.succeeded'], true);
+        }
 
         return ValidatedPaymentWebhookEvent::create(
             provider: 'stripe',
-            eventId: $eventId,
+            eventId: (string) $eventId,
             eventType: $eventType,
             orderReference: $orderReference,
             providerTransactionId: $txId,

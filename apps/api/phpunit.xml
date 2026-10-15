@@ -38,6 +38,8 @@
         <env name="PGSQL_USERNAME" value="garmentos"/>
         <env name="PGSQL_PASSWORD" value="secret_test_password"/>
         <env name="PAYMENT_WEBHOOK_SECRET" value="test_payment_webhook_secret_key_must_be_over_32_chars_long"/>
+        <env name="STRIPE_WEBHOOK_SECRET" value="whsec_test_stripe_webhook_secret_key_over_32_characters"/>
+        <env name="PAYMOB_HMAC_SECRET" value="test_paymob_hmac_secret_key_must_be_over_32_characters_long"/>
         <env name="PLATFORM_ADMIN_ACTIVATION_KEY" value="test_platform_admin_super_secret_activation_key_32_chars"/>
     </php>
 </phpunit>

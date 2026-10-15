@@ -24,25 +24,35 @@ class SubscriptionWebhookController extends Controller
      */
     public function handleWebhook(Request $request, ?string $provider = null): JsonResponse
     {
-        // 1. فحص سر التوقيع الرقمي والتحقق الصارم من التكوين (Fail-Closed)
-        $secret = config('services.payment.webhook_secret', env('PAYMENT_WEBHOOK_SECRET'));
+        // 1. التحديد الحتمي لنوع مزود الخدمة
+        $resolvedProvider = WebhookVerifierFactory::determineProvider($request, $provider);
+
+        // 2. استرجاع سر التوقيع الرقمي الخاص بالمزود المحدد حصراً (Provider-Specific Secret Resolution)
+        $secret = match ($resolvedProvider) {
+            'stripe' => config('services.stripe.webhook_secret') 
+                ?? config('services.payment.stripe_webhook_secret'),
+            'paymob' => config('services.paymob.hmac_secret') 
+                ?? config('services.payment.paymob_hmac_secret'),
+            default => config('services.payment.webhook_secret'),
+        };
 
         if (empty($secret)) {
             return response()->json([
                 'error' => 'ServerMisconfiguration',
-                'message' => 'أمان: سر التحقق من إشعارات الدفع (PAYMENT_WEBHOOK_SECRET) غير مهيأ. تم حظر المعالجة لضمان الأمان (Fail-Closed).',
+                'message' => "أمان: سر التحقق من إشعارات الدفع الخاص بـ [{$resolvedProvider}] غير مهيأ. تم حظر المعالجة لضمان الأمان (Fail-Closed).",
             ], 500);
         }
 
-        if (app()->isProduction() && strlen($secret) < 32) {
+        // فحص قوة السر (Secret Strength Check) دون طباعة أو تسريب السر في السجلات
+        if (strlen((string)$secret) < 16 || (app()->isProduction() && strlen((string)$secret) < 32)) {
             return response()->json([
                 'error' => 'WeakSecretConfiguration',
-                'message' => 'أمان: سر التحقق ضعيف جداً للعمل في بيئة الإنتاج (يجب ألا يقل عن 32 حرفاً).',
+                'message' => 'أمان: سر التحقق ضعيف جداً للعمل في بيئة النظام (يجب ألا يقل عن الحد الأدنى المعتمد).',
             ], 500);
         }
 
-        // 2. التحقق الحتمي من التوقيع الرقمي عبر المزود المعتمد
-        $verifier = WebhookVerifierFactory::resolve($request, $provider);
+        // 3. التحقق الحتمي من التوقيع الرقمي عبر المزود المعتمد
+        $verifier = WebhookVerifierFactory::resolve($request, $resolvedProvider);
         $verificationResult = $verifier->verify($request, $secret);
 
         if (!$verificationResult->isValid) {
@@ -52,7 +62,7 @@ class SubscriptionWebhookController extends Controller
             ], 401);
         }
 
-        // 3. تطبيع بيانات الإشعار الأصلية إلى العقد الداخلي الموحد (Validated Internal Event Contract)
+        // 4. تطبيع بيانات الإشعار الأصلية إلى العقد الداخلي الموحد (Validated Internal Event Contract)
         $normalizer = WebhookVerifierFactory::resolveNormalizer($verifier->getProviderName());
         try {
             $event = $normalizer->normalize($request->json()->all(), $verificationResult->verifiedTimestamp);
@@ -63,20 +73,13 @@ class SubscriptionWebhookController extends Controller
             ], 422);
         }
 
-        // 4. فحص مسبق لعدم التكرار الدائم (Durable Event Storage Idempotency)
+        // 5. فحص مسبق لعدم التكرار الدائم متوافق مع النتيجة الفعلية المسجلة (Durable Event Storage Idempotency)
         $existingEvent = ProcessedWebhookEvent::where('provider', $event->provider)
             ->where('event_id', $event->eventId)
             ->first();
 
         if ($existingEvent) {
-            return response()->json([
-                'status' => 'already_processed',
-                'message' => 'تمت معالجة إشعار الدفع مسبقاً بنجاح ومثبت في قاعدة البيانات (Durable Replay Idempotency).',
-                'provider' => $event->provider,
-                'event_id' => $event->eventId,
-                'order_reference' => $existingEvent->order_reference,
-                'is_paid' => true,
-            ], 200);
+            return $this->buildIdempotentResponse($existingEvent);
         }
 
         // 5. المعالجة الذرية داخل معاملة قاعدة البيانات (Atomic Transaction Execution)
@@ -260,17 +263,78 @@ class SubscriptionWebhookController extends Controller
             );
 
             if ($isDuplicateEvent) {
+                // إعادة قراءة السجل المثبت لتحديد حالته الحقيقية المؤكدة
+                $committedEvent = ProcessedWebhookEvent::where('provider', $event->provider)
+                    ->where('event_id', $event->eventId)
+                    ->first();
+
+                if ($committedEvent) {
+                    return $this->buildIdempotentResponse($committedEvent);
+                }
+
+                // إذا تعذر التحقق من نتيجة المعاملة المتزامنة بأمان، نرجع خطأ قابلاً لإعادة المحاولة دون ادعاء النجاح
                 return response()->json([
-                    'status' => 'already_processed',
-                    'message' => 'تمت معالجة إشعار الدفع المتزامن بنجاح (Concurrent Replay Safe).',
+                    'error' => 'ConcurrentProcessingConflict',
+                    'message' => 'يتم معالجة هذا الإشعار حالياً بشكل متزامن. يرجى إعادة المحاولة لاحقاً (Retryable Concurrency Conflict).',
                     'provider' => $event->provider,
                     'event_id' => $event->eventId,
-                    'is_paid' => true,
-                ], 200);
+                    'is_paid' => false,
+                ], 409);
             }
 
             throw $e;
         }
+    }
+
+    private function buildIdempotentResponse(ProcessedWebhookEvent $existingEvent): JsonResponse
+    {
+        $status = $existingEvent->status;
+
+        if (in_array($status, ['processed', 'already_paid', 'completed', 'paid'], true)) {
+            return response()->json([
+                'status' => 'already_processed',
+                'message' => 'تم استلام ومعالجة هذا الإشعار مسبقاً بنجاح ومثبت في قاعدة البيانات (Durable Replay Idempotency).',
+                'provider' => $existingEvent->provider,
+                'event_id' => $existingEvent->event_id,
+                'order_reference' => $existingEvent->order_reference,
+                'is_paid' => true,
+            ], 200);
+        }
+
+        if (in_array($status, ['failed_attempt', 'payment_attempt_failed', 'failed'], true)) {
+            return response()->json([
+                'error' => 'PaymentNotSuccessful',
+                'status' => 'failed_attempt',
+                'message' => 'تم تسجيل فشل محاولة السداد مسبقاً لهذا الإشعار ولا يعتبر مدفوعاً.',
+                'provider' => $existingEvent->provider,
+                'event_id' => $existingEvent->event_id,
+                'order_reference' => $existingEvent->order_reference,
+                'is_paid' => false,
+                'can_retry' => true,
+            ], 422);
+        }
+
+        if (in_array($status, ['expired_ignored', 'expired'], true)) {
+            return response()->json([
+                'error' => 'OrderExpired',
+                'status' => 'expired',
+                'message' => 'طلب الدفع المرتبط بهذا الإشعار منتهي الصلاحية وتم تسجيله مسبقاً كطلب غير قابل للسداد.',
+                'provider' => $existingEvent->provider,
+                'event_id' => $existingEvent->event_id,
+                'order_reference' => $existingEvent->order_reference,
+                'is_paid' => false,
+                'can_retry' => false,
+            ], 422);
+        }
+
+        return response()->json([
+            'status' => $status,
+            'message' => 'تم تسجيل هذا الإشعار مسبقاً في النظام.',
+            'provider' => $existingEvent->provider,
+            'event_id' => $existingEvent->event_id,
+            'order_reference' => $existingEvent->order_reference,
+            'is_paid' => false,
+        ], 200);
     }
 
     private function recordProcessedEvent(ValidatedPaymentWebhookEvent $event, string $tenantId, string $orderReference, string $status): void

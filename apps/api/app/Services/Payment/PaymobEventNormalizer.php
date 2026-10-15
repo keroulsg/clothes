@@ -77,14 +77,26 @@ class PaymobEventNormalizer implements PaymentEventNormalizerInterface
 
         $amount = (float) $rawAmount;
         $currency = strtoupper((string) ($payload['currency'] ?? 'EGP'));
-        $txId = (string) ($payload['transaction_id'] ?? ($payload['id'] ?? ('tx_' . uniqid())));
+        $txId = $payload['transaction_id'] ?? ($payload['id'] ?? null);
+        if (empty($txId) || !is_scalar($txId)) {
+            throw new InvalidArgumentException('معرف المعاملة (transaction_id/id) مفقود في إشعار Paymob.');
+        }
+        $txId = (string) $txId;
         $eventId = (string) ($payload['event_id'] ?? ('paymob_' . $txId));
         $eventType = (string) ($payload['event'] ?? 'payment.completed');
 
         $status = strtolower((string) ($payload['status'] ?? ''));
-        $isSuccess = in_array($status, ['succeeded', 'paid', 'success', 'completed'], true) 
-            || ($payload['success'] ?? false) === true
-            || ($eventType === 'payment.completed');
+        if ($status !== '') {
+            $isSuccess = in_array($status, ['succeeded', 'paid', 'success', 'completed'], true);
+        } elseif (isset($payload['success'])) {
+            $isSuccess = ($payload['success'] === true || $payload['success'] === 'true')
+                && empty($payload['error_occured'])
+                && empty($payload['is_voided'])
+                && empty($payload['is_refunded'])
+                && empty($payload['pending']);
+        } else {
+            $isSuccess = in_array($eventType, ['payment.completed', 'payment.succeeded'], true);
+        }
 
         return ValidatedPaymentWebhookEvent::create(
             provider: 'paymob',

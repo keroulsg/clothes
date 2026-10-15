@@ -34,20 +34,63 @@ return new class extends Migration
             );
         }
 
-        // 2. تحديث قيد التفرد ليكون مركباً على مستوى (provider, event_id)
-        $schema->table('processed_webhook_events', function (Blueprint $table) use ($connection) {
-            try {
-                $table->dropUnique(['event_id']);
-            } catch (\Throwable) {
-                // قد يكون الاسم الافتراضي مختلفاً في بعض المحركات
-                try {
-                    $table->dropUnique('processed_webhook_events_event_id_unique');
-                } catch (\Throwable) {
-                }
+        // 2. كشف اسم قيد التفرد الفردي القديم على عمود event_id حصراً
+        $existingIndexes = $schema->getIndexes('processed_webhook_events');
+        $oldIndexName = null;
+        foreach ($existingIndexes as $index) {
+            if (!empty($index['unique']) && empty($index['primary']) && ($index['columns'] ?? []) === ['event_id']) {
+                $oldIndexName = $index['name'];
+                break;
             }
+        }
 
-            $table->unique(['provider', 'event_id'], 'uniq_pwe_provider_event_id');
-        });
+        // 3. حذف القيد القديم دون ابتلاع الأخطاء
+        if ($oldIndexName !== null) {
+            $schema->table('processed_webhook_events', function (Blueprint $table) use ($oldIndexName) {
+                $table->dropUnique($oldIndexName);
+            });
+        }
+
+        // 4. إنشاء قيد التفرد المركب (provider, event_id) بأمان
+        $compositeExists = false;
+        foreach ($schema->getIndexes('processed_webhook_events') as $index) {
+            if (!empty($index['unique']) && ($index['columns'] ?? []) === ['provider', 'event_id']) {
+                $compositeExists = true;
+                break;
+            }
+        }
+
+        if (!$compositeExists) {
+            $schema->table('processed_webhook_events', function (Blueprint $table) {
+                $table->unique(['provider', 'event_id'], 'uniq_pwe_provider_event_id');
+            });
+        }
+
+        // 5. التحقق الصارم من حالة المخطط النهائي
+        $postIndexes = $schema->getIndexes('processed_webhook_events');
+        $oldIndexStillPresent = false;
+        $compositeVerified = false;
+
+        foreach ($postIndexes as $index) {
+            if (!empty($index['unique']) && empty($index['primary']) && ($index['columns'] ?? []) === ['event_id']) {
+                $oldIndexStillPresent = true;
+            }
+            if (!empty($index['unique']) && ($index['columns'] ?? []) === ['provider', 'event_id']) {
+                $compositeVerified = true;
+            }
+        }
+
+        if ($oldIndexStillPresent) {
+            throw new \RuntimeException(
+                "Migration Error: Failed to drop single-column unique index on 'event_id' in 'processed_webhook_events'."
+            );
+        }
+
+        if (!$compositeVerified) {
+            throw new \RuntimeException(
+                "Migration Error: Failed to establish composite unique index (provider, event_id) on 'processed_webhook_events'."
+            );
+        }
     }
 
     /**
@@ -62,12 +105,38 @@ return new class extends Migration
             return;
         }
 
-        $schema->table('processed_webhook_events', function (Blueprint $table) {
-            try {
-                $table->dropUnique('uniq_pwe_provider_event_id');
-                $table->unique('event_id');
-            } catch (\Throwable) {
+        // 1. كشف قيد التفرد المركب وحذفه
+        $compositeName = null;
+        foreach ($schema->getIndexes('processed_webhook_events') as $index) {
+            if (!empty($index['unique']) && ($index['columns'] ?? []) === ['provider', 'event_id']) {
+                $compositeName = $index['name'];
+                break;
             }
+        }
+
+        if ($compositeName !== null) {
+            $schema->table('processed_webhook_events', function (Blueprint $table) use ($compositeName) {
+                $table->dropUnique($compositeName);
+            });
+        }
+
+        // 2. إعادة إنشاء قيد التفرد الفردي القديم
+        $schema->table('processed_webhook_events', function (Blueprint $table) {
+            $table->unique('event_id', 'processed_webhook_events_event_id_unique');
         });
+
+        // 3. التحقق من نجاح التراجع
+        $downIndexes = $schema->getIndexes('processed_webhook_events');
+        $recreated = false;
+        foreach ($downIndexes as $index) {
+            if (!empty($index['unique']) && empty($index['primary']) && ($index['columns'] ?? []) === ['event_id']) {
+                $recreated = true;
+                break;
+            }
+        }
+
+        if (!$recreated) {
+            throw new \RuntimeException("Migration Rollback Error: Failed to recreate unique index on 'event_id'.");
+        }
     }
 };

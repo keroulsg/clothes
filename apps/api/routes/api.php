@@ -103,5 +103,29 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'index']);
         Route::post('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'store']);
+
+        // خدمات القص والتصنيع للغير (Phase 6: Subcontracting & CMT Services)
+        Route::get('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'customers']);
+        Route::post('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeCustomer']);
+
+        Route::get('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'jobs']);
+        Route::post('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeJob']);
+        Route::get('/subcontracting/jobs/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'showJob']);
+        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob']);
+        Route::get('/subcontracting/jobs/{id}/profitability', [\App\Http\Controllers\Api\SubcontractingController::class, 'profitability']);
+
+        Route::get('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'materialReceipts']);
+        Route::post('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeMaterialReceipt']);
+
+        Route::get('/subcontracting/external-operations', [\App\Http\Controllers\Api\SubcontractingController::class, 'externalOperations']);
+        Route::post('/subcontracting/external-operations', [\App\Http\Controllers\Api\SubcontractingController::class, 'dispatchExternalOperation']);
+        Route::post('/subcontracting/external-operations/{id}/receive', [\App\Http\Controllers\Api\SubcontractingController::class, 'receiveExternalOperation']);
+
+        Route::get('/subcontracting/delivery-notes', [\App\Http\Controllers\Api\SubcontractingController::class, 'deliveryNotes']);
+        Route::post('/subcontracting/delivery-notes', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeDeliveryNote']);
+
+        Route::get('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'invoices']);
+        Route::post('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeInvoice']);
+        Route::post('/subcontracting/invoices/{id}/pay', [\App\Http\Controllers\Api\SubcontractingController::class, 'recordPayment']);
     });
 });

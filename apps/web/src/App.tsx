@@ -34,6 +34,13 @@ import { CreateProductionOrderModal } from './components/production/CreateProduc
 import { CuttingOrderModal } from './components/production/CuttingOrderModal';
 import { BundleTrackerModal } from './components/production/BundleTrackerModal';
 import { QualityInspectionModal } from './components/production/QualityInspectionModal';
+import { CreateJobOrderModal } from './components/subcontracting/CreateJobOrderModal';
+import { CustomerMaterialReceiptModal } from './components/subcontracting/CustomerMaterialReceiptModal';
+import { ExternalOperationModal } from './components/subcontracting/ExternalOperationModal';
+import { JobDeliveryModal } from './components/subcontracting/JobDeliveryModal';
+import { JobInvoiceModal } from './components/subcontracting/JobInvoiceModal';
+import { JobDetailsModal } from './components/subcontracting/JobDetailsModal';
+import { SubcontractingTab } from './components/subcontracting/SubcontractingTab';
 import type {
   Language,
   ProductionOrder,
@@ -50,6 +57,12 @@ import type {
   CuttingOrder,
   CuttingBundle,
   QualityInspection,
+  Customer,
+  JobOrder,
+  CustomerMaterialReceipt,
+  ExternalOperation,
+  JobDeliveryNote,
+  JobInvoice,
 } from './types';
 
 export function App() {
@@ -79,6 +92,15 @@ export function App() {
   const [selectedProdOrderForCut, setSelectedProdOrderForCut] = useState<ProductionOrder | null>(null);
   const [selectedBundleForTracker, setSelectedBundleForTracker] = useState<CuttingBundle | null>(null);
   const [selectedProdOrderForQc, setSelectedProdOrderForQc] = useState<ProductionOrder | null>(null);
+
+  // Subcontracting & CMT States (Phase 6)
+  const [isCreateJobModalOpen, setIsCreateJobModalOpen] = useState(false);
+  const [isReceiveCustomerMatModalOpen, setIsReceiveCustomerMatModalOpen] = useState(false);
+  const [isExternalOpModalOpen, setIsExternalOpModalOpen] = useState(false);
+  const [selectedOpForReceive, setSelectedOpForReceive] = useState<ExternalOperation | null>(null);
+  const [selectedJobForDelivery, setSelectedJobForDelivery] = useState<JobOrder | null>(null);
+  const [selectedJobForInvoice, setSelectedJobForInvoice] = useState<JobOrder | null>(null);
+  const [selectedJobForDetails, setSelectedJobForDetails] = useState<JobOrder | null>(null);
 
   const [warehouses] = useState<Warehouse[]>([
     {
@@ -215,6 +237,175 @@ export function App() {
       total_amount: 57000.0,
       matching_status: 'matched',
       payment_status: 'unpaid',
+    },
+  ]);
+
+  // Subcontracting & CMT Datasets (Phase 6)
+  const [customers] = useState<Customer[]>([
+    {
+      id: 'cust-1',
+      code: 'CUST-CAIRO-01',
+      name: 'شركة كايرو فاشون لملابس الأطفال',
+      contact_person: 'أ. طارق رضوان',
+      phone: '+201011223344',
+      tax_id: '400-891-234',
+      is_active: true,
+      job_orders_count: 2,
+      material_receipts_count: 1,
+    },
+    {
+      id: 'cust-2',
+      code: 'CUST-ALEX-02',
+      name: 'براند إسكندرية كيدز',
+      contact_person: 'م. يوسف كامل',
+      phone: '+201099887766',
+      tax_id: '500-123-789',
+      is_active: true,
+      job_orders_count: 1,
+      material_receipts_count: 1,
+    },
+  ]);
+
+  const [jobOrders, setJobOrders] = useState<JobOrder[]>([
+    {
+      id: 'job-101',
+      order_number: 'JOB-202610-001',
+      customer_id: 'cust-1',
+      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
+      service_type: 'contract_cutting',
+      garment_model_id: 'mod-1',
+      model_name: 'تيشيرت بولو صيفي أطفال',
+      fabric_source: 'customer_supplied',
+      trims_responsibility: 'customer_supplied',
+      status: 'in_progress',
+      pricing_basis: 'per_piece',
+      unit_rate: 6.5,
+      total_target_quantity: 400,
+      total_received_meters: 250.0,
+      total_cut_quantity: 400,
+      total_accepted_quantity: 400,
+      total_rejected_quantity: 0,
+      total_rework_quantity: 0,
+      total_delivered_quantity: 200,
+      planned_start_date: '2026-10-12',
+      target_delivery_date: '2026-10-22',
+      created_at: '2026-10-12T09:00:00Z',
+      items: [
+        { color_name: 'أحمر', size_name: '4-5 سنوات', target_quantity: 200, cut_quantity: 200, delivered_quantity: 100, unit_rate: 6.5 },
+        { color_name: 'كحلي', size_name: '6-7 سنوات', target_quantity: 200, cut_quantity: 200, delivered_quantity: 100, unit_rate: 6.5 },
+      ],
+    },
+    {
+      id: 'job-102',
+      order_number: 'JOB-202610-002',
+      customer_id: 'cust-2',
+      customer_name: 'براند إسكندرية كيدز',
+      service_type: 'cmt',
+      garment_model_id: 'mod-2',
+      model_name: 'بنطلون جبردين مطرز أطفال',
+      fabric_source: 'mixed',
+      trims_responsibility: 'factory_supplied',
+      status: 'confirmed',
+      pricing_basis: 'per_piece',
+      unit_rate: 28.0,
+      total_target_quantity: 300,
+      total_received_meters: 220.0,
+      total_cut_quantity: 0,
+      total_accepted_quantity: 0,
+      total_rejected_quantity: 0,
+      total_rework_quantity: 0,
+      total_delivered_quantity: 0,
+      planned_start_date: '2026-10-14',
+      target_delivery_date: '2026-10-28',
+      created_at: '2026-10-14T11:30:00Z',
+      items: [
+        { color_name: 'بيج', size_name: '4-5 سنوات', target_quantity: 150, cut_quantity: 0, delivered_quantity: 0, unit_rate: 28.0 },
+        { color_name: 'زيتي', size_name: '6-7 سنوات', target_quantity: 150, cut_quantity: 0, delivered_quantity: 0, unit_rate: 28.0 },
+      ],
+    },
+  ]);
+
+  const [customerMaterialReceipts, setCustomerMaterialReceipts] = useState<CustomerMaterialReceipt[]>([
+    {
+      id: 'cmr-1',
+      receipt_number: 'CMR-202610-001',
+      job_order_id: 'job-101',
+      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
+      warehouse_id: 'wh-2',
+      warehouse_name: 'مخزن أمانات خامات العملاء',
+      fabric_name: 'سنغل ليكرا قطن أحمر 180GSM',
+      fabric_code: 'FAB-CUST-901',
+      received_meters: 250.0,
+      received_weight_kg: 74.25,
+      usable_width_meters: 1.65,
+      gsm: 180.0,
+      rolls_count: 5,
+      condition_status: 'accepted',
+      inspector_name: 'م. حسام شكري',
+      created_at: '2026-10-12T10:00:00Z',
+    },
+  ]);
+
+  const [externalOperations, setExternalOperations] = useState<ExternalOperation[]>([
+    {
+      id: 'ext-1',
+      operation_number: 'EXT-202610-001',
+      job_order_id: 'job-102',
+      subcontractor_name: 'مطبعة الأهرام للتطريز والترانسفير',
+      operation_type: 'embroidery',
+      sent_quantity: 300,
+      received_accepted_quantity: 295,
+      received_rejected_quantity: 2,
+      scrap_quantity: 3,
+      unit_rate: 4.5,
+      total_cost: 1350.0,
+      status: 'completed',
+      dispatched_at: '2026-10-14T12:00:00Z',
+      returned_at: '2026-10-15T09:00:00Z',
+    },
+  ]);
+
+  const [jobDeliveryNotes, setJobDeliveryNotes] = useState<JobDeliveryNote[]>([
+    {
+      id: 'jdn-1',
+      delivery_number: 'JDN-202610-001',
+      job_order_id: 'job-101',
+      order_number: 'JOB-202610-001',
+      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
+      delivery_date: '2026-10-14',
+      status: 'delivered',
+      total_delivered_pieces: 200,
+      returned_unused_fabric_meters: 15.0,
+      scrap_fabric_meters: 8.5,
+      delivered_by: 'سائق سيارة المصنع',
+      received_by_customer: 'أ. طارق رضوان (توقيع استلام)',
+      items: [
+        { color_name: 'أحمر', size_name: '4-5 سنوات', delivered_quantity: 100 },
+        { color_name: 'كحلي', size_name: '6-7 سنوات', delivered_quantity: 100 },
+      ],
+    },
+  ]);
+
+  const [jobInvoices, setJobInvoices] = useState<JobInvoice[]>([
+    {
+      id: 'jinv-1',
+      invoice_number: 'JINV-202610-001',
+      job_order_id: 'job-101',
+      order_number: 'JOB-202610-001',
+      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
+      invoice_date: '2026-10-14',
+      due_date: '2026-11-14',
+      status: 'issued',
+      service_amount: 1300.0,
+      additional_charges: 100.0,
+      deductions: 0.0,
+      tax_amount: 196.0,
+      total_amount: 1596.0,
+      paid_amount: 0.0,
+      items: [
+        { description: 'أجور قص 200 قطعة تيشيرت', item_type: 'service_charge', quantity: 200, unit_rate: 6.5, total_amount: 1300.0 },
+        { description: 'تغليف خاص بأكياس مفرغة', item_type: 'extra_operation', quantity: 1, unit_rate: 100.0, total_amount: 100.0 },
+      ],
     },
   ]);
 
@@ -1845,6 +2036,41 @@ export function App() {
             </div>
           )}
 
+          {/* TAB: Subcontracting & CMT Services (Phase 6) */}
+          {activeTab === 'subcontracting' && (
+            <SubcontractingTab
+              customers={customers}
+              jobOrders={jobOrders}
+              customerMaterialReceipts={customerMaterialReceipts}
+              externalOperations={externalOperations}
+              jobDeliveryNotes={jobDeliveryNotes}
+              jobInvoices={jobInvoices}
+              onOpenCreateJob={() => setIsCreateJobModalOpen(true)}
+              onOpenReceiveMaterial={() => setIsReceiveCustomerMatModalOpen(true)}
+              onOpenExternalOp={() => {
+                setSelectedOpForReceive(null);
+                setIsExternalOpModalOpen(true);
+              }}
+              onSelectOpForReceive={(op) => {
+                setSelectedOpForReceive(op);
+                setIsExternalOpModalOpen(true);
+              }}
+              onSelectJobForDelivery={(job) => setSelectedJobForDelivery(job)}
+              onSelectJobForInvoice={(job) => setSelectedJobForInvoice(job)}
+              onSelectJobForDetails={(job) => setSelectedJobForDetails(job)}
+              onConfirmJob={(jobId) => {
+                setJobOrders((prev) =>
+                  prev.map((j) => (j.id === jobId ? { ...j, status: 'confirmed' } : j))
+                );
+              }}
+              onPayInvoice={(invId) => {
+                setJobInvoices((prev) =>
+                  prev.map((inv) => (inv.id === invId ? { ...inv, status: 'paid', paid_amount: inv.total_amount } : inv))
+                );
+              }}
+            />
+          )}
+
           {/* Fallback for other tabs */}
           {['sales', 'costing', 'piece_rate', 'storefront', 'settings'].includes(activeTab) && (
             <Card className="text-center py-12">
@@ -2140,6 +2366,153 @@ export function App() {
           );
           setSelectedProdOrderForQc(null);
         }}
+      />
+
+      {/* MODAL 14: Create Job Order Modal (Phase 6) */}
+      <CreateJobOrderModal
+        isOpen={isCreateJobModalOpen}
+        onClose={() => setIsCreateJobModalOpen(false)}
+        customers={customers}
+        models={models}
+        onSuccess={(newJob) => {
+          setJobOrders((prev) => [newJob, ...prev]);
+          setIsCreateJobModalOpen(false);
+        }}
+      />
+
+      {/* MODAL 15: Customer Material Intake Receipt (Phase 6) */}
+      <CustomerMaterialReceiptModal
+        isOpen={isReceiveCustomerMatModalOpen}
+        onClose={() => setIsReceiveCustomerMatModalOpen(false)}
+        warehouses={warehouses}
+        customers={customers}
+        jobOrders={jobOrders}
+        onSuccess={(newReceipt) => {
+          setCustomerMaterialReceipts((prev) => [newReceipt, ...prev]);
+          // Update linked job order received meters if linked
+          if (newReceipt.job_order_id) {
+            setJobOrders((prev) =>
+              prev.map((j) =>
+                j.id === newReceipt.job_order_id
+                  ? {
+                      ...j,
+                      total_received_meters: (j.total_received_meters || 0) + newReceipt.received_meters,
+                      status: j.status === 'draft' || j.status === 'confirmed' ? 'materials_received' : j.status,
+                    }
+                  : j
+              )
+            );
+          }
+          setIsReceiveCustomerMatModalOpen(false);
+        }}
+      />
+
+      {/* MODAL 16: External Processing Operations (Phase 6) */}
+      <ExternalOperationModal
+        isOpen={isExternalOpModalOpen}
+        onClose={() => {
+          setIsExternalOpModalOpen(false);
+          setSelectedOpForReceive(null);
+        }}
+        jobOrders={jobOrders}
+        existingOperation={selectedOpForReceive}
+        onSuccess={(op) => {
+          if (selectedOpForReceive) {
+            setExternalOperations((prev) =>
+              prev.map((o) => (o.id === op.id ? op : o))
+            );
+          } else {
+            setExternalOperations((prev) => [op, ...prev]);
+          }
+          setIsExternalOpModalOpen(false);
+          setSelectedOpForReceive(null);
+        }}
+      />
+
+      {/* MODAL 17: Job Delivery Note (Phase 6) */}
+      <JobDeliveryModal
+        isOpen={selectedJobForDelivery !== null}
+        onClose={() => setSelectedJobForDelivery(null)}
+        jobOrder={selectedJobForDelivery}
+        onSuccess={(newDelivery) => {
+          setJobDeliveryNotes((prev) => [newDelivery, ...prev]);
+          setJobOrders((prev) =>
+            prev.map((j) => {
+              if (j.id !== newDelivery.job_order_id) return j;
+              const newDelivered = (j.total_delivered_quantity || 0) + newDelivery.total_delivered_pieces;
+              return {
+                ...j,
+                total_delivered_quantity: newDelivered,
+                status: newDelivered >= j.total_target_quantity ? 'completed' : 'partially_delivered',
+              };
+            })
+          );
+          setSelectedJobForDelivery(null);
+        }}
+      />
+
+      {/* MODAL 18: Job Service Invoice (Phase 6) */}
+      <JobInvoiceModal
+        isOpen={selectedJobForInvoice !== null}
+        onClose={() => setSelectedJobForInvoice(null)}
+        jobOrder={selectedJobForInvoice}
+        onSuccess={(newInvoice) => {
+          setJobInvoices((prev) => [newInvoice, ...prev]);
+          setSelectedJobForInvoice(null);
+        }}
+      />
+
+      {/* MODAL 19: Job Details & Profitability Modal (Phase 6) */}
+      <JobDetailsModal
+        isOpen={selectedJobForDetails !== null}
+        onClose={() => setSelectedJobForDetails(null)}
+        jobOrder={selectedJobForDetails}
+        profitability={
+          selectedJobForDetails
+            ? {
+                job_order_id: selectedJobForDetails.id,
+                order_number: selectedJobForDetails.order_number,
+                customer_name: selectedJobForDetails.customer_name,
+                service_type: selectedJobForDetails.service_type,
+                status: selectedJobForDetails.status,
+                total_target_pieces: selectedJobForDetails.total_target_quantity,
+                total_delivered_pieces: selectedJobForDetails.total_delivered_quantity,
+                total_received_meters: selectedJobForDetails.total_received_meters,
+                service_revenue:
+                  jobInvoices
+                    .filter((inv) => inv.job_order_id === selectedJobForDetails?.id && inv.status !== 'voided')
+                    .reduce((acc, curr) => acc + curr.total_amount, 0) ||
+                  (selectedJobForDetails.total_delivered_quantity > 0
+                    ? selectedJobForDetails.total_delivered_quantity * selectedJobForDetails.unit_rate
+                    : selectedJobForDetails.total_target_quantity * selectedJobForDetails.unit_rate),
+                external_operations_cost:
+                  externalOperations
+                    .filter((op) => op.job_order_id === selectedJobForDetails?.id && op.status !== 'cancelled')
+                    .reduce((acc, curr) => acc + curr.total_cost, 0) || 0,
+                factory_materials_cost: selectedJobForDetails.fabric_source === 'factory_supplied' ? 1200 : 0,
+                customer_materials_cost: 0,
+                total_direct_cost:
+                  (externalOperations
+                    .filter((op) => op.job_order_id === selectedJobForDetails?.id && op.status !== 'cancelled')
+                    .reduce((acc, curr) => acc + curr.total_cost, 0) || 0) +
+                  (selectedJobForDetails.fabric_source === 'factory_supplied' ? 1200 : 0),
+                gross_margin:
+                  ((jobInvoices
+                    .filter((inv) => inv.job_order_id === selectedJobForDetails?.id && inv.status !== 'voided')
+                    .reduce((acc, curr) => acc + curr.total_amount, 0) ||
+                    (selectedJobForDetails.total_delivered_quantity > 0
+                      ? selectedJobForDetails.total_delivered_quantity * selectedJobForDetails.unit_rate
+                      : selectedJobForDetails.total_target_quantity * selectedJobForDetails.unit_rate)) -
+                    (externalOperations
+                      .filter((op) => op.job_order_id === selectedJobForDetails?.id && op.status !== 'cancelled')
+                      .reduce((acc, curr) => acc + curr.total_cost, 0) || 0) -
+                    (selectedJobForDetails.fabric_source === 'factory_supplied' ? 1200 : 0)),
+                margin_percentage: 78.5,
+                metric_label: 'هامش ربح الخدمة المباشر (Direct Service Margin)',
+                notes: 'خامات العميل أمانات تشغيل مستبعدة بالكامل من أصول وتكاليف المصنع.',
+              }
+            : null
+        }
       />
     </AppLayout>
   );

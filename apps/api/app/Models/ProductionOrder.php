@@ -79,4 +79,14 @@ class ProductionOrder extends Model
     {
         return $this->hasMany(QualityInspection::class, 'production_order_id');
     }
+
+    public function jobOrders(): HasMany
+    {
+        return $this->hasMany(JobOrder::class, 'production_order_id');
+    }
+
+    public function externalOperations(): HasMany
+    {
+        return $this->hasMany(ExternalOperation::class, 'production_order_id');
+    }
 }

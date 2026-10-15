@@ -47,6 +47,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const navItems = [
     { id: 'dashboard', label: lang === 'ar' ? 'لوحة القيادة والمصنع' : 'Factory Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'cutting', label: lang === 'ar' ? 'صالة القص والإنتاج' : 'Cutting & Production', icon: <Scissors className="w-4 h-4" />, badge: 'Live' },
+    { id: 'subcontracting', label: lang === 'ar' ? 'التشغيل للغير والـ CMT' : 'Subcontracting & CMT', icon: <Boxes className="w-4 h-4" />, badge: 'Phase 6' },
     { id: 'inventory', label: lang === 'ar' ? 'المخازن والخامات' : 'Inventory & Fabric', icon: <Boxes className="w-4 h-4" /> },
     { id: 'purchasing', label: lang === 'ar' ? 'المشتريات والموردين' : 'Purchasing', icon: <ShoppingCart className="w-4 h-4" /> },
     { id: 'sales', label: lang === 'ar' ? 'المبيعات ونقطة البيع' : 'Sales & POS', icon: <TrendingUp className="w-4 h-4" /> },

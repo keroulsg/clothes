@@ -325,3 +325,182 @@ export interface QualityInspection {
   defects?: QualityDefect[];
   created_at?: string;
 }
+
+// Phase 6: Subcontracting & CMT Services
+export interface Customer {
+  id: string;
+  code: string;
+  name: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  tax_id?: string;
+  address?: string;
+  notes?: string;
+  is_active: boolean;
+  job_orders_count?: number;
+  material_receipts_count?: number;
+}
+
+export interface JobOrderItem {
+  id?: string;
+  job_order_id?: string;
+  color_id?: string;
+  color_name?: string;
+  size_id?: string;
+  size_name?: string;
+  product_variant_id?: string;
+  target_quantity: number;
+  cut_quantity?: number;
+  completed_quantity?: number;
+  delivered_quantity?: number;
+  unit_rate: number;
+}
+
+export interface JobOrder {
+  id: string;
+  order_number: string;
+  customer_id?: string;
+  customer_name: string;
+  service_type: 'contract_cutting' | 'cmt';
+  garment_model_id?: string;
+  model_name?: string;
+  production_order_id?: string;
+  fabric_source: 'customer_supplied' | 'factory_supplied' | 'mixed';
+  trims_responsibility: 'customer_supplied' | 'factory_supplied' | 'mixed';
+  status: 'draft' | 'confirmed' | 'materials_received' | 'in_progress' | 'quality_review' | 'ready_for_delivery' | 'partially_delivered' | 'completed' | 'cancelled';
+  pricing_basis: 'per_piece' | 'per_meter' | 'per_operation' | 'per_bundle';
+  unit_rate: number;
+  total_target_quantity: number;
+  total_received_meters: number;
+  total_cut_quantity: number;
+  total_accepted_quantity: number;
+  total_rejected_quantity: number;
+  total_rework_quantity: number;
+  total_delivered_quantity: number;
+  planned_start_date?: string;
+  target_delivery_date?: string;
+  actual_start_date?: string;
+  actual_completion_date?: string;
+  notes?: string;
+  created_at: string;
+  items?: JobOrderItem[];
+  customer?: Customer;
+}
+
+export interface CustomerMaterialReceipt {
+  id: string;
+  receipt_number: string;
+  job_order_id?: string;
+  customer_id?: string;
+  customer_name: string;
+  warehouse_id: string;
+  warehouse_name?: string;
+  fabric_name: string;
+  fabric_code?: string;
+  received_meters: number;
+  received_weight_kg?: number;
+  usable_width_meters: number;
+  gsm: number;
+  rolls_count: number;
+  condition_status: 'accepted' | 'damaged_rolls' | 'conditional_pass';
+  inspector_name?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface ExternalOperation {
+  id: string;
+  operation_number: string;
+  job_order_id?: string;
+  production_order_id?: string;
+  cutting_bundle_id?: string;
+  subcontractor_name: string;
+  operation_type: 'embroidery' | 'printing' | 'washing' | 'finishing' | 'dyeing' | 'overlocking' | 'other';
+  sent_quantity: number;
+  received_accepted_quantity: number;
+  received_rejected_quantity: number;
+  scrap_quantity: number;
+  unit_rate: number;
+  total_cost: number;
+  status: 'dispatched' | 'partially_returned' | 'completed' | 'cancelled';
+  dispatched_at?: string;
+  returned_at?: string;
+  notes?: string;
+}
+
+export interface JobDeliveryItem {
+  id?: string;
+  job_delivery_note_id?: string;
+  job_order_item_id?: string;
+  color_name?: string;
+  size_name?: string;
+  delivered_quantity: number;
+}
+
+export interface JobDeliveryNote {
+  id: string;
+  delivery_number: string;
+  job_order_id: string;
+  order_number?: string;
+  customer_name: string;
+  delivery_date: string;
+  status: 'draft' | 'confirmed' | 'delivered' | 'cancelled';
+  total_delivered_pieces: number;
+  returned_unused_fabric_meters: number;
+  scrap_fabric_meters: number;
+  delivered_by?: string;
+  received_by_customer?: string;
+  notes?: string;
+  items?: JobDeliveryItem[];
+}
+
+export interface JobInvoiceItem {
+  id?: string;
+  job_invoice_id?: string;
+  description: string;
+  item_type: 'service_charge' | 'extra_operation' | 'trim_charge' | 'deduction' | 'tax';
+  quantity: number;
+  unit_rate: number;
+  total_amount: number;
+  reason?: string;
+}
+
+export interface JobInvoice {
+  id: string;
+  invoice_number: string;
+  job_order_id: string;
+  order_number?: string;
+  customer_name: string;
+  invoice_date: string;
+  due_date?: string;
+  status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'voided';
+  service_amount: number;
+  additional_charges: number;
+  deductions: number;
+  tax_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  notes?: string;
+  items?: JobInvoiceItem[];
+}
+
+export interface JobProfitability {
+  job_order_id: string;
+  order_number: string;
+  customer_name: string;
+  service_type: string;
+  status: string;
+  total_target_pieces: number;
+  total_delivered_pieces: number;
+  total_received_meters: number;
+  service_revenue: number;
+  external_operations_cost: number;
+  factory_materials_cost: number;
+  customer_materials_cost: number;
+  total_direct_cost: number;
+  gross_margin: number;
+  margin_percentage: number;
+  metric_label: string;
+  notes: string;
+}

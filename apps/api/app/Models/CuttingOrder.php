@@ -16,6 +16,7 @@ class CuttingOrder extends Model
         'tenant_id',
         'cutting_order_number',
         'production_order_id',
+        'job_order_id',
         'pattern_id',
         'table_number',
         'fabric_inventory_item_id',
@@ -60,6 +61,11 @@ class CuttingOrder extends Model
     public function productionOrder(): BelongsTo
     {
         return $this->belongsTo(ProductionOrder::class);
+    }
+
+    public function jobOrder(): BelongsTo
+    {
+        return $this->belongsTo(JobOrder::class);
     }
 
     public function pattern(): BelongsTo

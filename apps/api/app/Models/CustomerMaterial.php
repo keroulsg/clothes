@@ -14,6 +14,7 @@ class CustomerMaterial extends Model
 
     protected $fillable = [
         'tenant_id',
+        'customer_id',
         'customer_name',
         'fabric_name',
         'fabric_code',
@@ -41,5 +42,15 @@ class CustomerMaterial extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function receipts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CustomerMaterialReceipt::class);
     }
 }

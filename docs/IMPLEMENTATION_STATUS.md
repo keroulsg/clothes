@@ -2,7 +2,7 @@
 
 **تاريخ التحديث:** أكتوبر 2026  
 **الإصدار المستهدف:** GarmentOS Cloud v1.0.0 (Commercial SaaS Release)  
-**الحالة العامة:** المراحل 0 و 1 و 2 و 3 و 4 و 5 — تم التنفيذ والتحقق بنجاح (Verified)
+**الحالة العامة:** المراحل 0 و 1 و 2 و 3 و 4 و 5 و 6 — تم التنفيذ والتحقق بنجاح (Verified)
 
 ---
 
@@ -16,8 +16,8 @@
 | **المرحلة 3** | البيانات الأساسية، الموديلات، وإدارة المخازن وحركات دفتر الأستاذ | **Verified** | 100% | نجاح 6 اختبارات للموديلات والمخازن والتزامن وتحويل الأقمشة (27 تأكيدًا) |
 | **المرحلة 4** | دورة المشتريات والموردين (Purchasing, GRN & 3-Way Match) | **Verified** | 100% | نجاح 6 اختبارات للمشتريات والاستلام والرفض والمطابقة الثلاثية (26 تأكيدًا) |
 | **المرحلة 5** | تخطيط وتشغيل الإنتاج، صالة القص (Cutting Room)، والـ BOM، وبطاقات الحزم والجودة | **Verified** | 100% | نجاح 6 اختبارات لأوامر التشغيل والقص والحزم والهالك والرقابة (40 تأكيدًا) |
-| **المرحلة 6** | خدمات القص للغير والتصنيع للغير (Subcontracting) | **Not Started** | 0% | الخطوة التالية المباشرة |
-| **المرحلة 7** | المبيعات، الفواتير، ونقاط البيع لمكتب ومحل المصنع | **Not Started** | 0% | مجدولة |
+| **المرحلة 6** | خدمات القص للغير والتصنيع للغير (Subcontracting & CMT) | **Verified** | 100% | نجاح 8 اختبارات متقدمة لدورة التشغيل والخامات والتسليم والفوترة والعزل والتزامن (57 تأكيدًا) |
+| **المرحلة 7** | المبيعات، الفواتير، ونقاط البيع لمكتب ومحل المصنع | **Not Started** | 0% | الخطوة التالية المباشرة |
 | **المرحلة 8** | الإدارة المالية، محاسبة التكاليف الصناعية، والأرباح | **Not Started** | 0% | مجدولة |
 | **المرحلة 9** | الموارد البشرية، أجور القطعة (Piece-rate)، وإنتاجية العمال | **Not Started** | 0% | مجدولة |
 | **المرحلة 10** | المتجر الإلكتروني لكل مصنع (Multi-Tenant Storefront) | **Not Started** | 0% | مجدولة |
@@ -347,12 +347,56 @@ npm.cmd run build
 
 vite v8.3.4 building client environment for production...
 transforming...
-✓ 1940 modules transformed.
+✓ 1947 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                   0.45 kB │ gzip:   0.29 kB
-dist/assets/index-Ch1k70OM.css   43.57 kB │ gzip:   7.41 kB
-dist/assets/index-DQzRHzj_.js   391.99 kB │ gzip: 102.07 kB
+dist/assets/index-uLmHtDC-.css   46.96 kB │ gzip:   7.80 kB
+dist/assets/index-kjkk7EFy.js   473.02 kB │ gzip: 114.65 kB
 
-✓ built in 1.15s
+✓ built in 485ms
 ```
+
+---
+
+## تفاصيل إنجاز المرحلة 6: خدمات القص للغير والتصنيع الكامل للغير (Subcontracting & CMT Services)
+
+### 1. الملفات التي تم إنشاؤها وتعديلها
+- **قاعدة البيانات والهجرات (Database & Migrations):**
+  - `apps/api/database/migrations/2026_10_15_000007_create_subcontracting_and_cmt_tables.php`:
+    - جدول العملاء التجاريين `customers` (بيانات العميل، السجل، البطاقة الضريبية، شروط السداد)
+    - جدول أوامر التشغيل والقص للغير `job_orders` (نوع الخدمة: قص للغير أو تصنيع كامل CMT، مصفوفة المقاسات والألوان، تسعير الخدمة، دورة الحالة الصارمة: draft → confirmed → materials_received → in_progress → quality_review → ready_for_delivery → completed)
+    - جدول بنود أمر التشغيل `job_order_items` (الكميات المستهدفة والمسلمة والمرفوضة على مستوى المقاس واللون)
+    - جدول محاضر استلام خامات العملاء `customer_material_receipts` (فصل صارم لأمانات العملاء عن مخزون المصنع بقيمة أصل صفرية للمصنع والتزام عهدة، تسجيل الأمتار والأوزان والأثواب وحالة الفحص)
+    - جدول عمليات التشغيل الخارجي `external_operations` (تطريز، طباعة، مغاسل، أوفرلوك مع مقاولي الباطن، تتبع الرصيد المرسل والمستلم والهالك)
+    - جدول أذون تسليم المشغولات ومصالحة الخامات `job_delivery_notes` و `job_delivery_items` (منع تجاوز الكمية المقبولة، مصالحة الأقمشة: المستلم = المستهلك + الهالك + المرتجع + المتبقي)
+    - جدول فواتير أجور وخدمات التشغيل `job_invoices` و `job_invoice_items` (احتساب دقيق للأجور بناءً على الكمية المسلمة ومعدل الوحدة، إضافة الرسوم والخصومات المعتمدة، تسجيل السداد)
+
+- **النماذج والخدمات والـ Controllers (Backend Models & Logic):**
+  - `apps/api/app/Models/Customer.php`
+  - `apps/api/app/Models/JobOrder.php`
+  - `apps/api/app/Models/JobOrderItem.php`
+  - `apps/api/app/Models/CustomerMaterialReceipt.php`
+  - `apps/api/app/Models/ExternalOperation.php`
+  - `apps/api/app/Models/JobDeliveryNote.php`
+  - `apps/api/app/Models/JobDeliveryItem.php`
+  - `apps/api/app/Models/JobInvoice.php`
+  - `apps/api/app/Models/JobInvoiceItem.php`
+  - تحديث العلاقات في: `CustomerMaterial.php` و `CuttingOrder.php` و `ProductionOrder.php`
+  - `apps/api/app/Services/SubcontractingService.php`: محرك تشغيل متكامل مع قفل السجلات للتزامن (`lockForUpdate`) وحماية التكرار عبر idempotency keys والتعامل الصارم مع تصادم المفاتيح وحساب مؤشرات الربحية الصناعية للأمر دون تضخيم الإيرادات بقيمة خامات الأمانة.
+  - `apps/api/app/Http/Controllers/Api/SubcontractingController.php`: نقاط نهاية RESTful مع عزل مستأجر صارم، تحقق من الصلاحيات والمدخلات، واستجابات متوافقة.
+  - `apps/api/routes/api.php`: تسجيل كافة مسارات المرحلة 6 المحمية.
+  - `apps/api/tests/Feature/SubcontractingAndCmtTest.php`: حزمة اختبارات شاملة تغطي دورة القص للغير، دورة CMT، عزل أمانات العملاء، منع التسليم الزائد، قيود مقاولي الباطن، التزامن وتفادي التكرار وتضارب الحمولة (409 Conflict)، وعزل المستأجرين (8 اختبارات، 57 تأكيدًا).
+
+- **الواجهة الأمامية التفاعلية (Frontend UI Components):**
+  - `apps/web/src/types/index.ts`: تعريفات كاملة للعملاء، أوامر التشغيل، أذون الاستلام، التشغيل الخارجي، التسليم، الفواتير، ومؤشرات الربحية.
+  - `apps/web/src/components/subcontracting/SubcontractingTab.tsx`: لوحة تشغيل متكاملة متعددة التبويبات مع بحث وفلاتر وبطاقات إحصائية ورسوم بيانية.
+  - `apps/web/src/components/subcontracting/CreateJobOrderModal.tsx`: إنشاء أوامر التشغيل والقص ومصفوفة المقاسات والألوان وشروط التسعير والمسؤوليات.
+  - `apps/web/src/components/subcontracting/CustomerMaterialReceiptModal.tsx`: استلام أمانات خامات العملاء مع فحص الجودة وتحديد المخزن.
+  - `apps/web/src/components/subcontracting/ExternalOperationModal.tsx`: إرسال واستلام وفحص تشغيلات مقاولي الباطن (تطريز، طباعة، مغاسل).
+  - `apps/web/src/components/subcontracting/JobDeliveryModal.tsx`: إصدار إذن تسليم المشغولات مع مصالحة الأقمشة المرتجعة والهالكة.
+  - `apps/web/src/components/subcontracting/JobInvoiceModal.tsx`: فوترة أجور التشغيل مع الإضافات والخصومات المعتمدة.
+  - `apps/web/src/components/subcontracting/JobDetailsModal.tsx`: ملف أمر التشغيل الشامل مع مصفوفة المقاسات ومؤشرات الربحية الصناعية الحقيقية.
+  - `apps/web/src/components/layout/AppLayout.tsx`: دمج تبويب خدمات التشغيل للغير في القائمة الرئيسية مع دعم اللغتين والثيم الليلي.
+  - `apps/web/src/App.tsx`: ربط كامل للنوافذ والبيانات الحقيقية وحالات التحميل والأخطاء.
+

@@ -22,18 +22,22 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $connection = $this->getConnection() ?? config('database.default');
+        $schema = Schema::connection($connection);
+
         foreach ($this->tables as $tableName => $indexName) {
-            if (!Schema::hasTable($tableName) || !Schema::hasColumn($tableName, 'idempotency_key')) {
+            if (!$schema->hasTable($tableName) || !$schema->hasColumn($tableName, 'idempotency_key')) {
                 continue;
             }
 
             // 1. فحص سلامة البيانات التاريخية قبل إضافة قيد التفرد
             // إذا وُجد أي تكرار سابق لنفس مفتاح عدم التكرار داخل نفس الشركة يتم إيقاف الهجرة بأمان
-            $duplicates = DB::table($tableName)
+            // استخدام havingRaw('COUNT(*) > 1') لضمان التوافق التام مع محرك PostgreSQL و SQLite
+            $duplicates = DB::connection($connection)->table($tableName)
                 ->select('tenant_id', 'idempotency_key', DB::raw('COUNT(*) as duplicate_count'))
                 ->whereNotNull('idempotency_key')
                 ->groupBy('tenant_id', 'idempotency_key')
-                ->having('duplicate_count', '>', 1)
+                ->havingRaw('COUNT(*) > 1')
                 ->get();
 
             if ($duplicates->isNotEmpty()) {
@@ -46,7 +50,7 @@ return new class extends Migration
             }
 
             // 2. تطبيق قيد التفرد المركب (tenant_id + idempotency_key)
-            Schema::table($tableName, function (Blueprint $table) use ($indexName) {
+            $schema->table($tableName, function (Blueprint $table) use ($indexName) {
                 $table->unique(['tenant_id', 'idempotency_key'], $indexName);
             });
         }
@@ -57,9 +61,12 @@ return new class extends Migration
      */
     public function down(): void
     {
+        $connection = $this->getConnection() ?? config('database.default');
+        $schema = Schema::connection($connection);
+
         foreach ($this->tables as $tableName => $indexName) {
-            if (Schema::hasTable($tableName) && Schema::hasColumn($tableName, 'idempotency_key')) {
-                Schema::table($tableName, function (Blueprint $table) use ($indexName) {
+            if ($schema->hasTable($tableName) && $schema->hasColumn($tableName, 'idempotency_key')) {
+                $schema->table($tableName, function (Blueprint $table) use ($indexName) {
                     $table->dropUnique($indexName);
                 });
             }

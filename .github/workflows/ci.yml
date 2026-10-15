@@ -75,26 +75,7 @@ jobs:
           cp .env .env.testing
 
       - name: Run Database Migrations on PostgreSQL
-        run: |
-          php -r "
-          \$connected = false;
-          for (\$i = 1; \$i <= 15; \$i++) {
-              try {
-                  new PDO('pgsql:host=127.0.0.1;port=5432;dbname=garmentos_test', 'garmentos', 'secret_test_password', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-                  echo 'PostgreSQL connection verified via PDO on 127.0.0.1:5432!' . PHP_EOL;
-                  \$connected = true;
-                  break;
-              } catch (Throwable \$e) {
-                  echo 'Waiting for PostgreSQL (attempt ' . \$i . '): ' . \$e->getMessage() . PHP_EOL;
-                  sleep(2);
-              }
-          }
-          if (!\$connected) {
-              echo 'Could not connect to PostgreSQL after 15 attempts.' . PHP_EOL;
-              exit(1);
-          }
-          "
-          php artisan migrate --database=pgsql -v --force
+        run: php artisan migrate --database=pgsql -v --force
 
       - name: Run Backend Tests
         run: php artisan test

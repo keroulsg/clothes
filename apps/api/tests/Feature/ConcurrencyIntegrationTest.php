@@ -112,4 +112,55 @@ class ConcurrencyIntegrationTest extends TestCase
         $this->assertEquals(120.0, (float)$this->item->fresh()->current_balance);
         $this->assertEquals(1, InventoryTransaction::where('tenant_id', $this->tenant->id)->where('idempotency_key', $idempKey)->count());
     }
+
+    /**
+     * التحقق عبر طبقة الـ HTTP Controller من أن الطلب المتضارب يعيد 409 ولا يحدث أي أثر جانبي على الرصيد
+     */
+    public function test_conflicting_idempotent_payload_returns_409_without_balance_mutation(): void
+    {
+        $user = \App\Models\User::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'مسؤول المخزن',
+            'email' => 'wh@concurrency.com',
+            'password' => bcrypt('password123'),
+            'role' => 'warehouse_manager',
+            'is_active' => true,
+        ]);
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+
+        $idempKey = 'COLLISION-HTTP-' . uniqid();
+
+        // 1. تسجيل الطلب الأول بنجاح (زيادة الرصيد بمقدار 30)
+        $firstPayload = [
+            'inventory_item_id' => $this->item->id,
+            'transaction_type' => 'goods_receipt',
+            'direction' => 'IN',
+            'quantity' => 30.0,
+            'unit_cost' => 50.0,
+            'reference_type' => 'purchase_order',
+            'reference_number' => 'PO-HTTP-WINNER',
+            'idempotency_key' => $idempKey,
+        ];
+
+        $res1 = $this->postJson('/api/v1/inventory/transactions', $firstPayload);
+        $res1->assertStatus(201);
+        $this->assertEquals(130.0, (float)$this->item->fresh()->current_balance);
+
+        // 2. إعادة إرسال نفس الطلب المتطابق (Identical Retry) -> 200 Replay دون زيادة الرصيد
+        $resReplay = $this->postJson('/api/v1/inventory/transactions', $firstPayload);
+        $resReplay->assertStatus(200)->assertJsonPath('is_duplicate', true);
+        $this->assertEquals(130.0, (float)$this->item->fresh()->current_balance);
+
+        // 3. إرسال طلب متضارب بنفس المفتاح ولكن بكمية 99 -> 409 IdempotencyConflict دون أي زيادة في الرصيد
+        $conflictingPayload = $firstPayload;
+        $conflictingPayload['quantity'] = 99.0;
+        $conflictingPayload['reference_number'] = 'PO-HTTP-LOSER';
+
+        $resConflict = $this->postJson('/api/v1/inventory/transactions', $conflictingPayload);
+        $resConflict->assertStatus(409)->assertJsonPath('error', 'IdempotencyConflict');
+
+        // التأكد القاطع من بقاء الرصيد عند 130.0 تماماً دون أي زيادة إلى 199 أو 229
+        $this->assertEquals(130.0, (float)$this->item->fresh()->current_balance);
+        $this->assertEquals(1, InventoryTransaction::where('tenant_id', $this->tenant->id)->where('idempotency_key', $idempKey)->count());
+    }
 }

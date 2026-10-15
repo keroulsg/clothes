@@ -157,13 +157,14 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         array $payload1,
         array $payload2,
         array $headers1 = [],
-        array $headers2 = []
+        array $headers2 = [],
+        int $sleepMs2 = 30
     ): array {
         $outFile1 = $this->tempDir . '/worker1_' . uniqid() . '.json';
         $outFile2 = $this->tempDir . '/worker2_' . uniqid() . '.json';
 
         $cmd1 = $this->buildWorkerCommand($action, $payload1, $outFile1, $headers1, 0);
-        $cmd2 = $this->buildWorkerCommand($action, $payload2, $outFile2, $headers2, 5);
+        $cmd2 = $this->buildWorkerCommand($action, $payload2, $outFile2, $headers2, $sleepMs2);
 
         $descriptors = [
             0 => ['pipe', 'r'],

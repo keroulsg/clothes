@@ -1312,10 +1312,12 @@ class SecurityGateTest extends TestCase
         $oldTimestampPayload = $badPayload;
         $oldTimestampPayload['timestamp'] = now()->subMinutes(10)->timestamp;
         $oldPayloadJson = json_encode($oldTimestampPayload);
-        $oldSig = hash_hmac('sha256', $oldPayloadJson, $webhookSecret);
+        $oldTs = $oldTimestampPayload['timestamp'];
+        $oldSig = hash_hmac('sha256', "{$oldTs}.{$oldPayloadJson}", $webhookSecret);
         $resExpiredTs = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_X_SIGNATURE' => $oldSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$oldTs,
         ], $oldPayloadJson);
         $resExpiredTs->assertStatus(401)->assertJsonPath('error', 'TimestampToleranceExceeded');
 
@@ -2714,6 +2716,116 @@ class SecurityGateTest extends TestCase
         // التحقق من تسجيل الحدثين ككيانين مستقلين في قاعدة البيانات دون دمج خاطئ
         $this->assertEquals(1, \App\Models\ProcessedWebhookEvent::where('event_id', $eventId2)->count());
         $this->assertEquals(2, \App\Models\ProcessedWebhookEvent::where('order_reference', $order->order_reference)->count());
+    }
+
+    /**
+     * اختبار أمان 44: إلزامية ربط التوقيع بطابع الوقت في HMAC المعياري ورفض التوقيعات المجردة من الوقت لمنع هجمات إعادة الإرسال
+     */
+    public function test_standard_hmac_strictly_binds_timestamp_and_rejects_body_only_replay(): void
+    {
+        $secret = config('services.payment.webhook_secret');
+        $tenant = Tenant::create([
+            'code' => 'TEN-HMAC-TS-BIND',
+            'name' => 'مصنع التحقق من ربط طابع الوقت',
+            'status' => 'active',
+            'is_paid' => false,
+        ]);
+
+        $order = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'BIND-TS-ORD-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 1800.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+
+        $now = time();
+        $payload = [
+            'event' => 'payment.completed',
+            'event_id' => 'EVT-BIND-TS-' . uniqid(),
+            'tenant_id' => $tenant->id,
+            'order_reference' => $order->order_reference,
+            'amount' => 1800.00,
+            'currency' => 'EGP',
+            'status' => 'succeeded',
+            'plan_tier' => 'professional',
+        ];
+        $body = json_encode($payload);
+
+        // 1. محاولة استخدام توقيع على جسم الطلب وحده (Body-only Signature) مع طابع وقت حديث لمحاولة إعادة الإرسال -> رفض 401 InvalidSignature
+        $bodyOnlySig = hash_hmac('sha256', $body, $secret);
+        $resBodyOnly = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $bodyOnlySig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body);
+
+        $resBodyOnly->assertStatus(401)
+            ->assertJsonPath('error', 'InvalidSignature');
+
+        // 2. محاولة التلاعب بطابع الوقت عند إرسال توقيع صحيح لزمن آخر (Timestamp Tampering) -> رفض 401 InvalidSignature
+        $validSigForNow = hash_hmac('sha256', "{$now}.{$body}", $secret);
+        $tamperedTs = $now + 5; // طابع وقت معدل لا يطابق التوقيع الرقمي
+        $resTamperedTs = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $validSigForNow,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$tamperedTs,
+        ], $body);
+
+        $resTamperedTs->assertStatus(401)
+            ->assertJsonPath('error', 'InvalidSignature');
+
+        // 3. توقيع صحيح ومطابق تماماً لطابع الوقت المعتمد -> 200 Success
+        $resSuccess = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $validSigForNow,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$now,
+        ], $body);
+
+        $resSuccess->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('is_paid', true);
+
+        // 4. توقيع مرتبط بطابع وقت قديم خارج نافذة السماح (> 300 ثانية) -> رفض 401 TimestampToleranceExceeded
+        $oldTs = $now - 350;
+        $order2 = SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => 'BIND-TS-EXP-' . uniqid(),
+            'plan_tier' => 'professional',
+            'amount' => 1800.00,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'expires_at' => now()->addDays(2),
+        ]);
+        $payload2 = $payload;
+        $payload2['event_id'] = 'EVT-BIND-EXP-' . uniqid();
+        $payload2['order_reference'] = $order2->order_reference;
+        $body2 = json_encode($payload2);
+        $oldBoundSig = hash_hmac('sha256', "{$oldTs}.{$body2}", $secret);
+
+        $resExpired = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $oldBoundSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$oldTs,
+        ], $body2);
+
+        $resExpired->assertStatus(401)
+            ->assertJsonPath('error', 'TimestampToleranceExceeded');
+
+        // 5. توقيع مرتبط بطابع وقت مستقبلي يتجاوز انحراف الساعة (> 60 ثانية) -> رفض 401 FutureTimestampToleranceExceeded
+        $futureTs = $now + 120;
+        $futureBoundSig = hash_hmac('sha256', "{$futureTs}.{$body2}", $secret);
+
+        $resFuture = $this->call('POST', '/api/v1/subscriptions/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_SIGNATURE' => $futureBoundSig,
+            'HTTP_X_SIGNATURE_TIMESTAMP' => (string)$futureTs,
+        ], $body2);
+
+        $resFuture->assertStatus(401)
+            ->assertJsonPath('error', 'FutureTimestampToleranceExceeded');
     }
 }
 

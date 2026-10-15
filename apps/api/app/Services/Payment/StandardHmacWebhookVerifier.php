@@ -69,12 +69,11 @@ class StandardHmacWebhookVerifier implements WebhookVerifierInterface
 
         $rawBody = $request->getContent();
         $expectedSignatureWithTs = hash_hmac('sha256', "{$tsInt}.{$rawBody}", $secret);
-        $expectedSignatureRaw = hash_hmac('sha256', $rawBody, $secret);
 
-        if (!hash_equals($expectedSignatureWithTs, $signature) && !hash_equals($expectedSignatureRaw, $signature)) {
+        if (!hash_equals($expectedSignatureWithTs, $signature)) {
             return WebhookVerificationResult::failure(
                 'InvalidSignature',
-                'أمان: التوقيع الرقمي لإشعار الدفع غير صالح أو مزور.'
+                'أمان: التوقيع الرقمي لإشعار الدفع غير صالح أو مزور (يجب ربط التوقيع بطابع الوقت المعتمد حصراً).'
             );
         }
 

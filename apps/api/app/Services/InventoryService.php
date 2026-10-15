@@ -78,6 +78,21 @@ class InventoryService
                     throw new InvalidArgumentException('أمان: المخزن المحدد لا يطابق مخزن الصنف المخزني.');
                 }
 
+                // فحص داخلي حاسم لعدم التكرار تحت قفل السجل لمنع أي تعديل على الرصيد للطلبات المكررة أو المتضاربة
+                if ($idempotencyKey) {
+                    $existingTx = InventoryTransaction::where('tenant_id', $tenantId)
+                        ->where('idempotency_key', $idempotencyKey)
+                        ->first();
+
+                    if ($existingTx) {
+                        if (!$this->isTransactionMatching($existingTx, $data, $itemId, $quantity, $unitCost, $direction, $transactionType)) {
+                            throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لعملية مخزنية مختلفة في نفس الشركة.');
+                        }
+
+                        return $existingTx;
+                    }
+                }
+
                 $balanceBefore = (float) $item->current_balance;
 
                 if ($direction === 'OUT') {
@@ -140,10 +155,17 @@ class InventoryService
                 }
             });
         } catch (\App\Exceptions\IdempotencyCollisionException $e) {
-            // تراجعت المعاملة بالكامل ولم يتأثر الرصيد؛ نسترجع القيد الأصلي الفائز ونتحقق من تطابق كافة العمليات
-            $existing = InventoryTransaction::where('tenant_id', $e->getTenantId())
-                ->where('idempotency_key', $e->getIdempotencyKey())
-                ->first();
+            // تراجعت المعاملة بالكامل ولم يتأثر الرصيد؛ نسترجع القيد الأصلي الفائز بعد إتمام التثبيت ونتحقق من تطابق كافة العمليات
+            $existing = null;
+            for ($attempt = 0; $attempt < 10; $attempt++) {
+                $existing = InventoryTransaction::where('tenant_id', $e->getTenantId())
+                    ->where('idempotency_key', $e->getIdempotencyKey())
+                    ->first();
+                if ($existing) {
+                    break;
+                }
+                usleep(20000);
+            }
 
             if ($existing) {
                 if (!$this->isTransactionMatching($existing, $data, $itemId, $quantity, $unitCost, $direction, $transactionType)) {

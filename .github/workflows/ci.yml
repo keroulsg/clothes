@@ -36,6 +36,8 @@ jobs:
           echo "APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=" >> .env.testing
           echo "DB_CONNECTION=sqlite" >> .env.testing
           echo "DB_DATABASE=:memory:" >> .env.testing
+          echo "PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long" >> .env.testing
+          echo "PLATFORM_ADMIN_ACTIVATION_KEY=test_platform_admin_super_secret_activation_key_32_chars" >> .env.testing
 
       - name: Run Backend Tests
         run: php artisan test

@@ -32,12 +32,17 @@ Route::prefix('v1')->group(function () {
     Route::post('/webhooks/subscription-payment', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
     Route::post('/subscriptions/webhook', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
 
+    // مسارات إدارة المنصة العليا (Platform Administration) - مسار تفويض مخصص بدون سياق شركة مستأجرة
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsurePlatformAdmin::class])->group(function () {
+        Route::post('/platform-admin/tenants/{id}/activate-subscription', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
+        Route::post('/platform-admin/tenants/{id}/subscription/manual-activate', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
+        Route::post('/admin/tenants/{id}/activate-subscription', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
+    });
+
     // المسارات المحمية بعزل الشركات
     Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
         Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription']);
-        Route::post('/platform-admin/tenants/{id}/subscription/manual-activate', [TenantController::class, 'adminManualActivate']);
-        Route::post('/admin/tenants/{id}/activate-subscription', [TenantController::class, 'adminManualActivate']);
 
         // الفروع ومواقع العمل
         Route::get('/branches', [BranchController::class, 'index']);

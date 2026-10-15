@@ -32,5 +32,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="PAYMENT_WEBHOOK_SECRET" value="test_payment_webhook_secret_key_must_be_over_32_chars_long"/>
+        <env name="PLATFORM_ADMIN_ACTIVATION_KEY" value="test_platform_admin_super_secret_activation_key_32_chars"/>
     </php>
 </phpunit>

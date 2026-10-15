@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'payment' => [
+        'webhook_secret' => env('PAYMENT_WEBHOOK_SECRET'),
+        'provider' => env('PAYMENT_PROVIDER', 'paymob'),
+    ],
+
+    'platform' => [
+        'admin_activation_key' => env('PLATFORM_ADMIN_ACTIVATION_KEY'),
+    ],
+
 ];

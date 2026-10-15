@@ -52,13 +52,8 @@ class InventoryService
                 ->first();
 
             if ($existing) {
-                // التحقق من تطابق العملية لمنع استخدام نفس المفتاح لعمليتين مختلفتين
-                $isMatch = ($existing->inventory_item_id === $itemId)
-                    && (abs((float)$existing->quantity - $quantity) < 0.0001)
-                    && ($existing->direction === $direction)
-                    && ($existing->transaction_type === $transactionType);
-
-                if (!$isMatch) {
+                // التحقق من تطابق كافة الحقول الجوهرية لمنع استخدام نفس المفتاح لعمليتين مختلفتين
+                if (!$this->isTransactionMatching($existing, $data, $itemId, $quantity, $unitCost, $direction, $transactionType)) {
                     throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لعملية مخزنية مختلفة في نفس الشركة.');
                 }
 
@@ -130,24 +125,25 @@ class InventoryService
                 } catch (QueryException $e) {
                     // في حال اصطدام طلبين متزامنين بنفس المفتاح: نطلق استثناء لإلغاء المعاملة وتراجع تحديث الرصيد تماماً!
                     if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
-                        throw new \App\Exceptions\IdempotencyCollisionException($idempotencyKey, $e->getMessage(), (int)$e->getCode(), $e);
+                        throw new \App\Exceptions\IdempotencyCollisionException(
+                            idempotencyKey: $idempotencyKey,
+                            tenantId: $tenantId,
+                            message: $e->getMessage(),
+                            code: (int)$e->getCode(),
+                            previous: $e
+                        );
                     }
                     throw $e;
                 }
             });
         } catch (\App\Exceptions\IdempotencyCollisionException $e) {
             // تراجعت المعاملة بالكامل ولم يتأثر الرصيد؛ نسترجع القيد الأصلي الفائز ونتحقق من تطابق كافة العمليات
-            $existing = InventoryTransaction::where('tenant_id', $tenantId)
-                ->where('idempotency_key', $idempotencyKey)
+            $existing = InventoryTransaction::where('tenant_id', $e->getTenantId())
+                ->where('idempotency_key', $e->getIdempotencyKey())
                 ->first();
 
             if ($existing) {
-                $isMatch = ($existing->inventory_item_id === $itemId)
-                    && (abs((float)$existing->quantity - $quantity) < 0.0001)
-                    && ($existing->direction === $direction)
-                    && ($existing->transaction_type === $transactionType);
-
-                if (!$isMatch) {
+                if (!$this->isTransactionMatching($existing, $data, $itemId, $quantity, $unitCost, $direction, $transactionType)) {
                     throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لعملية مخزنية مختلفة في نفس الشركة.');
                 }
 
@@ -155,6 +151,60 @@ class InventoryService
             }
             throw $e;
         }
+    }
+
+    /**
+     * التحقق من التطابق الكامل لكافة الحقول الجوهرية للعملية المخزنية
+     */
+    private function isTransactionMatching(
+        InventoryTransaction $existing,
+        array $data,
+        string $itemId,
+        float $quantity,
+        float $unitCost,
+        string $direction,
+        string $transactionType
+    ): bool {
+        if ($existing->inventory_item_id !== $itemId) {
+            return false;
+        }
+
+        if (abs((float)$existing->quantity - $quantity) > 0.0001) {
+            return false;
+        }
+
+        if ($existing->direction !== $direction) {
+            return false;
+        }
+
+        if ($existing->transaction_type !== $transactionType) {
+            return false;
+        }
+
+        if (abs((float)$existing->unit_cost - $unitCost) > 0.0001) {
+            return false;
+        }
+
+        if (!empty($data['warehouse_id']) && $existing->warehouse_id !== $data['warehouse_id']) {
+            return false;
+        }
+
+        $expectedRefType = $data['reference_type'] ?? null;
+        if ((string)($existing->reference_type ?? '') !== (string)($expectedRefType ?? '')) {
+            return false;
+        }
+
+        $expectedRefId = $data['reference_id'] ?? null;
+        if ((string)($existing->reference_id ?? '') !== (string)($expectedRefId ?? '')) {
+            return false;
+        }
+
+        $expectedRefNum = $data['reference_number'] ?? null;
+        if ((string)($existing->reference_number ?? '') !== (string)($expectedRefNum ?? '')) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

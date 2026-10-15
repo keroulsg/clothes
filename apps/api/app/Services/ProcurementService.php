@@ -166,15 +166,16 @@ class ProcurementService
         $tenantId = $contextTenantId;
         $idempotencyKey = $data['idempotency_key'] ?? null;
 
-        // التحقق المسبق من مفتاح عدم التكرار (Idempotency) لإذن الاستلام
+        // التحقق المسبق من مفتاح عدم التكرار (Idempotency) لإذن الاستلام باستخدام البصمة المعيارية (Canonical Fingerprint)
         if ($idempotencyKey) {
-            $existing = GoodsReceiptNote::where('tenant_id', $tenantId)
+            $existing = GoodsReceiptNote::with('items')->where('tenant_id', $tenantId)
                 ->where('idempotency_key', $idempotencyKey)
                 ->first();
             if ($existing) {
-                $isMatch = ((string)$existing->purchase_order_id === (string)$data['purchase_order_id']);
-                if (!$isMatch) {
-                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لإذن استلام مختلف.');
+                $incomingFingerprint = $this->calculateGrnFingerprint($data, $existing->warehouse_id);
+                $existingFingerprint = $this->calculateExistingGrnFingerprint($existing);
+                if ($incomingFingerprint !== $existingFingerprint) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لإذن استلام بحقول أو كميات مختلفة (IdempotencyConflict).');
                 }
                 return $existing->load('items.inventoryItem', 'purchaseOrder');
             }
@@ -211,7 +212,13 @@ class ProcurementService
                     ]);
                 } catch (QueryException $e) {
                     if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
-                        throw new IdempotencyCollisionException($idempotencyKey, $tenantId);
+                        throw new IdempotencyCollisionException(
+                            idempotencyKey: $idempotencyKey,
+                            tenantId: $tenantId,
+                            message: $e->getMessage(),
+                            code: (int)$e->getCode(),
+                            previous: $e
+                        );
                     }
                     throw $e;
                 }
@@ -283,13 +290,14 @@ class ProcurementService
                 return $grn->load('items.inventoryItem', 'purchaseOrder');
             });
         } catch (IdempotencyCollisionException $e) {
-            $existing = GoodsReceiptNote::where('tenant_id', $e->tenantId)
-                ->where('idempotency_key', $e->idempotencyKey)
+            $existing = GoodsReceiptNote::with('items')->where('tenant_id', $e->getTenantId())
+                ->where('idempotency_key', $e->getIdempotencyKey())
                 ->first();
             if ($existing) {
-                $isMatch = ((string)$existing->purchase_order_id === (string)$data['purchase_order_id']);
-                if (!$isMatch) {
-                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لإذن استلام مختلف.');
+                $incomingFingerprint = $this->calculateGrnFingerprint($data, $existing->warehouse_id);
+                $existingFingerprint = $this->calculateExistingGrnFingerprint($existing);
+                if ($incomingFingerprint !== $existingFingerprint) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لإذن استلام بحقول أو كميات مختلفة (IdempotencyConflict).');
                 }
                 return $existing->load('items.inventoryItem', 'purchaseOrder');
             }
@@ -312,18 +320,19 @@ class ProcurementService
         $tenantId = $contextTenantId;
         $idempotencyKey = $data['idempotency_key'] ?? null;
 
-        // منع التكرار المالي: التحقق المسبق من مفتاح عدم التكرار (Idempotency)
+        $invoiceSubtotal = (float) $data['subtotal'];
+        $invoiceTax = isset($data['tax_amount']) ? (float) $data['tax_amount'] : ($invoiceSubtotal * 0.14);
+        $invoiceTotal = isset($data['total_amount']) ? (float) $data['total_amount'] : ($invoiceSubtotal + $invoiceTax);
+        $grnId = $data['goods_receipt_note_id'] ?? null;
+
+        // منع التكرار المالي: التحقق المسبق من مفتاح عدم التكرار (Idempotency) لكافة الحقول المالية
         if ($idempotencyKey) {
             $existing = SupplierInvoice::where('tenant_id', $tenantId)
                 ->where('idempotency_key', $idempotencyKey)
                 ->first();
             if ($existing) {
-                $isMatch = ((string)$existing->purchase_order_id === (string)$data['purchase_order_id'])
-                    && ((string)$existing->invoice_number === (string)$data['invoice_number'])
-                    && (abs((float)$existing->subtotal - (float)$data['subtotal']) < 0.01);
-
-                if (!$isMatch) {
-                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لفاتورة مورد مختلفة.');
+                if (!$this->isInvoiceMatching($existing, $data, $invoiceSubtotal, $invoiceTax, $invoiceTotal, $grnId)) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لفاتورة مورد بحقول أو مبالغ مالية مختلفة (IdempotencyConflict).');
                 }
 
                 return $existing->load('supplier', 'purchaseOrder');
@@ -331,7 +340,7 @@ class ProcurementService
         }
 
         try {
-            return DB::transaction(function () use ($data, $tenantId, $idempotencyKey) {
+            return DB::transaction(function () use ($data, $tenantId, $idempotencyKey, $invoiceSubtotal, $invoiceTax, $invoiceTotal, $grnId) {
                 $po = PurchaseOrder::with('items')->where('tenant_id', $tenantId)->where('id', $data['purchase_order_id'])->firstOrFail();
 
                 $supplier = Supplier::where('tenant_id', $tenantId)->where('id', $po->supplier_id)->lockForUpdate()->firstOrFail();
@@ -413,7 +422,13 @@ class ProcurementService
                     ]);
                 } catch (QueryException $e) {
                     if ($idempotencyKey && ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Duplicate entry'))) {
-                        throw new IdempotencyCollisionException($idempotencyKey, $tenantId);
+                        throw new IdempotencyCollisionException(
+                            idempotencyKey: $idempotencyKey,
+                            tenantId: $tenantId,
+                            message: $e->getMessage(),
+                            code: (int)$e->getCode(),
+                            previous: $e
+                        );
                     }
                     throw $e;
                 }
@@ -425,16 +440,12 @@ class ProcurementService
                 return $invoice->load('supplier', 'purchaseOrder');
             });
         } catch (IdempotencyCollisionException $e) {
-            $existing = SupplierInvoice::where('tenant_id', $e->tenantId)
-                ->where('idempotency_key', $e->idempotencyKey)
+            $existing = SupplierInvoice::where('tenant_id', $e->getTenantId())
+                ->where('idempotency_key', $e->getIdempotencyKey())
                 ->first();
             if ($existing) {
-                $isMatch = ((string)$existing->purchase_order_id === (string)$data['purchase_order_id'])
-                    && ((string)$existing->invoice_number === (string)$data['invoice_number'])
-                    && (abs((float)$existing->subtotal - (float)$data['subtotal']) < 0.01);
-
-                if (!$isMatch) {
-                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لفاتورة مورد مختلفة.');
+                if (!$this->isInvoiceMatching($existing, $data, $invoiceSubtotal, $invoiceTax, $invoiceTotal, $grnId)) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح عدم التكرار مستخدم مسبقاً لفاتورة مورد بحقول أو مبالغ مالية مختلفة (IdempotencyConflict).');
                 }
 
                 return $existing->load('supplier', 'purchaseOrder');
@@ -519,5 +530,105 @@ class ProcurementService
 
             return $return->load('items.item', 'supplier');
         });
+    }
+
+    /**
+     * حساب البصمة المعيارية لبيانات استلام البضاعة (Canonical Fingerprint)
+     */
+    public function calculateGrnFingerprint(array $data, ?string $defaultWarehouseId = null): string
+    {
+        $items = $data['items'] ?? [];
+        usort($items, fn($a, $b) => strcmp((string)$a['purchase_order_item_id'], (string)$b['purchase_order_item_id']));
+
+        $canonicalItems = array_map(function ($item) {
+            $delivered = round((float)$item['delivered_quantity'], 4);
+            $accepted = round((float)$item['accepted_quantity'], 4);
+            $rejected = isset($item['rejected_quantity'])
+                ? round((float)$item['rejected_quantity'], 4)
+                : round($delivered - $accepted, 4);
+
+            return [
+                'purchase_order_item_id' => (string)$item['purchase_order_item_id'],
+                'delivered' => $delivered,
+                'accepted' => $accepted,
+                'rejected' => $rejected,
+            ];
+        }, $items);
+
+        $payload = [
+            'purchase_order_id' => (string)($data['purchase_order_id'] ?? ''),
+            'warehouse_id' => (string)($data['warehouse_id'] ?? $defaultWarehouseId ?? ''),
+            'inspection_status' => (string)($data['inspection_status'] ?? 'passed'),
+            'items' => $canonicalItems,
+        ];
+
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * حساب البصمة المعيارية لسجل إذن استلام مخزن قائم في قاعدة البيانات
+     */
+    public function calculateExistingGrnFingerprint(GoodsReceiptNote $grn): string
+    {
+        $grn->loadMissing('items');
+        $items = $grn->items->sortBy('purchase_order_item_id')->values();
+
+        $canonicalItems = $items->map(function ($item) {
+            return [
+                'purchase_order_item_id' => (string)$item->purchase_order_item_id,
+                'delivered' => round((float)$item->delivered_quantity, 4),
+                'accepted' => round((float)$item->accepted_quantity, 4),
+                'rejected' => round((float)$item->rejected_quantity, 4),
+            ];
+        })->all();
+
+        $payload = [
+            'purchase_order_id' => (string)$grn->purchase_order_id,
+            'warehouse_id' => (string)$grn->warehouse_id,
+            'inspection_status' => (string)$grn->inspection_status,
+            'items' => $canonicalItems,
+        ];
+
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * التحقق من التطابق التام لكافة الحقول المالية لفاتورة المورد
+     */
+    private function isInvoiceMatching(
+        SupplierInvoice $existing,
+        array $data,
+        float $subtotal,
+        float $taxAmount,
+        float $totalAmount,
+        ?string $grnId
+    ): bool {
+        if ((string)$existing->purchase_order_id !== (string)$data['purchase_order_id']) {
+            return false;
+        }
+
+        if ((string)$existing->invoice_number !== (string)$data['invoice_number']) {
+            return false;
+        }
+
+        if (abs((float)$existing->subtotal - $subtotal) >= 0.01) {
+            return false;
+        }
+
+        if (abs((float)$existing->tax_amount - $taxAmount) >= 0.01) {
+            return false;
+        }
+
+        if (abs((float)$existing->total_amount - $totalAmount) >= 0.01) {
+            return false;
+        }
+
+        $existingGrnId = $existing->goods_receipt_note_id ? (string)$existing->goods_receipt_note_id : null;
+        $expectedGrnId = $grnId ? (string)$grnId : null;
+        if ($existingGrnId !== $expectedGrnId) {
+            return false;
+        }
+
+        return true;
     }
 }

@@ -221,6 +221,18 @@ class TenantController extends Controller
         $amount = $planPricing[$planTier] ?? 5000.0;
         $orderReference = 'ORD-' . strtoupper(Str::random(10));
 
+        // حفظ أمر الدفع المعلق كطلب نظامي دائم في جدول طلبات السداد
+        $paymentOrder = \App\Models\SubscriptionPaymentOrder::create([
+            'tenant_id' => $tenant->id,
+            'order_reference' => $orderReference,
+            'plan_tier' => $planTier,
+            'amount' => $amount,
+            'currency' => 'EGP',
+            'status' => 'pending',
+            'billing_cycle' => 'yearly',
+            'expires_at' => now()->addDays(3),
+        ]);
+
         // حفظ أمر الدفع المعلق مع الحفاظ الصارم على is_paid = false
         $subscription = $settings['subscription'] ?? [];
         $subscription['status'] = 'payment_pending';

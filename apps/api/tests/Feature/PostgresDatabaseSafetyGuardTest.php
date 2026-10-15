@@ -162,6 +162,9 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
      */
     public function test_clean_database_fails_clearly_and_does_not_swallow_exceptions(): void
     {
+        $origHost = config('database.connections.pgsql.host');
+        $origPort = config('database.connections.pgsql.port');
+        $origDatabase = config('database.connections.pgsql.database');
         $origDb = env('PGSQL_DATABASE') ?? getenv('PGSQL_DATABASE');
         $origOptIn = env('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP') ?? getenv('ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP');
 
@@ -184,6 +187,12 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
             $testInstance = new PostgresConcurrencyIntegrationTest('test_error_handling');
             $testInstance->cleanDatabase();
         } finally {
+            config([
+                'database.connections.pgsql.host' => $origHost ?? '127.0.0.1',
+                'database.connections.pgsql.port' => $origPort ?? 5432,
+                'database.connections.pgsql.database' => $origDatabase ?? 'garmentos_test',
+            ]);
+
             if ($origOptIn !== null && $origOptIn !== false) {
                 putenv("ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP={$origOptIn}");
                 $_ENV['ALLOW_DESTRUCTIVE_PG_TEST_CLEANUP'] = $origOptIn;
@@ -195,11 +204,9 @@ class PostgresDatabaseSafetyGuardTest extends TestCase
             if ($origDb !== null && $origDb !== false) {
                 putenv("PGSQL_DATABASE={$origDb}");
                 $_ENV['PGSQL_DATABASE'] = $origDb;
-                config(['database.connections.pgsql.database' => $origDb]);
             } else {
                 putenv('PGSQL_DATABASE=garmentos_test');
                 $_ENV['PGSQL_DATABASE'] = 'garmentos_test';
-                config(['database.connections.pgsql.database' => 'garmentos_test']);
             }
             DB::purge('pgsql');
         }

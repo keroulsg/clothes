@@ -59,19 +59,19 @@ jobs:
 
       - name: Prepare Test Environment
         run: |
-          cat << 'EOF' > .env
-APP_ENV=testing
-APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
-DB_CONNECTION=sqlite
-DB_DATABASE=:memory:
-PGSQL_HOST=127.0.0.1
-PGSQL_PORT=5432
-PGSQL_DATABASE=garmentos_test
-PGSQL_USERNAME=garmentos
-PGSQL_PASSWORD=secret_test_password
-PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long
-PLATFORM_ADMIN_ACTIVATION_KEY=test_platform_admin_super_secret_activation_key_32_chars
-EOF
+          printf "%s\n" \
+            "APP_ENV=testing" \
+            "APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=" \
+            "DB_CONNECTION=sqlite" \
+            "DB_DATABASE=:memory:" \
+            "PGSQL_HOST=127.0.0.1" \
+            "PGSQL_PORT=5432" \
+            "PGSQL_DATABASE=garmentos_test" \
+            "PGSQL_USERNAME=garmentos" \
+            "PGSQL_PASSWORD=secret_test_password" \
+            "PAYMENT_WEBHOOK_SECRET=test_payment_webhook_secret_key_must_be_over_32_chars_long" \
+            "PLATFORM_ADMIN_ACTIVATION_KEY=test_platform_admin_super_secret_activation_key_32_chars" \
+            > .env
           cp .env .env.testing
 
       - name: Run Database Migrations on PostgreSQL

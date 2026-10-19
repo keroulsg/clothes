@@ -12,7 +12,7 @@ export const LoadingSkeleton: React.FC<SkeletonProps> = ({ className, count = 1 
       {Array.from({ length: count }).map((_, idx) => (
         <div
           key={idx}
-          className={clsx('bg-slate-800/60 rounded-lg h-5 w-full', className)}
+          className={clsx('bg-slate-200 dark:bg-slate-800/60 rounded-lg h-5 w-full', className)}
         />
       ))}
     </div>

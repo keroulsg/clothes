@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Scissors,
   TrendingUp,
@@ -7,13 +7,13 @@ import {
   AlertTriangle,
   Plus,
   CheckCircle,
-  Sparkles,
   Calculator,
   ArrowRightLeft,
   Search,
   Filter,
   QrCode,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
@@ -21,10 +21,13 @@ import { Badge } from './components/ui/Badge';
 import { Button } from './components/ui/Button';
 import { Modal } from './components/ui/Modal';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
-import { EmptyState } from './components/ui/EmptyState';
-import { ErrorState } from './components/ui/ErrorState';
 import { FabricCalculatorModal } from './components/inventory/FabricCalculatorModal';
 import { StockTransactionModal } from './components/inventory/StockTransactionModal';
+import { LoginModal } from './components/auth/LoginModal';
+import { RegisterModal } from './components/auth/RegisterModal';
+import { PublicWebsite } from './components/public/PublicWebsite';
+import { PlatformAdminDashboard } from './components/admin/PlatformAdminDashboard';
+import { api, type ApiUser, type ApiTenant } from './api/client';
 import { CreateModelModal } from './components/catalog/CreateModelModal';
 import { CreatePurchaseOrderModal } from './components/procurement/CreatePurchaseOrderModal';
 import { ReceiveGoodsModal } from './components/procurement/ReceiveGoodsModal';
@@ -41,9 +44,16 @@ import { JobDeliveryModal } from './components/subcontracting/JobDeliveryModal';
 import { JobInvoiceModal } from './components/subcontracting/JobInvoiceModal';
 import { JobDetailsModal } from './components/subcontracting/JobDetailsModal';
 import { SubcontractingTab } from './components/subcontracting/SubcontractingTab';
+import { SalesTab } from './components/sales/SalesTab';
+import { AccountingTab } from './components/accounting/AccountingTab';
+import { HrTab } from './components/hr/HrTab';
+import { StorefrontTab } from './components/storefront/StorefrontTab';
+import { MaintenanceTab } from './components/maintenance/MaintenanceTab';
 import type {
   Language,
+  ProductVariant,
   ProductionOrder,
+
   InventoryItem,
   Branch,
   GarmentModel,
@@ -66,12 +76,179 @@ import type {
 } from './types';
 
 export function App() {
-  const [lang, setLang] = useState<Language>('ar');
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  // Language Persistence State
+  const [lang, setLang] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem('garmentos_lang');
+      if (saved === 'en' || saved === 'ar') return saved;
+    } catch {}
+    return 'ar';
+  });
+
+  const toggleLang = () => {
+    setLang((prev) => {
+      const next = prev === 'ar' ? 'en' : 'ar';
+      try {
+        localStorage.setItem('garmentos_lang', next);
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+    document.documentElement.setAttribute('lang', lang);
+  }, [lang]);
+
+  // Real Theme State (Synchronized with CoreUI & Tailwind)
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('garmentos_theme') !== 'light';
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleTheme = () => {
+    setIsDark((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('garmentos_theme', next ? 'dark' : 'light');
+      } catch {}
+      if (next) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-coreui-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-coreui-theme', 'light');
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-coreui-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-coreui-theme', 'light');
+    }
+  }, [isDark]);
+
+  // Real Authentication & User State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(api.isAuthenticated());
+  const [currentUser, setCurrentUser] = useState<ApiUser | null>(api.auth.getStoredUser());
+
+  // Deep-Link Route Parser
+  const parseCurrentRoute = () => {
+    const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+    if (raw === 'admin') {
+      return { mode: 'admin' as const, tab: 'overview' };
+    }
+    if (raw.startsWith('erp')) {
+      const parts = raw.split('/');
+      const tab = parts[1] || 'dashboard';
+      return { mode: 'erp' as const, tab };
+    }
+    if (raw === 'sales' || raw === 'pos') {
+      return { mode: 'erp' as const, tab: 'sales' };
+    }
+    if (raw === 'accounting' || raw === 'costing') {
+      return { mode: 'erp' as const, tab: 'costing' };
+    }
+    if (raw === 'hr' || raw === 'piece_rate') {
+      return { mode: 'erp' as const, tab: 'piece_rate' };
+    }
+    if (raw === 'store' || raw === 'storefront') {
+      return { mode: 'erp' as const, tab: 'storefront' };
+    }
+    if (raw === 'login') {
+      return { mode: 'public' as const, tab: 'dashboard', openLogin: true };
+    }
+    if (raw === 'register') {
+      return { mode: 'public' as const, tab: 'dashboard', openRegister: true };
+    }
+    if (raw === 'features' || raw === 'pricing' || raw === 'workflow' || raw === 'contact') {
+      return { mode: 'public' as const, tab: 'dashboard', scrollTo: raw };
+    }
+    if (api.isAuthenticated()) {
+      return {
+        mode: (api.auth.getStoredUser()?.role === 'platform_admin' ? 'admin' : 'erp') as 'admin' | 'erp',
+        tab: 'dashboard',
+      };
+    }
+    return { mode: 'public' as const, tab: 'dashboard' };
+  };
+
+  const initialRoute = parseCurrentRoute();
+  const [viewMode, setViewMode] = useState<'public' | 'erp' | 'admin'>(() => {
+    if (initialRoute.mode === 'admin' && api.auth.getStoredUser()?.role !== 'platform_admin') {
+      return 'public';
+    }
+    return initialRoute.mode;
+  });
+  const [activeTab, setActiveTab] = useState<string>(initialRoute.tab || 'dashboard');
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(!!initialRoute.openLogin);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(!!initialRoute.openRegister);
+  const [registerPlanTier, setRegisterPlanTier] = useState<string>('starter');
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Synchronize route hash changes (Browser Back/Forward & Bookmarks)
+  useEffect(() => {
+    const onHashChange = () => {
+      const r = parseCurrentRoute();
+      if (r.mode === 'admin') {
+        if (api.auth.getStoredUser()?.role === 'platform_admin') {
+          setViewMode('admin');
+        } else {
+          setIsLoginModalOpen(true);
+        }
+      } else {
+        setViewMode(r.mode);
+        if (r.tab) setActiveTab(r.tab);
+      }
+      if (r.openLogin) setIsLoginModalOpen(true);
+      if (r.openRegister) setIsRegisterModalOpen(true);
+      if (r.scrollTo) {
+        setTimeout(() => {
+          const el = document.getElementById(r.scrollTo!);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 120);
+      }
+    };
+
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const navigateToRoute = (mode: 'public' | 'erp' | 'admin', tab?: string) => {
+    setViewMode(mode);
+    if (tab) setActiveTab(tab);
+    if (mode === 'public') {
+      window.location.hash = '#/';
+    } else if (mode === 'admin') {
+      window.location.hash = '#/admin';
+    } else if (mode === 'erp') {
+      window.location.hash = `#/erp/${tab || activeTab}`;
+    }
+  };
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    if (viewMode === 'erp') {
+      window.location.hash = `#/erp/${newTab}`;
+    }
+  };
 
   // Multi-Tenancy Current State
-  const [tenantName, setTenantName] = useState<string>('مصنع النيل لملابس الأطفال');
-  const [tenantCode, setTenantCode] = useState<string>('MFG-EG901');
+  const [tenantName, setTenantName] = useState<string>(
+    api.auth.getStoredTenant()?.name || 'مصنع النيل لملابس الأطفال'
+  );
+  const [tenantCode, setTenantCode] = useState<string>(
+    api.auth.getStoredTenant()?.code || 'MFG-EG901'
+  );
   const [branchName, setBranchName] = useState<string>('المصنع وصالة القص الرئيسية');
 
   // Modals state
@@ -102,32 +279,7 @@ export function App() {
   const [selectedJobForInvoice, setSelectedJobForInvoice] = useState<JobOrder | null>(null);
   const [selectedJobForDetails, setSelectedJobForDetails] = useState<JobOrder | null>(null);
 
-  const [warehouses] = useState<Warehouse[]>([
-    {
-      id: 'wh-1',
-      name: 'مخزن الأقمشة الرئيسي',
-      code: 'WH-FAB-01',
-      type: 'fabric',
-      allow_negative_stock: false,
-      items_count: 14,
-    },
-    {
-      id: 'wh-2',
-      name: 'مخزن أمانات خامات العملاء',
-      code: 'WH-CUST-01',
-      type: 'customer_deposits',
-      allow_negative_stock: false,
-      items_count: 5,
-    },
-    {
-      id: 'wh-3',
-      name: 'مخزن المستلزمات والإكسسوارات',
-      code: 'WH-ACC-01',
-      type: 'accessories',
-      allow_negative_stock: false,
-      items_count: 28,
-    },
-  ]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([
     {
@@ -241,7 +393,7 @@ export function App() {
   ]);
 
   // Subcontracting & CMT Datasets (Phase 6)
-  const [customers] = useState<Customer[]>([
+  const [customers, setCustomers] = useState<Customer[]>([
     {
       id: 'cust-1',
       code: 'CUST-CAIRO-01',
@@ -420,11 +572,6 @@ export function App() {
   const [isSubmittingCompany, setIsSubmittingCompany] = useState(false);
   const [companySuccessMsg, setCompanySuccessMsg] = useState('');
 
-  // UI state toggles
-  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
-  const [isEmptyDemo, setIsEmptyDemo] = useState(false);
-  const [isErrorDemo, setIsErrorDemo] = useState(false);
-
   // Search & Filter state
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('all');
@@ -472,7 +619,46 @@ export function App() {
     },
   ]);
 
+  // Product Variants State for Sales, POS & Storefront
+  const [productVariants] = useState<ProductVariant[]>([
+
+    {
+      id: 'pv-1',
+      garment_model_id: 'gm-1',
+      sku: 'POLO-NAVY-2Y',
+      barcode: '6221000101',
+      wholesale_price: 155,
+      retail_price: 220,
+      garment_model: { id: 'gm-1', name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)', code: 'MOD-KID-081' } as any,
+      size: { id: 's1', name: '2Y' } as any,
+      color: { id: 'c1', name: 'كحلي غامق' } as any,
+    },
+    {
+      id: 'pv-2',
+      garment_model_id: 'gm-1',
+      sku: 'POLO-RED-4Y',
+      barcode: '6221000102',
+      wholesale_price: 155,
+      retail_price: 220,
+      garment_model: { id: 'gm-1', name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)', code: 'MOD-KID-081' } as any,
+      size: { id: 's2', name: '4Y' } as any,
+      color: { id: 'c2', name: 'أحمر زاهي' } as any,
+    },
+    {
+      id: 'pv-3',
+      garment_model_id: 'gm-2',
+      sku: 'INF-ROM-3M',
+      barcode: '6221000103',
+      wholesale_price: 110,
+      retail_price: 165,
+      garment_model: { id: 'gm-2', name: 'سالوبيت مواليد قطن 100% مطبوع', code: 'MOD-INF-019' } as any,
+      size: { id: 's3', name: '3-6M' } as any,
+      color: { id: 'c3', name: 'أبيض / سماوي' } as any,
+    },
+  ]);
+
   // Production Orders State
+
   const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([
     {
       id: 'po-101',
@@ -623,99 +809,10 @@ export function App() {
   ]);
 
   // Inventory Items State
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([
-    {
-      id: 'mat-1',
-      warehouse_id: 'wh-1',
-      warehouse_name: 'مخزن الأقمشة المركزي',
-      item_type: 'fabric_raw',
-      code: 'FAB-COT-BLU',
-      name: 'قماش سينجل جيرسي قطن 100% كحلي (180 GSM - عرض 1.6م)',
-      unit_of_measure: 'متر',
-      current_balance: 1450.5,
-      average_cost: 110.0,
-      reorder_level: 500,
-      is_customer_owned: false,
-      technical_specs: { gsm: 180, usable_width_meters: 1.6 },
-    },
-    {
-      id: 'mat-2',
-      warehouse_id: 'wh-2',
-      warehouse_name: 'مخزن أمانات خامات العملاء',
-      item_type: 'fabric_raw',
-      code: 'FAB-CUST-GAB-01',
-      name: 'قماش جبردين ليكرا بيج (خامات العميل: أزياء الصغار)',
-      unit_of_measure: 'متر',
-      current_balance: 820.0,
-      average_cost: 0.0,
-      reorder_level: 0,
-      is_customer_owned: true,
-      customer_name: 'شركة أزياء الصغار (قص للغير)',
-      technical_specs: { gsm: 240, usable_width_meters: 1.5 },
-    },
-    {
-      id: 'mat-3',
-      warehouse_id: 'wh-3',
-      warehouse_name: 'مخزن المستلزمات',
-      item_type: 'accessory_raw',
-      code: 'ACC-SNP-WHT',
-      name: 'أزرار كبس بلاستيك بيضاء خاصة بملابس الأطفال',
-      unit_of_measure: 'قطعة',
-      current_balance: 18500,
-      average_cost: 0.25,
-      reorder_level: 5000,
-      is_customer_owned: false,
-    },
-    {
-      id: 'mat-4',
-      warehouse_id: 'wh-3',
-      warehouse_name: 'مخزن المستلزمات',
-      item_type: 'accessory_raw',
-      code: 'ACC-THRD-NVY',
-      name: 'خيط حياكة بوليستر عالي الشد 40/2 كحلي',
-      unit_of_measure: 'بكرة',
-      current_balance: 140,
-      average_cost: 32.5,
-      reorder_level: 50,
-      is_customer_owned: false,
-    },
-  ]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
 
   // Stock Ledger Log State
-  const [stockLedger, setStockLedger] = useState<InventoryTransaction[]>([
-    {
-      id: 'tx-1',
-      item_code: 'FAB-COT-BLU',
-      item_name: 'قماش سينجل جيرسي قطن 100% كحلي',
-      warehouse_name: 'مخزن الأقمشة المركزي',
-      transaction_type: 'goods_receipt',
-      direction: 'IN',
-      quantity: 500,
-      unit_cost: 110.0,
-      total_cost: 55000,
-      balance_before: 950.5,
-      balance_after: 1450.5,
-      reference_type: 'purchase_order',
-      reference_number: 'PO-2026-044',
-      created_at: '2026-10-14 14:30',
-    },
-    {
-      id: 'tx-2',
-      item_code: 'ACC-SNP-WHT',
-      item_name: 'أزرار كبس بلاستيك بيضاء',
-      warehouse_name: 'مخزن المستلزمات',
-      transaction_type: 'material_issuance',
-      direction: 'OUT',
-      quantity: 2400,
-      unit_cost: 0.25,
-      total_cost: 600,
-      balance_before: 20900,
-      balance_after: 18500,
-      reference_type: 'cutting_order',
-      reference_number: 'CUT-ORD-081',
-      created_at: '2026-10-14 11:15',
-    },
-  ]);
+  const [stockLedger, setStockLedger] = useState<InventoryTransaction[]>([]);
 
   // Customer Materials State
   const [customerMaterials] = useState<CustomerMaterial[]>([
@@ -766,45 +863,455 @@ export function App() {
     },
   ]);
 
-  const handleRegisterCompany = (e: React.FormEvent) => {
+  const handleRegisterCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingCompany(true);
-    setTimeout(() => {
-      setIsSubmittingCompany(false);
-      setTenantName(newCompanyForm.companyName || 'شركة الأندلس للأزياء');
-      const generatedCode = 'MFG-' + Math.floor(1000 + Math.random() * 9000);
-      setTenantCode(generatedCode);
+    setCompanySuccessMsg('');
+    try {
+      const res = await api.auth.registerCompany({
+        owner_name: newCompanyForm.ownerName,
+        email: newCompanyForm.email,
+        company_name: newCompanyForm.companyName,
+        password: 'Password@123',
+        subdomain: newCompanyForm.subdomain || newCompanyForm.companyName.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        plan_tier: newCompanyForm.plan,
+      });
+      setTenantName(res.tenant.name);
+      setTenantCode(res.tenant.code);
       setCompanySuccessMsg('تم تسجيل الشركة بنجاح وعزل قاعدة بياناتها وسياقها!');
       setTimeout(() => {
         setIsCompanyModalOpen(false);
         setCompanySuccessMsg('');
-      }, 1500);
-    }, 900);
+        loadBackendData();
+      }, 1200);
+    } catch (err: any) {
+      alert(err.message || 'فشل تسجيل الشركة الجديدة');
+    } finally {
+      setIsSubmittingCompany(false);
+    }
   };
 
   const [newBranchName, setNewBranchName] = useState('');
   const [newBranchCode, setNewBranchCode] = useState('');
   const [newBranchType, setNewBranchType] = useState<'factory' | 'outlet' | 'warehouse'>('warehouse');
 
-  const handleCreateBranch = (e: React.FormEvent) => {
+  const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBranchName || !newBranchCode) return;
-    const created: Branch = {
-      id: 'b-' + (branches.length + 1),
-      tenant_id: 'current',
-      name: newBranchName,
-      code: newBranchCode,
-      type: newBranchType,
-      is_main: false,
-    };
-    setBranches([...branches, created]);
-    setBranchName(created.name);
-    setIsBranchModalOpen(false);
-    setNewBranchName('');
-    setNewBranchCode('');
+    try {
+      const res = await api.branches.createBranch({
+        name: newBranchName,
+        code: newBranchCode,
+        type: newBranchType,
+      });
+      const b = res.branch;
+      const created: Branch = {
+        id: b.id,
+        tenant_id: b.tenant_id,
+        name: b.name,
+        code: b.code,
+        type: b.type,
+        is_main: Boolean(b.is_main),
+      };
+      setBranches(prev => [...prev, created]);
+      setBranchName(created.name);
+      setIsBranchModalOpen(false);
+      setNewBranchName('');
+      setNewBranchCode('');
+    } catch (err: any) {
+      alert(err.message || 'فشل إضافة الفرع');
+    }
   };
 
-  const handleStockTransactionSuccess = (updatedBalance: number) => {
+  const loadBackendData = async () => {
+    if (!api.isAuthenticated()) return;
+    setIsDataLoading(true);
+    setSyncError(null);
+    try {
+      // 1. Tenant profile & user identity
+      try {
+        const profileRes = await api.tenant.getProfile();
+        if (profileRes.tenant) {
+          setTenantName(profileRes.tenant.name);
+          setTenantCode(profileRes.tenant.code);
+        }
+        if ((profileRes as any).user) {
+          setCurrentUser((profileRes as any).user);
+        }
+      } catch (err: any) {
+        console.warn('Tenant profile fetch error:', err);
+      }
+
+      // 2. Warehouses from database
+      try {
+        const whRes = await api.inventory.getWarehouses();
+        if (whRes.warehouses && whRes.warehouses.length > 0) {
+          const mappedWh: Warehouse[] = whRes.warehouses.map((w: any) => ({
+            id: w.id,
+            name: w.name,
+            code: w.code,
+            type: w.type || 'fabric',
+            allow_negative_stock: Boolean(w.allow_negative_stock),
+            items_count: w.items_count ?? (w.items ? w.items.length : 0),
+          }));
+          setWarehouses(mappedWh);
+        }
+      } catch (err: any) {
+        console.warn('Warehouses fetch error:', err);
+      }
+
+      // 3. Branches from database
+      try {
+        const branchRes = await api.branches.getBranches();
+        if (branchRes.branches && branchRes.branches.length > 0) {
+          const mappedBranches: Branch[] = branchRes.branches.map((b: any) => ({
+            id: b.id,
+            tenant_id: b.tenant_id,
+            name: b.name,
+            code: b.code,
+            type: b.type || 'warehouse',
+            is_main: Boolean(b.is_main),
+            address: b.address,
+            phone: b.phone,
+          }));
+          setBranches(mappedBranches);
+        }
+      } catch (err: any) {
+        console.warn('Branches fetch error:', err);
+      }
+
+      // 4. Garment Models
+      try {
+        const modelsRes = await api.models.getModels();
+        if (modelsRes.data && modelsRes.data.length > 0) {
+          const mappedModels: GarmentModel[] = modelsRes.data.map((m: any) => ({
+            id: m.id,
+            code: m.code,
+            name: m.name,
+            category: m.category || 'عام',
+            season: m.season || 'الموسم الحالي',
+            target_cost: Number(m.target_cost || 0),
+            wholesale_price: Number(m.wholesale_price || 0),
+            retail_price: Number(m.retail_price || 0),
+            variants_count: m.variants ? m.variants.length : (m.variants_count || 0),
+            status: m.status || 'active',
+            created_at: m.created_at ? m.created_at.split('T')[0] : '',
+          }));
+          setModels(mappedModels);
+        }
+      } catch (err: any) {
+        console.warn('Models fetch error:', err);
+      }
+
+      // 5. Suppliers
+      try {
+        const supRes = await api.suppliers.getSuppliers();
+        if (supRes.data && supRes.data.length > 0) {
+          const mappedSuppliers: Supplier[] = supRes.data.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            code: s.code || 'SUP',
+            contact_person: s.contact_person || '',
+            phone: s.phone || '',
+            email: s.email || '',
+            tax_id: s.tax_id || '',
+            materials_category: s.materials_category || 'أقمشة ومستلزمات',
+            payment_terms: s.payment_terms || 'نقد عند الاستلام',
+            current_balance: Number(s.current_balance || 0),
+          }));
+          setSuppliers(mappedSuppliers);
+        }
+      } catch (err: any) {
+        console.warn('Suppliers fetch error:', err);
+      }
+
+      // 6. Purchase Orders
+      try {
+        const poRes = await api.procurement.getPurchaseOrders();
+        const poList = poRes.data || (poRes as any).purchase_orders;
+        if (Array.isArray(poList) && poList.length > 0) {
+          const mappedPo: PurchaseOrder[] = poList.map((po: any) => ({
+            id: po.id,
+            po_number: po.po_number,
+            supplier_id: po.supplier_id,
+            supplier_name: po.supplier?.name || 'مورد معتمد',
+            warehouse_id: po.warehouse_id,
+            warehouse_name: po.warehouse?.name || 'المخزن الرئيسي',
+            order_date: po.order_date || po.created_at?.split('T')[0] || '',
+            expected_delivery_date: po.expected_delivery_date || '',
+            status: po.status || 'draft',
+            subtotal: Number(po.subtotal ?? po.total_amount ?? 0),
+            tax_amount: Number(po.tax_amount ?? 0),
+            total_amount: Number(po.total_amount || 0),
+            items: (po.items || []).map((it: any) => {
+              const qty = Number(it.ordered_quantity ?? it.quantity ?? 0);
+              const rcv = Number(it.received_quantity ?? 0);
+              const prc = Number(it.unit_price ?? 0);
+              return {
+                id: it.id,
+                inventory_item_id: it.inventory_item_id || it.id,
+                item_name: it.item_name || it.material_name || 'خامة',
+                item_code: it.item_code || 'ITEM',
+                ordered_quantity: qty,
+                received_quantity: rcv,
+                remaining_quantity: Number(it.remaining_quantity ?? Math.max(0, qty - rcv)),
+                unit_price: prc,
+                total_price: Number(it.total_price ?? (qty * prc)),
+              };
+            }),
+          }));
+          setPurchaseOrders(mappedPo);
+        }
+      } catch (err: any) {
+        console.warn('Purchase orders fetch error:', err);
+      }
+
+      // 7. Production Orders
+      try {
+        const prodRes = await api.production.getProductionOrders();
+        if (prodRes.data && prodRes.data.length > 0) {
+          const mappedProd: ProductionOrder[] = prodRes.data.map((p: any) => ({
+            id: p.id,
+            order_number: p.order_number,
+            garment_model_id: p.garment_model_id,
+            model_name: p.garment_model?.name || p.model_name || 'موديل ملابس',
+            model_code: p.garment_model?.code || p.model_code || 'MOD',
+            category: p.garment_model?.category || p.category || 'ملابس أطفال',
+            target_quantity: Number(p.target_quantity || 0),
+            cut_quantity: Number(p.cut_quantity || 0),
+            completed_quantity: Number(p.completed_quantity || 0),
+            status: p.status || 'draft',
+            due_date: p.due_date || p.target_delivery_date || new Date().toISOString().split('T')[0],
+          }));
+          setProductionOrders(mappedProd);
+        }
+      } catch (err: any) {
+        console.warn('Production orders fetch error:', err);
+      }
+
+      // 8. Cutting Orders & Bundles
+      try {
+        const cutRes = await api.production.getCuttingOrders();
+        if (cutRes.data && cutRes.data.length > 0) {
+          const mappedCut: CuttingOrder[] = cutRes.data.map((c: any) => ({
+            id: c.id,
+            cutting_order_number: c.cutting_order_number,
+            production_order_id: c.production_order_id,
+            production_order_number: c.production_order?.order_number || '',
+            fabric_name: c.fabric_item?.name || 'قماش التشغيل',
+            table_number: c.table_number || 'طاولة 1',
+            fabric_source: c.fabric_source || 'factory_owned',
+            lay_length_meters: Number(c.lay_length_meters || 10),
+            layers_count: Number(c.layers_count || 50),
+            marker_efficiency_percent: Number(c.marker_efficiency_percent || 85),
+            actual_fabric_meters_used: Number(c.actual_fabric_meters_used || 500),
+            theoretical_fabric_meters: Number(c.theoretical_fabric_meters || 480),
+            end_loss_meters: Number(c.end_loss_meters || 5),
+            total_cut_pieces: Number(c.total_cut_pieces || 0),
+            status: c.status || 'planned',
+            created_at: c.created_at ? c.created_at.split('T')[0] : '',
+          }));
+          setCuttingOrders(mappedCut);
+        }
+      } catch (err: any) {
+        console.warn('Cutting orders fetch error:', err);
+      }
+
+      try {
+        const bundleRes = await api.production.getBundles();
+        if (bundleRes.data && bundleRes.data.length > 0) {
+          const mappedBundles: CuttingBundle[] = bundleRes.data.map((b: any) => ({
+            id: b.id,
+            bundle_code: b.bundle_code,
+            cutting_order_id: b.cutting_order_id,
+            production_order_id: b.production_order_id,
+            bundle_number: Number(b.bundle_number || 1),
+            color_name: b.color_name || 'عام',
+            size_name: b.size_name || 'عام',
+            quantity: Number(b.quantity || 0),
+            current_stage_code: b.current_stage_code || 'cutting',
+            status: b.status || 'active',
+          }));
+          setCuttingBundles(mappedBundles);
+        }
+      } catch (err: any) {
+        console.warn('Bundles fetch error:', err);
+      }
+
+      // 9. Subcontracting customers & jobs
+      try {
+        const custRes = await api.subcontracting.getCustomers();
+        if (custRes.data && custRes.data.length > 0) {
+          const mappedCust: Customer[] = custRes.data.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            code: c.code || 'CUST',
+            contact_person: c.contact_person || '',
+            phone: c.phone || '',
+            email: c.email || '',
+            tax_id: c.tax_id || '',
+            is_active: Boolean(c.is_active ?? true),
+            job_orders_count: Number(c.job_orders_count || 0),
+            material_receipts_count: Number(c.material_receipts_count || 0),
+          }));
+          setCustomers(mappedCust);
+        }
+      } catch (err: any) {
+        console.warn('Subcontracting customers fetch error:', err);
+      }
+
+      try {
+        const jobsRes = await api.subcontracting.getJobs();
+        if (jobsRes.data && jobsRes.data.length > 0) {
+          const mappedJobs: JobOrder[] = jobsRes.data.map((j: any) => ({
+            id: j.id,
+            order_number: j.order_number,
+            customer_id: j.customer_id,
+            customer_name: j.customer?.name || j.customer_name || 'عميل تشغيل للغير',
+            service_type: j.service_type || 'contract_cutting',
+            garment_model_id: j.garment_model_id,
+            model_name: j.garment_model?.name || j.model_name,
+            fabric_source: j.fabric_source || 'customer_supplied',
+            trims_responsibility: j.trims_responsibility || 'customer_supplied',
+            status: j.status || 'draft',
+            pricing_basis: j.pricing_basis || 'per_piece',
+            unit_rate: Number(j.unit_rate || 0),
+            total_target_quantity: Number(j.total_target_quantity || 0),
+            total_received_meters: Number(j.total_received_meters || 0),
+            total_cut_quantity: Number(j.total_cut_quantity || 0),
+            total_accepted_quantity: Number(j.total_accepted_quantity || 0),
+            total_rejected_quantity: Number(j.total_rejected_quantity || 0),
+            total_rework_quantity: Number(j.total_rework_quantity || 0),
+            total_delivered_quantity: Number(j.total_delivered_quantity || 0),
+            planned_start_date: j.planned_start_date,
+            target_delivery_date: j.target_delivery_date,
+            created_at: j.created_at,
+            items: (j.items || []).map((it: any) => ({
+              id: it.id,
+              color_name: it.color_name,
+              size_name: it.size_name,
+              target_quantity: Number(it.target_quantity || 0),
+              cut_quantity: Number(it.cut_quantity || 0),
+              delivered_quantity: Number(it.delivered_quantity || 0),
+              unit_rate: Number(it.unit_rate || 0),
+            })),
+          }));
+          setJobOrders(mappedJobs);
+        }
+      } catch (err: any) {
+        console.warn('Subcontracting jobs fetch error:', err);
+      }
+
+      // 10. Paginated inventory items from database
+      try {
+        const itemsRes = await api.inventory.getItems({ per_page: 50 });
+        if (itemsRes.data && itemsRes.data.length > 0) {
+          const mappedItems: InventoryItem[] = itemsRes.data.map((it: any) => ({
+            id: it.id,
+            warehouse_id: it.warehouse_id,
+            warehouse_name: it.warehouse?.name || 'المخزن الرئيسي',
+            item_type: it.item_type || 'fabric_raw',
+            code: it.code,
+            name: it.name,
+            unit_of_measure: it.unit_of_measure,
+            current_balance: Number(it.current_balance),
+            average_cost: Number(it.average_cost || 0),
+            reorder_level: Number(it.reorder_level || 0),
+            is_customer_owned: Boolean(it.is_customer_owned),
+            customer_name: it.customer?.name || (it.is_customer_owned ? 'عميل تشغيل للغير' : undefined),
+            technical_specs: it.technical_specs || undefined,
+          }));
+          setInventoryItems(mappedItems);
+        }
+      } catch (err: any) {
+        console.warn('Inventory items fetch error:', err);
+      }
+
+      // 11. Authoritative stock ledger transactions
+      try {
+        const txRes = await api.inventory.getTransactions({ per_page: 50 });
+        const txList = txRes.data || txRes.transactions;
+        if (Array.isArray(txList) && txList.length > 0) {
+          const mappedTx: InventoryTransaction[] = txList.map((tx: any) => ({
+            id: tx.id,
+            item_code: tx.item?.code || tx.item_code || 'ITEM',
+            item_name: tx.item?.name || tx.item_name || 'خامة مخزنية',
+            warehouse_name: tx.warehouse?.name || tx.warehouse_name || 'المخزن الرئيسي',
+            transaction_type: tx.transaction_type,
+            direction: tx.direction || (['goods_receipt', 'adjustment_positive', 'transfer_in'].includes(tx.transaction_type) ? 'IN' : 'OUT'),
+            quantity: Number(tx.quantity),
+            unit_cost: Number(tx.unit_cost || 0),
+            total_cost: Number(tx.total_cost || (Number(tx.quantity) * Number(tx.unit_cost || 0))),
+            balance_before: Number(tx.balance_before),
+            balance_after: Number(tx.balance_after),
+            reference_type: tx.reference_type || tx.transaction_type,
+            reference_number: tx.reference_number || ('TX-' + String(tx.id).substring(0, 8)),
+            created_at: tx.created_at ? new Date(tx.created_at).toLocaleString('ar-EG') : '',
+          }));
+          setStockLedger(mappedTx);
+        }
+      } catch (err: any) {
+        console.warn('Inventory transactions ledger fetch error:', err);
+      }
+    } catch (err: any) {
+      console.error('Failed to sync backend data:', err);
+      setSyncError(err.message || 'تعذر مزامنة بعض البيانات مع الخادم.');
+    } finally {
+      setIsDataLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    api.setOnUnauthorized(() => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setViewMode('public');
+      setIsLoginModalOpen(true);
+    });
+
+    if (api.isAuthenticated()) {
+      loadBackendData();
+    }
+  }, []);
+
+  const handleLoginSuccess = async (user: ApiUser, tenant: ApiTenant) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    setTenantName(tenant.name);
+    setTenantCode(tenant.code);
+    setIsLoginModalOpen(false);
+
+    if (user.role === 'platform_admin') {
+      navigateToRoute('admin');
+    } else {
+      navigateToRoute('erp', 'dashboard');
+      await loadBackendData();
+    }
+  };
+
+  const handleRegisterSuccess = async (user: ApiUser, tenant: ApiTenant) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    setTenantName(tenant.name);
+    setTenantCode(tenant.code);
+    setIsRegisterModalOpen(false);
+    navigateToRoute('erp', 'dashboard');
+    await loadBackendData();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // Local session cleared in api client
+    } finally {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      navigateToRoute('public');
+    }
+  };
+
+  const handleStockTransactionSuccess = (updatedBalance: number, newTxRecord?: any) => {
     if (!selectedStockItem) return;
     const diff = updatedBalance - selectedStockItem.current_balance;
     const direction = diff >= 0 ? 'IN' : 'OUT';
@@ -815,8 +1322,23 @@ export function App() {
       prev.map(it => it.id === selectedStockItem.id ? { ...it, current_balance: updatedBalance } : it)
     );
 
-    // Prepend to ledger
-    const newTx: InventoryTransaction = {
+    // Prepend to ledger with real server-confirmed record
+    const newTx: InventoryTransaction = newTxRecord ? {
+      id: newTxRecord.id,
+      item_code: selectedStockItem.code,
+      item_name: selectedStockItem.name,
+      warehouse_name: selectedStockItem.warehouse_name,
+      transaction_type: newTxRecord.transaction_type,
+      direction: newTxRecord.direction || direction,
+      quantity: Number(newTxRecord.quantity),
+      unit_cost: Number(newTxRecord.unit_cost || selectedStockItem.average_cost),
+      total_cost: Number(newTxRecord.total_cost || (Number(newTxRecord.quantity) * Number(newTxRecord.unit_cost || 0))),
+      balance_before: Number(newTxRecord.balance_before),
+      balance_after: Number(newTxRecord.balance_after),
+      reference_type: newTxRecord.reference_type || 'goods_receipt',
+      reference_number: newTxRecord.reference_number || ('TX-' + String(newTxRecord.id).substring(0, 8)),
+      created_at: newTxRecord.created_at ? new Date(newTxRecord.created_at).toLocaleString('ar-EG') : new Date().toLocaleTimeString(),
+    } : {
       id: 'tx-' + Date.now(),
       item_code: selectedStockItem.code,
       item_name: selectedStockItem.name,
@@ -832,7 +1354,7 @@ export function App() {
       reference_number: 'TX-' + Math.floor(1000 + Math.random() * 9000),
       created_at: new Date().toLocaleTimeString(),
     };
-    setStockLedger([newTx, ...stockLedger]);
+    setStockLedger(prev => [newTx, ...prev]);
   };
 
   const handleModelCreated = (newModel: GarmentModel) => {
@@ -850,83 +1372,105 @@ export function App() {
     return matchesSearch && matchesCategory;
   });
 
-  return (
-    <AppLayout
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      lang={lang}
-      onToggleLang={() => setLang(lang === 'ar' ? 'en' : 'ar')}
-      tenantName={tenantName}
-      tenantCode={tenantCode}
-      branchName={branchName}
-      onOpenNewCompanyModal={() => setIsCompanyModalOpen(true)}
-    >
-      {/* State Simulator Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span className="text-slate-300 font-medium">
-            {lang === 'ar' ? 'التحكم في محاكاة الحالات البرمجية للتأكد من المعايير:' : 'State Simulator Controls:'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant={isLoadingDemo ? 'primary' : 'outline'}
-            onClick={() => {
-              setIsLoadingDemo(!isLoadingDemo);
-              setIsEmptyDemo(false);
-              setIsErrorDemo(false);
-            }}
-          >
-            {isLoadingDemo ? 'إلغاء التحميل' : 'حالة التحميل (Loading)'}
-          </Button>
-          <Button
-            size="sm"
-            variant={isEmptyDemo ? 'primary' : 'outline'}
-            onClick={() => {
-              setIsEmptyDemo(!isEmptyDemo);
-              setIsLoadingDemo(false);
-              setIsErrorDemo(false);
-            }}
-          >
-            {isEmptyDemo ? 'إلغاء الفارغ' : 'حالة بدون بيانات (Empty)'}
-          </Button>
-          <Button
-            size="sm"
-            variant={isErrorDemo ? 'danger' : 'outline'}
-            onClick={() => {
-              setIsErrorDemo(!isErrorDemo);
-              setIsLoadingDemo(false);
-              setIsEmptyDemo(false);
-            }}
-          >
-            {isErrorDemo ? 'إلغاء الخطأ' : 'حالة الخطأ (Error)'}
-          </Button>
-        </div>
+  if (viewMode === 'public') {
+    return (
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className={isDark ? 'dark' : ''}>
+        <PublicWebsite
+          lang={lang}
+          onToggleLang={toggleLang}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          onOpenLogin={() => setIsLoginModalOpen(true)}
+          onOpenRegister={(plan) => {
+            setRegisterPlanTier((plan as any) || 'starter');
+            setIsRegisterModalOpen(true);
+          }}
+        />
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          isClosable={true}
+          onClose={() => setIsLoginModalOpen(false)}
+          onSuccess={handleLoginSuccess}
+          onSwitchToRegister={() => {
+            setIsLoginModalOpen(false);
+            setIsRegisterModalOpen(true);
+          }}
+        />
+        <RegisterModal
+          isOpen={isRegisterModalOpen}
+          onClose={() => setIsRegisterModalOpen(false)}
+          onSuccess={handleRegisterSuccess}
+          initialPlanTier={registerPlanTier}
+          onSwitchToLogin={() => {
+            setIsRegisterModalOpen(false);
+            setIsLoginModalOpen(true);
+          }}
+        />
       </div>
+    );
+  }
 
-      {isLoadingDemo ? (
+  if (viewMode === 'admin' && currentUser?.role === 'platform_admin') {
+    return (
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className={isDark ? 'dark' : ''}>
+        <PlatformAdminDashboard
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          lang={lang}
+          onToggleLang={toggleLang}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          onSwitchToTenantApp={() => navigateToRoute('erp', 'dashboard')}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className={isDark ? 'dark' : ''}>
+      <AppLayout
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        lang={lang}
+        onToggleLang={toggleLang}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        tenantName={tenantName}
+        tenantCode={tenantCode}
+        branchName={branchName}
+        onOpenNewCompanyModal={() => setIsRegisterModalOpen(true)}
+        userName={currentUser?.name || (isAuthenticated ? 'المستخدم الحالي' : 'زائر غير مسجل')}
+        userRole={currentUser?.role || (isAuthenticated ? 'company_owner' : 'guest')}
+        isAuthenticated={isAuthenticated}
+        onLogout={handleLogout}
+        onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onSwitchToPublic={() => navigateToRoute('public')}
+        onSwitchToAdmin={() => navigateToRoute('admin')}
+      >
+      {/* Real Live API Status & Sync Notifications */}
+      {syncError && (
+        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{syncError}</span>
+          </div>
+          <Button size="sm" variant="ghost" onClick={loadBackendData} icon={<RefreshCw className="w-3.5 h-3.5" />}>
+            إعادة المحاولة
+          </Button>
+        </div>
+      )}
+
+      {isDataLoading && (
         <Card>
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-300">جارِ مزامنة بيانات المصنع وقاعدة البيانات...</h3>
-            <LoadingSkeleton count={6} />
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-semibold">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>جارِ مزامنة بيانات المصنع والمخازن مع الخادم...</span>
+            </div>
+            <LoadingSkeleton count={4} />
           </div>
         </Card>
-      ) : isErrorDemo ? (
-        <ErrorState
-          title="فشل الاتصال بخادم قاعدة البيانات"
-          message="تعذر جلب سجلات صالة القص بسبب انتهاء مهلة الاتصال بالخادم. يرجى إعادة المحاولة."
-          onRetry={() => setIsErrorDemo(false)}
-        />
-      ) : isEmptyDemo ? (
-        <EmptyState
-          title="لا توجد بيانات مسجلة حاليًا"
-          description="لم يقم المصنع بإصدار أي أوامر أو حركات مخزنية لهذا الشهر حتى الآن."
-          actionText="إصدار حركة جديدة"
-          onAction={() => setIsEmptyDemo(false)}
-        />
-      ) : (
+      )}
         <>
           {/* TAB 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
@@ -935,76 +1479,88 @@ export function App() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card hover>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400 font-medium">مبيعات اليوم المحققة</span>
-                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">مبيعات اليوم المحققة</span>
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                       <TrendingUp className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-100 font-mono">
-                    84,500 <span className="text-xs font-normal text-slate-400">ج.م</span>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
+                    84,500 <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
                   </div>
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                     <span>+14.2%</span>
-                    <span className="text-slate-400">عن مبيعات أمس</span>
+                    <span className="text-slate-500 dark:text-slate-400">عن مبيعات أمس</span>
                   </div>
                 </Card>
 
                 <Card hover>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400 font-medium">أوامر الإنتاج النشطة</span>
-                    <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">أوامر الإنتاج النشطة</span>
+                    <div
+                      className="p-2 rounded-lg"
+                      style={{
+                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                        color: isDark ? '#fca5a5' : '#460809',
+                      }}
+                    >
                       <Scissors className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-100 font-mono">
-                    {productionOrders.length} <span className="text-xs font-normal text-slate-400">أوامر جارية</span>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
+                    {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">أوامر جارية</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-indigo-400 font-medium">
+                  <div className="mt-2 text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                     4,000 قطعة قيد التصنيع
                   </div>
                 </Card>
 
                 <Card hover>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400 font-medium">رصيد الأقمشة بالمخازن</span>
-                    <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">رصيد الأقمشة بالمخازن</span>
+                    <div className="p-2 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
                       <Layers className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-100 font-mono">
-                    2,270.5 <span className="text-xs font-normal text-slate-400">متر</span>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
+                    2,270.5 <span className="text-xs font-normal text-slate-500 dark:text-slate-400">متر</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-400">
-                    منها <span className="text-amber-400 font-medium">820 م أمانات عملاء</span>
+                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    منها <span className="text-amber-600 dark:text-amber-400 font-medium">820 م أمانات عملاء</span>
                   </div>
                 </Card>
 
                 <Card hover>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400 font-medium">نسبة الهالك الفعلي (قص)</span>
-                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">نسبة الهالك الفعلي (قص)</span>
+                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-emerald-400 font-mono">
-                    2.6% <span className="text-xs font-normal text-slate-400">(ممتاز)</span>
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                    2.6% <span className="text-xs font-normal text-slate-500 dark:text-slate-400">(ممتاز)</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-400">
+                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                     أقل من المعياري المسموح (3.5%)
                   </div>
                 </Card>
 
                 <Card hover>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400 font-medium">أجور القطعة المستحقة</span>
-                    <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">أجور القطعة المستحقة</span>
+                    <div
+                      className="p-2 rounded-lg"
+                      style={{
+                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                        color: isDark ? '#fca5a5' : '#460809',
+                      }}
+                    >
                       <Package className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-100 font-mono">
-                    16,840 <span className="text-xs font-normal text-slate-400">ج.م</span>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
+                    16,840 <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-purple-400">
+                  <div className="mt-2 text-[11px] text-slate-600 dark:text-slate-400">
                     مربوطة بمطابقة الجودة
                   </div>
                 </Card>
@@ -1019,7 +1575,7 @@ export function App() {
                   size="sm"
                   variant="outline"
                   onClick={() => setIsFabricCalcOpen(true)}
-                  icon={<Calculator className="w-3.5 h-3.5 text-indigo-400" />}
+                  icon={<Calculator className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
                 >
                   حاسبة الأقمشة (متر ↔ كجم بـ GSM والعرض)
                 </Button>
@@ -1053,18 +1609,18 @@ export function App() {
                     return (
                       <Card key={order.id} hover className="border-slate-800">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono text-xs font-bold text-indigo-400">{order.order_number}</span>
+                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">{order.order_number}</span>
                           <Badge variant={order.status === 'sewing' ? 'info' : 'warning'} dot>
                             {order.status === 'sewing' ? 'خياطة' : 'جودة'}
                           </Badge>
                         </div>
-                        <h4 className="text-xs font-bold text-slate-200 line-clamp-1 mb-2">{order.model_name}</h4>
-                        <div className="text-[11px] text-slate-400 mb-1 flex justify-between">
+                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1 mb-2">{order.model_name}</h4>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1 flex justify-between">
                           <span>الإنجاز:</span>
-                          <span className="font-mono text-slate-200">{order.sewn_quantity} / {order.target_quantity} ({sewPercent}%)</span>
+                          <span className="font-mono text-slate-800 dark:text-slate-200">{order.sewn_quantity} / {order.target_quantity} ({sewPercent}%)</span>
                         </div>
-                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${sewPercent}%` }} />
+                        <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-[var(--brand-primary)] rounded-full" style={{ width: `${sewPercent}%` }} />
                         </div>
                         <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
                           <span>الهالك: <strong className="text-emerald-400 font-mono">{order.waste_percentage}%</strong></span>
@@ -1095,33 +1651,33 @@ export function App() {
                 {models.map((m) => (
                   <Card key={m.id} hover className="border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-indigo-400 border border-slate-700">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                         {m.code}
                       </span>
                       <Badge variant="success">نشط</Badge>
                     </div>
 
                     <div>
-                      <h4 className="text-sm font-bold text-slate-100">{m.name}</h4>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{m.name}</h4>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         <span>{m.category}</span>
                         <span>•</span>
                         <span>{m.season}</span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 text-center text-xs">
+                    <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 text-center text-xs">
                       <div>
-                        <span className="text-[10px] text-slate-400 block">التكلفة</span>
-                        <strong className="font-mono text-slate-200">{m.target_cost} ج.م</strong>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التكلفة</span>
+                        <strong className="font-mono text-slate-800 dark:text-slate-200">{m.target_cost} ج.م</strong>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">الجملة</span>
-                        <strong className="font-mono text-indigo-400">{m.wholesale_price} ج.م</strong>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">الجملة</span>
+                        <strong className="font-mono text-slate-900 dark:text-slate-100">{m.wholesale_price} ج.م</strong>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">التجزئة</span>
-                        <strong className="font-mono text-emerald-400">{m.retail_price} ج.م</strong>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التجزئة</span>
+                        <strong className="font-mono text-emerald-600 dark:text-emerald-400">{m.retail_price} ج.م</strong>
                       </div>
                     </div>
 
@@ -1160,7 +1716,7 @@ export function App() {
               </div>
 
               {/* Filters & Search */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-2 max-w-sm w-full relative">
                   <Search className="w-4 h-4 text-slate-400 absolute right-3 pointer-events-none" />
                   <input
@@ -1168,7 +1724,7 @@ export function App() {
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
                     placeholder="بحث باسم الخامة، الكود، أو العميل..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 text-slate-100 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
                   />
                 </div>
 
@@ -1177,7 +1733,7 @@ export function App() {
                   <select
                     value={inventoryCategoryFilter}
                     onChange={(e) => setInventoryCategoryFilter(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
                   >
                     <option value="all">كل الأصناف والخامات</option>
                     <option value="company">خامات المصنع المملوكة فقط</option>
@@ -1189,10 +1745,10 @@ export function App() {
               </div>
 
               {/* Inventory Items Table */}
-              <Card className="overflow-hidden p-0 border-slate-800">
+              <Card className="overflow-hidden p-0 border-slate-200 dark:border-slate-800">
                 <div className="overflow-x-auto">
                   <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                    <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
                       <tr>
                         <th className="py-3 px-4">كود الصنف</th>
                         <th className="py-3 px-4">اسم الخامة والمواصفات</th>
@@ -1203,10 +1759,17 @@ export function App() {
                         <th className="py-3 px-4">الإجراءات</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredInventory.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="py-3 px-4 font-mono font-medium text-indigo-400">{item.code}</td>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
+                      {filteredInventory.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-400">
+                            لا توجد أصناف مخزنية مسجلة حالياً في قاعدة البيانات.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredInventory.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">{item.code}</td>
                           <td className="py-3 px-4">
                             <div className="font-medium text-slate-200">{item.name}</div>
                             {item.technical_specs?.gsm && (
@@ -1240,7 +1803,7 @@ export function App() {
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
@@ -1315,7 +1878,14 @@ export function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                        {stockLedger.map((tx) => (
+                        {stockLedger.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="py-6 text-center font-sans text-slate-400">
+                              لا توجد حركات مسجلة في دفتر الأستاذ بعد.
+                            </td>
+                          </tr>
+                        ) : (
+                          stockLedger.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-800/20">
                             <td className="py-2.5 px-4 text-slate-400">{tx.created_at}</td>
                             <td className="py-2.5 px-4 font-sans font-medium text-slate-200">{tx.item_name}</td>
@@ -1330,7 +1900,7 @@ export function App() {
                             <td className="py-2.5 px-4 text-emerald-400 font-bold">{tx.balance_after.toLocaleString()}</td>
                             <td className="py-2.5 px-4 text-indigo-400">{tx.reference_number || '—'}</td>
                           </tr>
-                        ))}
+                        )))}
                       </tbody>
                     </table>
                   </div>
@@ -1345,11 +1915,11 @@ export function App() {
               {/* Header with Title and Action Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                    <Scissors className="w-5 h-5 text-indigo-400" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Scissors className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                     <span>تشغيل الإنتاج، صالة القص، وتتبع بطاقات الحزم والجودة</span>
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     أوامر التشغيل المعتمدة، خطط الفرش والطبقات، بطاقات الحزم بالباركود، ونقاط التفتيش
                   </p>
                 </div>
@@ -1358,7 +1928,7 @@ export function App() {
                     size="sm"
                     variant="outline"
                     onClick={() => setIsFabricCalcOpen(true)}
-                    icon={<Calculator className="w-3.5 h-3.5 text-indigo-400" />}
+                    icon={<Calculator className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
                   >
                     حاسبة أطوال وأوزان الفرش
                   </Button>
@@ -1375,11 +1945,11 @@ export function App() {
               {/* KPI Performance Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">إجمالي أوامر الإنتاج</div>
-                  <div className="text-xl font-bold font-mono text-slate-100">
-                    {productionOrders.length} <span className="text-xs font-normal text-slate-400">أوامر</span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">إجمالي أوامر الإنتاج</div>
+                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">
+                    {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">أوامر</span>
                   </div>
-                  <div className="text-[11px] text-indigo-400 mt-1 font-medium">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
                     {productionOrders.filter(p => p.status === 'in_progress').length} قيد التشغيل في الورشة
                   </div>
                 </Card>
@@ -1502,10 +2072,17 @@ export function App() {
                                     size="sm"
                                     variant="outline"
                                     className="text-xs h-7 text-emerald-400 border-emerald-500/30"
-                                    onClick={() => {
-                                      setProductionOrders((prev) =>
-                                        prev.map((o) => (o.id === order.id ? { ...o, status: 'approved' } : o))
-                                      );
+                                    onClick={async () => {
+                                      try {
+                                        if (order.id.length > 20 && !order.id.startsWith('po-')) {
+                                          await api.production.approveProductionOrder(order.id);
+                                        }
+                                        setProductionOrders((prev) =>
+                                          prev.map((o) => (o.id === order.id ? { ...o, status: 'approved' } : o))
+                                        );
+                                      } catch (err: any) {
+                                        alert(err.message || 'فشل اعتماد أمر الإنتاج');
+                                      }
                                     }}
                                   >
                                     اعتماد الأمر
@@ -1606,10 +2183,10 @@ export function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {cuttingBundles.map((bnd) => (
-                    <Card key={bnd.id} hover className="border-slate-800 bg-slate-900/60 p-3.5 space-y-2.5">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-indigo-400">
-                          <QrCode className="w-4 h-4 text-indigo-400" />
+                    <Card key={bnd.id} hover className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                          <QrCode className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                           <span>{bnd.bundle_code}</span>
                         </div>
                         <Badge variant="neutral">حزمة #{bnd.bundle_number}</Badge>
@@ -1618,11 +2195,11 @@ export function App() {
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
                           <span className="text-slate-500 block text-[10px]">اللون</span>
-                          <span className="text-slate-200 font-semibold">{bnd.color_name}</span>
+                          <span className="text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
                         </div>
                         <div>
                           <span className="text-slate-500 block text-[10px]">المقاس</span>
-                          <span className="text-indigo-400 font-bold font-mono">{bnd.size_name}</span>
+                          <span className="text-slate-900 dark:text-slate-100 font-bold font-mono">{bnd.size_name}</span>
                         </div>
                         <div>
                           <span className="text-slate-500 block text-[10px]">الكمية</span>
@@ -1824,12 +2401,12 @@ export function App() {
                       </thead>
                       <tbody className="divide-y divide-slate-800/60">
                         {purchaseOrders.map((po) => (
-                          <tr key={po.id} className="hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-indigo-400">{po.po_number}</td>
-                            <td className="py-3 px-4 font-medium text-slate-200">{po.supplier_name}</td>
-                            <td className="py-3 px-4 text-slate-400">{po.warehouse_name}</td>
-                            <td className="py-3 px-4 font-mono text-slate-300">{po.order_date}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-100">
+                          <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">{po.po_number}</td>
+                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
+                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{po.warehouse_name}</td>
+                            <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{po.order_date}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
                               {po.total_amount.toLocaleString()} ج.م
                             </td>
                             <td className="py-3 px-4">
@@ -1861,10 +2438,17 @@ export function App() {
                                     size="sm"
                                     variant="outline"
                                     className="text-xs h-7 text-emerald-400 border-emerald-500/30"
-                                    onClick={() => {
-                                      setPurchaseOrders(prev =>
-                                        prev.map(p => p.id === po.id ? { ...p, status: 'approved' } : p)
-                                      );
+                                    onClick={async () => {
+                                      try {
+                                        if (po.id.length > 20 && !po.id.startsWith('po-')) {
+                                          await api.procurement.approvePurchaseOrder(po.id);
+                                        }
+                                        setPurchaseOrders(prev =>
+                                          prev.map(p => p.id === po.id ? { ...p, status: 'approved' } : p)
+                                        );
+                                      } catch (err: any) {
+                                        alert(err.message || 'فشل اعتماد أمر الشراء');
+                                      }
                                     }}
                                   >
                                     اعتماد الأمر
@@ -1925,8 +2509,8 @@ export function App() {
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                         {goodsReceiptNotes.map((grn) => (
-                          <tr key={grn.id} className="hover:bg-slate-800/20">
-                            <td className="py-2.5 px-4 font-bold text-indigo-400">{grn.grn_number}</td>
+                          <tr key={grn.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
+                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100">{grn.grn_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{grn.po_number}</td>
                             <td className="py-2.5 px-4 font-sans text-slate-200">{grn.supplier_name}</td>
                             <td className="py-2.5 px-4 font-sans text-slate-300">{grn.quality_inspector_name}</td>
@@ -1979,8 +2563,8 @@ export function App() {
                           <tr key={inv.id} className="hover:bg-slate-800/20">
                             <td className="py-2.5 px-4 font-bold text-slate-100">{inv.invoice_number}</td>
                             <td className="py-2.5 px-4 text-slate-400">{inv.internal_reference}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-200">{inv.supplier_name}</td>
-                            <td className="py-2.5 px-4 text-indigo-400">{inv.po_number}</td>
+                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
+                            <td className="py-2.5 px-4 font-mono text-slate-700 dark:text-slate-300">{inv.po_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{inv.due_date}</td>
                             <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} ج.م</td>
                             <td className="py-2.5 px-4">
@@ -2014,8 +2598,8 @@ export function App() {
                   {suppliers.map((s) => (
                     <Card key={s.id} className="border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-100">{s.name}</span>
-                        <span className="font-mono text-xs text-indigo-400">{s.code}</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{s.name}</span>
+                        <span className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold">{s.code}</span>
                       </div>
                       <div className="text-xs text-slate-400 flex items-center justify-between">
                         <span>مسؤول الاتصال: <strong className="text-slate-300">{s.contact_person || '—'}</strong></span>
@@ -2058,38 +2642,99 @@ export function App() {
               onSelectJobForDelivery={(job) => setSelectedJobForDelivery(job)}
               onSelectJobForInvoice={(job) => setSelectedJobForInvoice(job)}
               onSelectJobForDetails={(job) => setSelectedJobForDetails(job)}
-              onConfirmJob={(jobId) => {
-                setJobOrders((prev) =>
-                  prev.map((j) => (j.id === jobId ? { ...j, status: 'confirmed' } : j))
-                );
+              onConfirmJob={async (jobId) => {
+                try {
+                  if (jobId.length > 20 && !jobId.startsWith('job-')) {
+                    await api.subcontracting.confirmJob(jobId);
+                  }
+                  setJobOrders((prev) =>
+                    prev.map((j) => (j.id === jobId ? { ...j, status: 'confirmed' } : j))
+                  );
+                } catch (err: any) {
+                  alert(err.message || 'فشل تأكيد أمر التشغيل');
+                }
               }}
-              onPayInvoice={(invId) => {
-                setJobInvoices((prev) =>
-                  prev.map((inv) => (inv.id === invId ? { ...inv, status: 'paid', paid_amount: inv.total_amount } : inv))
-                );
+              onPayInvoice={async (invId) => {
+                try {
+                  if (invId.length > 20 && !invId.startsWith('jinv-')) {
+                    const inv = jobInvoices.find(i => i.id === invId);
+                    await api.subcontracting.recordPayment(invId, {
+                      amount: inv ? inv.total_amount : 100,
+                      payment_method: 'bank_transfer',
+                    });
+                  }
+                  setJobInvoices((prev) =>
+                    prev.map((inv) => (inv.id === invId ? { ...inv, status: 'paid', paid_amount: inv.total_amount } : inv))
+                  );
+                } catch (err: any) {
+                  alert(err.message || 'فشل تسجيل السداد');
+                }
               }}
             />
           )}
 
-          {/* Fallback for other tabs */}
-          {['sales', 'costing', 'piece_rate', 'storefront', 'settings'].includes(activeTab) && (
-            <Card className="text-center py-12">
-              <div className="p-4 rounded-2xl bg-slate-800/40 text-indigo-400 mx-auto w-fit mb-3">
-                <Package className="w-8 h-8" />
+          {/* Phase 7: Sales & POS */}
+          {activeTab === 'sales' && (
+            <SalesTab lang={lang} variants={productVariants} />
+          )}
+
+          {/* Phase 8: Financials, Accounting & Costing */}
+          {activeTab === 'costing' && (
+            <AccountingTab lang={lang} />
+          )}
+
+          {/* Phase 9: HR, Employees & Piece-Rate */}
+          {activeTab === 'piece_rate' && (
+            <HrTab lang={lang} />
+          )}
+
+          {/* Phase 10: Multi-Tenant E-Commerce Storefront */}
+          {activeTab === 'storefront' && (
+            <StorefrontTab lang={lang} variants={productVariants} />
+          )}
+
+          {/* Phase 12: Machine & Asset Maintenance */}
+          {activeTab === 'maintenance' && (
+            <MaintenanceTab lang={lang} />
+          )}
+
+          {/* Settings Tab */}
+          {activeTab === 'settings' && (
+            <Card className="p-6 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {lang === 'ar' ? 'إعدادات الشركة والمستأجر' : 'Tenant & Company Settings'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {lang === 'ar' ? 'إدارة الهوية الصناعية، فروع التشغيل، وصلاحيات الوصول' : 'Manage factory profile, branches, and team access'}
+                </p>
               </div>
-              <h3 className="text-base font-bold text-slate-100 mb-1">
-                وحدة {activeTab === 'sales' ? 'المبيعات' : activeTab === 'costing' ? 'التكاليف' : activeTab === 'piece_rate' ? 'أجور القطعة' : activeTab === 'storefront' ? 'المتجر الإلكتروني' : 'الإعدادات'}
-              </h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
-                قاعدة البيانات ودفتر الأستاذ ومحرك العزل جاهزان للربط مع هذه الوحدة في المراحل القادمة.
-              </p>
-              <Button size="sm" onClick={() => setActiveTab('purchasing')}>
-                العودة إلى وحدة المشتريات
-              </Button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'اسم المصنع' : 'Company Name'}</p>
+                  <p className="text-base font-bold text-slate-900 dark:text-white mt-1">{tenantName}</p>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'كود المصنع' : 'Tenant Code'}</p>
+                  <p className="text-base font-mono font-bold text-primary mt-1">{tenantCode}</p>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'الموقع الرئيسي' : 'Primary Site'}</p>
+                  <p className="text-base font-bold text-slate-900 dark:text-white mt-1">{branchName}</p>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
+                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'حالة الاشتراك' : 'Subscription Status'}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {lang === 'ar' ? 'مفعل — باقة المصانع الاحترافية (Professional)' : 'Active — Professional Tier'}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </Card>
           )}
         </>
-      )}
 
       {/* MODAL 1: New Company Registration */}
       <Modal
@@ -2113,7 +2758,7 @@ export function App() {
               value={newCompanyForm.companyName}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, companyName: e.target.value })}
               placeholder="مثال: مصنع الفيروز لملابس الأطفال"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
@@ -2125,7 +2770,7 @@ export function App() {
               value={newCompanyForm.ownerName}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, ownerName: e.target.value })}
               placeholder="مثال: م. حسام الدين"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
@@ -2137,7 +2782,7 @@ export function App() {
               value={newCompanyForm.email}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, email: e.target.value })}
               placeholder="hossam@al-fayrouz.com"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
@@ -2146,7 +2791,7 @@ export function App() {
             <select
               value={newCompanyForm.plan}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, plan: e.target.value })}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             >
               <option value="starter">باقة الورش الصغيرة (Starter) — 3 مستخدمين</option>
               <option value="professional">باقة المصانع المتكاملة (Professional) — إنتاج وقص ومخازن</option>
@@ -2180,7 +2825,7 @@ export function App() {
               value={newBranchName}
               onChange={(e) => setNewBranchName(e.target.value)}
               placeholder="مثال: مخزن صالة القص رقم 2"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
@@ -2192,7 +2837,7 @@ export function App() {
               value={newBranchCode}
               onChange={(e) => setNewBranchCode(e.target.value)}
               placeholder="مثال: WH-CUT-02"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
@@ -2201,13 +2846,27 @@ export function App() {
             <select
               value={newBranchType}
               onChange={(e) => setNewBranchType(e.target.value as any)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             >
               <option value="factory">مصنع / صالة إنتاج</option>
               <option value="warehouse">مخزن أقمشة ومستلزمات</option>
               <option value="outlet">منفذ بيع أو معرض توزيع</option>
             </select>
           </div>
+
+          {branches.length > 0 && (
+            <div className="pt-2 border-t border-slate-700/60">
+              <span className="block text-xs font-semibold text-slate-400 mb-1.5">الفروع والمواقع المسجلة حالياً:</span>
+              <div className="space-y-1 max-h-28 overflow-y-auto">
+                {branches.map(b => (
+                  <div key={b.id} className="flex justify-between items-center text-xs bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                    <span className="text-slate-200">{b.name}</span>
+                    <span className="font-mono text-slate-400 text-[11px]">{b.code}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setIsBranchModalOpen(false)}>
@@ -2232,6 +2891,30 @@ export function App() {
         onClose={() => setSelectedStockItem(null)}
         item={selectedStockItem}
         onSuccess={handleStockTransactionSuccess}
+      />
+
+      {/* MODAL 0: Real Authentication Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onSuccess={handleLoginSuccess}
+        isClosable={isAuthenticated}
+        onSwitchToRegister={() => {
+          setIsLoginModalOpen(false);
+          setIsRegisterModalOpen(true);
+        }}
+      />
+
+      {/* MODAL 0.5: Register Company Modal */}
+      <RegisterModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        onSuccess={handleRegisterSuccess}
+        initialPlanTier={registerPlanTier}
+        onSwitchToLogin={() => {
+          setIsRegisterModalOpen(false);
+          setIsLoginModalOpen(true);
+        }}
       />
 
       {/* MODAL 5: Create Garment Model Modal */}
@@ -2515,6 +3198,7 @@ export function App() {
         }
       />
     </AppLayout>
+    </div>
   );
 }
 

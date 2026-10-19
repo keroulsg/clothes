@@ -18,8 +18,8 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
       <div className="p-3 rounded-full bg-rose-500/10 text-rose-400 mb-3 border border-rose-500/20">
         <AlertCircle className="w-6 h-6" />
       </div>
-      <h4 className="text-sm font-semibold text-rose-300 mb-1">{title}</h4>
-      <p className="text-xs text-rose-400/80 max-w-sm mb-4">{message}</p>
+      <h4 className="text-sm font-semibold text-rose-700 dark:text-rose-300 mb-1">{title}</h4>
+      <p className="text-xs text-rose-600 dark:text-rose-400 max-w-sm mb-4">{message}</p>
       {onRetry && (
         <Button variant="outline" size="sm" onClick={onRetry} icon={<RefreshCw className="w-3.5 h-3.5" />}>
           إعادة المحاولة

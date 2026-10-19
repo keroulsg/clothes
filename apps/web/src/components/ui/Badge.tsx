@@ -1,7 +1,7 @@
 import React from 'react';
 import clsx from 'clsx';
 
-export type BadgeVariant = 'success' | 'warning' | 'info' | 'danger' | 'neutral' | 'purple';
+export type BadgeVariant = 'success' | 'warning' | 'info' | 'danger' | 'neutral' | 'purple' | 'brand';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -11,12 +11,13 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  info: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-  danger: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  neutral: 'bg-slate-700/50 text-slate-300 border-slate-600/30',
-  purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  success: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 font-semibold',
+  warning: 'bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/30 font-semibold',
+  info: 'bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 font-semibold',
+  danger: 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30 font-semibold',
+  neutral: 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 font-medium',
+  purple: 'bg-purple-500/15 text-purple-900 dark:text-purple-300 border-purple-500/30 font-semibold',
+  brand: 'bg-[#460809]/10 text-[#460809] dark:text-[#fca5a5] border-[#460809]/30 font-semibold',
 };
 
 const dotStyles: Record<BadgeVariant, string> = {
@@ -26,6 +27,7 @@ const dotStyles: Record<BadgeVariant, string> = {
   danger: 'bg-rose-400',
   neutral: 'bg-slate-400',
   purple: 'bg-purple-400',
+  brand: 'bg-[#460809] dark:bg-[#fca5a5]',
 };
 
 export const Badge: React.FC<BadgeProps> = ({

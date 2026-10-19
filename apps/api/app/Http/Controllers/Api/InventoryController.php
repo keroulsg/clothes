@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CuttingOrder;
 use App\Models\CustomerMaterial;
+use App\Models\GoodsReceiptNote;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Models\ProductionOrder;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
 use App\Models\Warehouse;
 use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
@@ -103,8 +109,326 @@ class InventoryController extends Controller
 
         $validated['tenant_id'] = $tenantId;
 
+        $user = $request->user();
+        $userRole = $user?->role;
+
+        // 1. حظر مشرف المنصة العام من تنفيذ أي حركات تشغيلية داخل الشركات المستأجرة
+        if ($userRole === 'platform_admin') {
+            return response()->json([
+                'error' => 'UnauthorizedRole',
+                'message' => 'أمان: مشرف المنصة العام غير مصرح له بتنفيذ عمليات تشغيلية أو تعديل المخزون داخل الشركات المستأجرة.',
+            ], 403);
+        }
+
+        // 2. حظر عمال التشغيل تماماً من ترحيل أي حركات مخزنية مباشرة (إضافة، صرف، تسوية)
+        if ($userRole === 'worker') {
+            return response()->json([
+                'error' => 'UnauthorizedRole',
+                'message' => 'أمان: عمال التشغيل غير مصرح لهم بتسجيل حركات مخزنية مباشرة؛ يجب أن تتم حركات الصرف والاستلام عبر دورات العمل المعتمدة (أوامر القص ومحاضر الاستلام).',
+            ], 403);
+        }
+
+        // 3. حظر الأدوار غير التشغيلية مثل مندوبي المبيعات
+        if ($userRole === 'sales_rep') {
+            return response()->json([
+                'error' => 'UnauthorizedRole',
+                'message' => 'أمان: مندوب المبيعات غير مصرح له بتعديل أرصدة الخامات والمخازن مباشرة.',
+            ], 403);
+        }
+
+        // 4. تقييد العمليات بحسب الاختصاص المالي والإنتاجي والمخزني
+        if ($userRole === 'accountant') {
+            if ($validated['transaction_type'] === 'material_issuance') {
+                return response()->json([
+                    'error' => 'UnauthorizedRole',
+                    'message' => 'أمان: المحاسب المالي غير مصرح له بصرف الخامات للإنتاج (مقتصرة على مدير الإنتاج وإدارة المصنع).',
+                ], 403);
+            }
+        } elseif ($userRole === 'production_manager') {
+            if (in_array($validated['transaction_type'], ['adjustment_positive', 'adjustment_negative', 'goods_receipt'], true)) {
+                return response()->json([
+                    'error' => 'UnauthorizedRole',
+                    'message' => 'أمان: مدير الإنتاج غير مصرح له بتسجيل تسويات جردية أو استلام توريدات مشتريات مباشرة (مقتصرة على المحاسبة وإدارة المصنع).',
+                ], 403);
+            }
+        } elseif ($userRole === 'warehouse_manager') {
+            if (in_array($validated['transaction_type'], ['adjustment_positive', 'adjustment_negative'], true)) {
+                return response()->json([
+                    'error' => 'UnauthorizedRole',
+                    'message' => 'أمان: مسؤول المستودع غير مصرح له بتسجيل تسويات جردية يدوية (مقتصرة على المحاسبة وإدارة المصنع).',
+                ], 403);
+            }
+        } elseif ($userRole !== 'company_owner') {
+            return response()->json([
+                'error' => 'UnauthorizedRole',
+                'message' => 'أمان: دورك الحالي غير مصرح له بتسجيل حركات مخزنية مباشرة.',
+            ], 403);
+        }
+
+        $refType = $validated['reference_type'] ?? null;
+        $refNum = $validated['reference_number'] ?? null;
+
+        // 5. التحقق الصارم من أنواع المستندات المرجعية المسموح بها ومنع المحارف غير المعترف بها
+        if (!empty($refType)) {
+            $validRefTypes = [
+                'purchase_order', 'po',
+                'cutting_order', 'production_order',
+                'goods_receipt', 'grn',
+                'manual_reference', 'inventory_audit', 'stock_transfer',
+            ];
+            if (!in_array($refType, $validRefTypes, true)) {
+                return response()->json([
+                    'error' => 'InvalidTransactionReference',
+                    'message' => 'نوع المستند المرجعي غير معتمد في النظام.',
+                ], 422);
+            }
+        }
+
+        // 6. التحقق من اتساق نوع الحركة مع نوع المستند المرجعي
+        $txType = $validated['transaction_type'];
+        if (in_array($txType, ['adjustment_positive', 'adjustment_negative'], true)) {
+            // التسويات الجردية اليدوية تقتصر على manual_reference أو inventory_audit
+            if (!empty($refType) && !in_array($refType, ['manual_reference', 'inventory_audit'], true)) {
+                return response()->json([
+                    'error' => 'InvalidReferenceTypeForTransaction',
+                    'message' => 'التسويات الجردية تقتصر على مراجع التسوية اليدوية (manual_reference) أو محاضر الجرد (inventory_audit).',
+                ], 422);
+            }
+            if (empty($refType)) {
+                $validated['reference_type'] = 'manual_reference';
+                $refType = 'manual_reference';
+            }
+        } else {
+            // العمليات التشغيلية (توريد، صرف، تحويل) تتطلب مستنداً مرجعياً حقيقياً ولا تقبل مراجع يدوية عشوائية
+            if (empty($refType) || in_array($refType, ['manual_reference', 'inventory_audit'], true)) {
+                return response()->json([
+                    'error' => 'InvalidReferenceTypeForTransaction',
+                    'message' => 'العمليات التشغيلية (التوريد، الصرف، التحويل) تتطلب مستنداً مرجعياً حقيقياً معتمداً (أمر شراء، أمر قص، أمر إنتاج، أمر تحويل) ولا تقبل التسجيل اليدوي العشوائي.',
+                ], 422);
+            }
+            if (empty($refNum)) {
+                return response()->json([
+                    'error' => 'MissingReferenceNumber',
+                    'message' => 'يجب إدخال رقم أو معرّف المستند المرجعي للعملية التشغيلية.',
+                ], 422);
+            }
+        }
+
+        $poAny = null;
+        $poItem = null;
+
+        // 7. التحقق العلائقي الصارم والتحقق من سياق الشركة وحالة المستند المرجعي
+        if (in_array($refType, ['purchase_order', 'po'], true)) {
+            $poAny = PurchaseOrder::withoutGlobalScopes()
+                ->where(function ($q) use ($refNum) {
+                    $q->where('id', $refNum)->orWhere('po_number', $refNum);
+                })->first();
+
+            if (!$poAny) {
+                return response()->json([
+                    'error' => 'InvalidReferenceDocument',
+                    'message' => 'أمر الشراء المرجعي غير موجود في النظام.',
+                ], 422);
+            }
+
+            if ((string) $poAny->tenant_id !== (string) $tenantId) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أمر الشراء المرجعي غير تابع لشركتك.',
+                ], 403);
+            }
+
+            if (!in_array($poAny->status, ['approved', 'partially_received'], true)) {
+                return response()->json([
+                    'error' => 'InvalidDocumentStatus',
+                    'message' => "لا يمكن تسجيل حركة على أمر شراء بحالة [{$poAny->status}]. يجب أن يكون معتمداً أو مستلماً جزئياً.",
+                ], 422);
+            }
+
+            $poItem = PurchaseOrderItem::where('tenant_id', $tenantId)
+                ->where('purchase_order_id', $poAny->id)
+                ->where('inventory_item_id', $validated['inventory_item_id'])
+                ->first();
+
+            if (!$poItem) {
+                return response()->json([
+                    'error' => 'InvalidReferenceItem',
+                    'message' => 'الصنف المخزني غير موجود ضمن بنود أمر الشراء المرجعي.',
+                ], 422);
+            }
+
+            if ($txType === 'goods_receipt' && (float) $validated['quantity'] > (float) $poItem->remaining_quantity) {
+                return response()->json([
+                    'error' => 'OverReceiptNotPermitted',
+                    'message' => "الكمية المطلوب استلامها [{$validated['quantity']}] تتجاوز الكمية المتبقية للتوريد في أمر الشراء [{$poItem->remaining_quantity}].",
+                ], 422);
+            }
+
+            $validated['reference_id'] = $poAny->id;
+            $validated['reference_number'] = $poAny->po_number;
+
+        } elseif (in_array($refType, ['goods_receipt', 'grn'], true)) {
+            $grnAny = GoodsReceiptNote::withoutGlobalScopes()
+                ->where(function ($q) use ($refNum) {
+                    $q->where('id', $refNum)->orWhere('grn_number', $refNum);
+                })->first();
+
+            if (!$grnAny) {
+                return response()->json([
+                    'error' => 'InvalidReferenceDocument',
+                    'message' => 'إذن الاستلام المرجعي غير موجود في النظام.',
+                ], 422);
+            }
+
+            if ((string) $grnAny->tenant_id !== (string) $tenantId) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: إذن الاستلام المرجعي غير تابع لشركتك.',
+                ], 403);
+            }
+
+            if ($grnAny->status === 'cancelled') {
+                return response()->json([
+                    'error' => 'InvalidDocumentStatus',
+                    'message' => 'إذن الاستلام المرجعي ملغى ولا يمكن تسجيل حركات عليه.',
+                ], 422);
+            }
+
+            // منع تكرار استلام نفس إذن الاستلام لنفس الصنف
+            $alreadyPosted = InventoryTransaction::where('tenant_id', $tenantId)
+                ->where('inventory_item_id', $validated['inventory_item_id'])
+                ->where(function ($q) use ($grnAny) {
+                    $q->where('reference_id', $grnAny->id)
+                      ->orWhere('reference_number', $grnAny->grn_number);
+                })->exists();
+
+            if ($alreadyPosted) {
+                return response()->json([
+                    'error' => 'DuplicateReceipt',
+                    'message' => 'إذن الاستلام المرجعي تم ترحيله مخزنياً مسبقاً ولا يمكن استلامه مرة أخرى منعاً لتكرار الرصيد.',
+                ], 422);
+            }
+
+            $validated['reference_id'] = $grnAny->id;
+            $validated['reference_number'] = $grnAny->grn_number;
+
+        } elseif ($refType === 'cutting_order') {
+            $coAny = CuttingOrder::withoutGlobalScopes()
+                ->where(function ($q) use ($refNum) {
+                    $q->where('id', $refNum)->orWhere('cutting_order_number', $refNum);
+                })->first();
+
+            if (!$coAny) {
+                return response()->json([
+                    'error' => 'InvalidReferenceDocument',
+                    'message' => 'أمر القص المرجعي غير موجود في النظام.',
+                ], 422);
+            }
+
+            if ((string) $coAny->tenant_id !== (string) $tenantId) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أمر القص المرجعي غير تابع لشركتك.',
+                ], 403);
+            }
+
+            if ($coAny->status === 'cancelled') {
+                return response()->json([
+                    'error' => 'InvalidDocumentStatus',
+                    'message' => 'أمر القص المرجعي ملغى ولا يمكن تسجيل حركات عليه.',
+                ], 422);
+            }
+
+            if ($coAny->fabric_inventory_item_id && $coAny->fabric_inventory_item_id !== $validated['inventory_item_id']) {
+                return response()->json([
+                    'error' => 'InvalidReferenceItem',
+                    'message' => 'الصنف المخزني لا يطابق خامة القماش المعتمدة في أمر القص المرجعي.',
+                ], 422);
+            }
+
+            $validated['reference_id'] = $coAny->id;
+            $validated['reference_number'] = $coAny->cutting_order_number;
+
+        } elseif ($refType === 'production_order') {
+            $prodAny = ProductionOrder::withoutGlobalScopes()
+                ->where(function ($q) use ($refNum) {
+                    $q->where('id', $refNum)->orWhere('order_number', $refNum);
+                })->first();
+
+            if (!$prodAny) {
+                return response()->json([
+                    'error' => 'InvalidReferenceDocument',
+                    'message' => 'أمر الإنتاج المرجعي غير موجود في النظام.',
+                ], 422);
+            }
+
+            if ((string) $prodAny->tenant_id !== (string) $tenantId) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أمر الإنتاج المرجعي غير تابع لشركتك.',
+                ], 403);
+            }
+
+            if (in_array($prodAny->status, ['draft', 'cancelled'], true)) {
+                return response()->json([
+                    'error' => 'InvalidDocumentStatus',
+                    'message' => "لا يمكن تسجيل حركة على أمر إنتاج بحالة [{$prodAny->status}]. يجب أن يكون معتمداً أو قيد التشغيل.",
+                ], 422);
+            }
+
+            $validated['reference_id'] = $prodAny->id;
+            $validated['reference_number'] = $prodAny->order_number;
+
+        } elseif ($refType === 'stock_transfer') {
+            $stAny = DB::table('stock_transfers')
+                ->where(function ($q) use ($refNum) {
+                    $q->where('id', $refNum)->orWhere('transfer_number', $refNum);
+                })->first();
+
+            if (!$stAny) {
+                return response()->json([
+                    'error' => 'InvalidReferenceDocument',
+                    'message' => 'أمر التحويل المخزني المرجعي غير موجود في النظام.',
+                ], 422);
+            }
+
+            if ((string) $stAny->tenant_id !== (string) $tenantId) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: أمر التحويل المخزني غير تابع لشركتك.',
+                ], 403);
+            }
+
+            if (in_array($stAny->status, ['draft', 'cancelled'], true)) {
+                return response()->json([
+                    'error' => 'InvalidDocumentStatus',
+                    'message' => "لا يمكن تسجيل حركة على أمر تحويل مخزني بحالة [{$stAny->status}].",
+                ], 422);
+            }
+
+            $validated['reference_id'] = $stAny->id;
+            $validated['reference_number'] = $stAny->transfer_number;
+        }
+
         try {
-            $transaction = $this->inventoryService->recordTransaction($validated);
+            $transaction = DB::transaction(function () use ($validated, $poItem, $poAny) {
+                $tx = $this->inventoryService->recordTransaction($validated);
+
+                if (!empty($poItem) && !empty($poAny) && $validated['transaction_type'] === 'goods_receipt' && $tx->wasRecentlyCreated) {
+                    $receivedQty = (float) $validated['quantity'];
+                    $poItem->refresh();
+                    $poItem->received_quantity = (float) $poItem->received_quantity + $receivedQty;
+                    $poItem->remaining_quantity = max(0.0, (float) $poItem->remaining_quantity - $receivedQty);
+                    $poItem->save();
+
+                    $remainingTotal = PurchaseOrderItem::where('purchase_order_id', $poAny->id)->sum('remaining_quantity');
+                    $poAny->refresh();
+                    $poAny->status = $remainingTotal <= 0.0001 ? 'completed' : 'partially_received';
+                    $poAny->save();
+                }
+
+                return $tx;
+            });
 
             $isDuplicate = false;
             if ($idempotencyKey && $transaction->wasRecentlyCreated === false) {

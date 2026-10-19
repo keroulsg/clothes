@@ -65,6 +65,50 @@ class TenantController extends Controller
                 'phone' => $validated['phone'] ?? null,
             ]);
 
+            // إنشاء المخزن الرئيسي للمصنع
+            \App\Models\Warehouse::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'name' => 'مخزن الأقمشة الرئيسي',
+                'code' => 'WH-FAB-01',
+                'type' => 'fabric',
+                'allow_negative_stock' => false,
+            ]);
+
+            // إنشاء المقاسات المعيارية للشركة
+            $defaultSizes = [
+                ['name' => 'حديثي ولادة (0-3M)', 'category' => 'infant', 'sort_order' => 1],
+                ['name' => 'رضّع (3-6M)', 'category' => 'infant', 'sort_order' => 2],
+                ['name' => 'أطفال (6-12M)', 'category' => 'infant', 'sort_order' => 3],
+                ['name' => 'دارجين (1-2Y)', 'category' => 'toddler', 'sort_order' => 4],
+                ['name' => 'أطفال (2-4Y)', 'category' => 'kids', 'sort_order' => 5],
+                ['name' => 'صغار (4-6Y)', 'category' => 'kids', 'sort_order' => 6],
+            ];
+            foreach ($defaultSizes as $sz) {
+                \App\Models\Size::withoutGlobalScopes()->create([
+                    'tenant_id' => $tenant->id,
+                    'name' => $sz['name'],
+                    'category' => $sz['category'],
+                    'sort_order' => $sz['sort_order'],
+                ]);
+            }
+
+            // إنشاء الألوان المعيارية للشركة
+            $defaultColors = [
+                ['name' => 'أزرق كحلي', 'color_code' => '#0f2744'],
+                ['name' => 'أبيض ناصع', 'color_code' => '#ffffff'],
+                ['name' => 'أحمر زاهي', 'color_code' => '#b91c1c'],
+                ['name' => 'وردي أطفال', 'color_code' => '#f472b6'],
+                ['name' => 'رمادي فضي', 'color_code' => '#94a3b8'],
+                ['name' => 'أسود', 'color_code' => '#000000'],
+            ];
+            foreach ($defaultColors as $clr) {
+                \App\Models\Color::withoutGlobalScopes()->create([
+                    'tenant_id' => $tenant->id,
+                    'name' => $clr['name'],
+                    'color_code' => $clr['color_code'],
+                ]);
+            }
+
             // إنشاء حساب مالك الشركة
             $user = User::create([
                 'tenant_id' => $tenant->id,
@@ -183,6 +227,21 @@ class TenantController extends Controller
     }
 
     /**
+     * تسجيل الخروج وإلغاء رمز الدخول الحالي (Sanctum Token Revocation)
+     */
+    public function logout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user && $user->currentAccessToken()) {
+            $user->currentAccessToken()->delete();
+        }
+
+        return response()->json([
+            'message' => 'تم تسجيل الخروج بنجاح وإلغاء رمز الدخول.',
+        ]);
+    }
+
+    /**
      * ملف الشركة والمؤشرات الأساسية
      */
     public function current(Request $request): JsonResponse
@@ -192,6 +251,7 @@ class TenantController extends Controller
 
         return response()->json([
             'tenant' => $tenant,
+            'user' => $request->user(),
         ]);
     }
 

@@ -88,12 +88,12 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-extrabold text-slate-100 tracking-tight">
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
               خدمات القص للغير والتصنيع الكامل (Subcontracting & CMT)
             </h2>
             <Badge variant="info">المرحلة 6</Badge>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
             إدارة عقود تشغيل الغير، الفصل الصارم لأمانات خامات العملاء، وتتبع عمليات التطريز والطباعة والتسليم والفوترة.
           </p>
         </div>
@@ -111,7 +111,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             size="sm"
             variant="outline"
             onClick={onOpenReceiveMaterial}
-            icon={<Boxes className="w-3.5 h-3.5 text-indigo-400" />}
+            icon={<Boxes className="w-3.5 h-3.5 text-primary" />}
           >
             استلام أمانة قماش
           </Button>
@@ -120,7 +120,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             size="sm"
             variant="outline"
             onClick={onOpenExternalOp}
-            icon={<Scissors className="w-3.5 h-3.5 text-amber-400" />}
+            icon={<Scissors className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />}
           >
             تشغيل خارجي (مطبعة/تطريز)
           </Button>
@@ -129,71 +129,71 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-slate-800 bg-slate-900/60 p-4">
+        <Card hover className="p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">أوامر التشغيل النشطة</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">أوامر التشغيل النشطة</span>
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
               <Layers className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-100 font-mono">{activeJobsCount}</span>
-            <span className="text-[11px] text-slate-500">أمر قيد التنفيذ</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">{activeJobsCount}</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">أمر قيد التنفيذ</span>
           </div>
         </Card>
 
-        <Card className="border-slate-800 bg-slate-900/60 p-4">
+        <Card hover className="p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">أمانات خامات العملاء</span>
-            <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">أمانات خامات العملاء</span>
+            <div className="w-8 h-8 rounded-lg bg-sky-500/15 text-sky-700 dark:text-sky-400 flex items-center justify-center">
               <Boxes className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-sky-400 font-mono">
+            <span className="text-2xl font-black text-sky-600 dark:text-sky-400 font-mono">
               {totalCustodyMeters.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
             </span>
-            <span className="text-[11px] text-slate-500">متر في العهدة</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">متر في العهدة</span>
           </div>
         </Card>
 
-        <Card className="border-slate-800 bg-slate-900/60 p-4">
+        <Card hover className="p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">القطع المسلمة للعملاء</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">القطع المسلمة للعملاء</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
               <Truck className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-400 font-mono">{totalDeliveredPieces.toLocaleString()}</span>
-            <span className="text-[11px] text-slate-500">قطعة تم تسليمها</span>
+            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">{totalDeliveredPieces.toLocaleString()}</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">قطعة تم تسليمها</span>
           </div>
         </Card>
 
-        <Card className="border-slate-800 bg-slate-900/60 p-4">
+        <Card hover className="p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">إيراد خدمات التشغيل</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">إيراد خدمات التشغيل</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center">
               <Receipt className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-amber-400 font-mono">
+            <span className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
               {totalInvoicedRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
-            <span className="text-[11px] text-slate-500">ج.م مفوترة</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">ج.م مفوترة</span>
           </div>
         </Card>
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-800 pb-2 overflow-x-auto text-xs font-medium">
+      <div className="flex items-center gap-1 border-b border-slate-300 dark:border-slate-800 pb-2 overflow-x-auto text-xs font-medium">
         <button
           onClick={() => setActiveSubTab('jobs')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'jobs'
-              ? 'bg-indigo-600/20 text-indigo-400 font-bold border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              ? 'bg-primary/10 text-primary dark:text-[#fca5a5] font-bold border border-primary/30'
+              : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/40'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -204,8 +204,8 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('receipts')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'receipts'
-              ? 'bg-indigo-600/20 text-indigo-400 font-bold border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              ? 'bg-primary/10 text-primary dark:text-[#fca5a5] font-bold border border-primary/30'
+              : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/40'
           }`}
         >
           <Boxes className="w-3.5 h-3.5" />
@@ -216,8 +216,8 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('external_ops')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'external_ops'
-              ? 'bg-indigo-600/20 text-indigo-400 font-bold border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              ? 'bg-primary/10 text-primary dark:text-[#fca5a5] font-bold border border-primary/30'
+              : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/40'
           }`}
         >
           <Scissors className="w-3.5 h-3.5" />
@@ -228,8 +228,8 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('deliveries')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'deliveries'
-              ? 'bg-indigo-600/20 text-indigo-400 font-bold border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              ? 'bg-primary/10 text-primary dark:text-[#fca5a5] font-bold border border-primary/30'
+              : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/40'
           }`}
         >
           <Truck className="w-3.5 h-3.5" />
@@ -240,8 +240,8 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('invoices')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'invoices'
-              ? 'bg-indigo-600/20 text-indigo-400 font-bold border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              ? 'bg-primary/10 text-primary dark:text-[#fca5a5] font-bold border border-primary/30'
+              : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/40'
           }`}
         >
           <Receipt className="w-3.5 h-3.5" />
@@ -252,8 +252,8 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('customers')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'customers'
-              ? 'bg-indigo-600/20 text-indigo-400 font-bold border border-indigo-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              ? 'bg-primary/10 text-primary dark:text-[#fca5a5] font-bold border border-primary/30'
+              : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800/40'
           }`}
         >
           <Users className="w-3.5 h-3.5" />
@@ -268,20 +268,20 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="بحث برقم الأمر أو العميل أو الموديل..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-slate-850 border border-slate-700 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 w-64 focus:outline-none focus:border-indigo-500"
+                  className="bg-white dark:bg-[#111726] border border-slate-300 dark:border-slate-700 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 w-64 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <select
                 value={serviceTypeFilter}
                 onChange={(e) => setServiceTypeFilter(e.target.value as any)}
-                className="bg-slate-850 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                className="bg-white dark:bg-[#111726] border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               >
                 <option value="all">كل الخدمات</option>
                 <option value="contract_cutting">قص للغير فقط</option>
@@ -291,7 +291,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-slate-850 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                className="bg-white dark:bg-[#111726] border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               >
                 <option value="all">كل الحالات</option>
                 <option value="draft">مسودة (Draft)</option>
@@ -303,36 +303,36 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             </div>
           </div>
 
-          <Card className="border-slate-800 overflow-hidden">
+          <Card className="overflow-hidden p-0 border border-slate-300 dark:border-slate-800">
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-right">
-                <thead className="bg-slate-850 text-slate-400 border-b border-slate-800">
+                <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-300 dark:border-slate-800 font-semibold">
                   <tr>
-                    <th className="py-3 px-4 font-semibold">رقم الأمر</th>
-                    <th className="py-3 px-4 font-semibold">العميل</th>
-                    <th className="py-3 px-4 font-semibold">نوع الخدمة</th>
-                    <th className="py-3 px-4 font-semibold">الموديل</th>
-                    <th className="py-3 px-4 font-semibold">المطلوب</th>
-                    <th className="py-3 px-4 font-semibold">المسلم</th>
-                    <th className="py-3 px-4 font-semibold">سعر الوحدة</th>
-                    <th className="py-3 px-4 font-semibold">الحالة</th>
-                    <th className="py-3 px-4 font-semibold text-center">الإجراءات</th>
+                    <th className="py-3 px-4">رقم الأمر</th>
+                    <th className="py-3 px-4">العميل</th>
+                    <th className="py-3 px-4">نوع الخدمة</th>
+                    <th className="py-3 px-4">الموديل</th>
+                    <th className="py-3 px-4">المطلوب</th>
+                    <th className="py-3 px-4">المسلم</th>
+                    <th className="py-3 px-4">سعر الوحدة</th>
+                    <th className="py-3 px-4">الحالة</th>
+                    <th className="py-3 px-4 text-center">الإجراءات</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 font-sans">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-sans">
                   {filteredJobs.map((job) => (
-                    <tr key={job.id} className="hover:bg-slate-800/20 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-indigo-400">{job.order_number}</td>
-                      <td className="py-3 px-4 font-medium text-slate-200">{job.customer_name}</td>
+                    <tr key={job.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-primary dark:text-[#fca5a5]">{job.order_number}</td>
+                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-200">{job.customer_name}</td>
                       <td className="py-3 px-4">
                         <Badge variant={job.service_type === 'contract_cutting' ? 'info' : 'purple'}>
                           {job.service_type === 'contract_cutting' ? 'قص للغير' : 'تصنيع CMT'}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-slate-300">{job.model_name || '—'}</td>
-                      <td className="py-3 px-4 font-mono text-slate-100">{job.total_target_quantity}</td>
-                      <td className="py-3 px-4 font-mono text-emerald-400 font-bold">{job.total_delivered_quantity}</td>
-                      <td className="py-3 px-4 font-mono text-slate-200">{job.unit_rate} ج.م</td>
+                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{job.model_name || '—'}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">{job.total_target_quantity}</td>
+                      <td className="py-3 px-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold">{job.total_delivered_quantity}</td>
+                      <td className="py-3 px-4 font-mono text-slate-800 dark:text-slate-200">{job.unit_rate} ج.م</td>
                       <td className="py-3 px-4">
                         <Badge variant={job.status === 'completed' ? 'success' : job.status === 'in_progress' ? 'info' : 'neutral'}>
                           {job.status === 'draft' ? 'مسودة' : job.status === 'confirmed' ? 'مؤكد' : job.status === 'in_progress' ? 'قيد التشغيل' : job.status === 'completed' ? 'مكتمل' : job.status}
@@ -372,7 +372,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             size="sm"
                             variant="ghost"
                             onClick={() => onSelectJobForDetails(job)}
-                            icon={<Eye className="w-3.5 h-3.5 text-slate-400" />}
+                            icon={<Eye className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
                           >
                             ملف الأمر
                           </Button>
@@ -382,7 +382,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   ))}
                   {filteredJobs.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                      <td colSpan={9} className="py-8 text-center text-slate-500 dark:text-slate-400">
                         لا توجد أوامر تشغيل مطابقة للفلاتر المحددة.
                       </td>
                     </tr>
@@ -396,11 +396,11 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
       {/* VIEW 2: Customer Material Receipts */}
       {activeSubTab === 'receipts' && (
-        <Card className="border-slate-800 overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <Card className="overflow-hidden p-0 border border-slate-300 dark:border-slate-800">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0e1320] flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-slate-200">محاضر استلام أمانات خامات العملاء</h4>
-              <p className="text-xs text-slate-400">سجل عهد الأقمشة الموردة من العملاء المفصولة عن مخزون المصنع المملوك</p>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">محاضر استلام أمانات خامات العملاء</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400">سجل عهد الأقمشة الموردة من العملاء المفصولة عن مخزون المصنع المملوك</p>
             </div>
             <Button size="sm" onClick={onOpenReceiveMaterial} icon={<Plus className="w-3.5 h-3.5" />}>
               إذن استلام جديد
@@ -409,7 +409,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-right">
-              <thead className="bg-slate-850 text-slate-400 border-b border-slate-800 font-mono">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-300 dark:border-slate-800 font-mono font-semibold">
                 <tr>
                   <th className="py-2.5 px-4">رقم الإذن</th>
                   <th className="py-2.5 px-4 font-sans">العميل المودع</th>
@@ -421,16 +421,16 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   <th className="py-2.5 px-4 font-sans">الحالة</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono text-[11px]">
                 {customerMaterialReceipts.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-800/20">
-                    <td className="py-2.5 px-4 font-bold text-sky-400">{r.receipt_number}</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-200">{r.customer_name}</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-300">{r.fabric_name}</td>
-                    <td className="py-2.5 px-4 font-bold text-slate-100">{r.received_meters} م</td>
-                    <td className="py-2.5 px-4 text-slate-400">{r.received_weight_kg || '—'} كجم</td>
-                    <td className="py-2.5 px-4 text-slate-300">{r.rolls_count} رول</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-400">{r.warehouse_name || 'مخزن الأمانات'}</td>
+                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-sky-600 dark:text-sky-400">{r.receipt_number}</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-900 dark:text-slate-200">{r.customer_name}</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-700 dark:text-slate-300">{r.fabric_name}</td>
+                    <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100">{r.received_meters} م</td>
+                    <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{r.received_weight_kg || '—'} كجم</td>
+                    <td className="py-2.5 px-4 text-slate-700 dark:text-slate-300">{r.rolls_count} رول</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-600 dark:text-slate-400">{r.warehouse_name || 'مخزن الأمانات'}</td>
                     <td className="py-2.5 px-4 font-sans">
                       <Badge variant={r.condition_status === 'accepted' ? 'success' : 'warning'}>
                         {r.condition_status === 'accepted' ? 'مقبول وسليم' : 'معيب'}
@@ -446,11 +446,11 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
       {/* VIEW 3: External Operations */}
       {activeSubTab === 'external_ops' && (
-        <Card className="border-slate-800 overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <Card className="overflow-hidden p-0 border border-slate-300 dark:border-slate-800">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0e1320] flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-slate-200">عمليات التشغيل الخارجي لمقاولي الباطن</h4>
-              <p className="text-xs text-slate-400">تتبع خروج القطع للمطابع والمغاسل وورش التطريز وفحص المرتجع والهالك</p>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">عمليات التشغيل الخارجي لمقاولي الباطن</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400">تتبع خروج القطع للمطابع والمغاسل وورش التطريز وفحص المرتجع والهالك</p>
             </div>
             <Button size="sm" onClick={onOpenExternalOp} icon={<Plus className="w-3.5 h-3.5" />}>
               إرسال تشغيل جديد
@@ -459,7 +459,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-right">
-              <thead className="bg-slate-850 text-slate-400 border-b border-slate-800 font-mono">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-300 dark:border-slate-800 font-mono font-semibold">
                 <tr>
                   <th className="py-2.5 px-4">رقم الحركة</th>
                   <th className="py-2.5 px-4 font-sans">المقاول / الورشة</th>
@@ -472,18 +472,18 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   <th className="py-2.5 px-4 font-sans text-center">إجراء</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono text-[11px]">
                 {externalOperations.map((op) => (
-                  <tr key={op.id} className="hover:bg-slate-800/20">
-                    <td className="py-2.5 px-4 font-bold text-amber-400">{op.operation_number}</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-200">{op.subcontractor_name}</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-300">
+                  <tr key={op.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-amber-600 dark:text-amber-400">{op.operation_number}</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-900 dark:text-slate-200">{op.subcontractor_name}</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-700 dark:text-slate-300">
                       {op.operation_type === 'embroidery' ? 'تطريز آلي' : op.operation_type === 'printing' ? 'طباعة' : op.operation_type}
                     </td>
-                    <td className="py-2.5 px-4 font-bold text-slate-100">{op.sent_quantity}</td>
-                    <td className="py-2.5 px-4 text-emerald-400 font-bold">{op.received_accepted_quantity}</td>
-                    <td className="py-2.5 px-4 text-rose-400">{op.scrap_quantity}</td>
-                    <td className="py-2.5 px-4 text-slate-300">{op.total_cost.toLocaleString()} ج.م</td>
+                    <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100">{op.sent_quantity}</td>
+                    <td className="py-2.5 px-4 text-emerald-600 dark:text-emerald-400 font-bold">{op.received_accepted_quantity}</td>
+                    <td className="py-2.5 px-4 text-rose-600 dark:text-rose-400">{op.scrap_quantity}</td>
+                    <td className="py-2.5 px-4 text-slate-800 dark:text-slate-300">{op.total_cost.toLocaleString()} ج.م</td>
                     <td className="py-2.5 px-4 font-sans">
                       <Badge variant={op.status === 'completed' ? 'success' : 'warning'}>
                         {op.status === 'completed' ? 'مكتمل' : 'مرسل بالخارج'}
@@ -506,15 +506,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
       {/* VIEW 4: Delivery Notes */}
       {activeSubTab === 'deliveries' && (
-        <Card className="border-slate-800 overflow-hidden">
-          <div className="p-4 border-b border-slate-800">
-            <h4 className="text-sm font-bold text-slate-200">أذون تسليم المشغولات ومصالحة خامات الأمانة</h4>
-            <p className="text-xs text-slate-400">سجل تسليم المنتجات المقصوصة والمصنعة للعميل وإرجاع الأقمشة الفائضة وعوادم القص</p>
+        <Card className="overflow-hidden p-0 border border-slate-300 dark:border-slate-800">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0e1320]">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">أذون تسليم المشغولات ومصالحة خامات الأمانة</h4>
+            <p className="text-xs text-slate-600 dark:text-slate-400">سجل تسليم المنتجات المقصوصة والمصنعة للعميل وإرجاع الأقمشة الفائضة وعوادم القص</p>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-right">
-              <thead className="bg-slate-850 text-slate-400 border-b border-slate-800 font-mono">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-300 dark:border-slate-800 font-mono font-semibold">
                 <tr>
                   <th className="py-2.5 px-4">رقم إذن التسليم</th>
                   <th className="py-2.5 px-4 font-sans">العميل</th>
@@ -526,16 +526,16 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   <th className="py-2.5 px-4 font-sans">الحالة</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono text-[11px]">
                 {jobDeliveryNotes.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-800/20">
-                    <td className="py-2.5 px-4 font-bold text-emerald-400">{d.delivery_number}</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-200">{d.customer_name}</td>
-                    <td className="py-2.5 px-4 text-slate-400">{d.delivery_date}</td>
-                    <td className="py-2.5 px-4 font-bold text-slate-100">{d.total_delivered_pieces} قطعة</td>
-                    <td className="py-2.5 px-4 text-indigo-400">{d.returned_unused_fabric_meters} م</td>
-                    <td className="py-2.5 px-4 text-slate-400">{d.scrap_fabric_meters} م</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-300">{d.received_by_customer || '—'}</td>
+                  <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">{d.delivery_number}</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-900 dark:text-slate-200">{d.customer_name}</td>
+                    <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{d.delivery_date}</td>
+                    <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100">{d.total_delivered_pieces} قطعة</td>
+                    <td className="py-2.5 px-4 text-primary dark:text-[#fca5a5]">{d.returned_unused_fabric_meters} م</td>
+                    <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{d.scrap_fabric_meters} م</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-700 dark:text-slate-300">{d.received_by_customer || '—'}</td>
                     <td className="py-2.5 px-4 font-sans">
                       <Badge variant="success">تم التسليم</Badge>
                     </td>
@@ -549,15 +549,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
       {/* VIEW 5: Invoices */}
       {activeSubTab === 'invoices' && (
-        <Card className="border-slate-800 overflow-hidden">
-          <div className="p-4 border-b border-slate-800">
-            <h4 className="text-sm font-bold text-slate-200">فواتير أجور وخدمات التشغيل للغير</h4>
-            <p className="text-xs text-slate-400">إيرادات خدمة القص والتصنيع مع الإضافات والخصومات المعتمدة (بدون خامات العميل)</p>
+        <Card className="overflow-hidden p-0 border border-slate-300 dark:border-slate-800">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0e1320]">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">فواتير أجور وخدمات التشغيل للغير</h4>
+            <p className="text-xs text-slate-600 dark:text-slate-400">إيرادات خدمة القص والتصنيع مع الإضافات والخصومات المعتمدة (بدون خامات العميل)</p>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-right">
-              <thead className="bg-slate-850 text-slate-400 border-b border-slate-800 font-mono">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-300 dark:border-slate-800 font-mono font-semibold">
                 <tr>
                   <th className="py-2.5 px-4">رقم الفاتورة</th>
                   <th className="py-2.5 px-4 font-sans">العميل</th>
@@ -570,16 +570,16 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   <th className="py-2.5 px-4 font-sans text-center">إجراء</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono text-[11px]">
                 {jobInvoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-800/20">
-                    <td className="py-2.5 px-4 font-bold text-indigo-400">{inv.invoice_number}</td>
-                    <td className="py-2.5 px-4 font-sans text-slate-200">{inv.customer_name}</td>
-                    <td className="py-2.5 px-4 text-slate-400">{inv.due_date || '—'}</td>
-                    <td className="py-2.5 px-4 text-slate-300">{inv.service_amount.toLocaleString()} ج.م</td>
-                    <td className="py-2.5 px-4 text-emerald-400">+{inv.additional_charges}</td>
-                    <td className="py-2.5 px-4 text-rose-400">-{inv.deductions}</td>
-                    <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} ج.م</td>
+                  <tr key={inv.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-primary dark:text-[#fca5a5]">{inv.invoice_number}</td>
+                    <td className="py-2.5 px-4 font-sans text-slate-900 dark:text-slate-200">{inv.customer_name}</td>
+                    <td className="py-2.5 px-4 text-slate-600 dark:text-slate-400">{inv.due_date || '—'}</td>
+                    <td className="py-2.5 px-4 text-slate-800 dark:text-slate-300">{inv.service_amount.toLocaleString()} ج.م</td>
+                    <td className="py-2.5 px-4 text-emerald-600 dark:text-emerald-400">+{inv.additional_charges}</td>
+                    <td className="py-2.5 px-4 text-rose-600 dark:text-rose-400">-{inv.deductions}</td>
+                    <td className="py-2.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">{inv.total_amount.toLocaleString()} ج.م</td>
                     <td className="py-2.5 px-4 font-sans">
                       <Badge variant={inv.status === 'paid' ? 'success' : 'neutral'}>
                         {inv.status === 'paid' ? 'مسددة بالكامل' : 'غير مسددة'}
@@ -605,17 +605,17 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {customers.map((c) => (
-              <Card key={c.id} className="border-slate-800 space-y-2 p-4">
+              <Card key={c.id} className="space-y-2 p-4 border border-slate-300 dark:border-slate-800">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-100 text-sm">{c.name}</span>
-                  <span className="font-mono text-xs text-indigo-400">{c.code}</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{c.name}</span>
+                  <span className="font-mono text-xs text-primary dark:text-[#fca5a5] font-bold">{c.code}</span>
                 </div>
-                <div className="text-xs text-slate-400 flex items-center justify-between">
-                  <span>مسؤول الاتصال: <strong className="text-slate-300">{c.contact_person || '—'}</strong></span>
-                  <span>الهاتف: <strong className="text-slate-300 font-mono">{c.phone || '—'}</strong></span>
+                <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                  <span>مسؤول الاتصال: <strong className="text-slate-800 dark:text-slate-200">{c.contact_person || '—'}</strong></span>
+                  <span>الهاتف: <strong className="text-slate-800 dark:text-slate-200 font-mono">{c.phone || '—'}</strong></span>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs text-slate-400">
-                  <span>السجل الضريبي: <strong className="text-slate-300 font-mono">{c.tax_id || '—'}</strong></span>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
+                  <span>السجل الضريبي: <strong className="text-slate-800 dark:text-slate-200 font-mono">{c.tax_id || '—'}</strong></span>
                   <Badge variant="success">نشط</Badge>
                 </div>
               </Card>

@@ -77,12 +77,16 @@ export interface ProductVariant {
   garment_model_id: string;
   sku: string;
   barcode: string;
-  size_name: string;
-  color_name: string;
-  color_code: string;
+  size_name?: string;
+  color_name?: string;
+  color_code?: string;
   wholesale_price: number;
   retail_price: number;
+  garment_model?: GarmentModel;
+  size?: { id: string; name: string };
+  color?: { id: string; name: string };
 }
+
 
 export interface Warehouse {
   id: string;
@@ -504,3 +508,324 @@ export interface JobProfitability {
   metric_label: string;
   notes: string;
 }
+
+// Phase 7: Sales, Quotations, Orders, Invoices, POS
+export interface QuotationItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_price: number;
+  variant_id?: string;
+}
+
+export interface Quotation {
+  id: string;
+  quotation_number: string;
+  customer_name: string;
+  customer_id?: string;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  subtotal: number;
+  tax_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  valid_until?: string;
+  notes?: string;
+  items?: QuotationItem[];
+}
+
+export interface SalesOrderItem {
+  id: string;
+  variant_id: string;
+  inventory_item_id?: string;
+  ordered_quantity: number;
+  reserved_quantity: number;
+  fulfilled_quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_price: number;
+  variant?: ProductVariant;
+}
+
+export interface SalesOrder {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  customer_id?: string;
+  quotation_id?: string;
+  warehouse_id?: string;
+  order_type: 'wholesale' | 'retail' | 'outlet' | 'custom';
+  status: 'draft' | 'confirmed' | 'reserved' | 'in_fulfillment' | 'fulfilled' | 'cancelled';
+  payment_status: 'unpaid' | 'partially_paid' | 'paid';
+  subtotal: number;
+  tax_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  expected_delivery_date?: string;
+  notes?: string;
+  items?: SalesOrderItem[];
+}
+
+export interface SalesInvoiceItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_price: number;
+}
+
+export interface SalesInvoice {
+  id: string;
+  invoice_number: string;
+  sales_order_id?: string;
+  customer_name: string;
+  customer_id?: string;
+  invoice_type: 'standard' | 'pos_receipt' | 'tax_invoice';
+  status: 'draft' | 'issued' | 'paid' | 'partially_paid' | 'void';
+  payment_method: 'cash' | 'card' | 'bank_transfer' | 'credit' | 'check';
+  subtotal: number;
+  tax_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  balance_due: number;
+  invoice_date: string;
+  due_date?: string;
+  items?: SalesInvoiceItem[];
+}
+
+export interface PosSession {
+  id: string;
+  session_code: string;
+  opening_cash: number;
+  closing_cash?: number;
+  total_sales: number;
+  status: 'open' | 'closed';
+  opened_at: string;
+  closed_at?: string;
+}
+
+// Phase 8: Financials, Accounting & Costing
+export interface ChartOfAccount {
+  id: string;
+  code: string;
+  name: string;
+  type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+  category: string;
+  current_balance: number;
+  is_active: boolean;
+}
+
+export interface JournalEntryLine {
+  id: string;
+  account_id: string;
+  description?: string;
+  debit: number;
+  credit: number;
+  cost_center?: string;
+  account?: ChartOfAccount;
+}
+
+export interface JournalEntry {
+  id: string;
+  entry_number: string;
+  entry_date: string;
+  reference_type?: string;
+  description: string;
+  total_debit: number;
+  total_credit: number;
+  status: 'draft' | 'posted' | 'void';
+  lines?: JournalEntryLine[];
+}
+
+export interface PaymentVoucher {
+  id: string;
+  voucher_number: string;
+  voucher_type: 'receipt' | 'payment';
+  party_type: 'customer' | 'supplier' | 'employee' | 'other';
+  party_name: string;
+  payment_method: string;
+  amount: number;
+  voucher_date: string;
+  notes?: string;
+  account?: ChartOfAccount;
+}
+
+export interface ProductionCostSheet {
+  id: string;
+  production_order_id: string;
+  garment_model_id: string;
+  total_produced_pieces: number;
+  direct_materials_cost: number;
+  direct_labor_cost: number;
+  subcontracted_services_cost: number;
+  allocated_overhead_cost: number;
+  total_cost: number;
+  cost_per_piece: number;
+  status: string;
+}
+
+// Phase 9: HR, Employees & Piece-Rate Payroll
+export interface Employee {
+  id: string;
+  employee_code: string;
+  name: string;
+  department: string;
+  job_title: string;
+  pay_type: 'piece_rate' | 'fixed_salary' | 'hourly' | 'hybrid';
+  base_salary: number;
+  phone?: string;
+  national_id?: string;
+  is_active: boolean;
+}
+
+export interface PieceRate {
+  id: string;
+  stage_name: string;
+  operation_name: string;
+  rate_per_piece: number;
+  is_active: boolean;
+}
+
+export interface PieceWorkLog {
+  id: string;
+  employee_id: string;
+  completed_quantity: number;
+  unit_rate: number;
+  total_amount: number;
+  work_date: string;
+  status: string;
+  employee?: Employee;
+}
+
+export interface PayrollItem {
+  id: string;
+  employee_id: string;
+  base_amount: number;
+  piece_rate_earnings: number;
+  overtime_earnings: number;
+  deductions_and_advances: number;
+  net_salary: number;
+  is_paid: boolean;
+  employee?: Employee;
+}
+
+export interface Payroll {
+  id: string;
+  payroll_period: string;
+  period_start: string;
+  period_end: string;
+  total_gross: number;
+  total_deductions: number;
+  total_net: number;
+  status: 'draft' | 'approved' | 'paid';
+  items?: PayrollItem[];
+}
+
+// Phase 10: E-Commerce Storefront
+export interface StoreOrderItem {
+  id: string;
+  variant_id: string;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
+
+export interface StoreOrder {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone: string;
+  shipping_address: string;
+  city: string;
+  payment_method: string;
+  status: 'new' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled';
+  subtotal: number;
+  shipping_fee: number;
+  total_amount: number;
+  created_at: string;
+  items?: StoreOrderItem[];
+}
+
+export interface TenantStoreSetting {
+  id: string;
+  store_name: string;
+  subdomain?: string;
+  is_store_enabled: boolean;
+  allow_cod: boolean;
+  allow_card_payment: boolean;
+  currency: string;
+  banner_title?: string;
+  banner_subtitle?: string;
+  contact_whatsapp?: string;
+}
+
+// Phase 12: Machine & Asset Maintenance
+export interface Machine {
+  id: string;
+  machine_code: string;
+  name: string;
+  model_number?: string;
+  serial_number?: string;
+  machine_type: 'sewing' | 'cutting' | 'ironing' | 'overlock' | 'buttonhole' | 'boiler' | 'compressor' | 'other';
+  location?: string;
+  purchase_date?: string;
+  warranty_expiry_date?: string;
+  status: 'operational' | 'under_maintenance' | 'breakdown' | 'retired';
+  maintenance_interval_days: number;
+  last_maintenance_date?: string;
+  next_maintenance_date?: string;
+  notes?: string;
+  work_orders_count?: number;
+}
+
+export interface MaintenanceSparePart {
+  id?: string;
+  work_order_id?: string;
+  inventory_item_id?: string;
+  part_name: string;
+  part_number?: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost?: number;
+}
+
+export interface MaintenanceWorkOrder {
+  id: string;
+  machine_id: string;
+  order_number: string;
+  work_type: 'preventive' | 'breakdown' | 'emergency' | 'calibration';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  issue_description: string;
+  resolution_notes?: string;
+  reported_by?: string;
+  technician_name?: string;
+  downtime_hours: number;
+  spare_parts_cost: number;
+  labor_cost: number;
+  total_cost: number;
+  scheduled_date?: string;
+  start_time?: string;
+  completion_time?: string;
+  created_at: string;
+  machine?: Machine;
+  spare_parts?: MaintenanceSparePart[];
+}
+
+export interface DowntimeSummary {
+  total_machines: number;
+  operational_machines: number;
+  down_machines: number;
+  total_downtime_hours: number;
+  total_maintenance_cost: number;
+}
+
+

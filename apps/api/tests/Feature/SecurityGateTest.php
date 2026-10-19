@@ -109,6 +109,64 @@ class SecurityGateTest extends TestCase
             'current_balance' => 200.0,
             'average_cost' => 120.0,
         ]);
+
+        $supplierA = Supplier::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مورد النيل الرئيسي',
+            'code' => 'SUP-A1',
+        ]);
+
+        foreach (['PO-A-1', 'PO-REF-100', 'PO-DIFFERENT-REF-999'] as $poNum) {
+            $po = PurchaseOrder::withoutGlobalScopes()->create([
+                'tenant_id' => $this->tenantA->id,
+                'supplier_id' => $supplierA->id,
+                'warehouse_id' => $this->warehouseA->id,
+                'po_number' => $poNum,
+                'order_date' => now()->toDateString(),
+                'status' => 'approved',
+                'subtotal' => 10000.0,
+                'total_amount' => 10000.0,
+            ]);
+
+            PurchaseOrderItem::withoutGlobalScopes()->create([
+                'tenant_id' => $this->tenantA->id,
+                'purchase_order_id' => $po->id,
+                'inventory_item_id' => $this->itemA->id,
+                'ordered_quantity' => 1000.0,
+                'received_quantity' => 0.0,
+                'remaining_quantity' => 1000.0,
+                'unit_price' => 80.0,
+                'total_price' => 80000.0,
+            ]);
+        }
+
+        $supplierB = Supplier::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantB->id,
+            'name' => 'مورد الأهرام الرئيسي',
+            'code' => 'SUP-B1',
+        ]);
+
+        $poB = PurchaseOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantB->id,
+            'supplier_id' => $supplierB->id,
+            'warehouse_id' => $this->warehouseB->id,
+            'po_number' => 'PO-B-1',
+            'order_date' => now()->toDateString(),
+            'status' => 'approved',
+            'subtotal' => 10000.0,
+            'total_amount' => 10000.0,
+        ]);
+
+        PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantB->id,
+            'purchase_order_id' => $poB->id,
+            'inventory_item_id' => $this->itemB->id,
+            'ordered_quantity' => 1000.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 1000.0,
+            'unit_price' => 120.0,
+            'total_price' => 120000.0,
+        ]);
     }
 
     /**
@@ -253,6 +311,8 @@ class SecurityGateTest extends TestCase
             'direction' => 'IN',
             'quantity' => 25.0,
             'unit_cost' => 80.0,
+            'reference_type' => 'purchase_order',
+            'reference_number' => 'PO-A-1',
             'notes' => 'شحنة خامات إضافية آمنة',
             'idempotency_key' => $idempotencyKey,
         ];

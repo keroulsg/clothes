@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { ShieldCheck, Plus, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { ProductionOrder, CuttingBundle, QualityInspection, QualityDefect } from '../../types';
+import { api } from '../../api/client';
 
 interface QualityInspectionModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
   const [rejectedQuantity, setRejectedQuantity] = useState(0);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const [defects, setDefects] = useState<QualityDefect[]>([
     {
@@ -70,41 +72,59 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
   const decision: 'passed' | 'rework_required' | 'rejected' =
     rejectedQuantity > 0 ? 'rejected' : reworkQuantity > 0 ? 'rework_required' : 'passed';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isQuantityValid) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setApiError(null);
 
-      const inspectionNum =
-        'QC-' +
-        new Date().getFullYear() +
-        String(new Date().getMonth() + 1).padStart(2, '0') +
-        '-' +
-        Math.floor(1000 + Math.random() * 9000);
+    const payload = {
+      production_order_id: productionOrder.id,
+      cutting_bundle_id: bundle?.id && bundle.id.length > 20 && !bundle.id.startsWith('bnd-') ? bundle.id : undefined,
+      inspector_name: inspectorName,
+      inspection_type: inspectionType,
+      inspected_quantity: inspectedQuantity,
+      passed_quantity: passedQuantity,
+      rework_quantity: reworkQuantity,
+      rejected_quantity: rejectedQuantity,
+      decision,
+      notes: notes || undefined,
+      defects: defects.map(d => ({
+        defect_type: d.defect_type,
+        severity: d.severity,
+        quantity: d.quantity,
+        corrective_action: d.corrective_action,
+      })),
+    };
 
-      const newInspection: QualityInspection = {
-        id: 'qc-' + Date.now(),
-        inspection_number: inspectionNum,
-        production_order_id: productionOrder.id,
+    try {
+      const res = await api.production.createQualityInspection(payload);
+      const created = res.data;
+      const formattedInspection: QualityInspection = {
+        id: created.id,
+        inspection_number: created.inspection_number || ('QC-' + Date.now().toString().slice(-6)),
+        production_order_id: created.production_order_id || productionOrder.id,
         production_order_number: productionOrder.order_number,
         bundle_code: bundle?.bundle_code,
-        inspector_name: inspectorName,
-        inspection_type: inspectionType,
-        inspected_quantity: inspectedQuantity,
-        passed_quantity: passedQuantity,
-        rework_quantity: reworkQuantity,
-        rejected_quantity: rejectedQuantity,
-        decision,
-        defects,
-        created_at: new Date().toISOString().split('T')[0],
+        inspector_name: created.inspector_name || inspectorName,
+        inspection_type: created.inspection_type || inspectionType,
+        inspected_quantity: created.inspected_quantity || inspectedQuantity,
+        passed_quantity: created.passed_quantity || passedQuantity,
+        rework_quantity: created.rework_quantity || reworkQuantity,
+        rejected_quantity: created.rejected_quantity || rejectedQuantity,
+        decision: created.decision || decision,
+        defects: created.defects || defects,
+        created_at: created.created_at || new Date().toISOString().split('T')[0],
       };
 
-      onSuccess(newInspection);
+      onSuccess(formattedInspection);
       onClose();
-    }, 600);
+    } catch (err: any) {
+      setApiError(err.message || 'حدث خطأ أثناء حفظ محضر الفحص');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -114,6 +134,12 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
       title={`محضر فحص الجودة والتفتيش: ${productionOrder.order_number}`}
       maxWidth="lg"
     >
+      {apiError && (
+        <div className="mb-4 p-3 bg-red-950/60 border border-red-700/60 text-red-300 rounded-lg text-sm flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
+          <span>{apiError}</span>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Banner with Target */}
         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
@@ -157,7 +183,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               اسم مسؤول / مهندس الجودة
             </label>
             <input
@@ -165,18 +191,18 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
               required
               value={inspectorName}
               onChange={(e) => setInspectorName(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               نوع نقطة الفحص
             </label>
             <select
               value={inspectionType}
               onChange={(e) => setInspectionType(e.target.value as any)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
               <option value="inline">فحص مرحلي أثناء الخياطة (Inline Inspection)</option>
               <option value="end_of_line">فحص نهاية الخط والكي (End-of-Line Inspection)</option>
@@ -186,60 +212,60 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         </div>
 
         {/* Quantities breakdown */}
-        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-          <span className="text-xs font-bold text-slate-300 block">
+        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
+          <span className="text-xs font-bold text-slate-900 dark:text-slate-300 block">
             نتائج الفحص والفرز الفعلي
           </span>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">إجمالي المفحوص</label>
+              <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">إجمالي المفحوص</label>
               <input
                 type="number"
                 min="1"
                 required
                 value={inspectedQuantity}
                 onChange={(e) => setInspectedQuantity(parseInt(e.target.value) || 0)}
-                className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-slate-200 font-mono font-bold"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-slate-900 dark:text-slate-200 font-mono font-bold"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] text-emerald-400 mb-1">مقبول مطابق (Pass)</label>
+              <label className="block text-[10px] text-emerald-600 dark:text-emerald-400 mb-1">مقبول مطابق (Pass)</label>
               <input
                 type="number"
                 min="0"
                 value={passedQuantity}
                 onChange={(e) => setPassedQuantity(parseInt(e.target.value) || 0)}
-                className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-emerald-400 font-mono font-bold"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-emerald-600 dark:text-emerald-400 font-mono font-bold"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] text-amber-400 mb-1">إعادة تشغيل (Rework)</label>
+              <label className="block text-[10px] text-amber-600 dark:text-amber-400 mb-1">إعادة تشغيل (Rework)</label>
               <input
                 type="number"
                 min="0"
                 value={reworkQuantity}
                 onChange={(e) => setReworkQuantity(parseInt(e.target.value) || 0)}
-                className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-amber-400 font-mono font-bold"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-amber-600 dark:text-amber-400 font-mono font-bold"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] text-red-400 mb-1">مرفوض نهائي (Reject)</label>
+              <label className="block text-[10px] text-red-600 dark:text-red-400 mb-1">مرفوض نهائي (Reject)</label>
               <input
                 type="number"
                 min="0"
                 value={rejectedQuantity}
                 onChange={(e) => setRejectedQuantity(parseInt(e.target.value) || 0)}
-                className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-red-400 font-mono font-bold"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-red-600 dark:text-red-400 font-mono font-bold"
               />
             </div>
           </div>
 
           {!isQuantityValid && (
-            <div className="flex items-center gap-1.5 text-red-400 text-[11px] pt-1">
+            <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-[11px] pt-1">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>
                 مجموع النتائج ({sumCheck}) لا يطابق إجمالي القطع المفحوصة ({inspectedQuantity}).
@@ -251,7 +277,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         {/* Defects Log Table */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-200">
+            <span className="text-xs font-bold text-slate-900 dark:text-slate-200">
               سجل تفاصيل العيوب والإجراءات التصحيحية
             </span>
             <Button
@@ -267,13 +293,13 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
           </div>
 
           {defects.length === 0 ? (
-            <div className="p-3 text-center text-xs text-slate-500 border border-slate-800 rounded-xl">
+            <div className="p-3 text-center text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl">
               لا توجد عيوب مسجلة — الدفعة مطابقة بالكامل.
             </div>
           ) : (
-            <div className="border border-slate-800 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
+                <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 font-semibold">
                   <tr>
                     <th className="py-2.5 px-3">نوع العيب</th>
                     <th className="py-2.5 px-3">الخطورة</th>
@@ -282,14 +308,14 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
                     <th className="py-2.5 px-2 text-center">حذف</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 bg-white dark:bg-slate-950/40">
                   {defects.map((def, idx) => (
                     <tr key={idx}>
                       <td className="py-2 px-3">
                         <select
                           value={def.defect_type}
                           onChange={(e) => handleDefectChange(idx, 'defect_type', e.target.value)}
-                          className="w-full bg-slate-800/80 border border-slate-700/80 rounded px-2 py-1 text-slate-200 text-xs"
+                          className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
                         >
                           <option value="skip_stitch">تنسيل أو غرزة ساقطة (Skip Stitch)</option>
                           <option value="fabric_flaw">عيب نسيج أو خامة (Fabric Flaw)</option>
@@ -303,7 +329,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
                         <select
                           value={def.severity}
                           onChange={(e) => handleDefectChange(idx, 'severity', e.target.value as any)}
-                          className="w-full bg-slate-800/80 border border-slate-700/80 rounded px-2 py-1 text-slate-200 text-xs"
+                          className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
                         >
                           <option value="minor">طفيف (Minor)</option>
                           <option value="major">جسيم (Major)</option>
@@ -318,7 +344,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
                           onChange={(e) =>
                             handleDefectChange(idx, 'quantity', parseInt(e.target.value) || 1)
                           }
-                          className="w-20 bg-slate-800/80 border border-slate-700/80 rounded px-2 py-1 text-slate-200 font-mono text-xs"
+                          className="w-20 bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 font-mono text-xs"
                         />
                       </td>
                       <td className="py-2 px-3">
@@ -328,14 +354,14 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
                           onChange={(e) =>
                             handleDefectChange(idx, 'corrective_action', e.target.value)
                           }
-                          className="w-full bg-slate-800/80 border border-slate-700/80 rounded px-2 py-1 text-slate-200 text-xs"
+                          className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
                         />
                       </td>
                       <td className="py-2 px-2 text-center">
                         <button
                           type="button"
                           onClick={() => handleRemoveDefect(idx)}
-                          className="text-slate-500 hover:text-red-400 transition-colors p-1"
+                          className="text-slate-500 hover:text-red-500 transition-colors p-1"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -349,7 +375,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
             ملاحظات وتوصيات التفتيش
           </label>
           <textarea
@@ -357,7 +383,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="ملاحظات فحص القياسات أو درجات الشد..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 

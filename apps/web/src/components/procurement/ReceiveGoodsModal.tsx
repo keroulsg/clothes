@@ -3,6 +3,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { PurchaseOrder, GoodsReceiptNote } from '../../types';
+import { api } from '../../api/client';
 
 interface ReceiveGoodsModalProps {
   isOpen: boolean;
@@ -47,7 +48,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -67,38 +68,44 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-
-      const grnNumber = 'GRN-' + Math.floor(1000 + Math.random() * 9000);
-      const newGrn: GoodsReceiptNote = {
-        id: 'grn-' + Date.now(),
-        grn_number: grnNumber,
-        po_number: purchaseOrder.po_number,
-        supplier_name: purchaseOrder.supplier_name,
-        warehouse_name: purchaseOrder.warehouse_name,
+    try {
+      const res = await api.procurement.createGoodsReceipt({
+        purchase_order_id: purchaseOrder.id,
+        warehouse_id: purchaseOrder.warehouse_id,
         receipt_date: new Date().toISOString().split('T')[0],
         quality_inspector_name: inspectorName,
         inspection_status: inspectionStatus,
-        accepted_quantity: acceptedQuantity,
-        rejected_quantity: rejectedQuantity,
-        rejection_reason: rejectionReason || undefined,
-      };
+        items: [
+          {
+            purchase_order_item_id: firstItem?.id,
+            delivered_quantity: Number(deliveredQuantity),
+            accepted_quantity: Number(acceptedQuantity),
+            rejected_quantity: Number(rejectedQuantity),
+            rejection_reason: rejectionReason || undefined,
+          },
+        ],
+      });
 
-      const updatedRemaining = remainingMax - deliveredQuantity;
-      const updatedPo: PurchaseOrder = {
-        ...purchaseOrder,
-        status: updatedRemaining <= 0 ? 'received' : 'partially_received',
-        items: purchaseOrder.items.map(it => ({
-          ...it,
-          received_quantity: it.received_quantity + acceptedQuantity,
-          remaining_quantity: updatedRemaining,
-        })),
-      };
+      if (res.goods_receipt_note) {
+        const updatedRemaining = remainingMax - deliveredQuantity;
+        const updatedPo: PurchaseOrder = {
+          ...purchaseOrder,
+          status: updatedRemaining <= 0 ? 'received' : 'partially_received',
+          items: purchaseOrder.items.map(it => ({
+            ...it,
+            received_quantity: it.received_quantity + acceptedQuantity,
+            remaining_quantity: updatedRemaining,
+          })),
+        };
 
-      onSuccess(updatedPo, newGrn);
-      onClose();
-    }, 600);
+        onSuccess(updatedPo, res.goods_receipt_note);
+        onClose();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'تعذر تسجيل إذن الاستلام والفحص على الخادم.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -123,7 +130,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
           </div>
           <div className="flex justify-between">
             <span className="text-slate-400">المخزن المستهدف:</span>
-            <span className="text-indigo-400 font-medium">{purchaseOrder.warehouse_name}</span>
+            <span className="text-primary dark:text-[#fca5a5] font-medium">{purchaseOrder.warehouse_name}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-400">الكمية المتبقية للتوريد في أمر الشراء:</span>
@@ -133,7 +140,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">الكمية المسلمة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الكمية المسلمة</label>
             <input
               type="number"
               step="any"
@@ -142,12 +149,12 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
               max={remainingMax}
               value={deliveredQuantity}
               onChange={(e) => handleDeliveredChange(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-emerald-400 mb-1">المقبول (يدخل المخزن)</label>
+            <label className="block text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">المقبول (يدخل المخزن)</label>
             <input
               type="number"
               step="any"
@@ -156,63 +163,63 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
               max={deliveredQuantity}
               value={acceptedQuantity}
               onChange={(e) => handleAcceptedChange(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-emerald-500/50 rounded-lg text-xs p-2.5 text-emerald-300 font-mono focus:outline-none focus:border-emerald-500"
+              className="w-full bg-white dark:bg-slate-800 border border-emerald-400 dark:border-emerald-500/50 rounded-lg text-xs p-2.5 text-emerald-700 dark:text-emerald-300 font-mono focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-rose-400 mb-1">المرفوض (تالف/عيوب)</label>
+            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-400 mb-1">المرفوض (تالف/عيوب)</label>
             <input
               type="number"
               step="any"
               value={rejectedQuantity}
               onChange={(e) => setRejectedQuantity(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-rose-500/50 rounded-lg text-xs p-2.5 text-rose-300 font-mono focus:outline-none focus:border-rose-500"
+              className="w-full bg-white dark:bg-slate-800 border border-rose-400 dark:border-rose-500/50 rounded-lg text-xs p-2.5 text-rose-700 dark:text-rose-300 font-mono focus:outline-none focus:border-rose-500"
             />
           </div>
         </div>
 
         {rejectedQuantity > 0 && (
           <div>
-            <label className="block text-xs font-semibold text-rose-300 mb-1">سبب رفض الكمية المعيبة</label>
+            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-300 mb-1">سبب رفض الكمية المعيبة</label>
             <input
               type="text"
               required
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               placeholder="مثال: وجود بقع زيتية وتنسيل في خيوط اللحمة أو اختلاف درجة الصباغة"
-              className="w-full bg-slate-800 border border-rose-500/40 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-rose-500"
+              className="w-full bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-500/40 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
             />
           </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">اسم مهندس / مسؤول الجودة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">اسم مهندس / مسؤول الجودة</label>
             <input
               type="text"
               required
               value={inspectorName}
               onChange={(e) => setInspectorName(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">رقم إذن تسليم المورد (سند الشحن)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">رقم إذن تسليم المورد (سند الشحن)</label>
             <input
               type="text"
               value={deliveryNoteNumber}
               onChange={(e) => setDeliveryNoteNumber(e.target.value)}
               placeholder="مثال: DN-MISR-9844"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
 
-        <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs flex items-center justify-between">
-          <span className="text-slate-400">الكمية الصافية المضافة لرصيد المخزن الدفتري:</span>
-          <span className="font-mono font-bold text-sm text-emerald-400 flex items-center gap-1.5">
+        <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between">
+          <span className="text-slate-600 dark:text-slate-400">الكمية الصافية المضافة لرصيد المخزن الدفتري:</span>
+          <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4" />
             +{acceptedQuantity.toLocaleString()} متر
           </span>

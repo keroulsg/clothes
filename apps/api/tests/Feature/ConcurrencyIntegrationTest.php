@@ -128,6 +128,56 @@ class ConcurrencyIntegrationTest extends TestCase
         ]);
         \Laravel\Sanctum\Sanctum::actingAs($user);
 
+        $supplier = \App\Models\Supplier::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'مورد التزامن',
+            'code' => 'SUP-CONC-01',
+        ]);
+
+        $po = \App\Models\PurchaseOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouse->id,
+            'po_number' => 'PO-HTTP-WINNER',
+            'order_date' => now()->toDateString(),
+            'status' => 'approved',
+            'subtotal' => 5000.0,
+            'total_amount' => 5000.0,
+        ]);
+
+        \App\Models\PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $this->item->id,
+            'ordered_quantity' => 100.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 100.0,
+            'unit_price' => 50.0,
+            'total_price' => 5000.0,
+        ]);
+
+        $poLoser = \App\Models\PurchaseOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouse->id,
+            'po_number' => 'PO-HTTP-LOSER',
+            'order_date' => now()->toDateString(),
+            'status' => 'approved',
+            'subtotal' => 5000.0,
+            'total_amount' => 5000.0,
+        ]);
+
+        \App\Models\PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'purchase_order_id' => $poLoser->id,
+            'inventory_item_id' => $this->item->id,
+            'ordered_quantity' => 100.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 100.0,
+            'unit_price' => 50.0,
+            'total_price' => 5000.0,
+        ]);
+
         $idempKey = 'COLLISION-HTTP-' . uniqid();
 
         // 1. تسجيل الطلب الأول بنجاح (زيادة الرصيد بمقدار 30)

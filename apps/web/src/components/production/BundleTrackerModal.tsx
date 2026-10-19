@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { QrCode, ArrowRightLeft, User, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { QrCode, ArrowRightLeft, User, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { CuttingBundle } from '../../types';
+import { api } from '../../api/client';
 
 interface BundleTrackerModalProps {
   isOpen: boolean;
@@ -28,17 +29,27 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
   const [rejectedQuantity, setRejectedQuantity] = useState(0);
   const [scrapQuantity, setScrapQuantity] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const sumCheck = acceptedQuantity + rejectedQuantity + scrapQuantity;
   const isQuantityValid = sumCheck === inputQuantity;
 
-  const handleTransfer = (e: React.FormEvent) => {
+  const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isQuantityValid) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setErrorMsg('');
+    try {
+      await api.production.transferBundle(bundle.id, {
+        to_stage_code: toStageCode,
+        operator_name: operatorName || undefined,
+        work_line: workLine || undefined,
+        input_quantity: Number(inputQuantity),
+        output_accepted_quantity: Number(acceptedQuantity),
+        output_rejected_quantity: Number(rejectedQuantity),
+        scrap_quantity: Number(scrapQuantity),
+      });
 
       const updatedBundle: CuttingBundle = {
         ...bundle,
@@ -49,7 +60,11 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
 
       onTransferSuccess(updatedBundle);
       onClose();
-    }, 500);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'تعذر تسجيل نقل الحزمة على الخادم.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -60,11 +75,17 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
       maxWidth="md"
     >
       <div className="space-y-4">
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
         {/* Printable Bundle Card Look */}
         <div className="p-4 rounded-xl bg-slate-900 border-2 border-dashed border-slate-700 space-y-3 font-mono">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <div className="flex items-center gap-2">
-              <QrCode className="w-5 h-5 text-indigo-400" />
+              <QrCode className="w-5 h-5 text-primary dark:text-[#fca5a5]" />
               <span className="font-bold text-sm text-slate-100">{bundle.bundle_code}</span>
             </div>
             <Badge variant="info">حزمة رقم #{bundle.bundle_number}</Badge>
@@ -77,7 +98,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
             </div>
             <div>
               <span className="text-slate-500 block text-[10px]">المقاس</span>
-              <span className="text-indigo-400 font-bold text-sm">{bundle.size_name}</span>
+              <span className="text-primary dark:text-[#fca5a5] font-bold text-sm">{bundle.size_name}</span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px]">العدد بالحزمة</span>
@@ -93,20 +114,20 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
 
         {/* Stage Transfer Form */}
         <form onSubmit={handleTransfer} className="space-y-3">
-          <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5 pt-1">
-            <ArrowRightLeft className="w-4 h-4 text-indigo-400" />
+          <div className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 pt-1">
+            <ArrowRightLeft className="w-4 h-4 text-primary dark:text-[#fca5a5]" />
             <span>تسليم الحزمة ونقلها للمرحلة التالية</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 المرحلة المستهدفة للتشغيل
               </label>
               <select
                 value={toStageCode}
                 onChange={(e) => setToStageCode(e.target.value as any)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               >
                 <option value="assembly">التجهيز والتجميع (Assembly)</option>
                 <option value="sewing">خط الخياطة والتجميع (Sewing)</option>
@@ -118,7 +139,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 خط الإنتاج / الورشة
               </label>
               <input
@@ -126,13 +147,13 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
                 required
                 value={workLine}
                 onChange={(e) => setWorkLine(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
               اسم العامل / رئيس المرحلة المستلم
             </label>
             <div className="relative">
@@ -141,58 +162,58 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
                 required
                 value={operatorName}
                 onChange={(e) => setOperatorName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
-              <User className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
+              <User className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
             </div>
           </div>
 
           {/* Quantities Breakdown */}
-          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-            <span className="text-[11px] font-semibold text-slate-300 block">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
+            <span className="text-[11px] font-semibold text-slate-900 dark:text-slate-300 block">
               مطابقة الكميات المسلمة والمقبولة والهالك
             </span>
 
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-[10px] text-slate-400 mb-1">قطع مقبولة سليمة</label>
+                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">قطع مقبولة سليمة</label>
                 <input
                   type="number"
                   min="0"
                   max={inputQuantity}
                   value={acceptedQuantity}
                   onChange={(e) => setAcceptedQuantity(parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-emerald-400 font-mono font-bold"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-emerald-600 dark:text-emerald-400 font-mono font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-400 mb-1">معيب (إعادة تشغيل)</label>
+                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">معيب (إعادة تشغيل)</label>
                 <input
                   type="number"
                   min="0"
                   max={inputQuantity}
                   value={rejectedQuantity}
                   onChange={(e) => setRejectedQuantity(parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-amber-400 font-mono font-bold"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-amber-600 dark:text-amber-400 font-mono font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-400 mb-1">هالك نهائي (Scrap)</label>
+                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">هالك نهائي (Scrap)</label>
                 <input
                   type="number"
                   min="0"
                   max={inputQuantity}
                   value={scrapQuantity}
                   onChange={(e) => setScrapQuantity(parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded text-xs p-2 text-red-400 font-mono font-bold"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded text-xs p-2 text-red-600 dark:text-red-400 font-mono font-bold"
                 />
               </div>
             </div>
 
             {!isQuantityValid && (
-              <div className="flex items-center gap-1.5 text-red-400 text-[11px] pt-1">
+              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-[11px] pt-1">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>
                   مجموع الكميات ({sumCheck}) لا يساوي رصيد الحزمة الحالي ({inputQuantity}).

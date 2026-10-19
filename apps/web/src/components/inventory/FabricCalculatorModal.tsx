@@ -81,7 +81,7 @@ export const FabricCalculatorModal: React.FC<FabricCalculatorModalProps> = ({ is
         {/* Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {mode === 'meters_to_kg' ? 'الكمية بالأمتار (م)' : 'الوزن بالكيلوجرام (كجم)'}
             </label>
             <input
@@ -90,12 +90,12 @@ export const FabricCalculatorModal: React.FC<FabricCalculatorModalProps> = ({ is
               required
               value={inputValue}
               onChange={(e) => setInputValue(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               عرض القماش الصالح للقص (متر)
             </label>
             <input
@@ -105,13 +105,13 @@ export const FabricCalculatorModal: React.FC<FabricCalculatorModalProps> = ({ is
               value={usableWidth}
               onChange={(e) => setUsableWidth(parseFloat(e.target.value) || 0)}
               placeholder="مثال: 1.6 (يعادل 160 سم)"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
-            <span className="text-[10px] text-slate-400 mt-0.5 block">160 سم = 1.60 م</span>
+            <span className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 block">160 سم = 1.60 م</span>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               كثافة النسيج GSM (جم/م²)
             </label>
             <input
@@ -121,9 +121,9 @@ export const FabricCalculatorModal: React.FC<FabricCalculatorModalProps> = ({ is
               value={gsm}
               onChange={(e) => setGsm(parseFloat(e.target.value) || 0)}
               placeholder="مثال: 180"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
-            <span className="text-[10px] text-slate-400 mt-0.5 block">وزن المتر المربع</span>
+            <span className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 block">وزن المتر المربع</span>
           </div>
         </div>
 
@@ -133,10 +133,10 @@ export const FabricCalculatorModal: React.FC<FabricCalculatorModalProps> = ({ is
 
         {/* Output card */}
         {result && (
-          <div className="p-4 rounded-xl bg-slate-800/90 border border-indigo-500/30 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-700 pb-2">
-              <span className="text-xs text-slate-300 font-medium">الناتج المحسوب بدقة:</span>
-              <div className="text-lg font-bold font-mono text-emerald-400 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+              <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">الناتج المحسوب بدقة:</span>
+              <div className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
                 {mode === 'meters_to_kg'
                   ? `${result.calculated_weight_kg?.toLocaleString()} كجم`
@@ -144,17 +144,17 @@ export const FabricCalculatorModal: React.FC<FabricCalculatorModalProps> = ({ is
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700 dark:text-slate-300">
               <div>
-                الوزن الطولي للمتر: <strong className="font-mono text-indigo-400">{result.linear_weight_grams_per_meter} جم/م</strong>
+                الوزن الطولي للمتر: <strong className="font-mono text-brand-primary dark:text-rose-400">{result.linear_weight_grams_per_meter} جم/م</strong>
               </div>
               <div>
-                المعادلة المطبقة: <span className="font-mono text-slate-400 text-[10px]">{result.formula}</span>
+                المعادلة المطبقة: <span className="font-mono text-slate-600 dark:text-slate-400 text-[10px]">{result.formula}</span>
               </div>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2">
-              <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="p-2.5 rounded-lg bg-slate-200/60 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-400 flex items-start gap-2">
+              <Info className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
               <span>{result.technical_note}</span>
             </div>
           </div>

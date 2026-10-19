@@ -3,12 +3,13 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import type { InventoryItem } from '../../types';
+import { api, ApiError } from '../../api/client';
 
 interface StockTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   item: InventoryItem | null;
-  onSuccess: (updatedBalance: number) => void;
+  onSuccess: (updatedBalance: number, newTransaction?: any) => void;
 }
 
 export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
@@ -33,7 +34,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
     ? currentBalance + quantity
     : currentBalance - quantity;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -47,12 +48,55 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
       return;
     }
 
+    const isOperational = ['goods_receipt', 'material_issuance', 'transfer_in', 'transfer_out'].includes(transactionType);
+    if (isOperational && !referenceNumber?.trim()) {
+      setErrorMsg('العمليات التشغيلية (التوريد، الصرف، التحويل) تتطلب إدخال رقم المستند المرجعي المعتمد (أمر شراء، أمر قص، أمر تحويل).');
+      return;
+    }
+
+    let refType: string | undefined = undefined;
+    if (transactionType === 'goods_receipt') {
+      refType = 'purchase_order';
+    } else if (transactionType === 'material_issuance') {
+      refType = 'cutting_order';
+    } else if (transactionType === 'transfer_in' || transactionType === 'transfer_out') {
+      refType = 'stock_transfer';
+    } else {
+      refType = referenceNumber?.trim() ? 'manual_reference' : undefined;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const idempotencyKey = `tx-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const res = await api.inventory.recordTransaction({
+        inventory_item_id: item.id,
+        transaction_type: transactionType as any,
+        direction: direction,
+        quantity: quantity,
+        unit_cost: unitCost > 0 ? unitCost : undefined,
+        reference_type: refType,
+        reference_number: referenceNumber?.trim() || undefined,
+        notes: notes || undefined,
+        idempotency_key: idempotencyKey,
+      });
+
+      const confirmedBalance = Number(res.transaction?.balance_after ?? simulatedAfterBalance);
       setIsSubmitting(false);
-      onSuccess(simulatedAfterBalance);
+      onSuccess(confirmedBalance, res.transaction);
       onClose();
-    }, 600);
+    } catch (err) {
+      setIsSubmitting(false);
+      if (err instanceof ApiError) {
+        if (err.errors) {
+          const firstErr = Object.values(err.errors).flat()[0];
+          setErrorMsg(firstErr ? String(firstErr) : err.message);
+        } else {
+          setErrorMsg(err.message || 'فشل تسجيل الحركة المخزنية من الخادم');
+        }
+      } else {
+        setErrorMsg('حدث خطأ في الاتصال بالخادم. يرجى التأكد من تشغيل واجهة الـ API.');
+      }
+    }
   };
 
   return (
@@ -71,26 +115,26 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
         )}
 
         {/* Current status bar */}
-        <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
           <div>
-            <span className="text-slate-400 block text-[11px]">كود الصنف والمخزن:</span>
-            <span className="font-mono text-indigo-400 font-semibold">{item.code}</span> • <span className="text-slate-300">{item.warehouse_name}</span>
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">كود الصنف والمخزن:</span>
+            <span className="font-mono text-brand-primary dark:text-rose-400 font-semibold">{item.code}</span> • <span className="text-slate-800 dark:text-slate-300">{item.warehouse_name}</span>
           </div>
           <div className="text-left">
-            <span className="text-slate-400 block text-[11px]">الرصيد الدفتري الحالي:</span>
-            <span className="font-mono text-base font-bold text-slate-100">{currentBalance.toLocaleString()} {item.unit_of_measure}</span>
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">الرصيد الدفتري الحالي:</span>
+            <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">{currentBalance.toLocaleString()} {item.unit_of_measure}</span>
           </div>
         </div>
 
         {/* Direction Selector */}
-        <div className="flex rounded-xl bg-slate-800/80 p-1 border border-slate-700">
+        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700">
           <button
             type="button"
             onClick={() => { setDirection('IN'); setTransactionType('goods_receipt'); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-2 ${
               direction === 'IN'
                 ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <ArrowDownLeft className="w-4 h-4" />
@@ -102,7 +146,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-2 ${
               direction === 'OUT'
                 ? 'bg-rose-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <ArrowUpRight className="w-4 h-4" />
@@ -112,7 +156,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               الكمية المطلوبة ({item.unit_of_measure})
             </label>
             <input
@@ -122,18 +166,18 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
               min="0.001"
               value={quantity}
               onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               نوع المستند المرجعي
             </label>
             <select
               value={transactionType}
               onChange={(e) => setTransactionType(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
               {direction === 'IN' ? (
                 <>
@@ -154,7 +198,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               تكلفة الوحدة (ج.م)
             </label>
             <input
@@ -163,12 +207,12 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
               value={unitCost}
               onChange={(e) => setUnitCost(parseFloat(e.target.value) || 0)}
               placeholder="0.00"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               رقم إذن / أمر التشغيل
             </label>
             <input
@@ -176,26 +220,26 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
               value={referenceNumber}
               onChange={(e) => setReferenceNumber(e.target.value)}
               placeholder="مثال: CUT-ORD-2026-081"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">ملاحظات مسؤول المخزن</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات مسؤول المخزن</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="ملاحظات رقم اللفة، فحص العيوب، نسبة الهالك..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
 
         {/* Balance After Preview */}
-        <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
-          <span className="text-slate-400">الرصيد الناتج بعد ترحيل القيد:</span>
-          <span className={`font-mono font-bold text-sm ${simulatedAfterBalance < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+        <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+          <span className="text-slate-600 dark:text-slate-400">الرصيد الناتج بعد ترحيل القيد:</span>
+          <span className={`font-mono font-bold text-sm ${simulatedAfterBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {simulatedAfterBalance.toLocaleString()} {item.unit_of_measure}
           </span>
         </div>

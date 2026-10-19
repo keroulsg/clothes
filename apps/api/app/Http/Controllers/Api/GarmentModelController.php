@@ -132,4 +132,24 @@ class GarmentModelController extends Controller
             'model' => $model,
         ]);
     }
+
+    /**
+     * عرض قائمة المقاسات المعتمدة للشركة
+     */
+    public function sizes(): JsonResponse
+    {
+        return response()->json([
+            'sizes' => Size::orderBy('sort_order')->orderBy('name')->get(),
+        ]);
+    }
+
+    /**
+     * عرض قائمة الألوان المعتمدة للشركة
+     */
+    public function colors(): JsonResponse
+    {
+        return response()->json([
+            'colors' => Color::orderBy('name')->get(),
+        ]);
+    }
 }

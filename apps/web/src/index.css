@@ -1,16 +1,366 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-hover: var(--brand-primary-hover);
+  --color-brand-primary-light: var(--brand-primary-light);
+  --color-brand-primary-subtle: var(--brand-primary-subtle);
+  --color-brand-secondary: #000000;
+  --color-brand-tertiary: #ffffff;
+  --color-brand-black: #000000;
+
+  --color-primary: var(--brand-primary);
+  --color-primary-foreground: #ffffff;
+  --color-background: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-card: var(--bg-card);
+  --color-card-foreground: var(--text-main);
+  --color-foreground: var(--text-main);
+  --color-muted: var(--bg-muted);
+  --color-muted-foreground: var(--text-muted);
+  --color-border: var(--border-color);
+  --color-input: var(--border-color);
+  --color-ring: var(--brand-primary);
+
+  --font-sans: 'Cairo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  /* GarmentOS Cloud Official Brand Palette */
+  --brand-primary: #460809;
+  --brand-primary-hover: #5d0b0d;
+  --brand-primary-active: #330506;
+  --brand-primary-light: #7c1214;
+  --brand-primary-subtle: #fbf2f2;
+  --brand-primary-contrast: #ffffff;
+  --brand-secondary: #000000;
+  --brand-tertiary: #ffffff;
+  --brand-black: #000000;
+
+  /* Typography */
+  --font-sans: 'Cairo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+
+  /* Light Theme (Default Root) - High Contrast (WCAG AA/AAA Compliant) */
+  --bg-app: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-muted: #f1f5f9;
+  --border-color: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #334155;
+  --text-dim: #475569;
+
+  /* CoreUI Variables Overrides (Light Theme) */
+  --cui-primary: #460809;
+  --cui-font-sans-serif: var(--font-sans);
+  --cui-body-bg: #f8fafc;
+  --cui-body-color: #0f172a;
+  --cui-card-bg: #ffffff;
+  --cui-card-color: #0f172a;
+  --cui-card-border-color: #cbd5e1;
+  --cui-tertiary-bg: #f1f5f9;
+  --cui-border-color: #cbd5e1;
+
+  /* Semantic Status Colors */
+  --status-success: #047857;
+  --status-success-bg: rgba(4, 120, 87, 0.12);
+  --status-warning: #b45309;
+  --status-warning-bg: rgba(180, 83, 9, 0.12);
+  --status-danger: #b91c1c;
+  --status-danger-bg: rgba(185, 28, 28, 0.12);
+  --status-info: #0369a1;
+  --status-info-bg: rgba(3, 105, 161, 0.12);
+}
+
+/* Dark Theme - High Contrast (WCAG AA/AAA Compliant) */
+[data-theme='dark'],
+.dark,
+body.dark-theme,
+[data-coreui-theme='dark'] {
+  --brand-primary: #460809;
+  --brand-primary-hover: #5d0b0d;
+  --brand-primary-active: #330506;
+  --brand-primary-light: #7c1214;
+  --brand-primary-subtle: #1c0506;
+  --brand-primary-contrast: #ffffff;
+  --brand-secondary: #000000;
+  --brand-tertiary: #ffffff;
+  --brand-black: #000000;
+
+  --bg-app: #080b12;
+  --bg-surface: #0e1320;
+  --bg-card: #121826;
+  --bg-card-hover: #172033;
+  --bg-muted: #172033;
+  --border-color: #26334d;
+  --border-subtle: #1e2638;
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-dim: #94a3b8;
+
+  --cui-primary: #460809;
+  --cui-body-bg: #080b12;
+  --cui-body-color: #f8fafc;
+  --cui-card-bg: #121826;
+  --cui-card-color: #f8fafc;
+  --cui-card-border-color: #26334d;
+  --cui-tertiary-bg: #172033;
+  --cui-border-color: #26334d;
+}
+
 @layer base {
-  :root {
-    --font-sans: 'Cairo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  * {
+    border-color: var(--border-color);
+  }
+
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     font-family: var(--font-sans);
     margin: 0;
     padding: 0;
-    background-color: #0f172a;
-    color: #f8fafc;
+    background-color: var(--bg-app);
+    color: var(--text-main);
     min-height: 100vh;
+    overflow-x: hidden;
   }
 }
+
+/* Directional & Localization Helpers */
+[dir="rtl"] {
+  text-align: right;
+  direction: rtl;
+}
+
+[dir="ltr"] {
+  text-align: left;
+  direction: ltr;
+}
+
+/* Brand Button Styling */
+.btn-brand-primary {
+  background-color: var(--brand-primary) !important;
+  border: 1px solid #5d0b0d !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px 0 rgba(70, 8, 9, 0.28);
+}
+
+.btn-brand-primary:hover {
+  background-color: var(--brand-primary-hover) !important;
+  border-color: #7c1214 !important;
+  box-shadow: 0 6px 20px 0 rgba(70, 8, 9, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-brand-primary:active {
+  background-color: var(--brand-primary-active) !important;
+  transform: translateY(0);
+}
+
+.dark .btn-brand-primary {
+  border-color: #7c1214 !important;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(124, 18, 20, 0.4);
+}
+
+/* Glassmorphism & Surface Utilities */
+.glass-panel {
+  background: rgba(14, 19, 32, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* High-End Card Border Treatments */
+.brand-card-premium {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.brand-card-premium:hover {
+  border-color: var(--brand-primary-light);
+  box-shadow: 0 10px 30px -10px rgba(74, 16, 29, 0.25);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* CoreUI Overrides to harmonize with brand tokens */
+.cui-card-dark {
+  background-color: #121826 !important;
+  border-color: #1e2638 !important;
+  color: #f8fafc !important;
+}
+
+.cui-card-dark .card-header {
+  background-color: #0e1320 !important;
+  border-bottom-color: #1e2638 !important;
+  color: #f8fafc !important;
+}
+
+.form-control:focus, .form-select:focus,
+input:focus, select:focus, textarea:focus {
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 2px rgba(70, 8, 9, 0.25) !important;
+}
+
+/* Semantic Utility Classes with Strict WCAG Contrast */
+.bg-primary {
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+
+.text-primary {
+  color: var(--brand-primary) !important;
+}
+
+.dark .text-primary,
+[data-theme='dark'] .text-primary,
+[data-coreui-theme='dark'] .text-primary {
+  color: #fca5a5 !important;
+}
+
+.bg-primary\/10 {
+  background-color: rgba(70, 8, 9, 0.12) !important;
+}
+
+.dark .bg-primary\/10,
+[data-theme='dark'] .bg-primary\/10,
+[data-coreui-theme='dark'] .bg-primary\/10 {
+  background-color: rgba(252, 165, 165, 0.15) !important;
+}
+
+.border-primary {
+  border-color: var(--brand-primary) !important;
+}
+
+.text-muted-foreground {
+  color: var(--text-muted) !important;
+}
+
+.text-foreground {
+  color: var(--text-main) !important;
+}
+
+.bg-muted\/50 {
+  background-color: var(--bg-muted) !important;
+}
+
+.border-border {
+  border-color: var(--border-color) !important;
+}
+
+/* Global Form Controls & Modals Contrast Protection */
+.modal-content,
+.cui-modal-content {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+.modal-header,
+.cui-modal-header {
+  border-bottom-color: var(--border-color) !important;
+}
+
+.modal-footer,
+.cui-modal-footer {
+  border-top-color: var(--border-color) !important;
+}
+
+/* Standardized accessible input styling across both themes */
+.input-accessible {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 0.5rem;
+}
+
+.input-accessible::placeholder {
+  color: var(--text-dim) !important;
+}
+
+.input-accessible:focus {
+  outline: none;
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 2px rgba(74, 16, 29, 0.25) !important;
+}
+
+/* Universal Theme Contrast Harmonization & Inverse Color Safety Net */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #64748b;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0e1422;
+  color: #f8fafc;
+  border-color: #26334d;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* Fix any hardcoded slate text classes in light mode */
+html:not(.dark) label {
+  color: #0f172a;
+}
+
+html:not(.dark) th {
+  color: #1e293b;
+}
+
+/* Ensure focus rings are prominent and keyboard accessible */
+*:focus-visible {
+  outline: 2px solid var(--brand-primary) !important;
+  outline-offset: 2px !important;
+}
+
+

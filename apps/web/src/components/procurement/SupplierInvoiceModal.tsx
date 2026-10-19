@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ShieldCheck, AlertCircle } from 'lucide-react';
 import type { PurchaseOrder, SupplierInvoice, GoodsReceiptNote } from '../../types';
+import { api } from '../../api/client';
 
 interface SupplierInvoiceModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
   const [subtotal, setSubtotal] = useState(expectedSubtotal);
   const [taxAmount, setTaxAmount] = useState(expectedSubtotal * 0.14);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // 3-Way Matching logic comparison
   const priceDifference = subtotal - expectedSubtotal;
@@ -36,35 +38,33 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
   const matchingStatus: 'matched' | 'price_variance' = hasVariance ? 'price_variance' : 'matched';
   const totalAmount = subtotal + taxAmount;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invoiceNumber || subtotal <= 0) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-
-      const createdInvoice: SupplierInvoice = {
-        id: 'sinv-' + Date.now(),
+    setErrorMsg('');
+    try {
+      const res = await api.procurement.createSupplierInvoice({
         invoice_number: invoiceNumber,
-        internal_reference: 'SINV-' + Math.floor(1000 + Math.random() * 9000),
-        supplier_name: purchaseOrder.supplier_name,
-        po_number: purchaseOrder.po_number,
+        purchase_order_id: purchaseOrder.id,
+        goods_receipt_note_id: goodsReceiptNote?.id || undefined,
         invoice_date: invoiceDate,
-        due_date: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        subtotal,
-        tax_amount: taxAmount,
-        total_amount: totalAmount,
+        due_date: dueDate || undefined,
+        subtotal: Number(subtotal),
+        tax_amount: Number(taxAmount),
         matching_status: matchingStatus,
-        variance_notes: hasVariance
-          ? `يوجد فرق مالي قدره ${priceDifference.toLocaleString()} ج.م بين أمر الشراء وفاتورة المورد`
-          : undefined,
-        payment_status: 'unpaid',
-      };
+      });
 
-      onSuccess(createdInvoice);
-      onClose();
-    }, 600);
+      if (res.supplier_invoice) {
+        onSuccess(res.supplier_invoice);
+        onClose();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'تعذر مطابقة واعتماد فاتورة المورد على الخادم.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -75,6 +75,12 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
         {/* 3-Way Matching Live Status Banner */}
         <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-3 ${
           hasVariance
@@ -105,7 +111,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               رقم الفاتورة الضريبية للمورد
             </label>
             <input
@@ -113,35 +119,35 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
               required
               value={invoiceNumber}
               onChange={(e) => setInvoiceNumber(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">تاريخ الفاتورة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ الفاتورة</label>
             <input
               type="date"
               required
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">تاريخ الاستحقاق</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ الاستحقاق</label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               المبلغ الصافي قبل الضريبة (ج.م)
             </label>
             <input
@@ -154,12 +160,12 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
                 setSubtotal(val);
                 setTaxAmount(val * 0.14);
               }}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               ضريبة القيمة المضافة 14% (ج.م)
             </label>
             <input
@@ -167,22 +173,22 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
               step="any"
               value={taxAmount}
               onChange={(e) => setTaxAmount(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
 
         {/* Total Obligation Preview */}
-        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+        <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
           <div>
-            <span className="text-slate-400 block text-[11px]">الالتزام المالي النهائي للمورد:</span>
-            <span className="text-slate-300">{purchaseOrder.supplier_name}</span>
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">الالتزام المالي النهائي للمورد:</span>
+            <span className="text-slate-900 dark:text-slate-300 font-semibold">{purchaseOrder.supplier_name}</span>
           </div>
           <div className="text-left">
-            <span className="text-xs font-mono font-bold text-lg text-indigo-400">
+            <span className="text-xs font-mono font-bold text-lg text-brand-primary dark:text-rose-400">
               {totalAmount.toLocaleString()} ج.م
             </span>
-            <span className="text-[10px] text-slate-400 block font-normal">شامل ضريبة القيمة المضافة</span>
+            <span className="text-[10px] text-slate-600 dark:text-slate-400 block font-normal">شامل ضريبة القيمة المضافة</span>
           </div>
         </div>
 

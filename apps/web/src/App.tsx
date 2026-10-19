@@ -1515,8 +1515,8 @@ export function App() {
                     <div
                       className="p-2 rounded-lg"
                       style={{
-                        backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
-                        color: isDark ? '#fca5a5' : '#4f0c16',
+                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                        color: isDark ? '#fca5a5' : '#460809',
                       }}
                     >
                       <Scissors className="w-4 h-4" />
@@ -1566,8 +1566,8 @@ export function App() {
                     <div
                       className="p-2 rounded-lg"
                       style={{
-                        backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
-                        color: isDark ? '#fca5a5' : '#4f0c16',
+                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                        color: isDark ? '#fca5a5' : '#460809',
                       }}
                     >
                       <Package className="w-4 h-4" />

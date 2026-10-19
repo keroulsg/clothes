@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Wrench,
   AlertTriangle,
@@ -8,11 +8,14 @@ import {
   ShieldAlert,
   Cpu,
   Package,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { api } from '../../api/client';
 import type { Language, Machine, MaintenanceWorkOrder, MaintenanceSparePart } from '../../types';
 
 interface MaintenanceTabProps {
@@ -26,120 +29,38 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   const [isWorkOrderModalOpen, setIsWorkOrderModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<MaintenanceWorkOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Initial State for Machines
-  const [machines, setMachines] = useState<Machine[]>([
-    {
-      id: 'mch-1',
-      machine_code: 'SEW-JUKI-01',
-      name: isAr ? 'ماكينة سنجر جوكي كمبيوتر - خط 1' : 'Juki DDL-9000C Direct Drive Lockstitch',
-      model_number: 'DDL-9000C',
-      serial_number: 'JK-2024-8841',
-      machine_type: 'sewing',
-      location: isAr ? 'عنبر الخياطة - خط الإنتاج أ' : 'Sewing Floor - Line A',
-      status: 'operational',
-      maintenance_interval_days: 30,
-      last_maintenance_date: '2026-09-20',
-      next_maintenance_date: '2026-10-20',
-      work_orders_count: 3,
-    },
-    {
-      id: 'mch-2',
-      machine_code: 'CUT-EAST-02',
-      name: isAr ? 'مقص قماش كهربائي رأسي إيستمان 10 بوصة' : 'Eastman 10-Inch Straight Knife Cutting Machine',
-      model_number: '629X Blue Streak',
-      serial_number: 'EM-2023-1102',
-      machine_type: 'cutting',
-      location: isAr ? 'صالة القص - طاولة 2' : 'Cutting Room - Table 2',
-      status: 'breakdown',
-      maintenance_interval_days: 15,
-      last_maintenance_date: '2026-10-01',
-      next_maintenance_date: '2026-10-16',
-      work_orders_count: 5,
-    },
-    {
-      id: 'mch-3',
-      machine_code: 'OVL-PEG-03',
-      name: isAr ? 'ماكينة أوفرلوك بيجاسوس 5 فتلة' : 'Pegasus 5-Thread Heavy Duty Overlock Machine',
-      model_number: 'M900-5',
-      serial_number: 'PG-2025-4519',
-      machine_type: 'overlock',
-      location: isAr ? 'عنبر الخياطة - خط الإنتاج ب' : 'Sewing Floor - Line B',
-      status: 'under_maintenance',
-      maintenance_interval_days: 45,
-      last_maintenance_date: '2026-09-10',
-      next_maintenance_date: '2026-10-25',
-      work_orders_count: 2,
-    },
-    {
-      id: 'mch-4',
-      machine_code: 'FUS-HASH-04',
-      name: isAr ? 'ماكينة لصق الحشو المستمر هشيما' : 'Hashima Continuous Fusing Press 450mm',
-      model_number: 'HP-450MS',
-      serial_number: 'HS-2022-7731',
-      machine_type: 'ironing',
-      location: isAr ? 'قسم الحشو والتحضير' : 'Fusing & Prep Department',
-      status: 'operational',
-      maintenance_interval_days: 60,
-      last_maintenance_date: '2026-08-30',
-      next_maintenance_date: '2026-10-30',
-      work_orders_count: 1,
-    },
-  ]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [workOrders, setWorkOrders] = useState<MaintenanceWorkOrder[]>([]);
 
-  // Initial State for Work Orders
-  const [workOrders, setWorkOrders] = useState<MaintenanceWorkOrder[]>([
-    {
-      id: 'wo-1',
-      machine_id: 'mch-2',
-      order_number: 'MNT-20261018-001',
-      work_type: 'breakdown',
-      priority: 'critical',
-      status: 'in_progress',
-      issue_description: isAr ? 'سخونة مفرطة في موتور المقص وتوقف حزام المسننات أثناء فرد طبقات الجينز' : 'Motor overheating and timing belt slippage during denim spread cut.',
-      reported_by: isAr ? 'م. كريم - مشرف القص' : 'Eng. Kareem - Cutting Lead',
-      technician_name: isAr ? 'فني / تامر عبد العزيز' : 'Tamer Abdelaziz (Senior Tech)',
-      downtime_hours: 4.5,
-      spare_parts_cost: 320,
-      labor_cost: 150,
-      total_cost: 470,
-      created_at: '2026-10-18',
-    },
-    {
-      id: 'wo-2',
-      machine_id: 'mch-3',
-      order_number: 'MNT-20261019-002',
-      work_type: 'preventive',
-      priority: 'medium',
-      status: 'scheduled',
-      issue_description: isAr ? 'صيانة دورية لتغيير كستبان الزيت وفحص ضبط الكروشيهات ومشدات الخيوط' : 'Preventive oil pump flush, looper alignment, and tension calibration.',
-      reported_by: isAr ? 'نظام الصيانة التلقائي' : 'Automated Maintenance Scheduler',
-      technician_name: isAr ? 'فني / سمير صبحي' : 'Sameer Sobhy',
-      downtime_hours: 1.0,
-      spare_parts_cost: 110,
-      labor_cost: 80,
-      total_cost: 190,
-      created_at: '2026-10-19',
-    },
-    {
-      id: 'wo-3',
-      machine_id: 'mch-1',
-      order_number: 'MNT-20260920-098',
-      work_type: 'preventive',
-      priority: 'low',
-      status: 'completed',
-      issue_description: isAr ? 'استبدال مشط التغذية وبلاطة الإبرة بعد تشغيل 20,000 قطعة قميص' : 'Feed dog and needle plate replacement after 20,000 shirt run.',
-      resolution_notes: isAr ? 'تم استبدال المشط والبلاطة، ومعايرة حساس قص الخيط الإلكتروني بنجاح.' : 'Replaced feed dog, calibrated electronic thread trimmer.',
-      reported_by: isAr ? 'مشرف خط 1' : 'Line 1 Supervisor',
-      technician_name: isAr ? 'فني / تامر عبد العزيز' : 'Tamer Abdelaziz',
-      downtime_hours: 0.75,
-      spare_parts_cost: 85,
-      labor_cost: 50,
-      total_cost: 135,
-      created_at: '2026-09-20',
-      completion_time: '2026-09-20 14:30:00',
-    },
-  ]);
+  const loadMaintenanceData = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const [mchRes, woRes] = await Promise.allSettled([
+        api.maintenance.getMachines(1),
+        api.maintenance.getWorkOrders(1),
+      ]);
+
+      if (mchRes.status === 'fulfilled' && mchRes.value?.data) {
+        setMachines(mchRes.value.data);
+      }
+      if (woRes.status === 'fulfilled' && woRes.value?.data) {
+        setWorkOrders(woRes.value.data);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات الصيانة والماكينات' : 'Failed to load maintenance data'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMaintenanceData();
+  }, []);
 
   // Spare parts ledger
   const [spareParts] = useState<MaintenanceSparePart[]>([
@@ -210,118 +131,91 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   });
 
   // Handlers
-  const handleAddMachine = (e: React.FormEvent) => {
+  const handleAddMachine = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMachine.name || !newMachine.machine_code) return;
 
-    const created: Machine = {
-      id: `mch-${Date.now()}`,
-      machine_code: newMachine.machine_code,
-      name: newMachine.name,
-      model_number: newMachine.model_number,
-      machine_type: newMachine.machine_type as any,
-      location: newMachine.location,
-      status: 'operational',
-      maintenance_interval_days: Number(newMachine.maintenance_interval_days) || 30,
-      last_maintenance_date: new Date().toISOString().split('T')[0],
-      next_maintenance_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-      work_orders_count: 0,
-    };
+    try {
+      const res = await api.maintenance.createMachine({
+        machine_code: newMachine.machine_code,
+        name: newMachine.name,
+        model_number: newMachine.model_number,
+        machine_type: newMachine.machine_type,
+        location: newMachine.location,
+        maintenance_interval_days: Number(newMachine.maintenance_interval_days) || 30,
+      });
 
-    setMachines([created, ...machines]);
-    setIsAddMachineModalOpen(false);
-    setNewMachine({
-      machine_code: '',
-      name: '',
-      model_number: '',
-      machine_type: 'sewing',
-      location: '',
-      maintenance_interval_days: 30,
-    });
+      if (res?.machine) {
+        setMachines([res.machine, ...machines]);
+      } else {
+        await loadMaintenanceData();
+      }
+      setIsAddMachineModalOpen(false);
+      setNewMachine({
+        machine_code: '',
+        name: '',
+        model_number: '',
+        machine_type: 'sewing',
+        location: '',
+        maintenance_interval_days: 30,
+      });
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل الماكينة' : 'Failed to register machine'));
+    }
   };
 
-  const handleCreateWorkOrder = (e: React.FormEvent) => {
+  const handleCreateWorkOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOrder.machine_id || !newOrder.issue_description) return;
 
-    const created: MaintenanceWorkOrder = {
-      id: `wo-${Date.now()}`,
-      machine_id: newOrder.machine_id,
-      order_number: `MNT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
-      work_type: newOrder.work_type as any,
-      priority: newOrder.priority as any,
-      status: 'in_progress',
-      issue_description: newOrder.issue_description,
-      reported_by: newOrder.reported_by,
-      technician_name: newOrder.technician_name,
-      downtime_hours: 0,
-      spare_parts_cost: 0,
-      labor_cost: Number(newOrder.labor_cost) || 0,
-      total_cost: Number(newOrder.labor_cost) || 0,
-      created_at: new Date().toISOString().split('T')[0],
-    };
+    try {
+      const res = await api.maintenance.createWorkOrder({
+        machine_id: newOrder.machine_id,
+        work_type: newOrder.work_type,
+        priority: newOrder.priority,
+        issue_description: newOrder.issue_description,
+        reported_by: newOrder.reported_by,
+        technician_name: newOrder.technician_name,
+        labor_cost: Number(newOrder.labor_cost) || 0,
+      });
 
-    // Update machine status to breakdown if critical or breakdown
-    if (newOrder.work_type === 'breakdown' || newOrder.priority === 'critical') {
-      setMachines(machines.map((m) => (m.id === newOrder.machine_id ? { ...m, status: 'breakdown' } : m)));
-    } else {
-      setMachines(machines.map((m) => (m.id === newOrder.machine_id ? { ...m, status: 'under_maintenance' } : m)));
+      if (res?.work_order) {
+        setWorkOrders([res.work_order, ...workOrders]);
+      } else {
+        await loadMaintenanceData();
+      }
+      setIsWorkOrderModalOpen(false);
+      setNewOrder({
+        machine_id: '',
+        work_type: 'breakdown',
+        priority: 'high',
+        issue_description: '',
+        reported_by: '',
+        technician_name: '',
+        labor_cost: 100,
+      });
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إنشاء أمر الصيانة' : 'Failed to create work order'));
     }
-
-    setWorkOrders([created, ...workOrders]);
-    setIsWorkOrderModalOpen(false);
-    setNewOrder({
-      machine_id: '',
-      work_type: 'breakdown',
-      priority: 'high',
-      issue_description: '',
-      reported_by: '',
-      technician_name: '',
-      labor_cost: 100,
-    });
   };
 
-  const handleCompleteWorkOrder = (e: React.FormEvent) => {
+  const handleCompleteWorkOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
 
-    const downtime = Number(completeData.downtime_hours) || 0;
-    const labor = Number(completeData.labor_cost) || selectedOrder.labor_cost;
-    const total = labor + selectedOrder.spare_parts_cost;
+    try {
+      await api.maintenance.completeWorkOrder(selectedOrder.id, {
+        resolution_notes: completeData.resolution_notes,
+        downtime_hours: Number(completeData.downtime_hours) || 0,
+      });
 
-    setWorkOrders(
-      workOrders.map((wo) =>
-        wo.id === selectedOrder.id
-          ? {
-              ...wo,
-              status: 'completed',
-              resolution_notes: completeData.resolution_notes,
-              downtime_hours: downtime,
-              labor_cost: labor,
-              total_cost: total,
-              completion_time: new Date().toISOString(),
-            }
-          : wo
-      )
-    );
-
-    // Restore machine status to operational
-    setMachines(
-      machines.map((m) =>
-        m.id === selectedOrder.machine_id
-          ? {
-              ...m,
-              status: 'operational',
-              last_maintenance_date: new Date().toISOString().split('T')[0],
-              next_maintenance_date: new Date(Date.now() + m.maintenance_interval_days * 86400000).toISOString().split('T')[0],
-            }
-          : m
-      )
-    );
-
-    setIsCompleteModalOpen(false);
-    setSelectedOrder(null);
-    setCompleteData({ resolution_notes: '', downtime_hours: 1.5, labor_cost: 120 });
+      await loadMaintenanceData();
+      setIsCompleteModalOpen(false);
+      setSelectedOrder(null);
+      setCompleteData({ resolution_notes: '', downtime_hours: 1.5, labor_cost: 120 });
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إغلاق أمر الصيانة' : 'Failed to complete work order'));
+    }
   };
 
   // Metrics
@@ -334,6 +228,26 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
 
   return (
     <div className="space-y-6">
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadMaintenanceData} className="text-xs py-1">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            {isAr ? 'إعادة المحاولة' : 'Retry'}
+          </Button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>{isAr ? 'جاري تحميل سجلات الصيانة والماكينات...' : 'Loading asset maintenance records...'}</span>
+        </div>
+      )}
+
       {/* Top Banner / Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4 border-l-4 border-emerald-600">

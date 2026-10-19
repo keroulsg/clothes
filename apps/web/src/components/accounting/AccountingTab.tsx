@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Receipt,
   DollarSign,
@@ -6,11 +6,14 @@ import {
   Plus,
   Scale,
   PieChart,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { api } from '../../api/client';
 
 import type { Language, ChartOfAccount, JournalEntry, ProductionCostSheet } from '../../types';
 
@@ -22,65 +25,44 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const isAr = lang === 'ar';
   const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'journals' | 'vouchers' | 'costing'>('accounts');
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Default apparel manufacturing accounts
-  const [accounts] = useState<ChartOfAccount[]>([
+  const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
+  const [journals, setJournals] = useState<JournalEntry[]>([]);
+  const [costSheets, setCostSheets] = useState<ProductionCostSheet[]>([]);
 
-    { id: '1', code: '1010', name: isAr ? 'نقدية بالصندوق والخزينة' : 'Cash on Hand', type: 'asset', category: 'current_asset', current_balance: 45000, is_active: true },
-    { id: '2', code: '1020', name: isAr ? 'حسابات البنوك الجارية' : 'Bank Accounts', type: 'asset', category: 'current_asset', current_balance: 185000, is_active: true },
-    { id: '3', code: '1110', name: isAr ? 'العملاء والمدينون التجاريون' : 'Accounts Receivable', type: 'asset', category: 'current_asset', current_balance: 62000, is_active: true },
-    { id: '4', code: '1210', name: isAr ? 'مخزون الأقمشة والخامات' : 'Raw Materials Inventory', type: 'asset', category: 'current_asset', current_balance: 320000, is_active: true },
-    { id: '5', code: '1230', name: isAr ? 'مخزون المنتجات التامة للبيع' : 'Finished Goods Inventory', type: 'asset', category: 'current_asset', current_balance: 140000, is_active: true },
-    { id: '6', code: '2010', name: isAr ? 'الموردون والدائنون التجاريون' : 'Accounts Payable', type: 'liability', category: 'current_liability', current_balance: 95000, is_active: true },
-    { id: '7', code: '4010', name: isAr ? 'إيراد مبيعات الملابس والإنتاج التام' : 'Garment Sales Revenue', type: 'revenue', category: 'sales_revenue', current_balance: 290000, is_active: true },
-    { id: '8', code: '5010', name: isAr ? 'تكلفة البضاعة المباعة (COGS)' : 'Cost of Goods Sold', type: 'expense', category: 'direct_cost', current_balance: 175000, is_active: true },
-    { id: '9', code: '5020', name: isAr ? 'أجور عمال الإنتاج المباشرة (أجر القطعة)' : 'Direct Labor Wages', type: 'expense', category: 'direct_cost', current_balance: 42000, is_active: true },
-  ]);
+  // Load accounting data from server
+  const loadAccountingData = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const [accsRes, journalsRes, costSheetsRes] = await Promise.allSettled([
+        api.accounting.getAccounts(),
+        api.accounting.getJournalEntries(1),
+        api.accounting.getCostSheets(1),
+      ]);
 
-  const [journals, setJournals] = useState<JournalEntry[]>([
-    {
-      id: 'je-1',
-      entry_number: 'JE-20261019-001',
-      entry_date: '2026-10-19',
-      description: isAr ? 'إثبات مبيعات نقدية لمعرض المصنع وإيداعها بالخزينة' : 'Factory Outlet cash sales recording',
-      total_debit: 14850,
-      total_credit: 14850,
-      status: 'posted',
-      lines: [
-        { id: 'l-1', account_id: '1', debit: 14850, credit: 0, description: isAr ? 'خزينة المصنع' : 'Factory Cash' },
-        { id: 'l-2', account_id: '7', debit: 0, credit: 14850, description: isAr ? 'إيراد مبيعات' : 'Sales Revenue' },
-      ],
-    },
-    {
-      id: 'je-2',
-      entry_number: 'JE-20261018-002',
-      entry_date: '2026-10-18',
-      description: isAr ? 'صرف مستحقات أجور عمال الخياطة عن أسبوع التشغيل' : 'Weekly sewing operators piece-rate wages payout',
-      total_debit: 28000,
-      total_credit: 28000,
-      status: 'posted',
-      lines: [
-        { id: 'l-3', account_id: '9', debit: 28000, credit: 0, description: isAr ? 'أجور عمال الإنتاج' : 'Direct Labor Expense' },
-        { id: 'l-4', account_id: '1', debit: 0, credit: 28000, description: isAr ? 'خزينة المصنع' : 'Cash Outflow' },
-      ],
-    },
-  ]);
+      if (accsRes.status === 'fulfilled' && Array.isArray(accsRes.value)) {
+        setAccounts(accsRes.value);
+      }
+      if (journalsRes.status === 'fulfilled' && journalsRes.value?.data) {
+        setJournals(journalsRes.value.data);
+      }
+      if (costSheetsRes.status === 'fulfilled' && costSheetsRes.value?.data) {
+        setCostSheets(costSheetsRes.value.data);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'تعذر جلب البيانات المحاسبية' : 'Failed to load accounting data'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const [costSheets] = useState<ProductionCostSheet[]>([
-    {
-      id: 'cs-1',
-      production_order_id: 'po-01',
-      garment_model_id: 'gm-01',
-      total_produced_pieces: 1000,
-      direct_materials_cost: 45000,
-      direct_labor_cost: 18000,
-      subcontracted_services_cost: 4000,
-      allocated_overhead_cost: 9450,
-      total_cost: 76450,
-      cost_per_piece: 76.45,
-      status: 'calculated',
-    },
-  ]);
+  useEffect(() => {
+    loadAccountingData();
+  }, []);
 
   // Modal State for New Balanced Journal Entry
   const [newDesc, setNewDesc] = useState('');
@@ -88,32 +70,66 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [creditAcc, setCreditAcc] = useState('4010');
   const [entryAmount, setEntryAmount] = useState<number>(5000);
 
-  const handleCreateJournal = (e: React.FormEvent) => {
+  const handleCreateJournal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (entryAmount <= 0) return;
 
-    const newEntry: JournalEntry = {
-      id: `je-${Date.now()}`,
-      entry_number: `JE-${Date.now().toString().slice(-6)}`,
-      entry_date: new Date().toISOString().split('T')[0],
-      description: newDesc || (isAr ? 'قيد تسوية عام' : 'General Adjustment Entry'),
-      total_debit: entryAmount,
-      total_credit: entryAmount,
-      status: 'posted',
-      lines: [
-        { id: `l-${Date.now()}-1`, account_id: debitAcc, debit: entryAmount, credit: 0, description: newDesc },
-        { id: `l-${Date.now()}-2`, account_id: creditAcc, debit: 0, credit: entryAmount, description: newDesc },
-      ],
-    };
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      // Find matching accounts
+      const debitAccount = accounts.find((a) => a.code === debitAcc || a.id === debitAcc);
+      const creditAccount = accounts.find((a) => a.code === creditAcc || a.id === creditAcc);
 
-    setJournals([newEntry, ...journals]);
-    setIsJournalModalOpen(false);
-    setNewDesc('');
+      const debitId = debitAccount ? debitAccount.id : debitAcc;
+      const creditId = creditAccount ? creditAccount.id : creditAcc;
+
+      const res = await api.accounting.createJournalEntry({
+        description: newDesc || (isAr ? 'قيد تسوية عام' : 'General Adjustment Entry'),
+        entry_date: new Date().toISOString().split('T')[0],
+        lines: [
+          { account_id: debitId, debit: entryAmount, credit: 0, description: newDesc },
+          { account_id: creditId, debit: 0, credit: entryAmount, description: newDesc },
+        ],
+      });
+
+      if (res?.entry) {
+        setJournals((prev) => [res.entry, ...prev]);
+      }
+      setIsJournalModalOpen(false);
+      setNewDesc('');
+      // Reload accounts balances
+      api.accounting.getAccounts().then((accs) => {
+        if (Array.isArray(accs)) setAccounts(accs);
+      }).catch(() => {});
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل حفظ قيد اليومية' : 'Failed to post journal entry'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Financial Health KPIs */}
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadAccountingData} className="text-xs py-1">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            {isAr ? 'إعادة المحاولة' : 'Retry'}
+          </Button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>{isAr ? 'جاري تحميل البيانات المحاسبية...' : 'Loading accounting records...'}</span>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between">
@@ -434,8 +450,15 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
             <Button type="button" variant="ghost" onClick={() => setIsJournalModalOpen(false)}>
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button type="submit">
-              {isAr ? 'ترحيل القيد' : 'Post Journal'}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
+                  {isAr ? 'جاري الترحيل...' : 'Posting...'}
+                </>
+              ) : (
+                isAr ? 'ترحيل القيد' : 'Post Journal'
+              )}
             </Button>
           </div>
         </form>

@@ -27,12 +27,12 @@
 }
 
 :root {
-  /* GarmentOS Cloud Official Brand Palette - Updated to #4f0c16, #000000, #FFFFFF */
-  --brand-primary: #4f0c16;
-  --brand-primary-hover: #66101d;
-  --brand-primary-active: #38070e;
-  --brand-primary-light: #871b29;
-  --brand-primary-subtle: #fdf2f4;
+  /* GarmentOS Cloud Official Brand Palette - Approved: #460809, #000000, #FFFFFF */
+  --brand-primary: #460809;
+  --brand-primary-hover: #5d0b0c;
+  --brand-primary-active: #320607;
+  --brand-primary-light: #7c1214;
+  --brand-primary-subtle: #fcf1f1;
   --brand-primary-contrast: #ffffff;
   --brand-secondary: #000000;
   --brand-tertiary: #ffffff;
@@ -55,7 +55,7 @@
   --text-dim: #64748b;
 
   /* CoreUI Variables Overrides (Light Theme) */
-  --cui-primary: #4f0c16;
+  --cui-primary: #460809;
   --cui-font-sans-serif: var(--font-sans);
   --cui-body-bg: #f4f6fa;
   --cui-body-color: #000000;
@@ -81,11 +81,11 @@
 html:not(.dark),
 body:not(.dark-theme),
 [data-coreui-theme='light'] {
-  --brand-primary: #4f0c16;
-  --brand-primary-hover: #66101d;
-  --brand-primary-active: #38070e;
-  --brand-primary-light: #871b29;
-  --brand-primary-subtle: #fdf2f4;
+  --brand-primary: #460809;
+  --brand-primary-hover: #5d0b0c;
+  --brand-primary-active: #320607;
+  --brand-primary-light: #7c1214;
+  --brand-primary-subtle: #fcf1f1;
   --brand-primary-contrast: #ffffff;
   --brand-secondary: #000000;
   --brand-tertiary: #ffffff;
@@ -102,7 +102,7 @@ body:not(.dark-theme),
   --text-muted: #334155;
   --text-dim: #64748b;
 
-  --cui-primary: #4f0c16;
+  --cui-primary: #460809;
   --cui-body-bg: #f4f6fa;
   --cui-body-color: #000000;
   --cui-card-bg: #ffffff;
@@ -117,11 +117,11 @@ body:not(.dark-theme),
 .dark,
 body.dark-theme,
 [data-coreui-theme='dark'] {
-  --brand-primary: #4f0c16;
-  --brand-primary-hover: #66101d;
-  --brand-primary-active: #38070e;
-  --brand-primary-light: #871b29;
-  --brand-primary-subtle: #26060a;
+  --brand-primary: #460809;
+  --brand-primary-hover: #5d0b0c;
+  --brand-primary-active: #320607;
+  --brand-primary-light: #7c1214;
+  --brand-primary-subtle: #230405;
   --brand-primary-contrast: #ffffff;
   --brand-secondary: #000000;
   --brand-tertiary: #ffffff;
@@ -138,7 +138,7 @@ body.dark-theme,
   --text-muted: #cbd5e1;
   --text-dim: #94a3b8;
 
-  --cui-primary: #4f0c16;
+  --cui-primary: #460809;
   --cui-body-bg: #080b12;
   --cui-body-color: #f8fafc;
   --cui-card-bg: #121826;

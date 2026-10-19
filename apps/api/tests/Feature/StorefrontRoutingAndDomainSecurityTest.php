@@ -383,8 +383,9 @@ class StorefrontRoutingAndDomainSecurityTest extends TestCase
 
         $order = StoreOrder::where('tenant_id', $this->tenantA->id)->first();
         $this->assertEquals(500, (float) $order->subtotal);
-        $this->assertEquals(40, (float) $order->shipping_fee);
-        $this->assertEquals(540, (float) $order->total_amount);
+        // التحقق من أن الخادم احتسب تكلفة الشحن المعتمدة (50 ج.م للقاهرة) متجاهلاً القيمة المرسلة من العميل (40 ج.م)
+        $this->assertEquals(50, (float) $order->shipping_fee);
+        $this->assertEquals(550, (float) $order->total_amount);
         $this->assertEquals('new', $order->status);
     }
 
@@ -595,6 +596,37 @@ class StorefrontRoutingAndDomainSecurityTest extends TestCase
 
         $response = $this->getJson('http://store.alphagarments.com/api/v1/storefront/public');
         $response->assertStatus(404);
+    }
+
+    /**
+     * اختبار أمان P0: رسوم الشحن المرسلة من العميل يتم تجاهلها تماماً وتطبيق السياسة المعتمدة سيرفر-سايد
+     */
+    public function test_client_submitted_shipping_fee_is_ignored_and_overridden_by_authoritative_server_policy(): void
+    {
+        // العميل يحاول إرسال رسوم شحن 0 أو 5 جنيه لمدينة الإسكندرية (المفترض 60 ج.م)
+        $response = $this->postJson('http://alpha-apparel.garmentos.cloud/api/v1/storefront/order', [
+            'customer_name' => 'Shipping Tamper Test Buyer',
+            'customer_phone' => '01011112222',
+            'shipping_address' => 'Sidi Gaber, Alexandria',
+            'city' => 'Alexandria',
+            'payment_method' => 'cod',
+            'shipping_fee' => 5.00, // محاولة تلاعب برسوم الشحن
+            'items' => [
+                [
+                    'variant_id' => $this->variantA->id,
+                    'quantity' => 1,
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(201);
+
+        $order = StoreOrder::withoutGlobalScopes()->where('customer_name', 'Shipping Tamper Test Buyer')->first();
+        $this->assertNotNull($order);
+        $this->assertEquals(250.00, (float) $order->subtotal);
+        // تم فرض 60 ج.م للإسكندرية وتجاهل 5.00 ج.م المرسلة من المتصفح
+        $this->assertEquals(60.00, (float) $order->shipping_fee);
+        $this->assertEquals(310.00, (float) $order->total_amount);
     }
 }
 

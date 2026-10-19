@@ -124,7 +124,8 @@ class StorefrontService
                 ];
             }
 
-            $shipping = isset($data['shipping_fee']) ? (float) $data['shipping_fee'] : 50.0;
+            // Security P0: Calculate shipping authoritatively on the server. Never trust client-supplied shipping_fee!
+            $shipping = $this->calculateAuthoritativeShipping($tenantId, $data['city'] ?? 'Cairo', $subtotal);
             $total = round($subtotal + $shipping, 4);
 
             $order = StoreOrder::withoutGlobalScopes()->create([
@@ -148,5 +149,37 @@ class StorefrontService
 
             return $order->load('items');
         });
+    }
+
+    /**
+     * سياسة احتساب تكلفة الشحن المعتمدة سيرفر-سايد
+     * تمنع التلاعب وتفرض رسوم الشحن الحقيقية بناء على المدينة والقيمة
+     */
+    public function calculateAuthoritativeShipping(string $tenantId, ?string $city, float $subtotal): float
+    {
+        // شحن مجاني للطلبات الكبيرة بقيمة 1500 جنيه فأكثر
+        if ($subtotal >= 1500.0) {
+            return 0.0;
+        }
+
+        $cityClean = mb_strtolower(trim($city ?? ''));
+
+        // القاهرة الكبرى والجيزة
+        if (in_array($cityClean, ['cairo', 'giza', 'القاهرة', 'الجيزة', 'october', 'أكتوبر', 'زايد', 'nasr city', 'new cairo'], true)) {
+            return 50.0;
+        }
+
+        // الإسكندرية والوجه البحري والقناة
+        if (in_array($cityClean, ['alexandria', 'alex', 'الإسكندرية', 'tanta', 'طنطا', 'mansoura', 'المنصورة', 'ismailia', 'suez', 'port said', 'بورسعيد', 'السويس', 'الإسماعيلية'], true)) {
+            return 60.0;
+        }
+
+        // الصعيد والبحر الأحمر والمحافظات البعيدة
+        if (in_array($cityClean, ['aswan', 'luxor', 'hurghada', 'sharm', 'أسوان', 'الأقصر', 'الغردقة', 'قنا', 'سوهاج', 'أسيوط', 'بني سويف', 'المنيا', 'مطروح'], true)) {
+            return 80.0;
+        }
+
+        // القيمة القياسية الافتراضية للشحن الموثوق
+        return 50.0;
     }
 }

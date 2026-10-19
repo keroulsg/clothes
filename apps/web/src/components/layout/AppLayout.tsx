@@ -205,9 +205,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 <span
                   className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border"
                   style={{
-                    backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
-                    color: isDark ? '#fca5a5' : '#4f0c16',
-                    borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.3)',
+                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                    color: isDark ? '#fca5a5' : '#460809',
+                    borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.3)',
                   }}
                 >
                   ERP
@@ -397,7 +397,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                             style={
                               isActive
                                 ? {
-                                    backgroundColor: isDark ? '#4f0c16' : '#4f0c16',
+                                    backgroundColor: isDark ? '#460809' : '#460809',
                                     borderColor: '#871b29',
                                     color: '#ffffff',
                                   }
@@ -414,7 +414,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                                 style={
                                   item.disabled
                                     ? { backgroundColor: '#e2e8f0', color: '#64748b' }
-                                    : { backgroundColor: 'rgba(79, 12, 22, 0.25)', color: isDark ? '#fca5a5' : '#ffffff' }
+                                    : { backgroundColor: 'rgba(70, 8, 9, 0.25)', color: isDark ? '#fca5a5' : '#ffffff' }
                                 }
                               >
                                 {item.badge}
@@ -482,19 +482,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                           isActive
                             ? {
                                 backgroundColor: isDark
-                                  ? 'rgba(79, 12, 22, 0.35)'
-                                  : 'rgba(79, 12, 22, 0.08)',
+                                  ? 'rgba(70, 8, 9, 0.35)'
+                                  : 'rgba(70, 8, 9, 0.08)',
                                 borderColor: isDark
                                   ? '#871b29'
-                                  : 'rgba(79, 12, 22, 0.25)',
-                                color: isDark ? '#ffffff' : '#4f0c16',
+                                  : 'rgba(70, 8, 9, 0.25)',
+                                color: isDark ? '#ffffff' : '#460809',
                               }
                             : {}
                         }
                       >
                         <div className="flex items-center gap-2.5">
                           <span
-                            style={isActive ? { color: isDark ? '#fca5a5' : '#4f0c16' } : {}}
+                            style={isActive ? { color: isDark ? '#fca5a5' : '#460809' } : {}}
                           >
                             {item.icon}
                           </span>
@@ -507,8 +507,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                               item.disabled
                                 ? { backgroundColor: isDark ? '#1e293b' : '#e2e8f0', color: '#94a3b8' }
                                 : {
-                                    backgroundColor: 'rgba(79, 12, 22, 0.15)',
-                                    color: isDark ? '#fca5a5' : '#4f0c16',
+                                    backgroundColor: 'rgba(70, 8, 9, 0.15)',
+                                    color: isDark ? '#fca5a5' : '#460809',
                                   }
                             }
                           >

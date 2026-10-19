@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TrendingUp,
   ShoppingBag,
@@ -8,10 +8,13 @@ import {
   Truck,
   DollarSign,
   PackageCheck,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { api } from '../../api/client';
 import type { Language, SalesOrder, SalesInvoice, ProductVariant } from '../../types';
 
 interface SalesTabProps {
@@ -19,116 +22,83 @@ interface SalesTabProps {
   variants: ProductVariant[];
 }
 
-
 export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
   const isAr = lang === 'ar';
   const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'pos'>('orders');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Mock initial demonstration data with real operational structure
-  const [orders, setOrders] = useState<SalesOrder[]>([
-    {
-      id: 'so-1',
-      order_number: 'SO-20261019-001',
-      customer_name: isAr ? 'محلات أطفال القاهرة الكبرى' : 'Cairo Kids Mega Stores',
-      order_type: 'wholesale',
-      status: 'reserved',
-      payment_status: 'partially_paid',
-      subtotal: 36000,
-      tax_amount: 5040,
-      discount_amount: 1040,
-      total_amount: 40000,
-      expected_delivery_date: '2026-10-25',
-    },
-    {
-      id: 'so-2',
-      order_number: 'SO-20261019-002',
-      customer_name: isAr ? 'شركة الدلتا للتوزيع والتجارة' : 'Delta Trading & Distribution',
-      order_type: 'wholesale',
-      status: 'confirmed',
-      payment_status: 'unpaid',
-      subtotal: 18000,
-      tax_amount: 2520,
-      discount_amount: 0,
-      total_amount: 20520,
-      expected_delivery_date: '2026-10-28',
-    },
-  ]);
+  const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
 
-  const [invoices, setInvoices] = useState<SalesInvoice[]>([
-    {
-      id: 'inv-1',
-      invoice_number: 'INV-20261019-001',
-      customer_name: isAr ? 'محلات أطفال القاهرة الكبرى' : 'Cairo Kids Mega Stores',
-      invoice_type: 'standard',
-      status: 'paid',
-      payment_method: 'bank_transfer',
-      subtotal: 20000,
-      tax_amount: 2800,
-      discount_amount: 800,
-      total_amount: 22000,
-      paid_amount: 22000,
-      balance_due: 0,
-      invoice_date: '2026-10-18',
-    },
-    {
-      id: 'inv-2',
-      invoice_number: 'POS-20261019-881',
-      customer_name: isAr ? 'عميل نقدي - منفذ المصنع' : 'Walk-in Cash Client',
-      invoice_type: 'pos_receipt',
-      status: 'paid',
-      payment_method: 'cash',
-      subtotal: 720,
-      tax_amount: 0,
-      discount_amount: 0,
-      total_amount: 720,
-      paid_amount: 720,
-      balance_due: 0,
-      invoice_date: '2026-10-19',
-    },
-  ]);
+  const loadSalesData = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const [ordersRes, invRes] = await Promise.allSettled([
+        api.sales.getOrders(1),
+        api.sales.getInvoices(1),
+      ]);
+
+      if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
+        setOrders(ordersRes.value.data);
+      }
+      if (invRes.status === 'fulfilled' && invRes.value?.data) {
+        setInvoices(invRes.value.data);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المبيعات' : 'Failed to load sales data'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSalesData();
+  }, []);
 
   // POS State
   const [posCart, setPosCart] = useState<{ variantId: string; name: string; price: number; qty: number }[]>([]);
   const [posSuccessMsg, setPosSuccessMsg] = useState<string | null>(null);
 
-  const handleReserveStock = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'reserved' as const } : o))
-    );
+  const handleReserveStock = async (orderId: string) => {
+    try {
+      const res = await api.sales.reserveOrderStock(orderId);
+      if (res?.order) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.order : o)));
+      } else {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: 'reserved' as const } : o))
+        );
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل حجز المخزون' : 'Failed to reserve stock'));
+    }
   };
 
-  const handleFulfillOrder = (orderId: string) => {
-    const target = orders.find((o) => o.id === orderId);
-    if (!target) return;
-
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'fulfilled' as const } : o))
-    );
-
-    const newInv: SalesInvoice = {
-      id: `inv-${Date.now()}`,
-      invoice_number: `INV-${Date.now().toString().slice(-6)}`,
-      customer_name: target.customer_name,
-      invoice_type: 'standard',
-      status: 'issued',
-      payment_method: 'credit',
-      subtotal: target.subtotal,
-      tax_amount: target.tax_amount,
-      discount_amount: target.discount_amount,
-      total_amount: target.total_amount,
-      paid_amount: 0,
-      balance_due: target.total_amount,
-      invoice_date: new Date().toISOString().split('T')[0],
-    };
-
-    setInvoices((prev) => [newInv, ...prev]);
+  const handleFulfillOrder = async (orderId: string) => {
+    try {
+      const res = await api.sales.fulfillOrder(orderId);
+      if (res?.order) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.order : o)));
+      } else {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: 'fulfilled' as const } : o))
+        );
+      }
+      // Reload invoices
+      api.sales.getInvoices(1).then((res) => {
+        if (res?.data) setInvoices(res.data);
+      }).catch(() => {});
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إتمام تسليم الطلب' : 'Failed to fulfill order'));
+    }
   };
 
   const addToPosCart = (v: ProductVariant) => {
     const name = `${v.garment_model?.name || v.sku} (${v.size?.name || v.size_name || 'Std'} - ${v.color?.name || v.color_name || 'Std'})`;
     const price = Number(v.retail_price) > 0 ? Number(v.retail_price) : 180;
-
 
     setPosCart((prev) => {
       const exist = prev.find((i) => i.variantId === v.id);
@@ -139,36 +109,61 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
     });
   };
 
-  const handlePosCheckout = () => {
+  const handlePosCheckout = async () => {
     if (posCart.length === 0) return;
-    const total = posCart.reduce((sum, i) => sum + i.price * i.qty, 0);
 
-    const posInvoice: SalesInvoice = {
-      id: `pos-${Date.now()}`,
-      invoice_number: `POS-${Date.now().toString().slice(-5)}`,
-      customer_name: isAr ? 'عميل نقدي - منفذ بيع المصنع' : 'Factory Outlet Cash Client',
-      invoice_type: 'pos_receipt',
-      status: 'paid',
-      payment_method: 'cash',
-      subtotal: total,
-      tax_amount: 0,
-      discount_amount: 0,
-      total_amount: total,
-      paid_amount: total,
-      balance_due: 0,
-      invoice_date: new Date().toISOString().split('T')[0],
-    };
+    try {
+      const items = posCart.map((i) => ({
+        variant_id: i.variantId,
+        description: i.name,
+        quantity: i.qty,
+        unit_price: i.price,
+        tax_rate: 0,
+      }));
 
-    setInvoices((prev) => [posInvoice, ...prev]);
-    setPosCart([]);
-    setPosSuccessMsg(isAr ? `تم إتمام عملية البيع بنجاح برقم: ${posInvoice.invoice_number}` : `POS Sale completed! Receipt: ${posInvoice.invoice_number}`);
-    setTimeout(() => setPosSuccessMsg(null), 4000);
+      const res = await api.sales.processPosSale({
+        customer_name: isAr ? 'عميل نقدي - منفذ بيع المصنع' : 'Factory Outlet Cash Client',
+        payment_method: 'cash',
+        items,
+      });
+
+      if (res?.invoice) {
+        setInvoices((prev) => [res.invoice, ...prev]);
+        setPosSuccessMsg(isAr ? `تم إتمام عملية البيع بنجاح برقم: ${res.invoice.invoice_number}` : `POS Sale completed! Receipt: ${res.invoice.invoice_number}`);
+      } else {
+        setPosSuccessMsg(isAr ? 'تم تسجيل الفاتورة النقدية بنجاح!' : 'POS Cash Sale completed successfully!');
+      }
+      setPosCart([]);
+      setTimeout(() => setPosSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل مبيعات الـ POS' : 'Failed to process POS sale'));
+    }
   };
 
   const posTotal = posCart.reduce((sum, i) => sum + i.price * i.qty, 0);
 
   return (
     <div className="space-y-6">
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadSalesData} className="text-xs py-1">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            {isAr ? 'إعادة المحاولة' : 'Retry'}
+          </Button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>{isAr ? 'جاري تحميل بيانات المبيعات ونقاط البيع...' : 'Loading sales and POS records...'}</span>
+        </div>
+      )}
+
       {/* Top KPI Metrics Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">

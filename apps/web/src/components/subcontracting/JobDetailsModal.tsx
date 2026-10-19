@@ -60,7 +60,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
             </div>
             <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-[#4f0c16] to-emerald-500 transition-all duration-500"
+                className="h-full bg-gradient-to-r from-[#460809] to-emerald-500 transition-all duration-500"
                 style={{ width: `${deliveredPercentage}%` }}
               />
             </div>

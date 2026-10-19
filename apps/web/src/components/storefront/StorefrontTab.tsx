@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Store,
   ShoppingBag,
@@ -7,13 +7,15 @@ import {
   CheckCircle,
   Package,
   ShieldCheck,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { api } from '../../api/client';
 import type { Language, StoreOrder, ProductVariant } from '../../types';
-
 
 interface StorefrontTabProps {
   lang: Language;
@@ -23,43 +25,29 @@ interface StorefrontTabProps {
 export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) => {
   const isAr = lang === 'ar';
   const [activeSubTab, setActiveSubTab] = useState<'orders' | 'preview' | 'settings'>('orders');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [orders, setOrders] = useState<StoreOrder[]>([
-    {
-      id: 'ord-1',
-      order_number: 'ORD-20261019-101',
-      customer_name: isAr ? 'سارة أحمد محمود' : 'Sara Ahmed',
-      customer_phone: '01012345678',
-      shipping_address: isAr ? 'شارع عباس العقاد، مدينة نصر' : 'Abbas El-Akkad, Nasr City',
-      city: isAr ? 'القاهرة' : 'Cairo',
-      payment_method: 'cod',
-      status: 'new',
-      subtotal: 540,
-      shipping_fee: 50,
-      total_amount: 590,
-      created_at: '2026-10-19 14:30',
-      items: [
-        { id: 'item-1', variant_id: 'v-1', product_name: 'Kids Summer Polo Shirt', sku: 'POLO-NAVY-4Y', quantity: 3, unit_price: 180, total_price: 540 },
-      ],
-    },
-    {
-      id: 'ord-2',
-      order_number: 'ORD-20261019-102',
-      customer_name: isAr ? 'طارق محمد علي' : 'Tarek Mohamed',
-      customer_phone: '01198765432',
-      shipping_address: isAr ? 'سموحة، الإسكندرية' : 'Smouha, Alexandria',
-      city: isAr ? 'الإسكندرية' : 'Alexandria',
-      payment_method: 'cod',
-      status: 'shipped',
-      subtotal: 720,
-      shipping_fee: 65,
-      total_amount: 785,
-      created_at: '2026-10-18 19:15',
-      items: [
-        { id: 'item-2', variant_id: 'v-2', product_name: 'Kids Denim Short', sku: 'SHRT-DENIM-6Y', quantity: 4, unit_price: 180, total_price: 720 },
-      ],
-    },
-  ]);
+  const [orders, setOrders] = useState<StoreOrder[]>([]);
+
+  const loadStoreOrders = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.storefront.getOrders(1);
+      if (res?.data) {
+        setOrders(res.data);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'تعذر جلب طلبات المتجر' : 'Failed to load storefront orders'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStoreOrders();
+  }, []);
 
   // Storefront preview cart state
   const [storeCart, setStoreCart] = useState<{ variant: ProductVariant; qty: number }[]>([]);
@@ -86,48 +74,70 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
     });
   };
 
-  const handlePlaceStoreOrder = (e: React.FormEvent) => {
+  const handlePlaceStoreOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (storeCart.length === 0) return;
 
-    const subtotal = storeCart.reduce((sum, i) => sum + (Number(i.variant.retail_price) || 180) * i.qty, 0);
-    const shipping = 50;
-
-    const newOrder: StoreOrder = {
-      id: `ord-${Date.now()}`,
-      order_number: `ORD-${Date.now().toString().slice(-6)}`,
-      customer_name: custName || (isAr ? 'عميل المتجر' : 'Store Customer'),
-      customer_phone: custPhone || '01000000000',
-      shipping_address: custAddress || (isAr ? 'عنوان التوصيل' : 'Delivery Address'),
-      city: custCity,
-      payment_method: 'cod',
-      status: 'new',
-      subtotal,
-      shipping_fee: shipping,
-      total_amount: subtotal + shipping,
-      created_at: new Date().toISOString().replace('T', ' ').slice(0, 16),
-      items: storeCart.map((i, idx) => ({
-        id: `si-${idx}`,
+    try {
+      const items = storeCart.map((i) => ({
         variant_id: i.variant.id,
-        product_name: i.variant.garment_model?.name || i.variant.sku,
-        sku: i.variant.sku,
         quantity: i.qty,
-        unit_price: Number(i.variant.retail_price) || 180,
-        total_price: (Number(i.variant.retail_price) || 180) * i.qty,
-      })),
-    };
+      }));
 
-    setOrders([newOrder, ...orders]);
-    setStoreCart([]);
-    setIsCheckoutOpen(false);
-    setOrderPlacedMsg(isAr ? `تم إرسال طلب الشراء رقم ${newOrder.order_number} بنجاح!` : `Order ${newOrder.order_number} placed!`);
-    setTimeout(() => setOrderPlacedMsg(null), 5000);
+      const res = await (api as any).request('/storefront/order', {
+        method: 'POST',
+        body: JSON.stringify({
+          customer_name: custName || (isAr ? 'عميل المتجر' : 'Store Customer'),
+          customer_phone: custPhone || '01000000000',
+          shipping_address: custAddress || (isAr ? 'عنوان التوصيل' : 'Delivery Address'),
+          city: custCity,
+          payment_method: 'cod',
+          items,
+        }),
+      });
+
+      if (res?.order) {
+        setOrders((prev) => [res.order, ...prev]);
+        setOrderPlacedMsg(isAr ? `تم تسجيل طلب الشراء بنجاح برقم: ${res.order.order_number}` : `Order placed successfully! Ref: ${res.order.order_number}`);
+      } else {
+        setOrderPlacedMsg(isAr ? 'تم تسجيل طلب الشراء بنجاح!' : 'Order placed successfully!');
+      }
+
+      setStoreCart([]);
+      setIsCheckoutOpen(false);
+      setCustName('');
+      setCustPhone('');
+      setCustAddress('');
+      setTimeout(() => setOrderPlacedMsg(null), 5000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل الطلب' : 'Failed to place order'));
+    }
   };
 
   const cartTotal = storeCart.reduce((sum, i) => sum + (Number(i.variant.retail_price) || 180) * i.qty, 0);
 
   return (
     <div className="space-y-6">
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadStoreOrders} className="text-xs py-1">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            {isAr ? 'إعادة المحاولة' : 'Retry'}
+          </Button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>{isAr ? 'جاري تحميل طلبات المتجر وسجل المبيعات...' : 'Loading storefront orders...'}</span>
+        </div>
+      )}
+
       {/* Top Storefront KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">

@@ -387,9 +387,9 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 <span
                   className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border"
                   style={{
-                    backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
-                    color: isDark ? '#fca5a5' : '#4f0c16',
-                    borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.3)',
+                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                    color: isDark ? '#fca5a5' : '#460809',
+                    borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.3)',
                   }}
                 >
                   Platform Super Admin
@@ -461,7 +461,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(70, 8, 9, 0.35)',
                   }
                 : {}
             }
@@ -481,7 +481,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(70, 8, 9, 0.35)',
                   }
                 : {}
             }
@@ -501,7 +501,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(70, 8, 9, 0.35)',
                   }
                 : {}
             }
@@ -522,7 +522,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(70, 8, 9, 0.35)',
                   }
                 : {}
             }
@@ -588,8 +588,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                           <div
                             className="w-8 h-8 rounded-lg flex items-center justify-center"
                             style={{
-                              backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
-                              color: isDark ? '#fca5a5' : '#4f0c16',
+                              backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
+                              color: isDark ? '#fca5a5' : '#460809',
                             }}
                           >
                             <Building2 className="w-4 h-4" />
@@ -892,7 +892,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                                 color="primary"
                                 size="sm"
                                 className="text-[11px] py-1 px-2.5 text-white font-bold"
-                                style={{ backgroundColor: 'var(--brand-primary, #4f0c16)', borderColor: 'var(--brand-primary, #4f0c16)' }}
+                                style={{ backgroundColor: 'var(--brand-primary, #460809)', borderColor: 'var(--brand-primary, #460809)' }}
                                 onClick={() => {
                                   setSelectedTenantForActivation(t);
                                   setIsActivationModalOpen(true);
@@ -965,7 +965,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h1 className={`text-xl font-extrabold flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                  <Globe className="w-5 h-5" style={{ color: 'var(--brand-primary, #4f0c16)' }} />
+                  <Globe className="w-5 h-5" style={{ color: 'var(--brand-primary, #460809)' }} />
                   <span>{isAr ? 'إدارة النطاقات والمتاجر الإلكترونية' : 'Domain & Storefront Routing Management'}</span>
                 </h1>
                 <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -984,7 +984,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     onChange={(e) => setDomainSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && loadDomains(1)}
                     placeholder={isAr ? 'بحث بالنطاق أو اسم المصنع...' : 'Search domain or company...'}
-                    className={`pl-8 rtl:pr-8 rtl:pl-3 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:border-[#4f0c16] ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                    className={`pl-8 rtl:pr-8 rtl:pl-3 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:border-[#460809] ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
                   />
                 </div>
 
@@ -1485,7 +1485,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingActivation || !authCode.trim()}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #4f0c16)' }}
+              style={{ backgroundColor: 'var(--brand-primary, #460809)' }}
             >
               {isSubmittingActivation ? 'جارِ التحقق والتفعيل...' : 'تأكيد تفعيل الاشتراك'}
             </CButton>
@@ -1608,7 +1608,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingSubdomain || !subdomainInput.trim()}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #4f0c16)' }}
+              style={{ backgroundColor: 'var(--brand-primary, #460809)' }}
             >
               {isSubmittingSubdomain ? (isAr ? 'جارِ التعيين...' : 'Saving...') : (isAr ? 'حفظ وتعيين النطاق' : 'Save Subdomain')}
             </CButton>
@@ -1712,7 +1712,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingCustomDomain}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #4f0c16)' }}
+              style={{ backgroundColor: 'var(--brand-primary, #460809)' }}
             >
               {isSubmittingCustomDomain ? (isAr ? 'جارِ الحفظ...' : 'Saving...') : (isAr ? 'حفظ وتحديث النطاق' : 'Save Domain')}
             </CButton>

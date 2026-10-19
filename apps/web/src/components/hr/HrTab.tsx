@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Award,
   Calendar,
   Plus,
   DollarSign,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { api } from '../../api/client';
 import type { Language, Employee, PieceRate, PieceWorkLog, Payroll } from '../../types';
 
 interface HrTabProps {
@@ -20,114 +23,119 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
   const isAr = lang === 'ar';
   const [activeSubTab, setActiveSubTab] = useState<'employees' | 'piecerates' | 'worklogs' | 'payrolls'>('employees');
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Workers state
-  const [employees] = useState<Employee[]>([
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [pieceRates, setPieceRates] = useState<PieceRate[]>([]);
+  const [workLogs, setWorkLogs] = useState<PieceWorkLog[]>([]);
+  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
 
-    {
-      id: 'emp-1',
-      employee_code: 'EMP-001',
-      name: isAr ? 'محمد حسن إبراهيم' : 'Mohamed Hassan',
-      department: 'sewing',
-      job_title: isAr ? 'صنايعي خياطة (سنجر/أوفر)' : 'Sewing Machine Operator',
-      pay_type: 'piece_rate',
-      base_salary: 1500,
-      phone: '01012345678',
-      is_active: true,
-    },
-    {
-      id: 'emp-2',
-      employee_code: 'EMP-002',
-      name: isAr ? 'محمود علي فتحي' : 'Mahmoud Ali',
-      department: 'cutting',
-      job_title: isAr ? 'مساعد مقصدار أول' : 'Senior Cutter Assistant',
-      pay_type: 'hybrid',
-      base_salary: 3000,
-      phone: '01123456789',
-      is_active: true,
-    },
-    {
-      id: 'emp-3',
-      employee_code: 'EMP-003',
-      name: isAr ? 'فاطمة الزهراء أحمد' : 'Fatima Al-Zahra',
-      department: 'finishing',
-      job_title: isAr ? 'مشرفة تشطيب وكوي' : 'Ironing & Finishing Lead',
-      pay_type: 'piece_rate',
-      base_salary: 1200,
-      phone: '01234567890',
-      is_active: true,
-    },
-  ]);
+  const loadHrData = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const [empRes, prRes, logsRes, payrollsRes] = await Promise.allSettled([
+        api.hr.getEmployees(1),
+        api.hr.getPieceRates(1),
+        api.hr.getPieceWorkLogs(1),
+        api.hr.getPayrolls(1),
+      ]);
 
-  const [pieceRates] = useState<PieceRate[]>([
-    { id: 'pr-1', stage_name: 'sewing', operation_name: isAr ? 'تركيب ياقة البولو مع الشريطة' : 'Polo Collar & Tape Assembly', rate_per_piece: 3.50, is_active: true },
-    { id: 'pr-2', stage_name: 'sewing', operation_name: isAr ? 'خياطة الجانبين وتسكير التيشيرت' : 'Side Seam Overlock', rate_per_piece: 1.80, is_active: true },
-    { id: 'pr-3', stage_name: 'sewing', operation_name: isAr ? 'تركيب السوستة وتثبيت الجرار' : 'Zipper Attachment', rate_per_piece: 2.20, is_active: true },
-    { id: 'pr-4', stage_name: 'ironing', operation_name: isAr ? 'كوي نهائي على البخار وتغليف' : 'Steam Ironing & Polybag Packing', rate_per_piece: 1.25, is_active: true },
-  ]);
+      if (empRes.status === 'fulfilled' && empRes.value?.data) {
+        setEmployees(empRes.value.data);
+      }
+      if (prRes.status === 'fulfilled' && prRes.value?.data) {
+        setPieceRates(prRes.value.data);
+      }
+      if (logsRes.status === 'fulfilled' && logsRes.value?.data) {
+        setWorkLogs(logsRes.value.data);
+      }
+      if (payrollsRes.status === 'fulfilled' && payrollsRes.value?.data) {
+        setPayrolls(payrollsRes.value.data);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات الموارد البشرية' : 'Failed to load HR data'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const [workLogs, setWorkLogs] = useState<PieceWorkLog[]>([
-    {
-      id: 'log-1',
-      employee_id: 'emp-1',
-      completed_quantity: 450,
-      unit_rate: 3.50,
-      total_amount: 1575,
-      work_date: '2026-10-19',
-      status: 'verified',
-    },
-    {
-      id: 'log-2',
-      employee_id: 'emp-3',
-      completed_quantity: 800,
-      unit_rate: 1.25,
-      total_amount: 1000,
-      work_date: '2026-10-19',
-      status: 'verified',
-    },
-  ]);
-
-  const [payrolls] = useState<Payroll[]>([
-
-    {
-      id: 'pay-1',
-      payroll_period: '2026-10',
-      period_start: '2026-10-01',
-      period_end: '2026-10-31',
-      total_gross: 42000,
-      total_deductions: 2500,
-      total_net: 39500,
-      status: 'approved',
-    },
-  ]);
+  useEffect(() => {
+    loadHrData();
+  }, []);
 
   // Modal State for Logging Piece Work
-  const [selectedEmp, setSelectedEmp] = useState(employees[0].id);
-  const [selectedRate, setSelectedRate] = useState(pieceRates[0].id);
+  const [selectedEmp, setSelectedEmp] = useState('');
+  const [selectedRate, setSelectedRate] = useState('');
   const [logQty, setLogQty] = useState<number>(100);
 
-  const handleAddLog = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (employees.length > 0 && !selectedEmp) {
+      setSelectedEmp(employees[0].id);
+    }
+  }, [employees]);
+
+  useEffect(() => {
+    if (pieceRates.length > 0 && !selectedRate) {
+      setSelectedRate(pieceRates[0].id);
+    }
+  }, [pieceRates]);
+
+  const handleAddLog = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (logQty <= 0) return;
+
     const rateObj = pieceRates.find((r) => r.id === selectedRate);
-    const rate = rateObj ? rateObj.rate_per_piece : 3.50;
-    const total = logQty * rate;
+    const unitRate = Number(rateObj?.rate_per_piece) || 3.50;
 
-    const newLog: PieceWorkLog = {
-      id: `log-${Date.now()}`,
-      employee_id: selectedEmp,
-      completed_quantity: logQty,
-      unit_rate: rate,
-      total_amount: total,
-      work_date: new Date().toISOString().split('T')[0],
-      status: 'verified',
-    };
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.hr.createPieceWorkLog({
+        employee_id: selectedEmp || employees[0]?.id,
+        piece_rate_id: selectedRate || pieceRates[0]?.id,
+        completed_quantity: logQty,
+        unit_rate: unitRate,
+        work_date: new Date().toISOString().split('T')[0],
+      });
 
-    setWorkLogs([newLog, ...workLogs]);
-    setIsLogModalOpen(false);
+      if (res?.log) {
+        setWorkLogs((prev) => [res.log, ...prev]);
+      }
+      setIsLogModalOpen(false);
+      setLogQty(100);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل إنتاجية العامل' : 'Failed to record piece work log'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadHrData} className="text-xs py-1">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            {isAr ? 'إعادة المحاولة' : 'Retry'}
+          </Button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>{isAr ? 'جاري تحميل بيانات الموارد البشرية والإنتاجية...' : 'Loading workforce and piece-rate records...'}</span>
+        </div>
+      )}
+
       {/* Top HR & Productivity KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -473,8 +481,15 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
             <Button type="button" variant="ghost" onClick={() => setIsLogModalOpen(false)}>
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button type="submit">
-              {isAr ? 'اعتماد وتسجيل الإنتاجية' : 'Log Output'}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
+                  {isAr ? 'جاري الاعتماد...' : 'Logging...'}
+                </>
+              ) : (
+                isAr ? 'اعتماد وتسجيل الإنتاجية' : 'Log Output'
+              )}
             </Button>
           </div>
         </form>

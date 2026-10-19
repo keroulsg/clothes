@@ -229,10 +229,11 @@ class DomainResolutionService
 
     /**
      * توليد رمز التوثيق المشفر للنطاق المخصص (DNS Verification Token)
+     * يعتمد على مولد عشوائي مشفر غير قابل للتنبؤ (CSPRNG)
      */
     public function generateVerificationToken(Tenant $tenant): string
     {
-        return 'garmentos-verification=' . hash('sha256', $tenant->id . '-' . config('app.key', 'secret') . '-' . time());
+        return 'garmentos-verification=' . bin2hex(random_bytes(32));
     }
 
     /**
@@ -261,8 +262,7 @@ class DomainResolutionService
             ];
         }
 
-        // في بيئة الاختبارات أو التطوير المحلي أو إذا توفر سجل DNS
-        // نقوم بفحص حقيقي للسجلات عبر dns_get_record إذا كانت الدالة متاحة
+        // فحص حقيقي لسجلات DNS عبر dns_get_record إذا كانت الدالة متاحة
         $dnsRecords = @dns_get_record($domain, DNS_TXT | DNS_CNAME);
         $foundVerification = false;
 
@@ -279,8 +279,10 @@ class DomainResolutionService
             }
         }
 
-        // في حال توفر اختبار أو علامة فرض التوثيق الإداري (Manual Admin Verified Override)
-        if ($foundVerification || ($domainSettings['allow_test_mock_dns'] ?? false)) {
+        // عزل بيئة الاختبارات: محول اختبار DNS متاح فقط وحصرياً في بيئة الاختبارات الآلية
+        $allowTestMock = app()->environment('testing') && ($domainSettings['allow_test_mock_dns'] ?? false);
+
+        if ($foundVerification || $allowTestMock) {
             return [
                 'verified' => true,
                 'status' => 'verified',

@@ -680,6 +680,203 @@ class ApiClient {
     },
   };
 
+  // --- Sales & POS Endpoints ---
+  public sales = {
+    getQuotations: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/quotations?page=${page}`);
+    },
+    createQuotation: async (payload: any): Promise<{ message: string; quotation: any }> => {
+      return this.request('/sales/quotations', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/orders?page=${page}`);
+    },
+    createOrder: async (payload: any): Promise<{ message: string; order: any }> => {
+      return this.request('/sales/orders', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    reserveOrderStock: async (id: string): Promise<{ message: string; order: any }> => {
+      return this.request(`/sales/orders/${id}/reserve`, {
+        method: 'POST',
+      });
+    },
+    fulfillOrder: async (id: string): Promise<{ message: string; order: any }> => {
+      return this.request(`/sales/orders/${id}/fulfill`, {
+        method: 'POST',
+      });
+    },
+    getInvoices: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/invoices?page=${page}`);
+    },
+    processPosSale: async (payload: any): Promise<{ message: string; invoice: any }> => {
+      return this.request('/pos/sale', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getPosSessions: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/pos/sessions?page=${page}`);
+    },
+    openPosSession: async (payload: { opening_cash: number; notes?: string }): Promise<{ message: string; session: any }> => {
+      return this.request('/pos/sessions/open', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    closePosSession: async (id: string, payload: { closing_cash: number; notes?: string }): Promise<{ message: string; session: any }> => {
+      return this.request(`/pos/sessions/${id}/close`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getDeliveryNotes: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/delivery-notes?page=${page}`);
+    },
+    createDeliveryNote: async (payload: any): Promise<{ message: string; delivery_note: any }> => {
+      return this.request('/sales/delivery-notes', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getReturns: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/returns?page=${page}`);
+    },
+    createReturn: async (payload: any): Promise<{ message: string; return: any }> => {
+      return this.request('/sales/returns', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+  };
+
+  // --- Accounting & Costing Endpoints ---
+  public accounting = {
+    getAccounts: async (): Promise<any[]> => {
+      return this.request('/accounting/accounts');
+    },
+    createAccount: async (payload: { code: string; name: string; type: string; category: string }): Promise<{ message: string; account: any }> => {
+      return this.request('/accounting/accounts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getJournalEntries: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/accounting/journal-entries?page=${page}`);
+    },
+    createJournalEntry: async (payload: { description: string; entry_date?: string; reference_type?: string; lines: Array<{ account_id: string; debit: number; credit: number; description?: string }> }): Promise<{ message: string; entry: any }> => {
+      return this.request('/accounting/journal-entries', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getPaymentVouchers: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/accounting/payment-vouchers?page=${page}`);
+    },
+    createPaymentVoucher: async (payload: any): Promise<{ message: string; voucher: any }> => {
+      return this.request('/accounting/payment-vouchers', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getCostSheets: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/accounting/cost-sheets?page=${page}`);
+    },
+    calculateCost: async (productionOrderId: string): Promise<{ message: string; cost_sheet: any }> => {
+      return this.request(`/accounting/cost-sheets/${productionOrderId}/calculate`, {
+        method: 'POST',
+      });
+    },
+  };
+
+  // --- HR & Payroll Endpoints ---
+  public hr = {
+    getEmployees: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/hr/employees?page=${page}`);
+    },
+    createEmployee: async (payload: any): Promise<{ message: string; employee: any }> => {
+      return this.request('/hr/employees', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getPieceRates: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/hr/piece-rates?page=${page}`);
+    },
+    createPieceRate: async (payload: any): Promise<{ message: string; piece_rate: any }> => {
+      return this.request('/hr/piece-rates', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getPieceWorkLogs: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/hr/piece-work-logs?page=${page}`);
+    },
+    createPieceWorkLog: async (payload: any): Promise<{ message: string; log: any }> => {
+      return this.request('/hr/piece-work-logs', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getPayrolls: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/hr/payrolls?page=${page}`);
+    },
+    generatePayroll: async (payload: { payroll_period: string; period_start: string; period_end: string }): Promise<{ message: string; payroll: any }> => {
+      return this.request('/hr/payrolls/generate', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+  };
+
+  // --- Maintenance & Equipment Endpoints ---
+  public maintenance = {
+    getMachines: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/maintenance/machines?page=${page}`);
+    },
+    createMachine: async (payload: any): Promise<{ message: string; machine: any }> => {
+      return this.request('/maintenance/machines', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    updateMachine: async (id: string, payload: any): Promise<{ message: string; machine: any }> => {
+      return this.request(`/maintenance/machines/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    getWorkOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/maintenance/work-orders?page=${page}`);
+    },
+    createWorkOrder: async (payload: any): Promise<{ message: string; work_order: any }> => {
+      return this.request('/maintenance/work-orders', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    completeWorkOrder: async (id: string, payload: { resolution_notes: string; downtime_hours?: number; spare_parts?: any[] }): Promise<{ message: string; work_order: any }> => {
+      return this.request(`/maintenance/work-orders/${id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getDowntimeSummary: async (): Promise<any> => {
+      return this.request('/maintenance/downtime-summary');
+    },
+  };
+
+  // --- Storefront Orders (ERP side) ---
+  public storefront = {
+    getOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/storefront/orders?page=${page}`);
+    },
+  };
+
   public public = {
     submitContact: async (payload: { name: string; email: string; phone?: string; company_name?: string; subject?: string; message: string }): Promise<{ success: boolean; message: string }> => {
       return this.request('/public/contact', {

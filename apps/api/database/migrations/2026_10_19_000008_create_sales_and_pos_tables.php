@@ -152,7 +152,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->uuid('tenant_id')->index();
             $table->uuid('branch_id')->nullable()->index();
-            $table->uuid('user_id')->index();
+            $table->unsignedBigInteger('user_id')->index();
             $table->string('session_code', 50);
             $table->decimal('opening_cash', 14, 4)->default(0);
             $table->decimal('closing_cash', 14, 4)->nullable();

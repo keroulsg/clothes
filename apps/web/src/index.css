@@ -27,12 +27,12 @@
 }
 
 :root {
-  /* GarmentOS Cloud Official Brand Palette */
-  --brand-primary: #460809;
-  --brand-primary-hover: #5d0b0d;
-  --brand-primary-active: #330506;
-  --brand-primary-light: #7c1214;
-  --brand-primary-subtle: #fbf2f2;
+  /* GarmentOS Cloud Official Brand Palette - Updated to #4f0c16, #000000, #FFFFFF */
+  --brand-primary: #4f0c16;
+  --brand-primary-hover: #66101d;
+  --brand-primary-active: #38070e;
+  --brand-primary-light: #871b29;
+  --brand-primary-subtle: #fdf2f4;
   --brand-primary-contrast: #ffffff;
   --brand-secondary: #000000;
   --brand-tertiary: #ffffff;
@@ -43,24 +43,24 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
 
   /* Light Theme (Default Root) - High Contrast (WCAG AA/AAA Compliant) */
-  --bg-app: #f8fafc;
+  --bg-app: #f4f6fa;
   --bg-surface: #ffffff;
   --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
+  --bg-card-hover: #f8fafc;
   --bg-muted: #f1f5f9;
   --border-color: #cbd5e1;
   --border-subtle: #e2e8f0;
-  --text-main: #0f172a;
+  --text-main: #000000;
   --text-muted: #334155;
-  --text-dim: #475569;
+  --text-dim: #64748b;
 
   /* CoreUI Variables Overrides (Light Theme) */
-  --cui-primary: #460809;
+  --cui-primary: #4f0c16;
   --cui-font-sans-serif: var(--font-sans);
-  --cui-body-bg: #f8fafc;
-  --cui-body-color: #0f172a;
+  --cui-body-bg: #f4f6fa;
+  --cui-body-color: #000000;
   --cui-card-bg: #ffffff;
-  --cui-card-color: #0f172a;
+  --cui-card-color: #000000;
   --cui-card-border-color: #cbd5e1;
   --cui-tertiary-bg: #f1f5f9;
   --cui-border-color: #cbd5e1;
@@ -76,16 +76,52 @@
   --status-info-bg: rgba(3, 105, 161, 0.12);
 }
 
+/* Explicit Light Theme Scope */
+[data-theme='light'],
+html:not(.dark),
+body:not(.dark-theme),
+[data-coreui-theme='light'] {
+  --brand-primary: #4f0c16;
+  --brand-primary-hover: #66101d;
+  --brand-primary-active: #38070e;
+  --brand-primary-light: #871b29;
+  --brand-primary-subtle: #fdf2f4;
+  --brand-primary-contrast: #ffffff;
+  --brand-secondary: #000000;
+  --brand-tertiary: #ffffff;
+  --brand-black: #000000;
+
+  --bg-app: #f4f6fa;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-muted: #f1f5f9;
+  --border-color: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --text-main: #000000;
+  --text-muted: #334155;
+  --text-dim: #64748b;
+
+  --cui-primary: #4f0c16;
+  --cui-body-bg: #f4f6fa;
+  --cui-body-color: #000000;
+  --cui-card-bg: #ffffff;
+  --cui-card-color: #000000;
+  --cui-card-border-color: #cbd5e1;
+  --cui-tertiary-bg: #f1f5f9;
+  --cui-border-color: #cbd5e1;
+}
+
 /* Dark Theme - High Contrast (WCAG AA/AAA Compliant) */
 [data-theme='dark'],
 .dark,
 body.dark-theme,
 [data-coreui-theme='dark'] {
-  --brand-primary: #460809;
-  --brand-primary-hover: #5d0b0d;
-  --brand-primary-active: #330506;
-  --brand-primary-light: #7c1214;
-  --brand-primary-subtle: #1c0506;
+  --brand-primary: #4f0c16;
+  --brand-primary-hover: #66101d;
+  --brand-primary-active: #38070e;
+  --brand-primary-light: #871b29;
+  --brand-primary-subtle: #26060a;
   --brand-primary-contrast: #ffffff;
   --brand-secondary: #000000;
   --brand-tertiary: #ffffff;
@@ -102,7 +138,7 @@ body.dark-theme,
   --text-muted: #cbd5e1;
   --text-dim: #94a3b8;
 
-  --cui-primary: #460809;
+  --cui-primary: #4f0c16;
   --cui-body-bg: #080b12;
   --cui-body-color: #f8fafc;
   --cui-card-bg: #121826;
@@ -132,6 +168,7 @@ body.dark-theme,
     color: var(--text-main);
     min-height: 100vh;
     overflow-x: hidden;
+    transition: background-color 0.25s ease, color 0.2s ease;
   }
 }
 
@@ -149,17 +186,17 @@ body.dark-theme,
 /* Brand Button Styling */
 .btn-brand-primary {
   background-color: var(--brand-primary) !important;
-  border: 1px solid #5d0b0d !important;
+  border: 1px solid #66101d !important;
   color: #ffffff !important;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 14px 0 rgba(70, 8, 9, 0.28);
+  box-shadow: 0 4px 14px 0 rgba(79, 12, 22, 0.35);
 }
 
 .btn-brand-primary:hover {
   background-color: var(--brand-primary-hover) !important;
-  border-color: #7c1214 !important;
-  box-shadow: 0 6px 20px 0 rgba(70, 8, 9, 0.4);
+  border-color: #871b29 !important;
+  box-shadow: 0 6px 20px 0 rgba(79, 12, 22, 0.45);
   transform: translateY(-1px);
 }
 
@@ -169,8 +206,8 @@ body.dark-theme,
 }
 
 .dark .btn-brand-primary {
-  border-color: #7c1214 !important;
-  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(124, 18, 20, 0.4);
+  border-color: #871b29 !important;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(135, 27, 41, 0.45);
 }
 
 /* Glassmorphism & Surface Utilities */
@@ -198,7 +235,40 @@ body.dark-theme,
 
 .brand-card-premium:hover {
   border-color: var(--brand-primary-light);
-  box-shadow: 0 10px 30px -10px rgba(74, 16, 29, 0.25);
+  box-shadow: 0 10px 30px -10px rgba(79, 12, 22, 0.25);
+}
+
+/* Mini Big UI Components */
+.mini-big-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.06);
+}
+
+.mini-big-card:hover {
+  border-color: var(--brand-primary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(79, 12, 22, 0.18);
+}
+
+.mini-big-stat-value {
+  font-family: var(--font-mono);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-size: 1.75rem;
+  line-height: 2rem;
+  color: var(--text-main);
+}
+
+.mini-big-stat-label {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
 /* Custom Scrollbar */
@@ -220,7 +290,7 @@ body.dark-theme,
   background: var(--text-dim);
 }
 
-/* CoreUI Overrides to harmonize with brand tokens */
+/* CoreUI Overrides to harmonize with brand tokens and light/dark mode */
 .cui-card-dark {
   background-color: #121826 !important;
   border-color: #1e2638 !important;
@@ -233,10 +303,25 @@ body.dark-theme,
   color: #f8fafc !important;
 }
 
+/* Ensure cui-card-dark adapts gracefully in light mode */
+html:not(.dark) .cui-card-dark,
+[data-theme='light'] .cui-card-dark {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #000000 !important;
+}
+
+html:not(.dark) .cui-card-dark .card-header,
+[data-theme='light'] .cui-card-dark .card-header {
+  background-color: #f8fafc !important;
+  border-bottom-color: #cbd5e1 !important;
+  color: #000000 !important;
+}
+
 .form-control:focus, .form-select:focus,
 input:focus, select:focus, textarea:focus {
   border-color: var(--brand-primary) !important;
-  box-shadow: 0 0 0 2px rgba(70, 8, 9, 0.25) !important;
+  box-shadow: 0 0 0 2px rgba(79, 12, 22, 0.28) !important;
 }
 
 /* Semantic Utility Classes with Strict WCAG Contrast */
@@ -256,7 +341,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .bg-primary\/10 {
-  background-color: rgba(70, 8, 9, 0.12) !important;
+  background-color: rgba(79, 12, 22, 0.12) !important;
 }
 
 .dark .bg-primary\/10,

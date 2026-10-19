@@ -69,6 +69,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/platform-admin/tenants/{id}/activate-subscription', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
         Route::post('/platform-admin/tenants/{id}/subscription/manual-activate', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
         Route::post('/admin/tenants/{id}/activate-subscription', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
+
+        // إدارة النطاقات وتوجيه المستأجرين (Domain & Subdomain Management)
+        Route::get('/platform-admin/domains', [\App\Http\Controllers\Api\PlatformAdminController::class, 'domains']);
+        Route::put('/platform-admin/tenants/{id}/subdomain', [\App\Http\Controllers\Api\PlatformAdminController::class, 'updateSubdomain']);
+        Route::put('/platform-admin/tenants/{id}/custom-domain', [\App\Http\Controllers\Api\PlatformAdminController::class, 'updateCustomDomain']);
+        Route::post('/platform-admin/tenants/{id}/custom-domain/verify', [\App\Http\Controllers\Api\PlatformAdminController::class, 'verifyCustomDomain']);
+        Route::post('/platform-admin/tenants/{id}/custom-domain/toggle', [\App\Http\Controllers\Api\PlatformAdminController::class, 'toggleDomainStatus']);
     });
 
     // المسارات المحمية بعزل الشركات

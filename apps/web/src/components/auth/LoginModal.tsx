@@ -65,8 +65,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         <div
           className="p-3.5 rounded-2xl border flex items-start gap-3"
           style={{
-            backgroundColor: 'rgba(70, 8, 9, 0.08)',
-            borderColor: 'rgba(70, 8, 9, 0.25)',
+            backgroundColor: 'rgba(79, 12, 22, 0.08)',
+            borderColor: 'rgba(79, 12, 22, 0.25)',
           }}
         >
           <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />

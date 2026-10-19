@@ -281,9 +281,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                   <span
                     className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border"
                     style={{
-                      backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                      color: isDark ? '#fca5a5' : '#460809',
-                      borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.3)',
+                      backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                      color: isDark ? '#fca5a5' : '#4f0c16',
+                      borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.3)',
                     }}
                   >
                     Cloud
@@ -411,7 +411,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         {/* Subtle Brand Ambient Backlight */}
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-[380px] pointer-events-none opacity-20 blur-[120px]"
-          style={{ background: 'radial-gradient(circle, #460809 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #4f0c16 0%, transparent 70%)' }}
         />
 
         <CContainer className="relative z-10 px-4 lg:px-8 text-center max-w-4xl mx-auto">
@@ -419,9 +419,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
           <div
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6 border shadow-sm"
             style={{
-              backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-              borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.35)',
-              color: isDark ? '#fca5a5' : '#460809',
+              backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+              borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.35)',
+              color: isDark ? '#fca5a5' : '#4f0c16',
             }}
           >
             <Sparkle className="w-3.5 h-3.5 animate-pulse" />
@@ -444,9 +444,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 <span
                   className="inline-block px-2.5 py-0.5 rounded-lg border"
                   style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.3)' : 'rgba(70, 8, 9, 0.08)',
-                    borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.3)',
-                    color: isDark ? '#ffffff' : '#460809',
+                    backgroundColor: isDark ? 'rgba(79, 12, 22, 0.3)' : 'rgba(79, 12, 22, 0.08)',
+                    borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.3)',
+                    color: isDark ? '#ffffff' : '#4f0c16',
                   }}
                 >
                   صالة القص والمخازن
@@ -459,9 +459,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 <span
                   className="inline-block px-2.5 py-0.5 rounded-lg border"
                   style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.3)' : 'rgba(70, 8, 9, 0.08)',
-                    borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.3)',
-                    color: isDark ? '#ffffff' : '#460809',
+                    backgroundColor: isDark ? 'rgba(79, 12, 22, 0.3)' : 'rgba(79, 12, 22, 0.08)',
+                    borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.3)',
+                    color: isDark ? '#ffffff' : '#4f0c16',
                   }}
                 >
                   Cutting Floor & Materials
@@ -618,9 +618,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
             <span
               className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border"
               style={{
-                backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                color: isDark ? '#fca5a5' : '#460809',
-                borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.35)',
+                backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                color: isDark ? '#fca5a5' : '#4f0c16',
+                borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.35)',
               }}
             >
               {isAr ? 'المميزات التشغيلية الحقيقية' : 'Production-Ready Capabilities'}
@@ -660,9 +660,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                         <span
                           className="text-[10px] font-bold px-2 py-0.5 rounded border"
                           style={{
-                            backgroundColor: isDark ? 'rgba(70, 8, 9, 0.2)' : 'rgba(70, 8, 9, 0.08)',
-                            color: isDark ? '#fca5a5' : '#460809',
-                            borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.25)',
+                            backgroundColor: isDark ? 'rgba(79, 12, 22, 0.2)' : 'rgba(79, 12, 22, 0.08)',
+                            color: isDark ? '#fca5a5' : '#4f0c16',
+                            borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.25)',
                           }}
                         >
                           {feat.badge}
@@ -740,7 +740,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                   <div className="flex items-center justify-between mb-4">
                     <span
                       className="text-3xl font-black font-mono"
-                      style={{ color: '#460809' }}
+                      style={{ color: '#4f0c16' }}
                     >
                       {st.step}
                     </span>
@@ -764,9 +764,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
             <span
               className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border"
               style={{
-                backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                color: isDark ? '#fca5a5' : '#460809',
-                borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.35)',
+                backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                color: isDark ? '#fca5a5' : '#4f0c16',
+                borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.35)',
               }}
             >
               {isAr ? 'خطط وباقات الاشتراك' : 'Transparent Pricing'}
@@ -793,7 +793,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                   style={{
                     backgroundColor: isDark ? (plan.popular ? '#131b2c' : '#0f1523') : '#ffffff',
                     borderColor: plan.popular
-                      ? '#460809'
+                      ? '#4f0c16'
                       : isDark ? '#1e2638' : '#e2e8f0',
                   }}
                 >
@@ -882,7 +882,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                   style={{
                     backgroundColor: isDark ? '#0f1523' : '#ffffff',
                     borderColor: isOpen
-                      ? (isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.4)')
+                      ? (isDark ? '#871b29' : 'rgba(79, 12, 22, 0.4)')
                       : isDark ? '#1e2638' : '#e2e8f0',
                   }}
                 >
@@ -922,9 +922,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 <span
                   className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border inline-block mb-3"
                   style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                    color: isDark ? '#fca5a5' : '#460809',
-                    borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.35)',
+                    backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                    color: isDark ? '#fca5a5' : '#4f0c16',
+                    borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.35)',
                   }}
                 >
                   {isAr ? 'فريق المبيعات والاستشارات' : 'Sales & Advisory'}

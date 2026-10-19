@@ -117,10 +117,18 @@ export function App() {
       } catch {}
       if (next) {
         document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
         document.documentElement.setAttribute('data-coreui-theme', 'dark');
+        document.body.classList.add('dark-theme');
+        document.body.setAttribute('data-theme', 'dark');
+        document.body.setAttribute('data-coreui-theme', 'dark');
       } else {
         document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
         document.documentElement.setAttribute('data-coreui-theme', 'light');
+        document.body.classList.remove('dark-theme');
+        document.body.setAttribute('data-theme', 'light');
+        document.body.setAttribute('data-coreui-theme', 'light');
       }
       return next;
     });
@@ -129,10 +137,18 @@ export function App() {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
       document.documentElement.setAttribute('data-coreui-theme', 'dark');
+      document.body.classList.add('dark-theme');
+      document.body.setAttribute('data-theme', 'dark');
+      document.body.setAttribute('data-coreui-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
       document.documentElement.setAttribute('data-coreui-theme', 'light');
+      document.body.classList.remove('dark-theme');
+      document.body.setAttribute('data-theme', 'light');
+      document.body.setAttribute('data-coreui-theme', 'light');
     }
   }, [isDark]);
 
@@ -1499,8 +1515,8 @@ export function App() {
                     <div
                       className="p-2 rounded-lg"
                       style={{
-                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                        color: isDark ? '#fca5a5' : '#460809',
+                        backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                        color: isDark ? '#fca5a5' : '#4f0c16',
                       }}
                     >
                       <Scissors className="w-4 h-4" />
@@ -1550,8 +1566,8 @@ export function App() {
                     <div
                       className="p-2 rounded-lg"
                       style={{
-                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                        color: isDark ? '#fca5a5' : '#460809',
+                        backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                        color: isDark ? '#fca5a5' : '#4f0c16',
                       }}
                     >
                       <Package className="w-4 h-4" />

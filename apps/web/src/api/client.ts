@@ -642,6 +642,42 @@ class ApiClient {
       const qs = query.toString();
       return this.request(`/platform-admin/audit-logs${qs ? `?${qs}` : ''}`);
     },
+
+    getDomains: async (params: { page?: number; per_page?: number; search?: string } = {}): Promise<{ domains: PaginatedResponse<any>; base_domain: string }> => {
+      const query = new URLSearchParams();
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      if (params.search) query.append('search', params.search);
+      const qs = query.toString();
+      return this.request(`/platform-admin/domains${qs ? `?${qs}` : ''}`);
+    },
+
+    updateSubdomain: async (id: string, subdomain: string): Promise<{ message: string; tenant_id: string; subdomain: string; full_domain: string }> => {
+      return this.request(`/platform-admin/tenants/${id}/subdomain`, {
+        method: 'PUT',
+        body: JSON.stringify({ subdomain }),
+      });
+    },
+
+    updateCustomDomain: async (id: string, custom_domain: string | null): Promise<{ message: string; tenant_id: string; custom_domain: string | null; domain_settings: any }> => {
+      return this.request(`/platform-admin/tenants/${id}/custom-domain`, {
+        method: 'PUT',
+        body: JSON.stringify({ custom_domain }),
+      });
+    },
+
+    verifyCustomDomain: async (id: string, mock_verify: boolean = false): Promise<{ verified: boolean; status: string; message: string; domain_settings: any }> => {
+      return this.request(`/platform-admin/tenants/${id}/custom-domain/verify`, {
+        method: 'POST',
+        body: JSON.stringify({ mock_verify }),
+      });
+    },
+
+    toggleDomainStatus: async (id: string): Promise<{ message: string; custom_domain_enabled: boolean }> => {
+      return this.request(`/platform-admin/tenants/${id}/custom-domain/toggle`, {
+        method: 'POST',
+      });
+    },
   };
 
   public public = {

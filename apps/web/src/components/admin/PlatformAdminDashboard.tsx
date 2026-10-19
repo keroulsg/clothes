@@ -41,6 +41,8 @@ import {
   Moon,
   Key,
   XCircle,
+  Edit,
+  ShieldCheck,
 } from 'lucide-react';
 import { api, type ApiUser } from '../../api/client';
 import type { Language } from '../../types';
@@ -67,7 +69,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   const isAr = lang === 'ar';
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'domains' | 'audit'>('overview');
 
   // Metrics State
   const [metrics, setMetrics] = useState<any>(null);
@@ -111,6 +113,32 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   const [suspendReason, setSuspendReason] = useState('انتهاء الفترة التجريبية وتأخر سداد الاشتراك');
   const [isSubmittingSuspend, setIsSubmittingSuspend] = useState(false);
   const [suspendError, setSuspendError] = useState<string | null>(null);
+
+  // Domains State
+  const [domains, setDomains] = useState<any[]>([]);
+  const [baseDomain, setBaseDomain] = useState('garmentos.cloud');
+  const [domainSearch, setDomainSearch] = useState('');
+  const [domainPage, setDomainPage] = useState(1);
+  const [domainTotalPages, setDomainTotalPages] = useState(1);
+  const [isDomainsLoading, setIsDomainsLoading] = useState(false);
+
+  // Subdomain Edit Modal
+  const [selectedTenantForSubdomain, setSelectedTenantForSubdomain] = useState<any | null>(null);
+  const [isSubdomainModalOpen, setIsSubdomainModalOpen] = useState(false);
+  const [subdomainInput, setSubdomainInput] = useState('');
+  const [isSubmittingSubdomain, setIsSubmittingSubdomain] = useState(false);
+  const [subdomainError, setSubdomainError] = useState<string | null>(null);
+
+  // Custom Domain Edit Modal
+  const [selectedTenantForCustomDomain, setSelectedTenantForCustomDomain] = useState<any | null>(null);
+  const [isCustomDomainModalOpen, setIsCustomDomainModalOpen] = useState(false);
+  const [customDomainInput, setCustomDomainInput] = useState('');
+  const [isSubmittingCustomDomain, setIsSubmittingCustomDomain] = useState(false);
+  const [customDomainError, setCustomDomainError] = useState<string | null>(null);
+
+  // Domain Actions State
+  const [verifyingDomainId, setVerifyingDomainId] = useState<string | null>(null);
+  const [togglingDomainId, setTogglingDomainId] = useState<string | null>(null);
 
   // General Notification
   const [globalMessage, setGlobalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -165,6 +193,22 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
     }
   };
 
+  // Load Domains
+  const loadDomains = async (page = 1) => {
+    setIsDomainsLoading(true);
+    try {
+      const res = await api.platformAdmin.getDomains({ page, search: domainSearch.trim() || undefined, per_page: 15 });
+      setDomains(res.domains.data || []);
+      setBaseDomain(res.base_domain || 'garmentos.cloud');
+      setDomainPage(res.domains.current_page || 1);
+      setDomainTotalPages(res.domains.last_page || 1);
+    } catch (err: any) {
+      setGlobalMessage({ type: 'error', text: err.message || 'فشل تحميل قائمة النطاقات.' });
+    } finally {
+      setIsDomainsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadOverview();
   }, []);
@@ -172,10 +216,91 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   useEffect(() => {
     if (activeTab === 'tenants') {
       loadTenants(1);
+    } else if (activeTab === 'domains') {
+      loadDomains(1);
     } else if (activeTab === 'audit') {
       loadAuditLogs(1);
     }
   }, [activeTab, tenantStatusFilter, tenantPlanFilter]);
+
+  // Domain Handlers
+  const handleOpenSubdomainModal = (tenant: any) => {
+    setSelectedTenantForSubdomain(tenant);
+    setSubdomainInput(tenant.subdomain || '');
+    setSubdomainError(null);
+    setIsSubdomainModalOpen(true);
+  };
+
+  const handleSubdomainSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenantForSubdomain) return;
+    setIsSubmittingSubdomain(true);
+    setSubdomainError(null);
+    try {
+      const res = await api.platformAdmin.updateSubdomain(selectedTenantForSubdomain.id, subdomainInput);
+      setGlobalMessage({ type: 'success', text: res.message || 'تم تحديث النطاق الفرعي بنجاح.' });
+      setIsSubdomainModalOpen(false);
+      loadDomains(domainPage);
+    } catch (err: any) {
+      setSubdomainError(err.message || 'فشل تحديث النطاق الفرعي.');
+    } finally {
+      setIsSubmittingSubdomain(false);
+    }
+  };
+
+  const handleOpenCustomDomainModal = (tenant: any) => {
+    setSelectedTenantForCustomDomain(tenant);
+    setCustomDomainInput(tenant.custom_domain || '');
+    setCustomDomainError(null);
+    setIsCustomDomainModalOpen(true);
+  };
+
+  const handleCustomDomainSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenantForCustomDomain) return;
+    setIsSubmittingCustomDomain(true);
+    setCustomDomainError(null);
+    try {
+      const res = await api.platformAdmin.updateCustomDomain(selectedTenantForCustomDomain.id, customDomainInput.trim() || null);
+      setGlobalMessage({ type: 'success', text: res.message || 'تم تحديث النطاق المخصص.' });
+      setIsCustomDomainModalOpen(false);
+      loadDomains(domainPage);
+    } catch (err: any) {
+      setCustomDomainError(err.message || 'فشل تحديث النطاق المخصص.');
+    } finally {
+      setIsSubmittingCustomDomain(false);
+    }
+  };
+
+  const handleVerifyCustomDomain = async (tenantId: string) => {
+    setVerifyingDomainId(tenantId);
+    try {
+      const res = await api.platformAdmin.verifyCustomDomain(tenantId, false);
+      if (res.verified) {
+        setGlobalMessage({ type: 'success', text: res.message || 'تم توثيق النطاق المخصص بنجاح.' });
+      } else {
+        setGlobalMessage({ type: 'error', text: res.message || 'فشل توثيق سجلات DNS.' });
+      }
+      loadDomains(domainPage);
+    } catch (err: any) {
+      setGlobalMessage({ type: 'error', text: err.message || 'خطأ في عملية التحقق من النطاق.' });
+    } finally {
+      setVerifyingDomainId(null);
+    }
+  };
+
+  const handleToggleDomainStatus = async (tenantId: string) => {
+    setTogglingDomainId(tenantId);
+    try {
+      const res = await api.platformAdmin.toggleDomainStatus(tenantId);
+      setGlobalMessage({ type: 'success', text: res.message });
+      loadDomains(domainPage);
+    } catch (err: any) {
+      setGlobalMessage({ type: 'error', text: err.message || 'فشل تبديل حالة توجيه النطاق.' });
+    } finally {
+      setTogglingDomainId(null);
+    }
+  };
 
   // Open Details Modal
   const handleOpenDetails = async (t: any) => {
@@ -262,9 +387,9 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 <span
                   className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border"
                   style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                    color: isDark ? '#fca5a5' : '#460809',
-                    borderColor: isDark ? '#7c1214' : 'rgba(70, 8, 9, 0.3)',
+                    backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                    color: isDark ? '#fca5a5' : '#4f0c16',
+                    borderColor: isDark ? '#871b29' : 'rgba(79, 12, 22, 0.3)',
                   }}
                 >
                   Platform Super Admin
@@ -336,7 +461,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(74, 16, 29, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
                   }
                 : {}
             }
@@ -356,12 +481,33 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(74, 16, 29, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
                   }
                 : {}
             }
           >
             {isAr ? 'دليل المصانع والشركات المستأجرة' : 'Tenants Directory'}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('domains')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'domains'
+                ? 'text-white border shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+            style={
+              activeTab === 'domains'
+                ? {
+                    backgroundColor: 'var(--brand-primary)',
+                    borderColor: 'var(--brand-primary-light)',
+                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
+                  }
+                : {}
+            }
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>{isAr ? 'إدارة النطاقات والمتاجر' : 'Domains & Storefront Routing'}</span>
           </button>
 
           <button
@@ -376,7 +522,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 ? {
                     backgroundColor: 'var(--brand-primary)',
                     borderColor: 'var(--brand-primary-light)',
-                    boxShadow: '0 4px 14px 0 rgba(74, 16, 29, 0.35)',
+                    boxShadow: '0 4px 14px 0 rgba(79, 12, 22, 0.35)',
                   }
                 : {}
             }
@@ -442,8 +588,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                           <div
                             className="w-8 h-8 rounded-lg flex items-center justify-center"
                             style={{
-                              backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                              color: isDark ? '#fca5a5' : '#460809',
+                              backgroundColor: isDark ? 'rgba(79, 12, 22, 0.25)' : 'rgba(79, 12, 22, 0.08)',
+                              color: isDark ? '#fca5a5' : '#4f0c16',
                             }}
                           >
                             <Building2 className="w-4 h-4" />
@@ -745,8 +891,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                               <CButton
                                 color="primary"
                                 size="sm"
-                                className="text-[11px] py-1 px-2.5 text-white"
-                                style={{ backgroundColor: 'var(--brand-primary, #460809)', borderColor: 'var(--brand-primary, #460809)' }}
+                                className="text-[11px] py-1 px-2.5 text-white font-bold"
+                                style={{ backgroundColor: 'var(--brand-primary, #4f0c16)', borderColor: 'var(--brand-primary, #4f0c16)' }}
                                 onClick={() => {
                                   setSelectedTenantForActivation(t);
                                   setIsActivationModalOpen(true);
@@ -803,6 +949,234 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     size="sm"
                     disabled={tenantPage >= tenantTotalPages}
                     onClick={() => loadTenants(tenantPage + 1)}
+                    className="text-xs text-slate-300 border-slate-700"
+                  >
+                    التالي
+                  </CButton>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: DOMAIN & STOREFRONT ROUTING MANAGEMENT */}
+        {activeTab === 'domains' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className={`text-xl font-extrabold flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+                  <Globe className="w-5 h-5" style={{ color: 'var(--brand-primary, #4f0c16)' }} />
+                  <span>{isAr ? 'إدارة النطاقات والمتاجر الإلكترونية' : 'Domain & Storefront Routing Management'}</span>
+                </h1>
+                <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  {isAr
+                    ? 'إدارة النطاقات الفرعية (.garmentos.cloud)، وربط النطاقات المخصصة، وتوثيق سجلات DNS، والتحكم الآمن في توجيه المتاجر.'
+                    : 'Manage platform subdomains, custom domains, DNS verification, and safe storefront routing.'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 rtl:right-3 rtl:left-auto top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={domainSearch}
+                    onChange={(e) => setDomainSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && loadDomains(1)}
+                    placeholder={isAr ? 'بحث بالنطاق أو اسم المصنع...' : 'Search domain or company...'}
+                    className={`pl-8 rtl:pr-8 rtl:pl-3 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:border-[#4f0c16] ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                  />
+                </div>
+
+                <CButton
+                  color="secondary"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => loadDomains(1)}
+                  disabled={isDomainsLoading}
+                  className={`text-xs ${isDark ? 'text-slate-300 border-slate-700 hover:bg-slate-800' : 'text-slate-700 border-slate-300 hover:bg-slate-100'}`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 inline-block mr-1.5 rtl:ml-1.5 ${isDomainsLoading ? 'animate-spin' : ''}`} />
+                  <span>{isAr ? 'تحديث' : 'Refresh'}</span>
+                </CButton>
+              </div>
+            </div>
+
+            {/* Domains Table Card */}
+            <CCard className={`rounded-2xl shadow-sm overflow-hidden border ${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-300'}`}>
+              <CCardBody className="p-0">
+                {isDomainsLoading ? (
+                  <div className="py-20 text-center">
+                    <CSpinner color="primary" />
+                    <div className={`text-xs mt-3 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{isAr ? 'جارِ تحميل تكوينات النطاقات...' : 'Loading domain configurations...'}</div>
+                  </div>
+                ) : domains.length === 0 ? (
+                  <div className={`py-16 text-center text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {isAr ? 'لم يتم العثور على أي نطاقات مسجلة.' : 'No registered domains found.'}
+                  </div>
+                ) : (
+                  <CTable responsive align="middle" className={`text-xs mb-0 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <CTableHead className={isDark ? "bg-slate-950/60 text-slate-400 border-b border-slate-800" : "bg-slate-100 text-slate-600 border-b border-slate-200"}>
+                      <CTableRow>
+                        <CTableHeaderCell>{isAr ? 'المصنع / المستأجر' : 'Tenant'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'النطاق الفرعي للمنصة' : 'Platform Subdomain'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'النطاق المخصص (Custom Domain)' : 'Custom Domain'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'حالة التوثيق (DNS)' : 'Verification Status'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'حالة التوجيه' : 'Routing'}</CTableHeaderCell>
+                        <CTableHeaderCell className="text-center">{isAr ? 'الإجراءات الإدارية' : 'Actions'}</CTableHeaderCell>
+                      </CTableRow>
+                    </CTableHead>
+                    <CTableBody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                      {domains.map((d) => (
+                        <CTableRow key={d.id} className={isDark ? "hover:bg-slate-800/40 transition-colors" : "hover:bg-slate-50 transition-colors"}>
+                          <CTableDataCell>
+                            <div className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{d.name}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{d.code}</div>
+                          </CTableDataCell>
+
+                          <CTableDataCell>
+                            {d.subdomain ? (
+                              <div className={`flex items-center gap-1.5 font-mono text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                <span>{d.full_platform_domain || `${d.subdomain}.${baseDomain}`}</span>
+                                <button
+                                  onClick={() => handleOpenSubdomainModal(d)}
+                                  className="text-slate-400 hover:text-slate-200 p-1"
+                                  title={isAr ? 'تعديل النطاق الفرعي' : 'Edit Subdomain'}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenSubdomainModal(d)}
+                                className="text-xs text-amber-400 hover:underline"
+                              >
+                                {isAr ? '+ تعيين نطاق فرعي' : '+ Assign Subdomain'}
+                              </button>
+                            )}
+                          </CTableDataCell>
+
+                          <CTableDataCell>
+                            {d.custom_domain ? (
+                              <div className="flex items-center gap-1.5 font-mono text-xs text-slate-200">
+                                <span>{d.custom_domain}</span>
+                                <button
+                                  onClick={() => handleOpenCustomDomainModal(d)}
+                                  className="text-slate-400 hover:text-slate-200 p-1"
+                                  title={isAr ? 'تعديل النطاق المخصص' : 'Edit Custom Domain'}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenCustomDomainModal(d)}
+                                className="text-xs text-slate-400 hover:text-slate-200 hover:underline"
+                              >
+                                {isAr ? '+ إضافة نطاق مخصص' : '+ Add Custom Domain'}
+                              </button>
+                            )}
+                          </CTableDataCell>
+
+                          <CTableDataCell>
+                            {d.custom_domain_status === 'verified' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>{isAr ? 'موثق رسمياً' : 'Verified'}</span>
+                              </span>
+                            ) : d.custom_domain_status === 'pending_verification' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/60 text-amber-400 border border-amber-500/30">
+                                <Clock className="w-3 h-3" />
+                                <span>{isAr ? 'في انتظار DNS' : 'Pending DNS'}</span>
+                              </span>
+                            ) : d.custom_domain_status === 'failed' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/60 text-rose-400 border border-rose-500/30" title={d.last_failure_reason || ''}>
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>{isAr ? 'فشل التوثيق' : 'Failed'}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                {isAr ? 'غير مهيأ' : 'Not Configured'}
+                              </span>
+                            )}
+                          </CTableDataCell>
+
+                          <CTableDataCell>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              d.custom_domain_enabled
+                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/20'
+                                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                            }`}>
+                              {d.custom_domain_enabled ? (isAr ? 'مفعل' : 'Active') : (isAr ? 'معطل مؤقتاً' : 'Paused')}
+                            </span>
+                          </CTableDataCell>
+
+                          <CTableDataCell className="text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {d.custom_domain && (
+                                <CButton
+                                  color="info"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={verifyingDomainId === d.id}
+                                  onClick={() => handleVerifyCustomDomain(d.id)}
+                                  className="text-[11px] px-2 py-1 border-sky-500/40 text-sky-300 hover:bg-sky-950/30"
+                                  title={isAr ? 'فحص سجلات DNS وتوثيق الملكية' : 'Verify DNS Records'}
+                                >
+                                  {verifyingDomainId === d.id ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin inline-block" />
+                                  ) : (
+                                    <ShieldCheck className="w-3 h-3 inline-block mr-1 rtl:ml-1" />
+                                  )}
+                                  <span>{isAr ? 'توثيق DNS' : 'Verify'}</span>
+                                </CButton>
+                              )}
+
+                              {d.custom_domain && (
+                                <CButton
+                                  color="secondary"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={togglingDomainId === d.id}
+                                  onClick={() => handleToggleDomainStatus(d.id)}
+                                  className="text-[11px] px-2 py-1 border-slate-700 text-slate-300 hover:bg-slate-800"
+                                >
+                                  <span>{d.custom_domain_enabled ? (isAr ? 'إيقاف' : 'Disable') : (isAr ? 'تشغيل' : 'Enable')}</span>
+                                </CButton>
+                              )}
+                            </div>
+                          </CTableDataCell>
+                        </CTableRow>
+                      ))}
+                    </CTableBody>
+                  </CTable>
+                )}
+              </CCardBody>
+            </CCard>
+
+            {/* Pagination */}
+            {domainTotalPages > 1 && (
+              <div className="flex items-center justify-between text-xs text-slate-400 pt-2">
+                <div>
+                  صفحة {domainPage} من {domainTotalPages}
+                </div>
+                <div className="flex items-center gap-2">
+                  <CButton
+                    color="secondary"
+                    variant="outline"
+                    size="sm"
+                    disabled={domainPage <= 1}
+                    onClick={() => loadDomains(domainPage - 1)}
+                    className="text-xs text-slate-300 border-slate-700"
+                  >
+                    السابق
+                  </CButton>
+                  <CButton
+                    color="secondary"
+                    variant="outline"
+                    size="sm"
+                    disabled={domainPage >= domainTotalPages}
+                    onClick={() => loadDomains(domainPage + 1)}
                     className="text-xs text-slate-300 border-slate-700"
                   >
                     التالي
@@ -1111,7 +1485,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingActivation || !authCode.trim()}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #460809)' }}
+              style={{ backgroundColor: 'var(--brand-primary, #4f0c16)' }}
             >
               {isSubmittingActivation ? 'جارِ التحقق والتفعيل...' : 'تأكيد تفعيل الاشتراك'}
             </CButton>
@@ -1162,6 +1536,185 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             </CButton>
             <CButton type="submit" color="danger" size="sm" disabled={isSubmittingSuspend} className="text-white font-bold">
               {isSubmittingSuspend ? 'جارِ التعليق...' : 'تأكيد تعليق الحساب'}
+            </CButton>
+          </CModalFooter>
+        </CForm>
+      </CModal>
+
+      {/* MODAL 4: EDIT PLATFORM SUBDOMAIN */}
+      <CModal
+        visible={isSubdomainModalOpen}
+        onClose={() => setIsSubdomainModalOpen(false)}
+        alignment="center"
+        className="cui-card-dark"
+      >
+        <CModalHeader className="bg-slate-900 border-b border-slate-800 text-slate-100">
+          <CModalTitle className="text-sm font-bold flex items-center gap-2">
+            <Globe className="w-4 h-4 text-sky-400" />
+            <span>{isAr ? 'تعديل وتعيين النطاق الفرعي للمنصة' : 'Edit Platform Subdomain'}</span>
+          </CModalTitle>
+        </CModalHeader>
+        <CForm onSubmit={handleSubdomainSubmit}>
+          <CModalBody className="bg-slate-950 p-6 space-y-4 text-xs text-slate-300">
+            <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-[11px] leading-relaxed">
+              {isAr
+                ? 'النطاق الفرعي هو المعرّف الحصري لمصنع المستأجر ومتجره السحابي (مثل: brand.garmentos.cloud). يُسمح فقط بالحروف الإنجليزية الصغيرة والأرقام والشرطة (-) بطول 3 إلى 63 حرفاً.'
+                : 'Subdomains serve as the unique platform routing identifier (e.g. brand.garmentos.cloud). Allowed characters: a-z, 0-9, hyphens (3-63 chars).'}
+            </div>
+
+            {subdomainError && (
+              <CAlert color="danger" className="text-xs bg-rose-950/40 border-rose-500/30 text-rose-300">
+                {subdomainError}
+              </CAlert>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">
+                {isAr ? 'المصنع المستهدف' : 'Target Tenant'}
+              </label>
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 font-bold text-slate-100">
+                {selectedTenantForSubdomain?.name} ({selectedTenantForSubdomain?.code})
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">
+                {isAr ? 'النطاق الفرعي الجديد *' : 'Subdomain Slug *'}
+              </label>
+              <div className="flex items-center gap-2">
+                <CFormInput
+                  type="text"
+                  required
+                  value={subdomainInput}
+                  onChange={(e) => setSubdomainInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="e.g. modern-textile"
+                  className="bg-slate-800 border-slate-700 text-xs text-slate-100 font-mono"
+                />
+                <span className="text-slate-400 font-mono text-xs shrink-0">.{baseDomain}</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                {isAr ? 'العنوان المتوقع: ' : 'Target URL: '}
+                <span className="text-sky-400">{subdomainInput || '...'}.{baseDomain}</span>
+              </div>
+            </div>
+          </CModalBody>
+          <CModalFooter className="bg-slate-900 border-t border-slate-800">
+            <CButton color="secondary" size="sm" onClick={() => setIsSubdomainModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </CButton>
+            <CButton
+              type="submit"
+              color="primary"
+              size="sm"
+              disabled={isSubmittingSubdomain || !subdomainInput.trim()}
+              className="text-white font-bold"
+              style={{ backgroundColor: 'var(--brand-primary, #4f0c16)' }}
+            >
+              {isSubmittingSubdomain ? (isAr ? 'جارِ التعيين...' : 'Saving...') : (isAr ? 'حفظ وتعيين النطاق' : 'Save Subdomain')}
+            </CButton>
+          </CModalFooter>
+        </CForm>
+      </CModal>
+
+      {/* MODAL 5: CUSTOM DOMAIN & DNS CONFIGURATION */}
+      <CModal
+        visible={isCustomDomainModalOpen}
+        onClose={() => setIsCustomDomainModalOpen(false)}
+        alignment="center"
+        size="lg"
+        className="cui-card-dark"
+      >
+        <CModalHeader className="bg-slate-900 border-b border-slate-800 text-slate-100">
+          <CModalTitle className="text-sm font-bold flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>{isAr ? 'إعداد وتوثيق النطاق المخصص (Custom Domain)' : 'Custom Domain & DNS Verification'}</span>
+          </CModalTitle>
+        </CModalHeader>
+        <CForm onSubmit={handleCustomDomainSubmit}>
+          <CModalBody className="bg-slate-950 p-6 space-y-4 text-xs text-slate-300">
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-[11px] space-y-2">
+              <div className="font-bold text-slate-200">
+                {isAr ? 'متطلبات توثيق ملكية النطاق وربطه بالمتجر (DNS Requirements):' : 'DNS Requirements for Custom Domain:'}
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-slate-400 text-[11px]">
+                <li>
+                  {isAr
+                    ? 'إضافة سجل CNAME في لوحة تحكم النطاق يوجه إلى: '
+                    : 'Add a CNAME record pointing to: '}
+                  <code className="text-amber-400 font-mono">cname.{baseDomain}</code>
+                </li>
+                <li>
+                  {isAr
+                    ? 'إضافة سجل TXT للتحقق الأمني من ملكية النطاق بالقيمة الموضحة أدناه.'
+                    : 'Add a TXT verification record with the token displayed below.'}
+                </li>
+              </ol>
+            </div>
+
+            {customDomainError && (
+              <CAlert color="danger" className="text-xs bg-rose-950/40 border-rose-500/30 text-rose-300">
+                {customDomainError}
+              </CAlert>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">
+                {isAr ? 'المصنع المستهدف' : 'Target Tenant'}
+              </label>
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 font-bold text-slate-100">
+                {selectedTenantForCustomDomain?.name} ({selectedTenantForCustomDomain?.code})
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">
+                {isAr ? 'اسم النطاق المخصص (Fully Qualified Domain Name) *' : 'Custom FQDN Domain Name *'}
+              </label>
+              <CFormInput
+                type="text"
+                value={customDomainInput}
+                onChange={(e) => setCustomDomainInput(e.target.value.toLowerCase().trim())}
+                placeholder="e.g. store.brandname.com"
+                className="bg-slate-800 border-slate-700 text-xs text-slate-100 font-mono"
+              />
+              <div className="text-[11px] text-slate-500 mt-1">
+                {isAr ? 'أدخل النطاق بدون http:// أو https://' : 'Do not include http:// or https:// prefix'}
+              </div>
+            </div>
+
+            {selectedTenantForCustomDomain?.custom_domain_token && (
+              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-300">
+                  {isAr ? 'رمز التوثيق الأمني (DNS TXT Record):' : 'DNS TXT Verification Token:'}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                  <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                    <span className="text-slate-500 block">Host / Name:</span>
+                    <span className="font-mono text-slate-200 select-all">@ أو {customDomainInput || 'domain'}</span>
+                  </div>
+                  <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                    <span className="text-slate-500 block">TXT Value:</span>
+                    <span className="font-mono text-amber-300 select-all font-bold">
+                      garmentos-verification={selectedTenantForCustomDomain.custom_domain_token}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CModalBody>
+          <CModalFooter className="bg-slate-900 border-t border-slate-800">
+            <CButton color="secondary" size="sm" onClick={() => setIsCustomDomainModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </CButton>
+            <CButton
+              type="submit"
+              color="primary"
+              size="sm"
+              disabled={isSubmittingCustomDomain}
+              className="text-white font-bold"
+              style={{ backgroundColor: 'var(--brand-primary, #4f0c16)' }}
+            >
+              {isSubmittingCustomDomain ? (isAr ? 'جارِ الحفظ...' : 'Saving...') : (isAr ? 'حفظ وتحديث النطاق' : 'Save Domain')}
             </CButton>
           </CModalFooter>
         </CForm>

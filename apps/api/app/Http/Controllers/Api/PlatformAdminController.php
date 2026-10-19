@@ -300,4 +300,304 @@ class PlatformAdminController extends Controller
 
         return response()->json($logs);
     }
+
+    /**
+     * قائمة النطاقات وتكوينات العناوين للشركات المسجلة (Domain Management Overview)
+     */
+    public function domains(Request $request): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $query = Tenant::withoutGlobalScopes()
+            ->select('id', 'name', 'code', 'subdomain', 'custom_domain', 'status', 'plan_tier', 'settings', 'created_at')
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
+                  ->orWhere('subdomain', 'like', "%{$search}%")
+                  ->orWhere('custom_domain', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = min(max((int) $request->query('per_page', 20), 5), 50);
+        $tenants = $query->paginate($perPage);
+
+        $baseDomain = config('app.platform_base_domain', env('PLATFORM_BASE_DOMAIN', 'garmentos.cloud'));
+
+        $tenants->getCollection()->transform(function ($tenant) use ($baseDomain) {
+            $domainSettings = $tenant->settings['domain'] ?? [];
+            return [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'code' => $tenant->code,
+                'status' => $tenant->status,
+                'subdomain' => $tenant->subdomain,
+                'full_platform_domain' => $tenant->subdomain ? "{$tenant->subdomain}.{$baseDomain}" : null,
+                'custom_domain' => $tenant->custom_domain,
+                'custom_domain_status' => $domainSettings['custom_domain_status'] ?? ($tenant->custom_domain ? 'pending_verification' : 'not_configured'),
+                'custom_domain_enabled' => (bool) ($domainSettings['custom_domain_enabled'] ?? true),
+                'verification_token' => $domainSettings['verification_token'] ?? null,
+                'verified_at' => $domainSettings['verified_at'] ?? null,
+                'last_checked_at' => $domainSettings['last_checked_at'] ?? null,
+                'last_failure_reason' => $domainSettings['last_failure_reason'] ?? null,
+            ];
+        });
+
+        return response()->json([
+            'domains' => $tenants,
+            'base_domain' => $baseDomain,
+        ]);
+    }
+
+    /**
+     * تحديث النطاق الفرعي للمستأجر (Update Tenant Subdomain)
+     */
+    public function updateSubdomain(Request $request, string $id, \App\Services\DomainResolutionService $domainResolver): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'subdomain' => 'required|string|min:3|max:63',
+        ]);
+
+        try {
+            $validation = $domainResolver->validateSubdomain($validated['subdomain'], $id);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvalidSubdomain',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return DB::transaction(function () use ($request, $adminUser, $id, $validation) {
+            $tenant = Tenant::withoutGlobalScopes()->lockForUpdate()->findOrFail($id);
+            $oldSubdomain = $tenant->subdomain;
+
+            $tenant->subdomain = $validation['subdomain'];
+            $tenant->save();
+
+            AuditLog::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $adminUser->id,
+                'action' => 'admin_update_subdomain',
+                'auditable_type' => Tenant::class,
+                'auditable_id' => $tenant->id,
+                'old_values' => ['subdomain' => $oldSubdomain],
+                'new_values' => ['subdomain' => $tenant->subdomain],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'message' => 'تم تحديث النطاق الفرعي للمستأجر بنجاح.',
+                'tenant_id' => $tenant->id,
+                'subdomain' => $tenant->subdomain,
+                'full_domain' => $validation['full_domain'],
+            ]);
+        });
+    }
+
+    /**
+     * تحديث أو تعيين النطاق المخصص للمستأجر (Update Custom Domain)
+     */
+    public function updateCustomDomain(Request $request, string $id, \App\Services\DomainResolutionService $domainResolver): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'custom_domain' => 'nullable|string|max:255',
+        ]);
+
+        $customDomain = $validated['custom_domain'] ? strtolower(trim($validated['custom_domain'])) : null;
+
+        if ($customDomain !== null) {
+            try {
+                $domainResolver->validateCustomDomain($customDomain, $id);
+            } catch (\InvalidArgumentException $e) {
+                return response()->json([
+                    'error' => 'InvalidCustomDomain',
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+        }
+
+        return DB::transaction(function () use ($request, $adminUser, $id, $customDomain, $domainResolver) {
+            $tenant = Tenant::withoutGlobalScopes()->lockForUpdate()->findOrFail($id);
+            $oldDomain = $tenant->custom_domain;
+
+            $settings = $tenant->settings ?? [];
+            $domainSettings = $settings['domain'] ?? [];
+
+            if ($customDomain === null) {
+                $tenant->custom_domain = null;
+                $domainSettings['custom_domain_status'] = 'not_configured';
+                $domainSettings['verification_token'] = null;
+                $domainSettings['verified_at'] = null;
+            } else {
+                $verificationToken = $domainResolver->generateVerificationToken($tenant);
+                $tenant->custom_domain = $customDomain;
+                $domainSettings['custom_domain_status'] = 'pending_verification';
+                $domainSettings['verification_token'] = $verificationToken;
+                $domainSettings['custom_domain_enabled'] = true;
+                $domainSettings['created_at'] = now()->toIso8601String();
+            }
+
+            $settings['domain'] = $domainSettings;
+            $tenant->settings = $settings;
+            $tenant->save();
+
+            AuditLog::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $adminUser->id,
+                'action' => 'admin_update_custom_domain',
+                'auditable_type' => Tenant::class,
+                'auditable_id' => $tenant->id,
+                'old_values' => ['custom_domain' => $oldDomain],
+                'new_values' => [
+                    'custom_domain' => $customDomain,
+                    'status' => $domainSettings['custom_domain_status'] ?? null,
+                ],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'message' => $customDomain ? 'تم تسجيل النطاق المخصص وهو في انتظار استكمال وتوثيق سجلات DNS.' : 'تمت إزالة النطاق المخصص بنجاح.',
+                'tenant_id' => $tenant->id,
+                'custom_domain' => $tenant->custom_domain,
+                'domain_settings' => $domainSettings,
+            ]);
+        });
+    }
+
+    /**
+     * التحقق من سجلات DNS وتوثيق النطاق المخصص (Verify Custom Domain)
+     */
+    public function verifyCustomDomain(Request $request, string $id, \App\Services\DomainResolutionService $domainResolver): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $tenant = Tenant::withoutGlobalScopes()->findOrFail($id);
+
+        if (!$tenant->custom_domain) {
+            return response()->json([
+                'error' => 'NoCustomDomainConfigured',
+                'message' => 'لم يتم تكوين أي نطاق مخصص لهذا المستأجر.',
+            ], 422);
+        }
+
+        if ($request->boolean('mock_verify') && app()->environment('local', 'testing')) {
+            $settings = $tenant->settings ?? [];
+            $settings['domain']['allow_test_mock_dns'] = true;
+            $tenant->settings = $settings;
+        }
+
+        $result = $domainResolver->verifyCustomDomainDns($tenant);
+
+        $settings = $tenant->settings ?? [];
+        $domainSettings = $settings['domain'] ?? [];
+        $domainSettings['last_checked_at'] = now()->toIso8601String();
+
+        if ($result['verified']) {
+            $domainSettings['custom_domain_status'] = 'verified';
+            $domainSettings['verified_at'] = $result['verified_at'];
+            $domainSettings['last_failure_reason'] = null;
+        } else {
+            $domainSettings['custom_domain_status'] = $result['status'];
+            $domainSettings['last_failure_reason'] = $result['message'];
+        }
+
+        $settings['domain'] = $domainSettings;
+        $tenant->settings = $settings;
+        $tenant->save();
+
+        AuditLog::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $adminUser->id,
+            'action' => 'admin_verify_custom_domain',
+            'auditable_type' => Tenant::class,
+            'auditable_id' => $tenant->id,
+            'old_values' => [],
+            'new_values' => [
+                'status' => $domainSettings['custom_domain_status'],
+                'verified' => $result['verified'],
+                'message' => $result['message'],
+            ],
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'verified' => $result['verified'],
+            'status' => $domainSettings['custom_domain_status'],
+            'message' => $result['message'],
+            'domain_settings' => $domainSettings,
+        ]);
+    }
+
+    /**
+     * تفعيل أو تعطيل النطاق المخصص دون حذفه (Toggle Custom Domain Status)
+     */
+    public function toggleDomainStatus(Request $request, string $id): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $tenant = Tenant::withoutGlobalScopes()->findOrFail($id);
+        $settings = $tenant->settings ?? [];
+        $domainSettings = $settings['domain'] ?? [];
+
+        $currentEnabled = (bool) ($domainSettings['custom_domain_enabled'] ?? true);
+        $newEnabled = !$currentEnabled;
+
+        $domainSettings['custom_domain_enabled'] = $newEnabled;
+        $settings['domain'] = $domainSettings;
+        $tenant->settings = $settings;
+        $tenant->save();
+
+        AuditLog::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $adminUser->id,
+            'action' => 'admin_toggle_custom_domain',
+            'auditable_type' => Tenant::class,
+            'auditable_id' => $tenant->id,
+            'old_values' => ['custom_domain_enabled' => $currentEnabled],
+            'new_values' => ['custom_domain_enabled' => $newEnabled],
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'message' => $newEnabled ? 'تم تفعيل توجيه النطاق المخصص.' : 'تم إيقاف توجيه النطاق المخصص بأمان دون مساس بالبيانات.',
+            'custom_domain_enabled' => $newEnabled,
+        ]);
+    }
 }

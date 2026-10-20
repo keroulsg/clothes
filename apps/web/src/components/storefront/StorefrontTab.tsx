@@ -58,10 +58,21 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
   const [custCity, setCustCity] = useState(isAr ? 'القاهرة' : 'Cairo');
   const [orderPlacedMsg, setOrderPlacedMsg] = useState<string | null>(null);
 
-  const handleUpdateOrderStatus = (orderId: string, nextStatus: StoreOrder['status']) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
-    );
+  const handleUpdateOrderStatus = async (orderId: string, nextStatus: StoreOrder['status']) => {
+    try {
+      const res = await api.storefront.updateOrderStatus(orderId, nextStatus);
+      if (res?.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? res.order : o))
+        );
+      } else {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
+        );
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تحديث حالة الطلب بالسيرفر' : 'Failed to update order status on server'));
+    }
   };
 
   const handleAddToCart = (v: ProductVariant) => {
@@ -148,7 +159,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{orders.length}</p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                {isAr ? '1 طلب جديد بانتظار الشحن' : '1 pending dispatch'}
+                {orders.filter((o) => o.status === 'new').length} {isAr ? 'طلب جديد بانتظار الشحن' : 'pending dispatch'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -164,7 +175,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                 {isAr ? 'مبيعات المتجر الإلكتروني' : 'Online Sales'}
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {orders.reduce((sum, o) => sum + o.total_amount, 0).toLocaleString()} ج.م
+                {orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0).toLocaleString()} ج.م
               </p>
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 {isAr ? 'دفع عند الاستلام (COD)' : 'Cash on Delivery (COD)'}

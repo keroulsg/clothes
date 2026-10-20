@@ -461,6 +461,26 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+
+    getBoms: async (params: { garment_model_id?: string } = {}): Promise<{ success: boolean; data: any[] }> => {
+      const query = new URLSearchParams();
+      if (params.garment_model_id) query.append('garment_model_id', params.garment_model_id);
+      const qs = query.toString();
+      return this.request<{ success: boolean; data: any[] }>(`/boms${qs ? `?${qs}` : ''}`);
+    },
+
+    createBom: async (payload: any): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>('/boms', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    approveBom: async (id: string): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/boms/${id}/approve`, {
+        method: 'POST',
+      });
+    },
   };
 
   // --- Subcontracting & CMT Endpoints ---
@@ -874,6 +894,12 @@ class ApiClient {
   public storefront = {
     getOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/storefront/orders?page=${page}`);
+    },
+    updateOrderStatus: async (id: string, status: string): Promise<{ message: string; order: any }> => {
+      return this.request(`/storefront/orders/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
     },
   };
 

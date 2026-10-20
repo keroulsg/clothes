@@ -126,4 +126,25 @@ class StorefrontController extends Controller
 
         return response()->json($orders);
     }
+
+    /**
+     * تحديث حالة طلب المتجر الإلكتروني
+     */
+    public function updateStatus(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = StoreOrder::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:new,confirmed,preparing,shipped,delivered,cancelled',
+        ]);
+
+        $order->update(['status' => $validated['status']]);
+
+        return response()->json([
+            'message' => 'تم تحديث حالة طلب الشراء بنجاح',
+            'order' => $order->load('items'),
+        ]);
+    }
 }
+

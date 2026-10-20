@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { Loader2 } from 'lucide-react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'success' | 'accent' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   icon?: React.ReactNode;
@@ -19,20 +19,30 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none';
+  const baseStyles =
+    'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#7F1625] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none active:scale-[0.98]';
 
   const variants = {
-    primary: 'bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] active:bg-[var(--brand-primary-active)] text-white shadow-md shadow-[#460809]/30 focus:ring-[var(--brand-primary)] border border-[var(--brand-primary-light)] font-bold active:scale-[0.98]',
-    secondary: 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 focus:ring-slate-400 font-bold active:scale-[0.98]',
-    outline: 'bg-transparent border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:border-[var(--brand-primary)] text-slate-900 dark:text-slate-100 focus:ring-slate-400 font-bold active:scale-[0.98]',
-    danger: 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 focus:ring-rose-500 border border-rose-500/30 font-bold active:scale-[0.98]',
-    ghost: 'bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold',
+    primary:
+      'bg-gradient-to-r from-[#7F1625] to-[#941b2d] hover:from-[#6a121e] hover:to-[#7F1625] text-white shadow-sm shadow-[#7F1625]/30 border border-[#7F1625] font-bold hover:shadow-md hover:shadow-[#7F1625]/40 hover:-translate-y-0.5 active:translate-y-0',
+    secondary:
+      'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90 font-semibold hover:shadow-xs active:translate-y-0',
+    outline:
+      'bg-white border border-slate-300 hover:border-[#7F1625] hover:text-[#7F1625] text-slate-800 hover:bg-[#7F1625]/5 font-semibold shadow-2xs hover:shadow-xs',
+    accent:
+      'bg-[#7F1625]/10 border border-[#7F1625]/25 text-[#7F1625] hover:bg-[#7F1625]/15 font-bold hover:border-[#7F1625]/40',
+    success:
+      'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-sm shadow-emerald-600/30 font-bold border border-emerald-600',
+    danger:
+      'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white shadow-sm shadow-rose-600/30 font-bold border border-rose-600',
+    ghost:
+      'bg-transparent hover:bg-slate-100 text-slate-700 hover:text-slate-950 font-semibold',
   };
 
   const sizes = {
-    sm: 'text-xs px-2.5 py-1.5 gap-1.5 font-bold rounded-lg',
-    md: 'text-xs sm:text-sm px-3.5 py-2 gap-2 font-bold rounded-xl',
-    lg: 'text-sm sm:text-base px-5 py-2.5 gap-2.5 font-extrabold rounded-xl',
+    sm: 'text-xs px-3 py-1.5 gap-1.5 rounded-lg font-medium',
+    md: 'text-xs sm:text-sm px-4 py-2 gap-2 rounded-xl font-bold',
+    lg: 'text-sm sm:text-base px-5 py-2.5 gap-2.5 rounded-xl font-black shadow-md',
   };
 
   return (
@@ -42,11 +52,11 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {isLoading ? (
-        <Loader2 className="w-4 h-4 animate-spin" />
+        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
       ) : icon ? (
-        <span className="shrink-0">{icon}</span>
+        <span className="shrink-0 flex items-center justify-center">{icon}</span>
       ) : null}
-      <span>{children}</span>
+      {children && <span>{children}</span>}
     </button>
   );
 };

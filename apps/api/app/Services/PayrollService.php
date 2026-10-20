@@ -46,6 +46,13 @@ class PayrollService
 
             $totalAmount = round($qty * $rate, 4);
 
+            if (!empty($data['production_order_id'])) {
+                \App\Models\ProductionOrder::where('tenant_id', $tenantId)->findOrFail($data['production_order_id']);
+            }
+            if (!empty($data['cutting_bundle_id'])) {
+                \App\Models\CuttingBundle::where('tenant_id', $tenantId)->findOrFail($data['cutting_bundle_id']);
+            }
+
             $log = PieceWorkLog::create([
                 'tenant_id' => $tenantId,
                 'employee_id' => $employee->id,

@@ -37,8 +37,6 @@ import {
   RefreshCw,
   LogOut,
   Globe,
-  Sun,
-  Moon,
   Key,
   XCircle,
   Edit,
@@ -52,8 +50,8 @@ interface PlatformAdminDashboardProps {
   onLogout: () => void;
   lang: Language;
   onToggleLang: () => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
+  isDark?: boolean;
+  onToggleTheme?: () => void;
   onSwitchToTenantApp?: () => void;
 }
 
@@ -62,8 +60,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   onLogout,
   lang,
   onToggleLang,
-  isDark,
-  onToggleTheme,
+  isDark = true,
   onSwitchToTenantApp,
 }) => {
   const isAr = lang === 'ar';
@@ -424,14 +421,6 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             >
               <Globe className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span className="hidden sm:inline font-bold">{isAr ? 'English' : 'عربي'}</span>
-            </button>
-
-            <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title={isDark ? (isAr ? 'تفعيل الوضع المضيء' : 'Light Mode') : (isAr ? 'تفعيل الوضع الليلي' : 'Dark Mode')}
-            >
-              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
             </button>
 
             <CButton

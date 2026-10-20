@@ -153,6 +153,10 @@ class SalesController extends Controller
 
         $tenantId = app('current_tenant_id');
 
+        if (!empty($validated['branch_id'])) {
+            \App\Models\Branch::where('tenant_id', $tenantId)->findOrFail($validated['branch_id']);
+        }
+
         $session = PosSession::create([
             'tenant_id' => $tenantId,
             'branch_id' => $validated['branch_id'] ?? null,

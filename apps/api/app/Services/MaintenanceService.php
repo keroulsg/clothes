@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Branch;
+use App\Models\InventoryItem;
 use App\Models\Machine;
 use App\Models\MaintenanceWorkOrder;
 use App\Models\MaintenanceSparePart;
@@ -11,12 +13,22 @@ use Illuminate\Support\Str;
 
 class MaintenanceService
 {
+    public function __construct(
+        protected InventoryService $inventoryService
+    ) {}
+
     /**
      * Register a new factory machine / equipment asset.
      */
     public function registerMachine(array $data): Machine
     {
         return DB::transaction(function () use ($data) {
+            $tenantId = app('current_tenant_id');
+
+            if (!empty($data['branch_id'])) {
+                Branch::where('tenant_id', $tenantId)->findOrFail($data['branch_id']);
+            }
+
             $machineCode = $data['machine_code'] ?? 'MCH-' . strtoupper(Str::random(6));
             $intervalDays = (int) ($data['maintenance_interval_days'] ?? 30);
 
@@ -26,6 +38,7 @@ class MaintenanceService
                 : ($lastDate ? (clone $lastDate)->addDays($intervalDays) : Carbon::today()->addDays($intervalDays));
 
             return Machine::create([
+                'tenant_id' => $tenantId,
                 'machine_code' => $machineCode,
                 'name' => $data['name'],
                 'model_number' => $data['model_number'] ?? null,
@@ -105,7 +118,31 @@ class MaintenanceService
 
             $quantity = (float) ($data['quantity'] ?? 1);
             $unitCost = (float) ($data['unit_cost'] ?? 0);
-            $totalCost = $quantity * $unitCost;
+
+            if (!empty($data['inventory_item_id'])) {
+                $invItem = InventoryItem::where('tenant_id', $workOrder->tenant_id)
+                    ->lockForUpdate()
+                    ->findOrFail($data['inventory_item_id']);
+
+                if ($unitCost <= 0) {
+                    $unitCost = (float)$invItem->average_cost;
+                }
+
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $workOrder->tenant_id,
+                    'inventory_item_id' => $invItem->id,
+                    'warehouse_id' => $invItem->warehouse_id,
+                    'quantity' => $quantity,
+                    'direction' => 'OUT',
+                    'transaction_type' => 'maintenance_consumption',
+                    'unit_cost' => $unitCost,
+                    'reference_type' => 'maintenance_work_orders',
+                    'reference_id' => $workOrder->id,
+                    'idempotency_key' => 'MNT-SPARE-' . $workOrder->id . '-' . md5(($data['part_name'] ?? 'part') . $quantity . uniqid()),
+                ]);
+            }
+
+            $totalCost = round($quantity * $unitCost, 4);
 
             $part = MaintenanceSparePart::create([
                 'work_order_id' => $workOrder->id,
@@ -121,7 +158,7 @@ class MaintenanceService
             $allPartsCost = (float) $workOrder->spareParts()->sum('total_cost');
             $workOrder->update([
                 'spare_parts_cost' => $allPartsCost,
-                'total_cost' => (float)$workOrder->labor_cost + $allPartsCost,
+                'total_cost' => round((float)$workOrder->labor_cost + $allPartsCost, 4),
             ]);
 
             return $part;

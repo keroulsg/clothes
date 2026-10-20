@@ -11,23 +11,23 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  success: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 font-semibold',
-  warning: 'bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/30 font-semibold',
-  info: 'bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 font-semibold',
-  danger: 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30 font-semibold',
-  neutral: 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 font-medium',
-  purple: 'bg-purple-500/15 text-purple-900 dark:text-purple-300 border-purple-500/30 font-semibold',
-  brand: 'bg-[#460809]/10 text-[#460809] dark:text-[#fca5a5] border-[#460809]/30 font-bold',
+  success: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 font-bold',
+  warning: 'bg-amber-500/10 text-amber-700 border-amber-500/20 font-bold',
+  info: 'bg-sky-500/10 text-sky-700 border-sky-500/20 font-bold',
+  danger: 'bg-rose-500/10 text-rose-700 border-rose-500/20 font-bold',
+  neutral: 'bg-zinc-100 text-zinc-700 border-zinc-200 font-semibold',
+  purple: 'bg-purple-500/10 text-purple-700 border-purple-500/20 font-bold',
+  brand: 'bg-[#7F1625]/10 text-[#7F1625] border-[#7F1625]/25 font-bold',
 };
 
 const dotStyles: Record<BadgeVariant, string> = {
-  success: 'bg-emerald-400',
-  warning: 'bg-amber-400',
-  info: 'bg-sky-400',
-  danger: 'bg-rose-400',
-  neutral: 'bg-slate-400',
-  purple: 'bg-purple-400',
-  brand: 'bg-[#460809] dark:bg-[#fca5a5]',
+  success: 'bg-emerald-500',
+  warning: 'bg-amber-500',
+  info: 'bg-sky-500',
+  danger: 'bg-rose-500',
+  neutral: 'bg-zinc-400',
+  purple: 'bg-purple-500',
+  brand: 'bg-[#7F1625]',
 };
 
 export const Badge: React.FC<BadgeProps> = ({
@@ -39,12 +39,12 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono border transition-all',
         variantStyles[variant],
         className
       )}
     >
-      {dot && <span className={clsx('w-1.5 h-1.5 rounded-full animate-pulse', dotStyles[variant])} />}
+      {dot && <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', dotStyles[variant])} />}
       {children}
     </span>
   );

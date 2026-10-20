@@ -1,38 +1,20 @@
 import React, { useState } from 'react';
 import {
-  CContainer,
-  CRow,
-  CCol,
-  CCard,
-  CCardBody,
-  CButton,
-  CBadge,
-  CAlert,
-  CForm,
-  CFormInput,
-  CFormTextarea,
-  CSpinner,
-} from '@coreui/react';
-import {
   Scissors,
   Calculator,
   QrCode,
   ShieldCheck,
-  Building2,
   ArrowRight,
   ArrowLeft,
-  Mail,
-  Phone,
   Send,
   Sparkles,
   ChevronDown,
   Globe,
   LogIn,
-  Sun,
-  Moon,
   Boxes,
   ShoppingCart,
   Check,
+  CheckCircle2,
   Sparkle,
 } from 'lucide-react';
 import { api } from '../../api/client';
@@ -41,8 +23,8 @@ import type { Language } from '../../types';
 interface PublicWebsiteProps {
   lang: Language;
   onToggleLang: () => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
+  isDark?: boolean;
+  onToggleTheme?: () => void;
   onOpenLogin: () => void;
   onOpenRegister: (planTier?: 'starter' | 'professional' | 'enterprise') => void;
 }
@@ -50,8 +32,6 @@ interface PublicWebsiteProps {
 export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   lang,
   onToggleLang,
-  isDark,
-  onToggleTheme,
   onOpenLogin,
   onOpenRegister,
 }) => {
@@ -104,52 +84,58 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
 
   const features = [
     {
-      icon: <Scissors className="w-5 h-5 text-amber-400" />,
-      badge: isAr ? 'صالة القص' : 'Cutting Floor',
-      title: isAr ? 'هندسة صالة القص وحساب الهالك' : 'Cutting Floor & Marker Optimization',
+      icon: <Scissors className="w-5 h-5 text-white" />,
+      badge: isAr ? 'صالة القص والفرش' : 'Cutting Floor',
+      title: isAr ? 'هندسة صالة القص وتخطيط الفرش' : 'Cutting Floor & Marker Optimization',
       desc: isAr
         ? 'حساب كفاءة التعشيق (Marker Efficiency %)، عدد طبقات الفرش (Plies)، والتحكم الصارم في نسب الهالك المسموح بها مع توليد أوامر القص الآلية.'
         : 'Marker efficiency optimization, automatic layer/ply planning, and strict waste threshold tracking.',
+      planRequired: isAr ? 'المصانع المتكاملة' : 'Professional',
     },
     {
-      icon: <Calculator className="w-5 h-5 text-emerald-400" />,
+      icon: <Calculator className="w-5 h-5 text-white" />,
       badge: isAr ? 'المخازن والخامات' : 'Fabric Inventory',
-      title: isAr ? 'حاسبة استهلاك الأقمشة الذكية' : 'Smart GSM & Roll Calculator',
+      title: isAr ? 'حاسبة استهلاك الأقمشة والـ GSM' : 'Smart GSM & Roll Calculator',
       desc: isAr
-        ? 'تحويل فوري دقيق بين الأمتار والكيلوجرامات ووزن المتر المربع (GSM)، وتتبع الأمتار المتبقية في أثواب الأقمشة قبل الفرش.'
+        ? 'تحويل فوري دقيق بين الأمتار والكيلوجرامات ووزن المتر المربع (GSM)، وتتبع الأمتار المتبقية في أثواب الأقمشة قبل الفرش لمنع العجز.'
         : 'Bi-directional conversions between meters, kilograms, and GSM with real-time remaining roll metrics.',
+      planRequired: isAr ? 'الأساسية' : 'Starter',
     },
     {
-      icon: <QrCode className="w-5 h-5 text-sky-400" />,
-      badge: isAr ? 'التتبع بالباركود' : 'QR Checkpoints',
-      title: isAr ? 'تتبع بطاقات الحزم الذكية بالباركود' : 'Smart Barcode Bundle Tracking',
+      icon: <QrCode className="w-5 h-5 text-white" />,
+      badge: isAr ? 'تتبع الباركود' : 'QR Checkpoints',
+      title: isAr ? 'بطاقات الحزم الذكية بالباركود' : 'Smart Barcode Bundle Tracking',
       desc: isAr
-        ? 'توليد باركود فريد لكل حزمة مقصوصة وتتبع مراحل الخط (خياطة، تشغيل خارجي، كوي، تغليف) مع محطات فحص الجودة.'
+        ? 'توليد باركود فريد لكل حزمة مقصوصة وتتبع مراحل الخط (خياطة، تشغيل خارجي، كوي، تغليف) مع محطات فحص الجودة الميدانية.'
         : 'Unique QR bundle tickets tracked across cutting, sewing, finishing, and multi-stage QC checkpoints.',
+      planRequired: isAr ? 'المصانع المتكاملة' : 'Professional',
     },
     {
-      icon: <Boxes className="w-5 h-5 text-primary dark:text-[#fca5a5]" />,
+      icon: <Boxes className="w-5 h-5 text-white" />,
       badge: isAr ? 'التشغيل للغير' : 'CMT Custody',
-      title: isAr ? 'التشغيل للغير وعزل أمانات العملاء (CMT)' : 'CMT & Customer Fabric Custody',
+      title: isAr ? 'التشغيل للغير وأمانات العملاء (CMT)' : 'CMT & Customer Fabric Custody',
       desc: isAr
-        ? 'إدارة عقود التشغيل للغير مع عزل أقمشة ومستلزمات العملاء محاسبياً ومخزنياً كأمانات تشغيل مستبعدة من أصول المصنع.'
+        ? 'إدارة عقود التشغيل للغير مع عزل أقمشة ومستلزمات العملاء محاسبياً ومخزنياً كأمانات تشغيل مستبعدة بالكامل من أصول المصنع.'
         : 'Strict segregation of customer-owned fabric custody with isolated stock balances and service fee billing.',
+      planRequired: isAr ? 'المصانع المتكاملة' : 'Professional',
     },
     {
-      icon: <ShoppingCart className="w-5 h-5 text-rose-400" />,
-      badge: isAr ? 'المشتريات' : 'Procurement',
+      icon: <ShoppingCart className="w-5 h-5 text-white" />,
+      badge: isAr ? 'سلاسل الإمداد' : 'Procurement',
       title: isAr ? 'المشتريات والمطابقة الثلاثية' : 'Procurement & 3-Way Matching',
       desc: isAr
-        ? 'ربط أمر الشراء مع إذن فحص الجودة بالبوابة وفاتورة المورد لمنع فروقات الأسعار أو استلام خامات غير مطابقة.'
+        ? 'ربط أمر الشراء مع إذن فحص الجودة بالبوابة وفاتورة المورد لمنع فروقات الأسعار أو استلام خامات غير مطابقة للمواصفات.'
         : 'Rigid 3-way matching between purchase orders, gate QC inspection receipts, and vendor invoices.',
+      planRequired: isAr ? 'المصانع المتكاملة' : 'Professional',
     },
     {
-      icon: <ShieldCheck className="w-5 h-5 text-emerald-400" />,
-      badge: isAr ? 'أمان السحابة' : 'Data Isolation',
-      title: isAr ? 'عزل كامل للمصانع والبيانات (Multi-Tenancy)' : 'Strict Multi-Tenant Isolation',
+      icon: <ShieldCheck className="w-5 h-5 text-white" />,
+      badge: isAr ? 'الأمان السحابي' : 'Data Isolation',
+      title: isAr ? 'عزل كامل للمصانع والبيانات' : 'Strict Multi-Tenant Isolation',
       desc: isAr
-        ? 'نظام سحابي معزول بالكامل لكل مصنع مع قفل تلقائي للاستعلامات وصلاحيات دقيقة (مالك، مدير إنتاج، محاسب، جودة).'
+        ? 'نظام سحابي معزول بالكامل لكل مصنع مع قفل تلقائي للاستعلامات وصلاحيات دقيقة (مالك، مدير إنتاج، محاسب، جودة، عمال).'
         : 'Row-level multi-tenancy enforcing strict data isolation and granular role-based permissions.',
+      planRequired: isAr ? 'المؤسسات' : 'Enterprise',
     },
   ];
 
@@ -160,7 +146,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
       tierLabel: 'Starter',
       popular: false,
       tagline: isAr ? 'مثالية للورش الصغيرة ومشاغل الخياطة حتى 3 مستخدمين' : 'Ideal for workshops up to 3 users',
-      price: isAr ? '750' : '750',
+      price: '750',
       currency: isAr ? 'ج.م' : 'EGP',
       period: isAr ? '/ شهرياً' : '/ month',
       badge: isAr ? 'تجربة 14 يوماً مجاناً' : '14-Day Free Trial',
@@ -182,7 +168,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
       tierLabel: 'Professional',
       popular: true,
       tagline: isAr ? 'الخيار الأكثر طلباً للمصانع المتوسطة وخطوط الإنتاج الكاملة' : 'Most popular for growing apparel manufacturers',
-      price: isAr ? '2,500' : '2,500',
+      price: '2,500',
       currency: isAr ? 'ج.م' : 'EGP',
       period: isAr ? '/ شهرياً' : '/ month',
       badge: isAr ? 'الأكثر طلباً للمصانع' : 'Most Popular',
@@ -203,7 +189,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
       tierLabel: 'Enterprise',
       popular: false,
       tagline: isAr ? 'للشركات الكبرى والمجموعات ذات المصانع المتعددة' : 'For large apparel groups and export houses',
-      price: isAr ? '5,500' : '5,500',
+      price: '5,500',
       currency: isAr ? 'ج.م' : 'EGP',
       period: isAr ? '/ شهرياً' : '/ month',
       badge: isAr ? 'مؤسسات ومجموعات' : 'Enterprise',
@@ -228,7 +214,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
     {
       q: isAr ? 'كيف يتم حماية عزل بيانات مصنعي عن المصانع الأخرى؟' : 'How is my factory data strictly isolated from other tenants?',
       a: isAr
-        ? 'نظام GarmentOS Cloud مبني على بنية Multi-Tenancy هندسية صارمة؛ حيث يتم قفل كافة الاستعلامات المخزنية والإنتاجية بـ TenantScope إجباري على مستوى قاعدة البيانات، ولا يمكن لأي مستخدم الوصول لبيانات مصنع آخر.'
+        ? 'نظام GarmentOS مبني على بنية Multi-Tenancy هندسية صارمة؛ حيث يتم قفل كافة الاستعلامات المخزنية والإنتاجية بـ TenantScope إجباري على مستوى قاعدة البيانات، ولا يمكن لأي مستخدم الوصول لبيانات مصنع آخر.'
         : 'GarmentOS Cloud uses strict server-side TenantScope filters at the database layer, mathematically preventing cross-tenant access.',
     },
     {
@@ -240,663 +226,524 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
     {
       q: isAr ? 'هل يتطلب النظام أجهزة كمبيوتر أو سيرفرات خاصة داخل المصنع؟' : 'Does the system require on-premise servers in the factory?',
       a: isAr
-        ? 'كلا، GarmentOS Cloud هو نظام سحابي 100% يعمل من أي متصفح ويب حديث على أجهزة الكمبيوتر، اللابتوب، أو التابلت في صالة القص بدون تكاليف صيانة خوادم أو شبكات محلية معقدة.'
+        ? 'كلا، GarmentOS هو نظام سحابي 100% يعمل من أي متصفح ويب حديث على أجهزة الكمبيوتر، اللابتوب، أو التابلت في صالة القص بدون تكاليف صيانة خوادم أو شبكات محلية معقدة.'
         : 'No, it is a 100% Cloud SaaS accessible from any desktop, laptop, or tablet on the shop floor without internal servers.',
     },
   ];
 
   return (
     <div
-      className={`min-h-screen text-slate-100 ${isDark ? 'bg-[#080b12]' : 'bg-[#f8fafc] text-slate-900'}`}
+      className="min-h-screen bg-[#f4f5f8] text-zinc-900 selection:bg-[#7F1625] selection:text-white font-sans"
       dir={isAr ? 'rtl' : 'ltr'}
-      style={{
-        backgroundColor: isDark ? 'var(--brand-black)' : '#f8fafc',
-      }}
     >
-      {/* 1. Public Top Navigation */}
-      <header
-        className={`sticky top-0 z-50 backdrop-blur-xl border-b transition-all ${
-          isDark ? 'border-slate-800/80 bg-[#080b12]/90' : 'border-slate-200/90 bg-white/95'
-        }`}
-      >
-        <CContainer className="py-3 px-4 lg:px-8">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transition-transform hover:scale-105"
-                style={{ backgroundColor: 'var(--brand-primary)' }}
-              >
-                <Scissors className="w-5 h-5 -rotate-45" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-black text-xl tracking-tight ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    GarmentOS
-                  </span>
-                  <span
-                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border"
-                    style={{
-                      backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                      color: isDark ? '#fca5a5' : '#460809',
-                      borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.3)',
-                    }}
-                  >
-                    Cloud
-                  </span>
-                </div>
-                <div
-                  className={`text-[10px] font-medium hidden sm:block ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}
-                >
-                  {isAr ? 'المنظومة السحابية المتخصصة لمصانع وورش الملابس' : 'Specialized Apparel & Garment Cloud ERP'}
-                </div>
-              </div>
+      {/* 1. Header (Reference Style: Auto Parts ERP) */}
+      <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white/95 backdrop-blur-md shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F1625] to-black text-white shadow-md shadow-[#7F1625]/20 ring-1 ring-white/10 shrink-0">
+              <Scissors className="w-5 h-5 -rotate-45" />
             </div>
-
-            {/* Public Nav Links (Desktop) */}
-            <nav className="hidden lg:flex items-center gap-7 text-xs font-semibold">
-              <a
-                href="#features"
-                className={`transition-colors ${
-                  isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {isAr ? 'قدرات المنظومة' : 'Capabilities'}
-              </a>
-              <a
-                href="#preview"
-                className={`transition-colors ${
-                  isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {isAr ? 'معاينة حية' : 'Live Preview'}
-              </a>
-              <a
-                href="#workflows"
-                className={`transition-colors ${
-                  isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {isAr ? 'دورة العمل' : 'Workflows'}
-              </a>
-              <a
-                href="#pricing"
-                className={`transition-colors ${
-                  isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {isAr ? 'باقات الاشتراك' : 'Pricing'}
-              </a>
-              <a
-                href="#faq"
-                className={`transition-colors ${
-                  isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {isAr ? 'الأسئلة الشائعة' : 'FAQ'}
-              </a>
-              <a
-                href="#contact"
-                className={`transition-colors ${
-                  isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {isAr ? 'تواصل معنا' : 'Contact'}
-              </a>
-            </nav>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={onToggleLang}
-                className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                  isDark
-                    ? 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title={isAr ? 'Switch to English' : 'التحويل للعربية'}
-              >
-                <Globe className="w-4 h-4" />
-                <span className="hidden sm:inline">{isAr ? 'English' : 'عربي'}</span>
-              </button>
-
-              <button
-                onClick={onToggleTheme}
-                className={`p-2 rounded-lg transition-colors ${
-                  isDark
-                    ? 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title={isDark ? 'Light Theme' : 'Dark Theme'}
-              >
-                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
-              </button>
-
-              <CButton
-                color="secondary"
-                variant="outline"
-                size="sm"
-                className={`text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all ${
-                  isDark
-                    ? 'text-slate-200 border-slate-700 hover:bg-slate-800'
-                    : 'text-slate-700 border-slate-300 hover:bg-slate-100'
-                }`}
-                onClick={onOpenLogin}
-              >
-                <LogIn className="w-3.5 h-3.5 inline-block mr-1.5 rtl:ml-1.5" />
-                {isAr ? 'دخول المصنع' : 'Sign In'}
-              </CButton>
-
-              <CButton
-                size="sm"
-                className="btn-brand-primary text-xs font-bold px-4 py-1.5 rounded-lg"
-                onClick={() => onOpenRegister('professional')}
-              >
-                <Sparkles className="w-3.5 h-3.5 inline-block mr-1.5 rtl:ml-1.5" />
-                {isAr ? 'ابدأ مجاناً 14 يوماً' : 'Start 14-Day Trial'}
-              </CButton>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-xl tracking-tight text-zinc-950 font-sans">
+                  GarmentOS
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-[#7F1625]/20 bg-[#7F1625]/10 text-[#7F1625]">
+                  ERP
+                </span>
+              </div>
+              <div className="text-[10px] text-zinc-500 hidden sm:block font-medium">
+                {isAr ? 'المنظومة السحابية المتخصصة لمصانع وورش الملابس' : 'Specialized Apparel & Garment Cloud ERP'}
+              </div>
             </div>
           </div>
-        </CContainer>
+
+          {/* Navigation Links (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-7 text-xs font-bold text-zinc-600">
+            <a href="#" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'الرئيسية' : 'Home'}
+            </a>
+            <a href="#features" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'قدرات صالة القص' : 'Cutting Capabilities'}
+            </a>
+            <a href="#preview" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'معاينة الداشبورد' : 'Live Dashboard'}
+            </a>
+            <a href="#workflows" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'دورة العمل والـ CMT' : 'Workflows'}
+            </a>
+            <a href="#pricing" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'الأسعار والباقات' : 'Pricing'}
+            </a>
+            <a href="#faq" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'الأسئلة الشائعة' : 'FAQ'}
+            </a>
+            <a href="#contact" className="hover:text-[#7F1625] transition-colors">
+              {isAr ? 'تواصل معنا' : 'Contact'}
+            </a>
+          </nav>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onToggleLang}
+              className="p-2 rounded-xl border border-zinc-200 text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100 transition-colors text-xs flex items-center gap-1 font-bold"
+              title={isAr ? 'Switch to English' : 'التحويل للعربية'}
+            >
+              <Globe className="w-4 h-4 text-zinc-500" />
+              <span className="text-[11px]">{isAr ? 'EN' : 'عربي'}</span>
+            </button>
+
+            <button
+              onClick={onOpenLogin}
+              className="text-xs font-bold px-3.5 py-2 rounded-xl border border-zinc-300 text-zinc-800 hover:bg-zinc-100 transition-all flex items-center gap-1.5"
+            >
+              <LogIn className="w-3.5 h-3.5 text-zinc-600" />
+              <span>{isAr ? 'دخول المصنع' : 'Sign In'}</span>
+            </button>
+
+            <button
+              onClick={() => onOpenRegister('professional')}
+              className="text-xs font-bold px-4 py-2 rounded-xl bg-[#7F1625] text-white hover:bg-[#6a121e] transition-all flex items-center gap-1.5 shadow-md shadow-[#7F1625]/25"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isAr ? 'ابدأ مجاناً 14 يوماً' : 'Start Trial'}</span>
+            </button>
+          </div>
+        </div>
       </header>
 
-      {/* 2. Hero Section with Live Shop-Floor Monitor Preview */}
-      <section className="relative overflow-hidden pt-16 pb-24 border-b border-slate-800/40">
-        {/* Subtle Brand Ambient Backlight */}
-        <div
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-[380px] pointer-events-none opacity-20 blur-[120px]"
-          style={{ background: 'radial-gradient(circle, #460809 0%, transparent 70%)' }}
-        />
+      {/* 2. Hero Section (Reference Style: Deep Burgundy Gradient + Radial Pattern) */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#7F1625] via-[#4f0c16] to-black px-6 pt-20 pb-28 text-center text-white">
+        {/* Subtle Radial Dot Texture */}
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px] opacity-10 pointer-events-none" />
 
-        <CContainer className="relative z-10 px-4 lg:px-8 text-center max-w-4xl mx-auto">
-          {/* Engineering Announcement Badge */}
-          <div
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6 border shadow-sm"
-            style={{
-              backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-              borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.35)',
-              color: isDark ? '#fca5a5' : '#460809',
-            }}
-          >
-            <Sparkle className="w-3.5 h-3.5 animate-pulse" />
+        <div className="relative mx-auto max-w-5xl z-10">
+          {/* Announcement Pill */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-bold backdrop-blur-md shadow-xs mb-6">
+            <Sparkle className="h-3.5 w-3.5 text-amber-300 animate-pulse" />
             <span>
               {isAr
-                ? 'المنظومة السحابية المتخصصة لمصانع وورش الملابس والتشغيل للغير (CMT)'
-                : 'Dedicated Cloud ERP for Garment Factories & CMT Operations'}
+                ? 'المنظومة السحابية الأحدث لإدارة صالات القص، الأقمشة، والتشغيل للغير (CMT)'
+                : 'Advanced Cloud ERP for Garment Cutting Floors & CMT Operations'}
             </span>
           </div>
 
           {/* Main Hero Headline */}
-          <h1
-            className={`text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15] mb-6 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}
-          >
+          <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.2] text-white">
             {isAr ? (
               <>
-                إدارة هندسية متكاملة لـ{' '}
-                <span
-                  className="inline-block px-2.5 py-0.5 rounded-lg border"
-                  style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.3)' : 'rgba(70, 8, 9, 0.08)',
-                    borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.3)',
-                    color: isDark ? '#ffffff' : '#460809',
-                  }}
-                >
-                  صالة القص والمخازن
-                </span>{' '}
-                والتشغيل للغير
+                منظومة <span className="text-white">GarmentOS</span>{' '}
+                <span className="text-[#f4abb9]">ERP</span> المتكاملة
               </>
             ) : (
               <>
-                Engineered Command Over{' '}
-                <span
-                  className="inline-block px-2.5 py-0.5 rounded-lg border"
-                  style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.3)' : 'rgba(70, 8, 9, 0.08)',
-                    borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.3)',
-                    color: isDark ? '#ffffff' : '#460809',
-                  }}
-                >
-                  Cutting Floor & Materials
-                </span>{' '}
-                on the Cloud
+                Integrated <span className="text-white">GarmentOS</span>{' '}
+                <span className="text-[#f4abb9]">ERP</span> Platform
               </>
             )}
           </h1>
 
-          <p
-            className={`text-sm sm:text-base max-w-2xl mx-auto leading-relaxed mb-10 ${
-              isDark ? 'text-slate-300' : 'text-slate-600'
-            }`}
-          >
+          <p className="mx-auto mt-6 max-w-3xl text-base sm:text-lg text-zinc-200 leading-relaxed font-normal">
             {isAr
-              ? 'توقف عن هدر الأقمشة وفوضى التشغيل للغير. منظومة سحابية متكاملة تضبط كفاءة التعشيق، تتبع بطاقات الحزم بالباركود، تعزل أمانات العملاء محاسبياً، وتحكم المطابقة الثلاثية للمشتريات.'
-              : 'Eliminate fabric waste and billing chaos. Real-time marker efficiency, QR bundle tracking across shop-floor lines, strict customer fabric custody, and 3-way procurement matching.'}
+              ? 'أول نظام سحابي متخصص يجمع صالة القص، حساب نسب الهالك الفعلي، حاسبة استهلاك الأقمشة والـ GSM، تتبع بطاقات الحزم بالباركود، وفصل أمانات العملاء محاسبياً ومخزنياً بدون تعقيد.'
+              : 'End-to-end apparel cloud suite engineered for marker efficiency, fabric GSM conversions, barcode bundle tickets, CMT customer custody, and 3-way procurement matching.'}
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <CButton
-              size="lg"
-              className="btn-brand-primary w-full sm:w-auto px-8 py-3.5 text-sm font-bold flex items-center justify-center gap-2.5"
+          {/* Call to Actions */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <button
               onClick={() => onOpenRegister('professional')}
+              className="rounded-xl bg-white text-zinc-950 hover:bg-zinc-100 font-black text-sm px-8 py-3.5 shadow-xl hover:scale-105 transition-all flex items-center gap-2 cursor-pointer"
             >
-              <span>{isAr ? 'ابدأ تجربة مصنعك المجانية (14 يوماً)' : 'Start 14-Day Free Trial'}</span>
-              <ArrowIcon className="w-4 h-4" />
-            </CButton>
-
-            <CButton
-              color="secondary"
-              variant="outline"
-              size="lg"
-              className={`w-full sm:w-auto px-8 py-3.5 text-sm font-semibold rounded-xl border ${
-                isDark
-                  ? 'border-slate-700 text-slate-200 hover:bg-slate-800/60'
-                  : 'border-slate-300 text-slate-700 hover:bg-slate-100'
-              }`}
-              onClick={onOpenLogin}
+              <span>{isAr ? 'اختر باقتك وابدأ التجربة' : 'Choose Plan & Start Free Trial'}</span>
+              <ArrowIcon className="h-4 w-4" />
+            </button>
+            <a
+              href="#preview"
+              className="rounded-xl border border-white/30 text-white hover:bg-white/10 font-bold text-sm px-8 py-3.5 transition-all flex items-center gap-2 cursor-pointer"
             >
-              <LogIn className="w-4 h-4 inline-block mr-2 rtl:ml-2" />
-              <span>{isAr ? 'دخول المشتركين للنظام' : 'Sign In to Factory'}</span>
-            </CButton>
+              <span>{isAr ? 'استكشف ميزات النظام كاملة' : 'Explore Platform Features'}</span>
+            </a>
           </div>
 
-          {/* Operational Metrics Strip */}
-          <div
-            className={`mt-14 pt-8 border-t grid grid-cols-2 md:grid-cols-4 gap-6 text-center ${
-              isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-600'
-            }`}
-          >
-            <div className="p-3">
-              <div className={`font-black text-2xl ${isDark ? 'text-white' : 'text-slate-900'}`}>100%</div>
-              <div className="text-xs mt-1 font-medium">{isAr ? 'عزل كامل لبيانات المصانع' : 'Strict Tenant Isolation'}</div>
-            </div>
-            <div className="p-3">
-              <div className={`font-black text-2xl ${isDark ? 'text-white' : 'text-slate-900'}`}>0 EGP</div>
-              <div className="text-xs mt-1 font-medium">{isAr ? 'بدون تكاليف خوادم أو شبكات' : 'Zero Infrastructure Cost'}</div>
-            </div>
-            <div className="p-3">
-              <div className={`font-black text-2xl ${isDark ? 'text-white' : 'text-slate-900'}`}>Phase 6</div>
-              <div className="text-xs mt-1 font-medium">{isAr ? 'تشغيل للغير وأمانات خامات CMT' : 'Full CMT Custody Ready'}</div>
-            </div>
-            <div className="p-3">
-              <div className={`font-black text-2xl ${isDark ? 'text-white' : 'text-slate-900'}`}>QR Live</div>
-              <div className="text-xs mt-1 font-medium">{isAr ? 'تتبع فوري للحزم ومحطات الجودة' : 'Real-time Bundle Checkpoints'}</div>
-            </div>
+          {/* Guarantee Badges */}
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-xs text-zinc-300 font-semibold">
+            <span className="flex items-center gap-1.5">
+              <Check className="h-4 w-4 text-emerald-400" />
+              <span>{isAr ? 'أتمتة صالة القص وتتبع نسب الهالك' : 'Cutting Floor Automation'}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="h-4 w-4 text-emerald-400" />
+              <span>{isAr ? 'بطاقات الحزم الذكية بالباركود QR' : 'Smart QR Bundle Tickets'}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="h-4 w-4 text-emerald-400" />
+              <span>{isAr ? 'عزل أمانات العملاء المحاسبي (CMT)' : 'CMT Customer Fabric Custody'}</span>
+            </span>
           </div>
-        </CContainer>
+        </div>
+      </section>
 
-        {/* 2.1 Live Interactive Shop-Floor Monitor Simulation (Proof of real capability) */}
-        <div id="preview" className="mt-12 px-4 max-w-5xl mx-auto">
-          <div
-            className="rounded-2xl border p-4 sm:p-6 shadow-2xl overflow-hidden text-left"
-            style={{
-              backgroundColor: isDark ? '#0d131f' : '#ffffff',
-              borderColor: isDark ? '#1e2638' : '#e2e8f0',
-            }}
-          >
-            {/* Monitor Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800/60 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-                <div>
-                  <div className={`font-bold text-xs uppercase tracking-wider ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                    {isAr ? 'شاشة الرقابة الحية لصالة القص والإنتاج' : 'Live Shop-Floor & Cutting Monitor'}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono">ORDER #PO-2026-081 • BATCH-EG-44</div>
-                </div>
-              </div>
+      {/* 3. Stat Counter Banner (4 Cards - Reference Style) */}
+      <section className="max-w-7xl mx-auto px-4 -mt-10 relative z-20">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-lg">
+            <Scissors className="mx-auto h-7 w-7 text-[#7F1625] mb-2" />
+            <div className="text-2xl font-black text-zinc-950 font-mono">+40%</div>
+            <div className="mt-1 text-xs text-zinc-500 font-semibold">{isAr ? 'كفاءة وسرعة صالة القص' : 'Cutting Floor Speed'}</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-lg">
+            <QrCode className="mx-auto h-7 w-7 text-emerald-600 mb-2" />
+            <div className="text-2xl font-black text-zinc-950 font-mono">3 ثواني</div>
+            <div className="mt-1 text-xs text-zinc-500 font-semibold">{isAr ? 'مسح باركود بطاقة الحزمة' : 'QR Ticket Scan Speed'}</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-lg">
+            <Boxes className="mx-auto h-7 w-7 text-purple-600 mb-2" />
+            <div className="text-2xl font-black text-zinc-950 font-mono">100%</div>
+            <div className="mt-1 text-xs text-zinc-500 font-semibold">{isAr ? 'دقة عزل أمانات العملاء (CMT)' : 'CMT Isolation Accuracy'}</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-lg">
+            <ShieldCheck className="mx-auto h-7 w-7 text-blue-600 mb-2" />
+            <div className="text-2xl font-black text-zinc-950 font-mono">سحابي</div>
+            <div className="mt-1 text-xs text-zinc-500 font-semibold">{isAr ? 'عزل كامل للبيانات والمصانع' : 'Multi-Tenant Isolation'}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Live Shop-Floor Monitor & Mockup */}
+      <section id="preview" className="py-20 border-b border-zinc-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#7F1625]">
+              {isAr ? 'شاشة تشغيل المصنع اللحظية' : 'Live Shop Floor Operating System'}
+            </span>
+            <h2 className="text-3xl font-black text-zinc-950 sm:text-4xl mt-1">
+              {isAr ? 'واجهة موحدة تجمع صالة القص، المخازن، والتشغيل للغير' : 'Unified Workspace for Cutting, Inventory & CMT'}
+            </h2>
+            <p className="text-xs text-zinc-500 mt-2 max-w-xl mx-auto">
+              {isAr ? 'لوحة قيادة مركزية تمكنك من متابعة كل أمر تشغيل، هالك الفرش، وحركات الصرف في شاشة واحدة.' : 'Monitor lays, waste variances, bundle scans, and fabric stock in a single command center.'}
+            </p>
+          </div>
+
+          {/* Interactive Mockup Container */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 shadow-xl">
+            {/* Mockup Header */}
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-zinc-200 text-xs font-mono">
               <div className="flex items-center gap-2">
-                <CBadge color="success" className="text-[10px] font-bold px-2 py-1">
-                  LIVE CUTTING
-                </CBadge>
-                <span className="text-[11px] text-slate-400 font-mono">14:50:00 EET</span>
+                <span className="w-3 h-3 rounded-full bg-rose-400 inline-block" />
+                <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" />
+                <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block" />
+                <span className="ms-2 font-bold text-zinc-900">GarmentOS Cloud • صالة القص الرئيسية</span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px]">
+                ● مباشر • وردية الصباح
+              </span>
+            </div>
+
+            {/* KPI Mini Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <div className="p-3.5 rounded-xl border border-zinc-200 bg-zinc-50">
+                <div className="text-[11px] text-zinc-500 mb-1 font-semibold">{isAr ? 'أوامر القص النشطة' : 'Active Cutting Orders'}</div>
+                <div className="text-xl font-bold font-mono text-zinc-950">4 أوامر جارية</div>
+                <div className="text-[10px] text-zinc-500 font-mono">4,000 قطعة قيد التنفيذ</div>
+              </div>
+              <div className="p-3.5 rounded-xl border border-zinc-200 bg-zinc-50">
+                <div className="text-[11px] text-zinc-500 mb-1 font-semibold">{isAr ? 'نسبة الهالك الفعلي' : 'Actual Waste Rate'}</div>
+                <div className="text-xl font-bold font-mono text-[#7F1625]">2.6%</div>
+                <div className="text-[10px] text-emerald-700 font-mono font-bold">أقل من المعياري (3.5%)</div>
+              </div>
+              <div className="p-3.5 rounded-xl border border-zinc-200 bg-zinc-50">
+                <div className="text-[11px] text-zinc-500 mb-1 font-semibold">{isAr ? 'أمانات أقمشة العملاء (CMT)' : 'CMT Custody Rolls'}</div>
+                <div className="text-xl font-bold font-mono text-zinc-950">820.0 متر</div>
+                <div className="text-[10px] text-zinc-500 font-mono">معزولة محاسبياً ومخزنياً</div>
+              </div>
+              <div className="p-3.5 rounded-xl border border-zinc-200 bg-zinc-50">
+                <div className="text-[11px] text-zinc-500 mb-1 font-semibold">{isAr ? 'مطابقة الجودة بالخط' : 'First-Pass Yield (QC)'}</div>
+                <div className="text-xl font-bold font-mono text-emerald-700">99.2%</div>
+                <div className="text-[10px] text-zinc-500 font-mono">محطات تفتيش رقمية</div>
               </div>
             </div>
 
-            {/* Simulated Live KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
-              <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 block font-medium">
-                  {isAr ? 'كفاءة التعشيق (Marker Efficiency)' : 'Marker Efficiency'}
-                </span>
-                <span className="text-lg font-black text-emerald-400 font-mono">89.4%</span>
-                <span className="text-[9px] text-slate-500 block">{isAr ? 'ضمن المعيار الهندسي المعتمد' : 'Within optimum tolerance'}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 block font-medium">
-                  {isAr ? 'إجمالي الأمتار المفروشة' : 'Laid Meters'}
-                </span>
-                <span className="text-lg font-black text-primary dark:text-[#fca5a5] font-mono">1,240.0 م</span>
-                <span className="text-[9px] text-slate-500 block">{isAr ? '5 أثواب قماش سنجل جيرسي' : '5 fabric rolls processed'}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 block font-medium">
-                  {isAr ? 'حزم مقصوصة بالباركود' : 'Bundles QR Generated'}
-                </span>
-                <span className="text-lg font-black text-amber-300 font-mono">18 / 20 حزمة</span>
-                <span className="text-[9px] text-slate-500 block">{isAr ? '450 قطعة جاهزة للتشغيل' : '450 pieces tagged'}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 block font-medium">
-                  {isAr ? 'نسبة الهالك الفعلي (Waste %)' : 'Actual Waste Rate'}
-                </span>
-                <span className="text-lg font-black text-emerald-400 font-mono">2.1%</span>
-                <span className="text-[9px] text-slate-500 block">{isAr ? 'أقل من حد التسامح (3.5%)' : 'Below 3.5% threshold'}</span>
-              </div>
-            </div>
-
-            {/* Live Cutting Progress */}
-            <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
-              <div className="flex justify-between items-center text-xs mb-2">
-                <span className="font-semibold text-slate-300">
-                  {isAr ? 'تقدم أمر القص الحالي (تيشيرت صيفي بولو - موديل MOD-PL01)' : 'Current Lay & Cut Progress (Polo Model)'}
-                </span>
-                <span className="font-mono text-emerald-400 font-bold">90% مكتمل</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: '90%', backgroundColor: 'var(--brand-primary)' }}
-                />
-              </div>
+            {/* Table Mockup */}
+            <div className="overflow-x-auto rounded-xl border border-zinc-200">
+              <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
+                <thead className="bg-zinc-100 text-zinc-700 font-mono border-b border-zinc-200 font-bold">
+                  <tr>
+                    <th className="py-2.5 px-3">رقم أمر التشغيل</th>
+                    <th className="py-2.5 px-3">الموديل والنوع</th>
+                    <th className="py-2.5 px-3">الكمية المستهدفة</th>
+                    <th className="py-2.5 px-3">مرحلة الخط</th>
+                    <th className="py-2.5 px-3">نسبة الإنجاز</th>
+                    <th className="py-2.5 px-3">نسبة الهالك</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 font-medium">
+                  <tr>
+                    <td className="py-2.5 px-3 font-mono font-bold text-zinc-950">#ORD-2026-001</td>
+                    <td className="py-2.5 px-3">تيشيرت بولو رجالي بيكيه</td>
+                    <td className="py-2.5 px-3 font-mono">1,200 قطعة</td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded-full bg-[#7F1625]/10 text-[#7F1625] font-bold text-[10px] border border-[#7F1625]/20">
+                        صالة القص والفرش
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-zinc-900">100% (تم القص)</td>
+                    <td className="py-2.5 px-3 font-mono text-emerald-700 font-bold">2.1%</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 px-3 font-mono font-bold text-zinc-950">#ORD-2026-002</td>
+                    <td className="py-2.5 px-3">بنطلون جبردين كاجوال</td>
+                    <td className="py-2.5 px-3 font-mono">800 قطعة</td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200">
+                        خط الخياطة والتجميع
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-zinc-900">680 / 800 (85%)</td>
+                    <td className="py-2.5 px-3 font-mono text-emerald-700 font-bold">2.8%</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. Core Features Section */}
-      <section id="features" className="py-24 border-b border-slate-800/40">
-        <CContainer className="px-4 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <span
-              className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border"
-              style={{
-                backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                color: isDark ? '#fca5a5' : '#460809',
-                borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.35)',
-              }}
-            >
-              {isAr ? 'المميزات التشغيلية الحقيقية' : 'Production-Ready Capabilities'}
-            </span>
-            <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {isAr ? 'مصمم خصيصاً للتعامل مع واقع مصانع وورش الملابس' : 'Engineered for the Realities of Garment Production'}
-            </h2>
-            <p className={`text-xs sm:text-sm mt-3 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              {isAr
-                ? 'حلول برمجية تعالج التحديات الحقيقية: تحويل أوزان الأقمشة، تقليل هادر القص، تتبع الحزم، وعزل خامات العملاء.'
-                : 'Mathematically grounded tools designed to eliminate disputes, track rolls, and maximize throughput.'}
-            </p>
-          </div>
+      {/* 5. Core Platform Features (Reference Style: 6 Cards with #7F1625 Hover) */}
+      <section id="features" className="max-w-7xl mx-auto px-4 py-20 space-y-12">
+        <div className="text-center space-y-3">
+          <span className="text-xs font-extrabold uppercase tracking-widest text-[#7F1625]">
+            {isAr ? 'منظومة الخصائص الهندسية المتكاملة' : 'Integrated Engineering Suite'}
+          </span>
+          <h2 className="text-3xl font-black text-zinc-950 sm:text-4xl">
+            {isAr ? 'كل ما يحتاجه مصنع الملابس في شاشة واحدة' : 'Everything Your Factory Needs in One Dashboard'}
+          </h2>
+          <p className="text-sm text-zinc-600 max-w-xl mx-auto">
+            {isAr
+              ? 'صممنا GarmentOS ليفهم طبيعة صناعة الملابس المعقدة: طبقات الفرش، حسابات الـ GSM، وبطاقات الحزم.'
+              : 'Generic ERPs fail at cutting floor realities. GarmentOS natively supports marker efficiency, plies, and CMT custody.'}
+          </p>
+        </div>
 
-          <CRow className="g-4">
-            {features.map((feat, idx) => (
-              <CCol key={idx} xs={12} md={6} lg={4}>
-                <CCard
-                  className="h-100 rounded-2xl p-2 border transition-all duration-300 hover:-translate-y-1 group"
-                  style={{
-                    backgroundColor: isDark ? '#0f1523' : '#ffffff',
-                    borderColor: isDark ? '#1e2638' : '#e2e8f0',
-                  }}
-                >
-                  <CCardBody className="p-5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <div
-                          className="w-11 h-11 rounded-xl flex items-center justify-center border shadow-sm transition-colors"
-                          style={{
-                            backgroundColor: isDark ? '#141c2e' : '#f1f5f9',
-                            borderColor: isDark ? '#222f47' : '#cbd5e1',
-                          }}
-                        >
-                          {feat.icon}
-                        </div>
-                        <span
-                          className="text-[10px] font-bold px-2 py-0.5 rounded border"
-                          style={{
-                            backgroundColor: isDark ? 'rgba(70, 8, 9, 0.2)' : 'rgba(70, 8, 9, 0.08)',
-                            color: isDark ? '#fca5a5' : '#460809',
-                            borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.25)',
-                          }}
-                        >
-                          {feat.badge}
-                        </span>
-                      </div>
-                      <h3 className={`font-bold text-base mb-2.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>{feat.title}</h3>
-                      <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{feat.desc}</p>
-                    </div>
-                  </CCardBody>
-                </CCard>
-              </CCol>
-            ))}
-          </CRow>
-        </CContainer>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((e, idx) => (
+            <div
+              key={idx}
+              className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-all hover:border-[#7F1625] hover:shadow-md"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F1625] to-[#4f0c16] text-white shadow-md shadow-[#7F1625]/20">
+                    {e.icon}
+                  </div>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-extrabold text-zinc-700">
+                    {e.badge}
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-zinc-950 group-hover:text-[#7F1625] transition-colors">
+                  {e.title}
+                </h3>
+                <p className="mt-2 text-xs text-zinc-600 leading-relaxed line-clamp-3 font-normal">
+                  {e.desc}
+                </p>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-zinc-100 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-700">
+                  {isAr ? 'باقة:' : 'Plan:'} {e.planRequired}
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#7F1625] group-hover:underline">
+                  <span>{isAr ? 'عرض التفاصيل' : 'Details'}</span>
+                  <ArrowIcon className="h-3.5 w-3.5" />
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      {/* 4. Integrated Lifecycle Pipeline (Workflow) */}
-      <section id="workflows" className="py-24 border-b border-slate-800/40">
-        <CContainer className="px-4 lg:px-8">
+      {/* 6. Production Workflow Pipeline */}
+      <section id="workflows" className="py-20 bg-white border-y border-zinc-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {isAr ? 'دورة الإنتاج المتكاملة من الثوب حتى التسليم' : 'Integrated Factory Lifecycle Pipeline'}
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#7F1625]">
+              {isAr ? 'دورة الإنتاج المتكاملة' : 'Production Lifecycle'}
+            </span>
+            <h2 className="text-3xl font-black text-zinc-950 sm:text-4xl mt-1">
+              {isAr ? 'من إذن استلام القماش حتى الفاتورة والتسليم' : 'From Fabric Gate to Final Delivery'}
             </h2>
-            <p className={`text-xs sm:text-sm mt-3 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              {isAr
-                ? 'سلسلة تشغيلية مترابطة تضمن عدم ضياع أي متر قماش أو خروج أي حزمة دون فحص الجودة.'
-                : 'A cohesive digital thread connecting receiving, cutting, assembly, and customer invoicing.'}
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {[
               {
                 step: '01',
-                title: isAr ? 'استلام وفحص الخامات' : 'Material Receipt & QC',
-                desc: isAr
-                  ? 'فحص جودة استواء النسيج والصبغة، حجز خامات العملاء في مخزن أمانات منفصل مع إصدار إذن استلام رسمي.'
-                  : 'Verify fabric specs and quarantine customer-supplied goods in isolated escrow custody.',
-                badge: isAr ? 'إذن استلام GRN' : 'GRN Gate Pass',
+                title: isAr ? 'فحص واستلام الأقمشة' : 'Fabric Gate QC',
+                desc: isAr ? 'وزن الأثواب، قياس العرض والـ GSM، وتسجيل أمانات العملاء.' : 'Roll weight, width, GSM check, and CMT custody separation.',
               },
               {
                 step: '02',
-                title: isAr ? 'الفرش والقص وتوليد الـ QR' : 'Cutting & QR Bundling',
-                desc: isAr
-                  ? 'حساب عدد الطبقات ونسب الهالك، إصدار أمر القص، وتوليد باركود لكل حزمة مقصوصة بمقاسها ولونها.'
-                  : 'Optimize lay plies, enforce waste caps, and generate unique QR tickets for every bundle.',
-                badge: isAr ? 'بطاقات الحزم' : 'QR Bundle Tickets',
+                title: isAr ? 'تخطيط الفرش والقص' : 'Marker & Lay Plan',
+                desc: isAr ? 'تحديد أطوال الفرش وعدد الطبقات وحساب نسبة الهالك المقدر.' : 'Lay lengths, ply counts, and estimated waste calculation.',
               },
               {
                 step: '03',
-                title: isAr ? 'التشغيل ومحطات الفحص' : 'Assembly & Stage QC',
-                desc: isAr
-                  ? 'تتبع حركات الحزم على خطوط الخياطة والتشغيل الخارجي (تطريز، طباعة) مع توثيق عيوب الجودة وإعادة التشغيل.'
-                  : 'Scan bundles at sewing, subcontracted embroidery, and record defects with rework workflows.',
-                badge: isAr ? 'محطات الجودة QC' : 'QC Checkpoints',
+                title: isAr ? 'بطاقات الحزم بالباركود' : 'QR Bundle Tickets',
+                desc: isAr ? 'توليد باركود لكل حزمة مقصوصة لتتبع العاملين والمراحل.' : 'Unique QR ticket per cut bundle for piece-rate and tracking.',
               },
               {
                 step: '04',
-                title: isAr ? 'التسليم والفوترة والمطابقة' : 'Delivery & Invoicing',
-                desc: isAr
-                  ? 'إصدار إذن تسليم للمصنع أو العميل، استرداد فواضل الأقمشة، وإصدار فاتورة أجور التشغيل أو مطابقة التكلفة.'
-                  : 'Generate delivery dispatch notes, reconcile leftover fabrics, and issue verified service invoices.',
-                badge: isAr ? 'أذون وفواتير' : 'Delivery & Invoice',
+                title: isAr ? 'الخياطة والجودة بالخط' : 'Sewing & In-Line QC',
+                desc: isAr ? 'مسح الباركود عند كل مرحلة واعتماد الجودة الميدانية.' : 'Barcode scan at each operation and real-time pass/fail inspection.',
+              },
+              {
+                step: '05',
+                title: isAr ? 'التعبئة والتسليم' : 'Finishing & Invoice',
+                desc: isAr ? 'إذن تسليم البضاعة الجاهزة وإصدار فواتير التشغيل أو البيع.' : 'Delivery receipt and automated job costing / sales invoice.',
               },
             ].map((st, i) => (
+              <div key={i} className="p-5 rounded-2xl border border-zinc-200 bg-[#f4f5f8] shadow-xs">
+                <div className="font-mono text-2xl font-black text-[#7F1625] mb-2">{st.step}</div>
+                <h4 className="text-xs font-bold text-zinc-950 mb-1.5">{st.title}</h4>
+                <p className="text-[11px] text-zinc-500 leading-normal">{st.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 7. Pricing Plans (Reference Style: Card with #7F1625 Active Outline) */}
+      <section id="pricing" className="py-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#7F1625]">
+              {isAr ? 'أسعار شفافة وباقات مرنة' : 'Transparent Pricing'}
+            </span>
+            <h2 className="text-3xl font-black text-zinc-950 sm:text-4xl mt-1">
+              {isAr ? 'اختر الباقة المناسبة لحجم مصنعك' : 'Choose Your Factory Plan'}
+            </h2>
+            <p className="text-xs text-zinc-500 mt-2">
+              {isAr ? 'جميع الباقات تشمل فترة تجريبية مجانية 14 يوماً مع دعم فني متكامل' : 'All plans include 14-day free trial with onboarding support'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {pricingPlans.map((plan) => (
               <div
-                key={i}
-                className="p-6 rounded-2xl border transition-all hover:border-slate-700 relative flex flex-col justify-between"
-                style={{
-                  backgroundColor: isDark ? '#0f1523' : '#ffffff',
-                  borderColor: isDark ? '#1e2638' : '#e2e8f0',
-                }}
+                key={plan.id}
+                className={`rounded-2xl p-6 flex flex-col justify-between transition-all duration-300 ${
+                  plan.popular
+                    ? 'border-2 border-[#7F1625] shadow-xl bg-gradient-to-b from-[#7F1625]/5 to-white relative'
+                    : 'border border-zinc-200 bg-white shadow-xs hover:border-zinc-300 hover:shadow-md'
+                }`}
               >
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span
-                      className="text-3xl font-black font-mono"
-                      style={{ color: '#460809' }}
-                    >
-                      {st.step}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                      {st.badge}
-                    </span>
+                  {plan.popular && (
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[#7F1625] px-3 py-1 text-[11px] font-black text-white shadow-md mb-4">
+                      <Sparkles className="h-3 w-3 text-amber-300" />
+                      <span>{plan.badge}</span>
+                    </div>
+                  )}
+                  <h3 className="text-lg font-black text-zinc-950 mb-1">{plan.name}</h3>
+                  <p className="text-xs text-zinc-500 mb-6">{plan.tagline}</p>
+
+                  <div className="flex items-baseline gap-1 mb-6 pb-6 border-b border-zinc-100 font-mono">
+                    <span className="text-4xl font-black text-zinc-950">{plan.price}</span>
+                    <span className="text-xs font-bold text-zinc-600">{plan.currency}</span>
+                    <span className="text-xs text-zinc-400">{plan.period}</span>
                   </div>
-                  <h4 className={`font-bold text-base mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{st.title}</h4>
-                  <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{st.desc}</p>
+
+                  <div className="space-y-2.5 text-xs">
+                    {plan.features.map((feat, fi) => (
+                      <div key={fi} className="flex items-start gap-2 text-zinc-700 font-medium">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>{feat}</span>
+                      </div>
+                    ))}
+                    {plan.notIncluded.map((nfeat, ni) => (
+                      <div key={ni} className="flex items-start gap-2 text-zinc-400 line-through">
+                        <span className="w-4 h-4 shrink-0 text-center">•</span>
+                        <span>{nfeat}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-8">
+                  <button
+                    onClick={() => onOpenRegister(plan.id)}
+                    className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      plan.popular
+                        ? 'bg-[#7F1625] text-white hover:bg-[#6a121e] shadow-md shadow-[#7F1625]/20'
+                        : 'border border-zinc-300 text-zinc-800 hover:bg-zinc-100'
+                    }`}
+                  >
+                    {isAr ? 'ابدأ تجربة مجانية 14 يوماً' : 'Start 14-Day Free Trial'}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </CContainer>
+        </div>
       </section>
 
-      {/* 5. Authoritative Pricing Section */}
-      <section id="pricing" className="py-24 border-b border-slate-800/40">
-        <CContainer className="px-4 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <span
-              className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border"
-              style={{
-                backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                color: isDark ? '#fca5a5' : '#460809',
-                borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.35)',
-              }}
+      {/* 8. Bottom CTA Banner (Reference Style: Gradient #7F1625 to Zinc-950) */}
+      <section className="max-w-7xl mx-auto px-4 pb-16">
+        <div className="rounded-3xl bg-gradient-to-br from-[#7F1625] to-zinc-950 p-8 sm:p-12 text-center text-white space-y-6 shadow-xl">
+          <h2 className="text-3xl font-black sm:text-4xl">
+            {isAr ? 'ابدأ أتمتة صالة القص ومصنعك الآن بأعلى كفاءة' : 'Automate Your Garment Factory Floor Today'}
+          </h2>
+          <p className="mx-auto max-w-2xl text-xs sm:text-sm text-zinc-200 leading-relaxed font-normal">
+            {isAr
+              ? 'انضم الآن إلى المنظومة السحابية الأكثر تخصصاً لإدارة الأقمشة، عقود التشغيل للغير CMT، وتتبع الحزم بالباركود في مصر والشرق الأوسط.'
+              : 'Join the specialized apparel manufacturing cloud platform built for real shop-floor operations.'}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button
+              onClick={() => onOpenRegister('professional')}
+              className="rounded-xl bg-white text-[#7F1625] font-black text-sm px-8 py-3.5 hover:bg-zinc-100 shadow-lg cursor-pointer"
             >
-              {isAr ? 'خطط وباقات الاشتراك' : 'Transparent Pricing'}
-            </span>
-            <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {isAr ? 'استثمار واضح وعادل ينمو مع حجم مصنعك' : 'Clear Plans Sized to Match Your Factory Floor'}
-            </h2>
-            <p className={`text-xs sm:text-sm mt-3 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              {isAr
-                ? 'تشمل كافة الخطط فترة تجريبية مجانية لمدة 14 يوماً. بدون رسوم إعداد خفية أو عقود سنوية إلزامية.'
-                : 'All plans include a full 14-day free trial. Zero setup fees, cancel anytime.'}
-            </p>
+              <span>{isAr ? 'الاشتراك وتفعيل الحساب فوراً' : 'Activate Free Trial Now'}</span>
+            </button>
           </div>
-
-          <CRow className="g-4 items-stretch">
-            {pricingPlans.map((plan) => (
-              <CCol key={plan.id} xs={12} lg={4}>
-                <div
-                  className={`h-100 rounded-3xl p-6 sm:p-8 border flex flex-col justify-between transition-all duration-300 relative ${
-                    plan.popular
-                      ? 'shadow-2xl scale-[1.02] z-10'
-                      : 'hover:border-slate-700'
-                  }`}
-                  style={{
-                    backgroundColor: isDark ? (plan.popular ? '#131b2c' : '#0f1523') : '#ffffff',
-                    borderColor: plan.popular
-                      ? '#460809'
-                      : isDark ? '#1e2638' : '#e2e8f0',
-                  }}
-                >
-                  {plan.popular && (
-                    <div
-                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-white text-[10px] font-extrabold uppercase tracking-widest px-4 py-1 rounded-full shadow-md"
-                      style={{ backgroundColor: 'var(--brand-primary)' }}
-                    >
-                      {plan.badge}
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex justify-between items-baseline mb-2">
-                      <h3 className={`font-extrabold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>{plan.name}</h3>
-                      <span className="text-[11px] font-mono text-slate-400 font-semibold">{plan.tierLabel}</span>
-                    </div>
-
-                    <p className={`text-xs mb-6 min-h-[36px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{plan.tagline}</p>
-
-                    <div className="flex items-baseline gap-1.5 pb-6 mb-6 border-b border-slate-800/80">
-                      <span className={`text-3xl sm:text-4xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {plan.price}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-400">{plan.currency}</span>
-                      <span className="text-xs text-slate-500 font-medium">{plan.period}</span>
-                    </div>
-
-                    {/* Features List */}
-                    <div className="space-y-3 mb-8 text-xs">
-                      {plan.features.map((feat, fi) => (
-                        <div key={fi} className="flex items-start gap-2.5">
-                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{feat}</span>
-                        </div>
-                      ))}
-                      {plan.notIncluded.map((feat, ni) => (
-                        <div key={ni} className="flex items-start gap-2.5 opacity-40">
-                          <div className="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center shrink-0 mt-0.5 text-[10px]">
-                            ✕
-                          </div>
-                          <span className="line-through">{feat}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <CButton
-                    className={`w-full py-3 text-xs font-bold rounded-xl transition-all ${
-                      plan.popular
-                        ? 'btn-brand-primary'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-100 hover:bg-slate-700'
-                        : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
-                    }`}
-                    onClick={() => onOpenRegister(plan.id)}
-                  >
-                    {isAr ? 'ابدأ تجربة مجانية بهذه الباقة' : `Select ${plan.tierLabel} (Free Trial)`}
-                  </CButton>
-                </div>
-              </CCol>
-            ))}
-          </CRow>
-        </CContainer>
+        </div>
       </section>
 
-      {/* 6. FAQ Section */}
-      <section id="faq" className="py-24 border-b border-slate-800/40">
-        <CContainer className="px-4 lg:px-8 max-w-3xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {isAr ? 'الأسئلة الشائعة من أصحاب المصانع' : 'Frequently Asked Questions'}
+      {/* 9. FAQ Section */}
+      <section id="faq" className="py-20 bg-zinc-50 border-t border-zinc-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#7F1625]">
+              {isAr ? 'الأسئلة الشائعة والمصانع' : 'Frequently Asked Questions'}
+            </span>
+            <h2 className="text-3xl font-black text-zinc-950 sm:text-4xl mt-1">
+              {isAr ? 'كل ما يخص التشغيل وعزل البيانات' : 'Operations, Data Security & Trials'}
             </h2>
-            <p className={`text-xs sm:text-sm mt-3 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              {isAr ? 'إجابات واضحة وصريحة حول أمان البيانات، فترات التجربة، وطريقة التشغيل.' : 'Straightforward answers regarding security, custody, and rollout.'}
-            </p>
           </div>
 
-          <div className="space-y-4">
-            {faqs.map((faq, i) => {
-              const isOpen = openFaq === i;
+          <div className="space-y-3">
+            {faqs.map((faq, idx) => {
+              const isOpen = openFaq === idx;
               return (
                 <div
-                  key={i}
-                  className="rounded-2xl border transition-all overflow-hidden"
-                  style={{
-                    backgroundColor: isDark ? '#0f1523' : '#ffffff',
-                    borderColor: isOpen
-                      ? (isDark ? '#871b29' : 'rgba(70, 8, 9, 0.4)')
-                      : isDark ? '#1e2638' : '#e2e8f0',
-                  }}
+                  key={idx}
+                  className="rounded-2xl border border-zinc-200 bg-white overflow-hidden transition-all shadow-xs"
                 >
                   <button
-                    onClick={() => setOpenFaq(isOpen ? null : i)}
-                    className="w-full p-5 text-left rtl:text-right flex items-center justify-between gap-4 font-bold text-sm"
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    className="w-full p-5 text-right rtl:text-right ltr:text-left flex items-center justify-between gap-4 font-bold text-zinc-900 text-sm hover:text-[#7F1625] transition-colors cursor-pointer"
                   >
-                    <span className={isDark ? 'text-white' : 'text-slate-900'}>{faq.q}</span>
+                    <span>{faq.q}</span>
                     <ChevronDown
-                      className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                      className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${
+                        isOpen ? 'rotate-180 text-[#7F1625]' : ''
+                      }`}
                     />
                   </button>
                   {isOpen && (
-                    <div className={`px-5 pb-5 pt-1 text-xs leading-relaxed border-t border-slate-800/40 font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <div className="px-5 pb-5 text-xs text-zinc-600 leading-relaxed border-t border-zinc-100 pt-3">
                       {faq.a}
                     </div>
                   )}
@@ -904,196 +751,138 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
               );
             })}
           </div>
-        </CContainer>
+        </div>
       </section>
 
-      {/* 7. Contact & Sales Inquiries Section */}
-      <section id="contact" className="py-24 border-b border-slate-800/40">
-        <CContainer className="px-4 lg:px-8 max-w-4xl mx-auto">
-          <div
-            className="rounded-3xl border p-6 sm:p-12 shadow-2xl"
-            style={{
-              backgroundColor: isDark ? '#0d131f' : '#ffffff',
-              borderColor: isDark ? '#1e2638' : '#cbd5e1',
-            }}
-          >
-            <CRow className="g-5">
-              <CCol xs={12} md={5}>
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border inline-block mb-3"
-                  style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                    color: isDark ? '#fca5a5' : '#460809',
-                    borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.35)',
-                  }}
-                >
-                  {isAr ? 'فريق المبيعات والاستشارات' : 'Sales & Advisory'}
-                </span>
-                <h3 className={`text-xl sm:text-2xl font-black mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {isAr ? 'هل تحتاج إلى استشارة لتهيئة صالة القص؟' : 'Need Custom Deployment for Your Factory?'}
-                </h3>
-                <p className={`text-xs leading-relaxed mb-6 font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  {isAr
-                    ? 'فريقنا الهندسي مستعد لمساعدتك في ضبط دورة العمل، استيراد بيانات الموديلات والخامات، وتدريب مديري الإنتاج.'
-                    : 'Our engineering specialists assist in setting up cutting workflows, importing rolls, and training floor managers.'}
-                </p>
-
-                <div className={`space-y-3 text-xs font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  <div className="flex items-center gap-3">
-                    <Mail className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`} />
-                    <span>sales@garmentos.cloud</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Phone className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`} />
-                    <span>+20 100 000 0000</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Building2 className={`w-4 h-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`} />
-                    <span>{isAr ? 'القاهرة • العاشر من رمضان • المحلة الكبرى' : 'Cairo • 10th of Ramadan • Mahalla'}</span>
-                  </div>
-                </div>
-              </CCol>
-
-              <CCol xs={12} md={7}>
-                {contactSuccess && (
-                  <CAlert color="success" className="text-xs mb-4">
-                    {contactSuccess}
-                  </CAlert>
-                )}
-
-                {contactError && (
-                  <CAlert color="danger" className="text-xs mb-4">
-                    {contactError}
-                  </CAlert>
-                )}
-
-                <CForm onSubmit={handleContactSubmit} className="space-y-3">
-                  <div className="row g-2">
-                    <div className="col-12 col-sm-6">
-                      <label className={`form-label text-[11px] font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{isAr ? 'الاسم بالكامل *' : 'Full Name *'}</label>
-                      <CFormInput
-                        size="sm"
-                        required
-                        value={contactName}
-                        onChange={(e) => setContactName(e.target.value)}
-                        placeholder={isAr ? 'م. أحمد حسني' : 'Ahmed Hosny'}
-                        disabled={isSubmittingContact}
-                      />
-                    </div>
-                    <div className="col-12 col-sm-6">
-                      <label className={`form-label text-[11px] font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{isAr ? 'البريد الإلكتروني للعمل *' : 'Work Email *'}</label>
-                      <CFormInput
-                        type="email"
-                        size="sm"
-                        required
-                        value={contactEmail}
-                        onChange={(e) => setContactEmail(e.target.value)}
-                        placeholder="manager@factory.com"
-                        disabled={isSubmittingContact}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="row g-2">
-                    <div className="col-12 col-sm-6">
-                      <label className={`form-label text-[11px] font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{isAr ? 'رقم الهاتف / واتساب' : 'Phone / WhatsApp'}</label>
-                      <CFormInput
-                        size="sm"
-                        value={contactPhone}
-                        onChange={(e) => setContactPhone(e.target.value)}
-                        placeholder="+20 100 000 0000"
-                        disabled={isSubmittingContact}
-                      />
-                    </div>
-                    <div className="col-12 col-sm-6">
-                      <label className={`form-label text-[11px] font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{isAr ? 'اسم المصنع أو الشركة' : 'Company Name'}</label>
-                      <CFormInput
-                        size="sm"
-                        value={contactCompany}
-                        onChange={(e) => setContactCompany(e.target.value)}
-                        placeholder={isAr ? 'مصنع النيل للملابس' : 'Nile Garments'}
-                        disabled={isSubmittingContact}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`form-label text-[11px] font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{isAr ? 'تفاصيل الاستفسار أو متطلبات المصنع *' : 'Message *'}</label>
-                    <CFormTextarea
-                      rows={3}
-                      required
-                      value={contactMessage}
-                      onChange={(e) => setContactMessage(e.target.value)}
-                      placeholder={isAr ? 'عدد خطوط الإنتاج، طبيعة العمل (ملابس جاهزة، تشغيل للغير)، عدد طاولات القص...' : 'Describe your manufacturing scale, cutting lines, or CMT requirements...'}
-                      disabled={isSubmittingContact}
-                    />
-                  </div>
-
-                  <CButton
-                    type="submit"
-                    disabled={isSubmittingContact}
-                    className="btn-brand-primary w-full py-2.5 text-xs font-bold rounded-xl mt-2 flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingContact ? (
-                      <>
-                        <CSpinner size="sm" />
-                        <span>{isAr ? 'جارِ الإرسال...' : 'Sending...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'إرسال الاستفسار لفريق المبيعات' : 'Submit Consultation Request'}</span>
-                      </>
-                    )}
-                  </CButton>
-                </CForm>
-              </CCol>
-            </CRow>
+      {/* 10. Contact Form */}
+      <section id="contact" className="py-20 bg-white border-t border-zinc-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#7F1625]">
+              {isAr ? 'فريق الدعم الهندسي والاستشارات' : 'Consultation & Demo'}
+            </span>
+            <h2 className="text-3xl font-black text-zinc-950 sm:text-4xl mt-1">
+              {isAr ? 'هل تحتاج إلى جلسة مخصصة لمصنعك؟' : 'Need an On-Site Workflow Review?'}
+            </h2>
+            <p className="text-xs text-zinc-500 mt-2">
+              {isAr ? 'فريقنا الهندسي جاهز لترتيب جلسة تدريب عملية لصالة القص ومراجعة دورة العمل لمصنعك.' : 'Our engineers are ready to review your floor layout and calculate potential fabric waste reduction.'}
+            </p>
           </div>
-        </CContainer>
-      </section>
 
-      {/* 8. Public Footer */}
-      <footer
-        className={`py-12 border-t text-xs ${
-          isDark ? 'border-slate-800 bg-[#06080e] text-slate-500' : 'border-slate-200 bg-white text-slate-600'
-        }`}
-      >
-        <CContainer className="px-4 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-slate-800/60">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
-                style={{ backgroundColor: 'var(--brand-primary)' }}
-              >
-                <Scissors className="w-4 h-4 -rotate-45" />
+          <div className="rounded-2xl border border-zinc-200 bg-[#f4f5f8] p-6 sm:p-8 shadow-xs">
+            {contactSuccess && (
+              <div className="mb-6 p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-800 font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>{contactSuccess}</span>
               </div>
-              <span className={`font-black text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>GarmentOS Cloud</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-[11px] text-slate-400">
-                {isAr ? 'المنظومة السحابية لإدارة مصانع الملابس' : 'Garment Manufacturing SaaS'}
-              </span>
-            </div>
+            )}
+            {contactError && (
+              <div className="mb-6 p-4 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-800 font-bold">
+                {contactError}
+              </div>
+            )}
 
-            <div className="flex items-center gap-2 text-[11px] text-emerald-400">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{isAr ? 'جميع الأنظمة السحابية تعمل بكفاءة 99.9%' : 'All Cloud Systems Operational (99.9% SLA)'}</span>
-            </div>
-          </div>
+            <form onSubmit={handleContactSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                    {isAr ? 'الاسم بالكامل' : 'Full Name'} *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder={isAr ? 'م. محمد علي' : 'Eng. Mohamed Ali'}
+                    className="w-full bg-white border border-zinc-300 rounded-xl text-xs py-2 px-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#7F1625] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                    {isAr ? 'البريد الإلكتروني' : 'Email Address'} *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    placeholder="factory@company.com"
+                    className="w-full bg-white border border-zinc-300 rounded-xl text-xs py-2 px-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#7F1625] transition-all"
+                  />
+                </div>
+              </div>
 
-          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
-            <div>
-              © {new Date().getFullYear()} GarmentOS Cloud. {isAr ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'}
-            </div>
-            <div className="flex items-center gap-4 text-slate-400">
-              <span>{isAr ? 'عزل مستأجرين مشدد' : 'Strict Tenant Isolation'}</span>
-              <span>•</span>
-              <span>Sanctum RBAC</span>
-              <span>•</span>
-              <span>Phase 6 CMT</span>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                    {isAr ? 'رقم الهاتف / واتساب' : 'Phone / WhatsApp'}
+                  </label>
+                  <input
+                    type="tel"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    placeholder="+20 100 000 0000"
+                    className="w-full bg-white border border-zinc-300 rounded-xl text-xs py-2 px-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#7F1625] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                    {isAr ? 'اسم المصنع أو الشركة' : 'Factory / Company Name'}
+                  </label>
+                  <input
+                    type="text"
+                    value={contactCompany}
+                    onChange={(e) => setContactCompany(e.target.value)}
+                    placeholder={isAr ? 'مصنع النيل للملابس الجاهزة' : 'Nile Garment Factory'}
+                    className="w-full bg-white border border-zinc-300 rounded-xl text-xs py-2 px-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#7F1625] transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                  {isAr ? 'تفاصيل الاستفسار أو متطلبات صالة القص' : 'Message / Details'} *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={contactMessage}
+                  onChange={(e) => setContactMessage(e.target.value)}
+                  placeholder={isAr ? 'اكتب عدد خطوط الإنتاج أو متطلبات الربط...' : 'Describe your operational requirements...'}
+                  className="w-full bg-white border border-zinc-300 rounded-xl text-xs py-2 px-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#7F1625] transition-all"
+                />
+              </div>
+
+              <div className="text-right rtl:text-right ltr:text-left pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmittingContact}
+                  className="px-6 py-2.5 rounded-xl bg-[#7F1625] text-white font-bold text-xs hover:bg-[#6a121e] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-md shadow-[#7F1625]/20"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingContact ? (isAr ? 'جارِ الإرسال...' : 'Sending...') : (isAr ? 'إرسال طلب الاستشارة' : 'Submit Inquiry')}</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </CContainer>
+        </div>
+      </section>
+
+      {/* 10. Minimal Enterprise Footer */}
+      <footer className="py-10 bg-white border-t border-zinc-200 text-xs text-zinc-500 font-mono">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-zinc-800">
+            <Scissors className="w-4 h-4 text-[#7F1625]" />
+            <span className="font-bold text-zinc-950 font-sans">GarmentOS Cloud ERP</span>
+            <span>• © 2026</span>
+          </div>
+          <div className="flex items-center gap-6 font-sans font-semibold">
+            <a href="#features" className="hover:text-[#7F1625] transition-colors">{isAr ? 'الميزات' : 'Features'}</a>
+            <a href="#pricing" className="hover:text-[#7F1625] transition-colors">{isAr ? 'الأسعار' : 'Pricing'}</a>
+            <a href="#faq" className="hover:text-[#7F1625] transition-colors">{isAr ? 'الأسئلة' : 'FAQ'}</a>
+            <button onClick={onOpenLogin} className="hover:text-[#7F1625] transition-colors">{isAr ? 'دخول المصنع' : 'Login'}</button>
+          </div>
+        </div>
       </footer>
     </div>
   );

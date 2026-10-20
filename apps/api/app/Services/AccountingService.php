@@ -151,6 +151,29 @@ class AccountingService
                 throw new InvalidArgumentException('يجب أن تكون قيمة السند المالي أكبر من الصفر.');
             }
 
+            $account = ChartOfAccount::where('tenant_id', $tenantId)
+                ->where('id', $data['account_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (!empty($data['party_id'])) {
+                if (($data['party_type'] ?? '') === 'customer') {
+                    \App\Models\Customer::where('tenant_id', $tenantId)->findOrFail($data['party_id']);
+                } elseif (($data['party_type'] ?? '') === 'supplier') {
+                    \App\Models\Supplier::where('tenant_id', $tenantId)->findOrFail($data['party_id']);
+                } elseif (($data['party_type'] ?? '') === 'employee') {
+                    \App\Models\Employee::where('tenant_id', $tenantId)->findOrFail($data['party_id']);
+                }
+            }
+
+            // تحديث رصيد حساب النقدية / البنك طبقاً لطبيعة السند المالي
+            if ($data['voucher_type'] === 'receipt') {
+                $account->current_balance += $amount;
+            } else {
+                $account->current_balance -= $amount;
+            }
+            $account->save();
+
             $voucher = PaymentVoucher::create([
                 'tenant_id' => $tenantId,
                 'voucher_number' => $data['voucher_number'] ?? ('PV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
@@ -159,7 +182,7 @@ class AccountingService
                 'party_id' => $data['party_id'] ?? null,
                 'party_name' => $data['party_name'],
                 'payment_method' => $data['payment_method'] ?? 'cash',
-                'account_id' => $data['account_id'],
+                'account_id' => $account->id,
                 'amount' => $amount,
                 'voucher_date' => $data['voucher_date'] ?? now()->toDateString(),
                 'notes' => $data['notes'] ?? null,

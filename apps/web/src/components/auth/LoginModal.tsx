@@ -65,8 +65,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         <div
           className="p-3.5 rounded-2xl border flex items-start gap-3"
           style={{
-            backgroundColor: 'rgba(79, 12, 22, 0.08)',
-            borderColor: 'rgba(79, 12, 22, 0.25)',
+            backgroundColor: 'rgba(70, 8, 9, 0.08)',
+            borderColor: 'rgba(70, 8, 9, 0.25)',
           }}
         >
           <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
@@ -118,11 +118,42 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           </div>
         </div>
 
+        {/* Quick Demo Credentials Box */}
+        <div className="p-3 rounded-xl bg-zinc-100 border border-zinc-200 text-xs space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-bold text-zinc-700">
+            <span>بيانات الدخول التجريبية (اضغط للتعبئة):</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('owner@delta-garments.test');
+                setPassword('password123');
+              }}
+              className="p-2 text-right rounded-lg bg-white border border-zinc-300 hover:border-[#7F1625] transition-colors cursor-pointer"
+            >
+              <div className="font-bold text-[#7F1625]">مالك مصنع الدلتا</div>
+              <div className="text-[10px] text-zinc-500 font-mono truncate">owner@delta-garments.test</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@garmentos.com');
+                setPassword('password123');
+              }}
+              className="p-2 text-right rounded-lg bg-white border border-zinc-300 hover:border-[#7F1625] transition-colors cursor-pointer"
+            >
+              <div className="font-bold text-zinc-800">مدير عام المنصة</div>
+              <div className="text-[10px] text-zinc-500 font-mono truncate">admin@garmentos.com</div>
+            </button>
+          </div>
+        </div>
+
         {onSwitchToRegister && (
           <div className="text-center pt-1">
             <button
               type="button"
-              className="text-xs text-primary dark:text-[#fca5a5] hover:underline font-semibold transition-colors"
+              className="text-xs text-[#7F1625] hover:underline font-semibold transition-colors"
               onClick={() => {
                 if (onClose) onClose();
                 onSwitchToRegister();

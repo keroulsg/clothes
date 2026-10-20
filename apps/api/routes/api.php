@@ -206,6 +206,7 @@ Route::prefix('v1')->group(function () {
 
         // إدارة المتجر الإلكتروني داخل الـ ERP (Phase 11: Storefront ERP)
         Route::get('/storefront/orders', [\App\Http\Controllers\Api\StorefrontController::class, 'orders']);
+        Route::patch('/storefront/orders/{id}/status', [\App\Http\Controllers\Api\StorefrontController::class, 'updateStatus']);
 
         // إدارة الماكينات وصيانة الأصول وبلاغات الأعطال (Phase 12: Machine & Asset Maintenance)
         Route::get('/maintenance/machines', [\App\Http\Controllers\Api\MaintenanceController::class, 'indexMachines']);

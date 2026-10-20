@@ -76,6 +76,10 @@ class HrController extends Controller
 
         $tenantId = app('current_tenant_id');
 
+        if (!empty($validated['garment_model_id'])) {
+            \App\Models\GarmentModel::where('tenant_id', $tenantId)->findOrFail($validated['garment_model_id']);
+        }
+
         $rate = PieceRate::create([
             'tenant_id' => $tenantId,
             'garment_model_id' => $validated['garment_model_id'] ?? null,

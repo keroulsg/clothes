@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\InventoryItem;
 use App\Models\PosSession;
 use App\Models\ProductVariant;
@@ -34,10 +35,17 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($data, $tenantId) {
+            if (!empty($data['customer_id'])) {
+                Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            }
+
             $subtotal = 0;
             $taxTotal = 0;
 
             foreach ($data['items'] as $item) {
+                if (!empty($item['variant_id'])) {
+                    ProductVariant::where('tenant_id', $tenantId)->findOrFail($item['variant_id']);
+                }
                 $qty = (float) $item['quantity'];
                 $price = (float) $item['unit_price'];
                 $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
@@ -98,6 +106,20 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($data, $tenantId) {
+            if (!empty($data['customer_id'])) {
+                Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            }
+            if (!empty($data['warehouse_id'])) {
+                Warehouse::where('tenant_id', $tenantId)->findOrFail($data['warehouse_id']);
+            }
+            if (!empty($data['quotation_id'])) {
+                Quotation::where('tenant_id', $tenantId)->findOrFail($data['quotation_id']);
+            }
+
+            foreach ($data['items'] as $item) {
+                ProductVariant::where('tenant_id', $tenantId)->findOrFail($item['variant_id']);
+            }
+
             $subtotal = 0;
             $taxTotal = 0;
 
@@ -423,6 +445,10 @@ class SalesService
                 throw new InvalidArgumentException("لا يمكن إصدار إذن تسليم وشحن لأمر بيع ملغي.");
             }
 
+            if (!empty($data['warehouse_id'])) {
+                Warehouse::where('tenant_id', $tenantId)->findOrFail($data['warehouse_id']);
+            }
+
             $deliveryNumber = $data['delivery_number'] ?? 'DN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
 
             $deliveryNote = SalesDeliveryNote::create([
@@ -470,6 +496,16 @@ class SalesService
             $returnNumber = $data['return_number'] ?? 'SRT-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
             $isRestocked = $data['is_restocked'] ?? true;
 
+            Warehouse::where('tenant_id', $tenantId)->findOrFail($data['warehouse_id']);
+
+            if (!empty($data['customer_id'])) {
+                Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            }
+
+            if (!empty($data['sales_invoice_id'])) {
+                SalesInvoice::where('tenant_id', $tenantId)->findOrFail($data['sales_invoice_id']);
+            }
+
             if (!empty($data['sales_order_id'])) {
                 $order = SalesOrder::where('tenant_id', $tenantId)->findOrFail($data['sales_order_id']);
                 foreach ($data['items'] as $item) {
@@ -478,6 +514,10 @@ class SalesService
                         throw new InvalidArgumentException("الكمية المرتجعة ({$item['quantity']}) تتجاوز الكمية المسلمة فعلياً ({$orderItem->fulfilled_quantity}) في أمر البيع.");
                     }
                 }
+            }
+
+            foreach ($data['items'] as $item) {
+                ProductVariant::where('tenant_id', $tenantId)->findOrFail($item['variant_id']);
             }
 
             $totalAmount = 0;

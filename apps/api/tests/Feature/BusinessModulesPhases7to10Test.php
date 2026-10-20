@@ -442,4 +442,47 @@ class BusinessModulesPhases7to10Test extends TestCase
         $payrollsForB = Payroll::all();
         $this->assertEmpty($payrollsForB);
     }
+
+    /**
+     * Test Storefront Order Status Update in ERP and Cross-Tenant Rejection
+     */
+    public function test_storefront_order_status_update_and_isolation(): void
+    {
+        $storeService = app(StorefrontService::class);
+        $order = $storeService->placeStoreOrder($this->tenantA->id, [
+            'customer_name' => 'Adel Imam',
+            'customer_phone' => '01099887766',
+            'shipping_address' => 'Zamalek, Cairo',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                [
+                    'variant_id' => $this->variantA->id,
+                    'quantity' => 2,
+                ],
+            ],
+        ]);
+
+        $this->assertEquals('new', $order->status);
+
+        // Update status as authenticated user of tenant A
+        $response = $this->actingAs($this->userA, 'sanctum')
+            ->withHeader('X-Tenant-ID', $this->tenantA->id)
+            ->patchJson("/api/v1/storefront/orders/{$order->id}/status", [
+                'status' => 'confirmed',
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertEquals('confirmed', $order->fresh()->status);
+
+        // Attempt to update as user of Tenant B (Cross-tenant rejection)
+        $unauthResponse = $this->actingAs($this->userB, 'sanctum')
+            ->withHeader('X-Tenant-ID', $this->tenantB->id)
+            ->patchJson("/api/v1/storefront/orders/{$order->id}/status", [
+                'status' => 'shipped',
+            ]);
+
+        $unauthResponse->assertStatus(404);
+        $this->assertEquals('confirmed', $order->fresh()->status);
+    }
 }

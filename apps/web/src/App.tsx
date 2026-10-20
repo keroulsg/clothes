@@ -14,11 +14,18 @@ import {
   QrCode,
   ShieldCheck,
   RefreshCw,
+  Boxes,
+  ShoppingCart,
+  Printer,
+  DollarSign,
+  Truck,
+  Receipt,
 } from 'lucide-react';
 import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 import { Button } from './components/ui/Button';
+import { ActionsMenu } from './components/ui/ActionsMenu';
 import { Modal } from './components/ui/Modal';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { FabricCalculatorModal } from './components/inventory/FabricCalculatorModal';
@@ -29,6 +36,7 @@ import { PublicWebsite } from './components/public/PublicWebsite';
 import { PlatformAdminDashboard } from './components/admin/PlatformAdminDashboard';
 import { api, type ApiUser, type ApiTenant } from './api/client';
 import { CreateModelModal } from './components/catalog/CreateModelModal';
+import { ModelDetailsBomModal } from './components/catalog/ModelDetailsBomModal';
 import { CreatePurchaseOrderModal } from './components/procurement/CreatePurchaseOrderModal';
 import { ReceiveGoodsModal } from './components/procurement/ReceiveGoodsModal';
 import { SupplierInvoiceModal } from './components/procurement/SupplierInvoiceModal';
@@ -100,57 +108,7 @@ export function App() {
     document.documentElement.setAttribute('lang', lang);
   }, [lang]);
 
-  // Real Theme State (Synchronized with CoreUI & Tailwind)
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('garmentos_theme') !== 'light';
-    } catch {
-      return true;
-    }
-  });
-
-  const toggleTheme = () => {
-    setIsDark((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('garmentos_theme', next ? 'dark' : 'light');
-      } catch {}
-      if (next) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-        document.documentElement.setAttribute('data-coreui-theme', 'dark');
-        document.body.classList.add('dark-theme');
-        document.body.setAttribute('data-theme', 'dark');
-        document.body.setAttribute('data-coreui-theme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'light');
-        document.documentElement.setAttribute('data-coreui-theme', 'light');
-        document.body.classList.remove('dark-theme');
-        document.body.setAttribute('data-theme', 'light');
-        document.body.setAttribute('data-coreui-theme', 'light');
-      }
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-      document.documentElement.setAttribute('data-coreui-theme', 'dark');
-      document.body.classList.add('dark-theme');
-      document.body.setAttribute('data-theme', 'dark');
-      document.body.setAttribute('data-coreui-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.setAttribute('data-theme', 'light');
-      document.documentElement.setAttribute('data-coreui-theme', 'light');
-      document.body.classList.remove('dark-theme');
-      document.body.setAttribute('data-theme', 'light');
-      document.body.setAttribute('data-coreui-theme', 'light');
-    }
-  }, [isDark]);
+  const isAr = lang === 'ar';
 
   // Real Authentication & User State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(api.isAuthenticated());
@@ -273,6 +231,7 @@ export function App() {
   const [isFabricCalcOpen, setIsFabricCalcOpen] = useState(false);
   const [isCreateModelOpen, setIsCreateModelOpen] = useState(false);
   const [selectedStockItem, setSelectedStockItem] = useState<InventoryItem | null>(null);
+  const [selectedModelForBom, setSelectedModelForBom] = useState<GarmentModel | null>(null);
 
   // Procurement States
   const [isCreatePoModalOpen, setIsCreatePoModalOpen] = useState(false);
@@ -1390,12 +1349,10 @@ export function App() {
 
   if (viewMode === 'public') {
     return (
-      <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className={isDark ? 'dark' : ''}>
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <PublicWebsite
           lang={lang}
           onToggleLang={toggleLang}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
           onOpenLogin={() => setIsLoginModalOpen(true)}
           onOpenRegister={(plan) => {
             setRegisterPlanTier((plan as any) || 'starter');
@@ -1428,14 +1385,12 @@ export function App() {
 
   if (viewMode === 'admin' && currentUser?.role === 'platform_admin') {
     return (
-      <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className={isDark ? 'dark' : ''}>
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <PlatformAdminDashboard
           currentUser={currentUser}
           onLogout={handleLogout}
           lang={lang}
           onToggleLang={toggleLang}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
           onSwitchToTenantApp={() => navigateToRoute('erp', 'dashboard')}
         />
       </div>
@@ -1443,14 +1398,12 @@ export function App() {
   }
 
   return (
-    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className={isDark ? 'dark' : ''}>
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <AppLayout
         activeTab={activeTab}
         onTabChange={handleTabChange}
         lang={lang}
         onToggleLang={toggleLang}
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
         tenantName={tenantName}
         tenantCode={tenantCode}
         branchName={branchName}
@@ -1491,160 +1444,508 @@ export function App() {
           {/* TAB 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Top KPI Metrics Row */}
+              {/* Ultra-Modern Operations Hero matching the Public Website's Royal Burgundy Aesthetic */}
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#7F1625] via-[#500c17] to-[#120306] p-6 sm:p-8 text-white shadow-xl shadow-[#7F1625]/20 border border-[#7F1625]/30">
+                {/* Radial Pattern Texture */}
+                <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px] opacity-15 pointer-events-none" />
+                
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-bold backdrop-blur-md shadow-xs mb-3">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>{isAr ? 'الوردية الأولى نشطة • صالة القص والتشغيل متصلة سحابياً' : 'Shift 1 Active • Cutting Floor & Operations Connected'}</span>
+                    </div>
+
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-2">
+                      {isAr ? 'مركز قيادة العمليات الصناعية والمخزنية' : 'Factory Operations Command Center'}
+                    </h1>
+                    <p className="text-xs sm:text-sm text-zinc-200/90 max-w-2xl leading-relaxed">
+                      {isAr
+                        ? 'متابعة لحظية شاملة لخطوط القص، أمانات تشغيل الـ CMT، حزم الباركود الذكية، ومطابقة الجودة والتكاليف بدقة صناعية.'
+                        : 'Real-time monitoring of cutting lines, CMT fabric custody, barcode bundles, and quality inspection.'}
+                    </p>
+                  </div>
+
+                  {/* Primary Action Controls */}
+                  <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <Button
+                      variant="primary"
+                      onClick={() => setIsCreateProdOrderModalOpen(true)}
+                      icon={<Scissors className="w-4 h-4" />}
+                      className="bg-white text-[#7F1625] hover:bg-zinc-100 hover:text-[#6a121e] border-white shadow-lg font-black"
+                    >
+                      {isAr ? 'أمر قص جديد' : 'New Cutting Order'}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsFabricCalcOpen(true)}
+                      icon={<Calculator className="w-4 h-4 text-white" />}
+                      className="bg-white/10 border-white/25 text-white hover:bg-white/20 backdrop-blur-md"
+                    >
+                      {isAr ? 'حاسبة الـ GSM' : 'Fabric GSM'}
+                    </Button>
+
+                    <ActionsMenu
+                      label={isAr ? 'إجراءات المصنع ▾' : 'Factory Actions ▾'}
+                      variant="outline"
+                      size="md"
+                      className="backdrop-blur-md"
+                      items={[
+                        {
+                          id: 'create-model',
+                          label: isAr ? 'تعريف موديل جديد + متغيرات' : 'New Garment Model & Matrix',
+                          icon: <Plus className="w-4 h-4" />,
+                          onClick: () => setIsCreateModelOpen(true),
+                        },
+                        {
+                          id: 'stock-movement',
+                          label: isAr ? 'تسجيل حركة مخزنية سريعة' : 'Record Stock Movement',
+                          icon: <ArrowRightLeft className="w-4 h-4" />,
+                          onClick: () => setSelectedStockItem(inventoryItems[0]),
+                        },
+                        {
+                          id: 'cmt-custody',
+                          divider: true,
+                          label: isAr ? 'استلام أمانات عميل (CMT)' : 'Receive CMT Customer Goods',
+                          icon: <Boxes className="w-4 h-4" />,
+                          onClick: () => setIsReceiveCustomerMatModalOpen(true),
+                        },
+                        {
+                          id: 'purchase-order',
+                          label: isAr ? 'أمر شراء وتوريد خامات' : 'Create Purchase Order (PO)',
+                          icon: <ShoppingCart className="w-4 h-4" />,
+                          onClick: () => setIsCreatePoModalOpen(true),
+                        },
+                        {
+                          id: 'bundle-tracker',
+                          label: isAr ? 'تتبع بطاقات الحزم بالـ QR' : 'Track QR Bundle Tickets',
+                          icon: <QrCode className="w-4 h-4" />,
+                          onClick: () => setActiveTab('cutting'),
+                        },
+                        {
+                          id: 'qc-inspect',
+                          label: isAr ? 'محطة فحص الجودة الميدانية' : 'Quality Line Inspection',
+                          icon: <ShieldCheck className="w-4 h-4" />,
+                          onClick: () => setSelectedProdOrderForQc(productionOrders[0] || null),
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {/* Micro Metrics Strip */}
+                <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/15 text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-300">{isAr ? 'أوامر جارية:' : 'Active Runs:'}</span>
+                    <strong className="text-white font-bold">{productionOrders.length} {isAr ? 'أمر' : 'orders'}</strong>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-300">{isAr ? 'قطع قيد الخياطة:' : 'Sewing Pieces:'}</span>
+                    <strong className="text-white font-bold">4,000 {isAr ? 'قطعة' : 'pcs'}</strong>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-300">{isAr ? 'رصيد الأقمشة:' : 'Fabric Stock:'}</span>
+                    <strong className="text-white font-bold">2,270.5 {isAr ? 'متر' : 'm'}</strong>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-300">{isAr ? 'كفاءة التعشيق:' : 'Marker Efficiency:'}</span>
+                    <strong className="text-emerald-300 font-bold">91.4%</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top 5 KPI Metrics in Royal Burgundy & Clean Dashboard Aesthetics */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <Card hover>
+                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-[#7F1625] shadow-xs hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">مبيعات اليوم المحققة</span>
-                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'مبيعات اليوم المحققة' : "Today's Sales"}</span>
+                    <div className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] flex items-center justify-center border border-[#7F1625]/20">
                       <TrendingUp className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                    84,500 <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
+                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                    84,500 <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'ج.م' : 'EGP'}</span>
                   </div>
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span>+14.2%</span>
-                    <span className="text-slate-500 dark:text-slate-400">عن مبيعات أمس</span>
+                  <div className="mt-2.5 flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                    <span className="font-mono">↑ +14.2%</span>
+                    <span className="text-slate-400 font-normal text-[11px]">{isAr ? 'مقارنة بأمس' : 'vs yesterday'}</span>
                   </div>
                 </Card>
 
-                <Card hover>
+                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-amber-500 shadow-xs hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">أوامر الإنتاج النشطة</span>
-                    <div
-                      className="p-2 rounded-lg"
-                      style={{
-                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                        color: isDark ? '#fca5a5' : '#460809',
-                      }}
-                    >
+                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'أوامر الإنتاج وصالة القص' : 'Active Cutting & Runs'}</span>
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-700 flex items-center justify-center border border-amber-500/20">
                       <Scissors className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                    {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">أوامر جارية</span>
+                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                    {productionOrders.length} <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'أوامر' : 'orders'}</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-600 dark:text-slate-400 font-medium">
-                    4,000 قطعة قيد التصنيع
+                  <div className="mt-2.5 text-xs text-slate-600 font-medium font-mono">
+                    <span className="font-bold text-slate-900">4,000</span> {isAr ? 'قطعة قيد التشغيل' : 'pcs in line'}
                   </div>
                 </Card>
 
-                <Card hover>
+                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-blue-500 shadow-xs hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">رصيد الأقمشة بالمخازن</span>
-                    <div className="p-2 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'رصيد الأقمشة بالمخازن' : 'Fabric Inventory'}</span>
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-700 flex items-center justify-center border border-blue-500/20">
                       <Layers className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                    2,270.5 <span className="text-xs font-normal text-slate-500 dark:text-slate-400">متر</span>
+                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                    2,270.5 <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'متر' : 'm'}</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                    منها <span className="text-amber-600 dark:text-amber-400 font-medium">820 م أمانات عملاء</span>
+                  <div className="mt-2.5 text-xs text-slate-600">
+                    {isAr ? 'منها' : 'incl.'} <strong className="font-mono text-slate-900 font-bold">820 م</strong> {isAr ? 'أمانات CMT' : 'CMT custody'}
                   </div>
                 </Card>
 
-                <Card hover>
+                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-emerald-500 shadow-xs hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">نسبة الهالك الفعلي (قص)</span>
-                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'نسبة الهالك الفعلي (قص)' : 'Cutting Waste Rate'}</span>
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-700 flex items-center justify-center border border-emerald-500/20">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                    2.6% <span className="text-xs font-normal text-slate-500 dark:text-slate-400">(ممتاز)</span>
+                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                    2.6% <span className="text-xs font-bold text-emerald-600 font-sans">{isAr ? '(ممتاز)' : 'optimal'}</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                    أقل من المعياري المسموح (3.5%)
+                  <div className="mt-2.5 text-xs text-slate-500">
+                    {isAr ? 'أقل من المعياري (3.5%)' : 'below 3.5% target'}
                   </div>
                 </Card>
 
-                <Card hover>
+                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-purple-600 shadow-xs hover:shadow-md transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">أجور القطعة المستحقة</span>
-                    <div
-                      className="p-2 rounded-lg"
-                      style={{
-                        backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                        color: isDark ? '#fca5a5' : '#460809',
-                      }}
-                    >
+                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'أجور القطعة المستحقة' : 'Piece-Rate Accruals'}</span>
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-700 flex items-center justify-center border border-purple-500/20">
                       <Package className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                    16,840 <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
+                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                    16,840 <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'ج.م' : 'EGP'}</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-600 dark:text-slate-400">
-                    مربوطة بمطابقة الجودة
+                  <div className="mt-2.5 text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'معتمدة من الجودة' : 'verified via QC'}</span>
                   </div>
                 </Card>
               </div>
 
-              {/* Quick Actions Bar */}
-              <div className="flex flex-wrap items-center gap-3">
-                <Button size="sm" onClick={() => setIsCreateModelOpen(true)} icon={<Plus className="w-3.5 h-3.5" />}>
-                  تعريف موديل جديد وتوليد المتغيرات
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsFabricCalcOpen(true)}
-                  icon={<Calculator className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
-                >
-                  حاسبة الأقمشة (متر ↔ كجم بـ GSM والعرض)
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedStockItem(inventoryItems[0]);
-                  }}
-                  icon={<ArrowRightLeft className="w-3.5 h-3.5 text-emerald-400" />}
-                >
-                  تسجيل حركة مخزنية سريعة
-                </Button>
-              </div>
+              {/* Two-Column Real Factory Floor Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Major Column (8/12): Live Cutting Orders + Fabric Status */}
+                <div className="lg:col-span-8 space-y-6">
+                  {/* Section 1: Live Cutting Floor & Production Runs */}
+                  <Card className="p-0 border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:shadow-sm transition-all bg-white">
+                    <div className="p-4 sm:p-5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/60">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-[#7F1625]/10 text-[#7F1625] flex items-center justify-center">
+                            <Scissors className="w-3.5 h-3.5" />
+                          </div>
+                          <span>{isAr ? 'صالة القص وأوامر الإنتاج الجارية' : 'Cutting Floor & Live Production Runs'}</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          {isAr ? 'متابعة كفاءة التعشيق، نسب الهالك، ومراحل خياطة كل أمر تشغيل' : 'Real-time lay markers, progress bars, and operational stage actions'}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setActiveTab('cutting')}
+                        className="text-xs font-bold text-[#7F1625] hover:text-[#6a121e] hover:bg-[#7F1625]/5"
+                      >
+                        {isAr ? 'عرض صالة القص كاملة ←' : 'View Full Cutting Floor →'}
+                      </Button>
+                    </div>
 
-              {/* Live Cutting Room Tracker preview */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-100">أوامر الإنتاج وصالة القص المباشرة</h3>
-                    <p className="text-xs text-slate-400">تقدم مراحل القص والخياطة والجودة لكل أمر تشغيل</p>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => setActiveTab('cutting')}>
-                    عرض صالة القص كاملة
-                  </Button>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
+                        <thead className="bg-slate-50 text-slate-600 font-mono border-b border-slate-200/80">
+                          <tr>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'أمر التشغيل' : 'Order #'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'الموديل' : 'Model'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'المرحلة' : 'Stage'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'نسبة الإنجاز' : 'Progress'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'الهالك' : 'Waste'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'موعد التسليم' : 'Due'}</th>
+                            <th className="py-3 px-4 font-bold text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {productionOrders.map((order) => {
+                            const sewPercent = Math.round(((order.sewn_quantity || 0) / order.target_quantity) * 100);
+                            return (
+                              <tr key={order.id} className="hover:bg-slate-50/70 transition-colors">
+                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                                  {order.order_number}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <div className="font-bold text-slate-900">{order.model_name}</div>
+                                  <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                    {order.target_quantity} {isAr ? 'قطعة' : 'pcs'}
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold border border-slate-200 bg-slate-100 text-slate-800">
+                                    {order.status === 'sewing'
+                                      ? (isAr ? 'خياطة وتجميع' : 'Sewing')
+                                      : order.status === 'cutting'
+                                      ? (isAr ? 'صالة القص' : 'Cutting')
+                                      : (isAr ? 'فحص جودة' : 'QC')}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <div className="w-32">
+                                    <div className="flex justify-between text-[10px] font-mono text-slate-600 mb-1">
+                                      <span>{order.sewn_quantity} / {order.target_quantity}</span>
+                                      <span className="font-bold text-slate-900">{sewPercent}%</span>
+                                    </div>
+                                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                                      <div className="h-full bg-gradient-to-r from-[#7F1625] to-[#a82537] rounded-full" style={{ width: `${sewPercent}%` }} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                                    {order.waste_percentage}%
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 font-mono text-slate-600 text-[11px]">
+                                  {order.due_date}
+                                </td>
+                                <td className="py-3.5 px-4 text-center">
+                                  <ActionsMenu
+                                    label={isAr ? 'إجراءات' : 'Actions'}
+                                    variant="outline"
+                                    size="sm"
+                                    items={[
+                                      {
+                                        id: 'track-bundle',
+                                        label: isAr ? 'الانتقال لصالة القص والفرش' : 'Go to Cutting Floor',
+                                        icon: <Scissors className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                        onClick: () => setActiveTab('cutting'),
+                                      },
+                                      {
+                                        id: 'qc-stage',
+                                        label: isAr ? 'فحص الجودة والمطابقة' : 'QC Inspection',
+                                        icon: <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />,
+                                        onClick: () => setSelectedProdOrderForQc(order),
+                                      },
+                                    ]}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  {/* Section 2: Critical Fabric Stock & Allocation */}
+                  <Card className="p-0 border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:shadow-sm transition-all bg-white">
+                    <div className="p-4 sm:p-5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/60">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-700 flex items-center justify-center">
+                            <Layers className="w-3.5 h-3.5" />
+                          </div>
+                          <span>{isAr ? 'أرصدة الأقمشة وأمانات العملاء (CMT)' : 'Fabric Inventory & CMT Customer Custody'}</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          {isAr ? 'تتبع الأثواب المتاحة، الأمتار المتبقية، وعزل أمانات التشغيل للغير' : 'Track rolls in stock, remaining meters, and isolated customer material balances'}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setActiveTab('inventory')}
+                        className="text-xs font-bold text-[#7F1625] hover:text-[#6a121e] hover:bg-[#7F1625]/5"
+                      >
+                        {isAr ? 'عرض المخزن كامل ←' : 'View Full Warehouse →'}
+                      </Button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
+                        <thead className="bg-slate-50 text-slate-600 font-mono border-b border-slate-200/80">
+                          <tr>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'كود الصنف' : 'Code'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'اسم الصنف' : 'Item Name'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'نوع الملكية' : 'Custody'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'المخزن' : 'Warehouse'}</th>
+                            <th className="py-3 px-4 font-bold">{isAr ? 'الرصيد المتاح' : 'Available'}</th>
+                            <th className="py-3 px-4 font-bold text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {inventoryItems.slice(0, 4).map((item) => (
+                            <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                                {item.code}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="font-bold text-slate-900">{item.name}</div>
+                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  {item.item_type === 'fabric_raw' ? (isAr ? 'خام أقمشة' : 'Raw Fabric') : (isAr ? 'مستلزمات تشغيل' : 'Accessories')}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                {item.is_customer_owned ? (
+                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border border-[#7F1625]/30 bg-[#7F1625]/10 text-[#7F1625]">
+                                    {isAr ? 'أمانات عميل (CMT)' : 'CMT Custody'}
+                                  </span>
+                                ) : (
+                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border border-slate-300 bg-slate-100 text-slate-800">
+                                    {isAr ? 'ملكية المصنع' : 'Factory Owned'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono text-slate-700">
+                                {item.warehouse_name || (isAr ? 'المخزن الرئيسي' : 'Main')}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                                <span className="font-bold text-sm">{item.current_balance}</span> <span className="text-[11px] text-slate-500">{item.unit_of_measure}</span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <ActionsMenu
+                                  label={isAr ? 'إجراءات' : 'Actions'}
+                                  variant="outline"
+                                  size="sm"
+                                  items={[
+                                    {
+                                      id: 'issue-cutting',
+                                      label: isAr ? 'تسجيل صرف لصالة القص' : 'Issue to Cutting Lay',
+                                      icon: <ArrowRightLeft className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                      onClick: () => setSelectedStockItem(item),
+                                    },
+                                    {
+                                      id: 'calc-gsm',
+                                      label: isAr ? 'حاسبة الـ GSM والأمتار' : 'GSM & Meter Calculator',
+                                      icon: <Calculator className="w-3.5 h-3.5 text-blue-500" />,
+                                      onClick: () => setIsFabricCalcOpen(true),
+                                    },
+                                    {
+                                      id: 'inv-tab',
+                                      label: isAr ? 'تفاصيل كارت الصنف' : 'View Item Ledger',
+                                      icon: <Layers className="w-3.5 h-3.5 text-slate-600" />,
+                                      onClick: () => setActiveTab('inventory'),
+                                    },
+                                  ]}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {productionOrders.map((order) => {
-                    const sewPercent = Math.round(((order.sewn_quantity || 0) / order.target_quantity) * 100);
-                    return (
-                      <Card key={order.id} hover className="border-slate-800">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">{order.order_number}</span>
-                          <Badge variant={order.status === 'sewing' ? 'info' : 'warning'} dot>
-                            {order.status === 'sewing' ? 'خياطة' : 'جودة'}
-                          </Badge>
+                {/* Minor Column (4/12): Live Shop-Floor Feed & Operational Controls */}
+                <div className="lg:col-span-4 space-y-6">
+                  {/* Live Shop-Floor Audit Stream */}
+                  <Card className="p-5 border-slate-200/90 rounded-2xl bg-white shadow-xs">
+                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-200/80">
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 font-mono">
+                          {isAr ? 'سجل أحداث المصنع اللحظي' : 'Live Floor Event Feed'}
+                        </h4>
+                        <span className="text-[10px] text-slate-500 font-mono">Real-time floor scans</span>
+                      </div>
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block" />
+                    </div>
+
+                    <div className="space-y-4 text-xs">
+                      {[
+                        {
+                          time: isAr ? 'منذ 12 دقيقة' : '12m ago',
+                          title: isAr ? 'تم اكتمال قص فرشة 1,200 قطعة' : 'Lay Completed: 1,200 pcs',
+                          desc: isAr ? 'أمر تشغيل #ORD-2026-001 • تيشيرت بولو رجالي' : 'Order #ORD-2026-001 (Polo Shirt)',
+                          badge: isAr ? 'قص وفرش' : 'Cutting',
+                          badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+                          dotClass: 'bg-amber-500',
+                        },
+                        {
+                          time: isAr ? 'منذ 34 دقيقة' : '34m ago',
+                          title: isAr ? 'اعتماد جودة حزمة خياطة #BND-088' : 'QC Ticket Approved: #BND-088',
+                          desc: isAr ? 'مطابقة 100% بدون أي عيوب أو ترحيل غرز' : '100% First-Pass Yield (No defects)',
+                          badge: isAr ? 'جودة' : 'QC',
+                          badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          dotClass: 'bg-emerald-500',
+                        },
+                        {
+                          time: isAr ? 'منذ ساعة' : '1h ago',
+                          title: isAr ? 'استلام أمانات أقمشة عميل (CMT)' : 'CMT Custody Receipt Issued',
+                          desc: isAr ? '450 م قماش جبردين - شركة النيل للملابس' : '450m Gabardine custody roll received',
+                          badge: 'CMT',
+                          badgeClass: 'bg-[#7F1625]/10 text-[#7F1625] border-[#7F1625]/20',
+                          dotClass: 'bg-[#7F1625]',
+                        },
+                        {
+                          time: isAr ? 'منذ ساعتين' : '2h ago',
+                          title: isAr ? 'إصدار إذن تسليم أوامر تشغيل' : 'Delivery Note #DEL-104',
+                          desc: isAr ? 'تسليم 800 بنطلون كاجوال للعميل' : '800 trousers ready for dispatch',
+                          badge: isAr ? 'تسليم' : 'Delivery',
+                          badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+                          dotClass: 'bg-blue-500',
+                        },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex items-start gap-3 pb-3.5 border-b border-slate-100 last:border-0 last:pb-0">
+                          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.dotClass}`} />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-slate-900">{item.title}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">{item.time}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 mt-1">{item.desc}</div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${item.badgeClass}`}>
+                            {item.badge}
+                          </span>
                         </div>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1 mb-2">{order.model_name}</h4>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1 flex justify-between">
-                          <span>الإنجاز:</span>
-                          <span className="font-mono text-slate-800 dark:text-slate-200">{order.sewn_quantity} / {order.target_quantity} ({sewPercent}%)</span>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {/* Quality Inspection & Marker Efficiency Metrics */}
+                  <Card className="p-5 border-slate-200/90 rounded-2xl bg-white shadow-xs">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 font-mono mb-4">
+                      {isAr ? 'كفاءة الخط وهندسة الفرش' : 'Floor Efficiency & Quality Yield'}
+                    </h4>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-xs font-semibold mb-1.5">
+                          <span className="text-slate-600">{isAr ? 'كفاءة التعشيق (Marker Efficiency)' : 'Marker Efficiency'}</span>
+                          <span className="font-mono text-slate-900 font-bold">91.4%</span>
                         </div>
-                        <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-[var(--brand-primary)] rounded-full" style={{ width: `${sewPercent}%` }} />
+                        <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-[#7F1625] to-[#b32b3f] rounded-full" style={{ width: '91.4%' }} />
                         </div>
-                        <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
-                          <span>الهالك: <strong className="text-emerald-400 font-mono">{order.waste_percentage}%</strong></span>
-                          <span>التسليم: <strong className="text-slate-300 font-mono">{order.due_date}</strong></span>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-xs font-semibold mb-1.5">
+                          <span className="text-slate-600">{isAr ? 'مطابقة الجودة من أول مرة (FPY)' : 'First-Pass Yield (QC)'}</span>
+                          <span className="font-mono text-slate-900 font-bold">99.2%</span>
                         </div>
-                      </Card>
-                    );
-                  })}
+                        <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-emerald-600 to-teal-500 rounded-full" style={{ width: '99.2%' }} />
+                        </div>
+                      </div>
+
+                      <div className="pt-3.5 border-t border-slate-100 text-xs flex items-center justify-between font-mono text-slate-600">
+                        <span>{isAr ? 'مشرف الوردية:' : 'Shift Supervisor:'}</span>
+                        <span className="font-bold text-slate-900">{isAr ? 'م. أحمد عثمان' : 'Eng. Ahmed Othman'}</span>
+                      </div>
+                    </div>
+                  </Card>
                 </div>
               </div>
             </div>
@@ -1655,7 +1956,7 @@ export function App() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-100">كتالوج موديلات الملابس وملفات التشغيل</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">كتالوج موديلات الملابس وملفات التشغيل</h3>
                   <p className="text-xs text-slate-400">إدارة الموديلات والمقاسات والألوان وتوليد الباركود الدولي والـ SKU</p>
                 </div>
                 <Button size="sm" onClick={() => setIsCreateModelOpen(true)} icon={<Plus className="w-3.5 h-3.5" />}>
@@ -1667,14 +1968,14 @@ export function App() {
                 {models.map((m) => (
                   <Card key={m.id} hover className="border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                         {m.code}
                       </span>
                       <Badge variant="success">نشط</Badge>
                     </div>
 
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{m.name}</h4>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-900 dark:text-white">{m.name}</h4>
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         <span>{m.category}</span>
                         <span>•</span>
@@ -1685,11 +1986,11 @@ export function App() {
                     <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 text-center text-xs">
                       <div>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التكلفة</span>
-                        <strong className="font-mono text-slate-800 dark:text-slate-200">{m.target_cost} ج.م</strong>
+                        <strong className="font-mono text-slate-800 dark:text-slate-800 dark:text-slate-200">{m.target_cost} ج.م</strong>
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 block">الجملة</span>
-                        <strong className="font-mono text-slate-900 dark:text-slate-100">{m.wholesale_price} ج.م</strong>
+                        <strong className="font-mono text-slate-900 dark:text-slate-900 dark:text-white">{m.wholesale_price} ج.م</strong>
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التجزئة</span>
@@ -1699,9 +2000,14 @@ export function App() {
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
                       <span className="text-slate-400 text-[11px]">
-                        المتغيرات: <strong className="text-slate-200 font-mono">{m.variants_count} مقاس ولون</strong>
+                        المتغيرات: <strong className="text-slate-800 dark:text-slate-200 font-mono">{m.variants_count} مقاس ولون</strong>
                       </span>
-                      <Button variant="ghost" size="sm" className="text-xs h-7">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-7 hover:bg-[#7F1625]/10 hover:text-[#7F1625] font-semibold"
+                        onClick={() => setSelectedModelForBom(m)}
+                      >
                         بطاقة الباركود والـ BOM
                       </Button>
                     </div>
@@ -1716,7 +2022,7 @@ export function App() {
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-100">إدارة المخازن ودفتر الأستاذ غير القابل للتعديل</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">إدارة المخازن ودفتر الأستاذ غير القابل للتعديل</h3>
                   <p className="text-xs text-slate-400">مخازن الأقمشة والمستلزمات وفصل أمانات خامات العملاء للقص للغير</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1749,7 +2055,7 @@ export function App() {
                   <select
                     value={inventoryCategoryFilter}
                     onChange={(e) => setInventoryCategoryFilter(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
                   >
                     <option value="all">كل الأصناف والخامات</option>
                     <option value="company">خامات المصنع المملوكة فقط</option>
@@ -1785,9 +2091,9 @@ export function App() {
                       ) : (
                         filteredInventory.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">{item.code}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-900 dark:text-white">{item.code}</td>
                           <td className="py-3 px-4">
-                            <div className="font-medium text-slate-200">{item.name}</div>
+                            <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
                             {item.technical_specs?.gsm && (
                               <div className="text-[10px] text-slate-400">
                                 GSM: {item.technical_specs.gsm} جم/م² • عرض: {item.technical_specs.usable_width_meters} م
@@ -1802,21 +2108,47 @@ export function App() {
                             )}
                           </td>
                           <td className="py-3 px-4 text-slate-400">{item.warehouse_name}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-slate-100">
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                             {item.current_balance.toLocaleString()} {item.unit_of_measure}
                           </td>
                           <td className="py-3 px-4 font-mono text-slate-300">
                             {item.is_customer_owned ? '—' : `${item.average_cost.toFixed(2)} ج.م`}
                           </td>
                           <td className="py-3 px-4">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7"
-                              onClick={() => setSelectedStockItem(item)}
-                            >
-                              تسجيل حركة
-                            </Button>
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7"
+                                onClick={() => setSelectedStockItem(item)}
+                              >
+                                تسجيل حركة
+                              </Button>
+
+                              <ActionsMenu
+                                variant="icon-horizontal"
+                                items={[
+                                  {
+                                    id: 'movement',
+                                    label: 'تسجيل حركة مخزنية سريعة',
+                                    icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
+                                    onClick: () => setSelectedStockItem(item),
+                                  },
+                                  {
+                                    id: 'calc',
+                                    label: 'حاسبة تحويل الأقمشة (متر ↔ كجم)',
+                                    icon: <Calculator className="w-3.5 h-3.5" />,
+                                    onClick: () => setIsFabricCalcOpen(true),
+                                  },
+                                  {
+                                    id: 'print',
+                                    label: 'طباعة كارت الصنف وباركود الرف',
+                                    icon: <Printer className="w-3.5 h-3.5" />,
+                                    onClick: () => window.print(),
+                                  },
+                                ]}
+                              />
+                            </div>
                           </td>
                         </tr>
                       )))}
@@ -1829,7 +2161,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">أرصدة خامات العملاء (أمانات تشغيل للغير)</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أرصدة خامات العملاء (أمانات تشغيل للغير)</h4>
                     <p className="text-xs text-slate-400">خامات لا تسجل كأصول للمصنع ولا تدخل ضمن حسابات تكلفة البضاعة المباعة</p>
                   </div>
                 </div>
@@ -1841,7 +2173,7 @@ export function App() {
                         <span className="text-xs font-bold text-amber-400">{cm.customer_name}</span>
                         <span className="font-mono text-[11px] text-slate-400">{cm.fabric_code}</span>
                       </div>
-                      <h5 className="text-xs font-semibold text-slate-200">{cm.fabric_name}</h5>
+                      <h5 className="text-xs font-semibold text-slate-900 dark:text-white">{cm.fabric_name}</h5>
                       <div className="text-[11px] text-slate-400">
                         كثافة النسيج: <strong className="text-slate-300 font-mono">{cm.gsm} GSM</strong> • العرض الصالح: <strong className="text-slate-300 font-mono">{cm.usable_width_meters} م</strong>
                       </div>
@@ -1849,7 +2181,7 @@ export function App() {
                       <div className="grid grid-cols-4 gap-1.5 p-2 rounded-lg bg-slate-900 border border-slate-800 text-center text-[10px]">
                         <div>
                           <span className="text-slate-400 block">المستلم</span>
-                          <strong className="font-mono text-slate-200">{cm.received_meters} م</strong>
+                          <strong className="font-mono text-slate-800 dark:text-slate-200">{cm.received_meters} م</strong>
                         </div>
                         <div>
                           <span className="text-slate-400 block">المستهلك</span>
@@ -1873,7 +2205,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">دفتر الأستاذ المخزني (سجل التدقيق غير القابل للتعديل)</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">دفتر الأستاذ المخزني (سجل التدقيق غير القابل للتعديل)</h4>
                     <p className="text-xs text-slate-400">كل حركة مخزنية تسجل آلياً وتثبت الرصيد السابق واللاحق والمستند المرجعي</p>
                   </div>
                 </div>
@@ -1904,14 +2236,14 @@ export function App() {
                           stockLedger.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-800/20">
                             <td className="py-2.5 px-4 text-slate-400">{tx.created_at}</td>
-                            <td className="py-2.5 px-4 font-sans font-medium text-slate-200">{tx.item_name}</td>
+                            <td className="py-2.5 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{tx.item_name}</td>
                             <td className="py-2.5 px-4 font-sans text-slate-300">{tx.transaction_type}</td>
                             <td className="py-2.5 px-4">
                               <Badge variant={tx.direction === 'IN' ? 'success' : 'danger'}>
                                 {tx.direction}
                               </Badge>
                             </td>
-                            <td className="py-2.5 px-4 font-bold text-slate-100">{tx.quantity.toLocaleString()}</td>
+                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{tx.quantity.toLocaleString()}</td>
                             <td className="py-2.5 px-4 text-slate-400">{tx.balance_before.toLocaleString()}</td>
                             <td className="py-2.5 px-4 text-emerald-400 font-bold">{tx.balance_after.toLocaleString()}</td>
                             <td className="py-2.5 px-4 text-indigo-400">{tx.reference_number || '—'}</td>
@@ -1962,7 +2294,7 @@ export function App() {
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Card hover>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">إجمالي أوامر الإنتاج</div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">
+                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-900 dark:text-white">
                     {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">أوامر</span>
                   </div>
                   <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
@@ -2005,7 +2337,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">أوامر الإنتاج وتفصيل المقاسات والألوان</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر الإنتاج وتفصيل المقاسات والألوان</h4>
                     <p className="text-xs text-slate-400">متابعة الكميات المخططة والمقصوصة والمنجزة ومواعيد التسليم</p>
                   </div>
                 </div>
@@ -2030,11 +2362,11 @@ export function App() {
                         {productionOrders.map((order) => (
                           <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
                             <td className="py-3 px-4 font-mono font-bold text-indigo-400">{order.order_number}</td>
-                            <td className="py-3 px-4 font-medium text-slate-200">
+                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
                               <div>{order.model_name}</div>
                               <span className="text-[10px] text-slate-400 font-mono">[{order.model_code}]</span>
                             </td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-100">
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                               {(order.planned_quantity || order.target_quantity).toLocaleString()}
                             </td>
                             <td className="py-3 px-4 font-mono text-sky-400 font-semibold">
@@ -2082,12 +2414,12 @@ export function App() {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
-                              <div className="flex items-center gap-1.5">
-                                {order.status === 'draft' && (
+                              <div className="flex items-center gap-1.5 justify-end">
+                                {order.status === 'draft' ? (
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="text-xs h-7 text-emerald-400 border-emerald-500/30"
+                                    className="text-xs h-7 text-emerald-600 border-emerald-500/30 font-bold"
                                     onClick={async () => {
                                       try {
                                         if (order.id.length > 20 && !order.id.startsWith('po-')) {
@@ -2103,9 +2435,7 @@ export function App() {
                                   >
                                     اعتماد الأمر
                                   </Button>
-                                )}
-
-                                {(order.status === 'approved' || order.status === 'in_progress' || order.status === 'cutting') && (
+                                ) : (
                                   <Button
                                     size="sm"
                                     className="text-xs h-7"
@@ -2116,15 +2446,45 @@ export function App() {
                                   </Button>
                                 )}
 
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs h-7 text-emerald-400 hover:text-emerald-300"
-                                  onClick={() => setSelectedProdOrderForQc(order)}
-                                  icon={<ShieldCheck className="w-3 h-3" />}
-                                >
-                                  فحص الجودة (QC)
-                                </Button>
+                                <ActionsMenu
+                                  variant="icon-horizontal"
+                                  items={[
+                                    {
+                                      id: 'cut',
+                                      label: 'إصدار خطة قص وفرش',
+                                      icon: <Scissors className="w-3.5 h-3.5" />,
+                                      onClick: () => setSelectedProdOrderForCut(order),
+                                    },
+                                    {
+                                      id: 'qc',
+                                      label: 'فحص الجودة والمطابقة (QC)',
+                                      icon: <ShieldCheck className="w-3.5 h-3.5" />,
+                                      onClick: () => setSelectedProdOrderForQc(order),
+                                    },
+                                    {
+                                      id: 'bundles',
+                                      label: 'تتبع بطاقات الحزم بالباركود',
+                                      icon: <QrCode className="w-3.5 h-3.5" />,
+                                      onClick: () => {
+                                        const b = cuttingBundles.find((cb) => cb.production_order_id === order.id) || cuttingBundles[0];
+                                        if (b) setSelectedBundleForTracker(b);
+                                      },
+                                    },
+                                    {
+                                      id: 'costing',
+                                      label: 'حساب تكاليف أمر التشغيل',
+                                      icon: <DollarSign className="w-3.5 h-3.5" />,
+                                      divider: true,
+                                      onClick: () => handleTabChange('costing'),
+                                    },
+                                    {
+                                      id: 'print',
+                                      label: 'طباعة تذكرة أمر التشغيل',
+                                      icon: <Printer className="w-3.5 h-3.5" />,
+                                      onClick: () => window.print(),
+                                    },
+                                  ]}
+                                />
                               </div>
                             </td>
                           </tr>
@@ -2139,7 +2499,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">أوامر صالة القص وخطط الفرش (Lay & Cut Orders)</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر صالة القص وخطط الفرش (Lay & Cut Orders)</h4>
                     <p className="text-xs text-slate-400">طول الفرشة، عدد الراقات، الأمتار المصروفة من المخزن، وعوادم الأطراف</p>
                   </div>
                 </div>
@@ -2159,6 +2519,7 @@ export function App() {
                           <th className="py-3 px-4">الأمتار المصروفة</th>
                           <th className="py-3 px-4">القطع الناتجة</th>
                           <th className="py-3 px-4">الحالة</th>
+                          <th className="py-3 px-4 text-center">الإجراءات</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
@@ -2167,18 +2528,49 @@ export function App() {
                             <td className="py-3 px-4 font-bold text-sky-400">{cut.cutting_order_number}</td>
                             <td className="py-3 px-4 text-indigo-400">{cut.production_order_number}</td>
                             <td className="py-3 px-4 font-sans text-slate-300">{cut.table_number}</td>
-                            <td className="py-3 px-4 font-sans font-medium text-slate-200">{cut.fabric_name}</td>
+                            <td className="py-3 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{cut.fabric_name}</td>
                             <td className="py-3 px-4">
                               <Badge variant={cut.fabric_source === 'factory_owned' ? 'info' : 'warning'}>
                                 {cut.fabric_source === 'factory_owned' ? 'خامات المصنع' : 'أمانة عميل CMT'}
                               </Badge>
                             </td>
                             <td className="py-3 px-4 text-slate-300">{cut.lay_length_meters} م</td>
-                            <td className="py-3 px-4 font-bold text-slate-100">{cut.layers_count} راقة</td>
+                            <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{cut.layers_count} راقة</td>
                             <td className="py-3 px-4 text-amber-400 font-bold">{cut.actual_fabric_meters_used} م</td>
                             <td className="py-3 px-4 text-emerald-400 font-bold">{cut.total_cut_pieces} قطعة</td>
                             <td className="py-3 px-4">
                               <Badge variant="success">تم القص وتوليد الحزم</Badge>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <ActionsMenu
+                                variant="icon-horizontal"
+                                items={[
+                                  {
+                                    id: 'bundles',
+                                    label: 'تتبع حزم أمر القص',
+                                    icon: <QrCode className="w-3.5 h-3.5" />,
+                                    onClick: () => {
+                                      const b = cuttingBundles.find((cb) => cb.cutting_order_id === cut.id) || cuttingBundles[0];
+                                      if (b) setSelectedBundleForTracker(b);
+                                    },
+                                  },
+                                  {
+                                    id: 'qc',
+                                    label: 'فحص الجودة والمطابقة (QC)',
+                                    icon: <ShieldCheck className="w-3.5 h-3.5" />,
+                                    onClick: () => {
+                                      const prod = productionOrders.find((p) => p.id === cut.production_order_id);
+                                      if (prod) setSelectedProdOrderForQc(prod);
+                                    },
+                                  },
+                                  {
+                                    id: 'print',
+                                    label: 'طباعة كارت طاولة القص',
+                                    icon: <Printer className="w-3.5 h-3.5" />,
+                                    onClick: () => window.print(),
+                                  },
+                                ]}
+                              />
                             </td>
                           </tr>
                         ))}
@@ -2192,7 +2584,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">بطاقات الحزم وتتبع خطوط الإنتاج (Bundle Cards Floor Tracker)</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">بطاقات الحزم وتتبع خطوط الإنتاج (Bundle Cards Floor Tracker)</h4>
                     <p className="text-xs text-slate-400">تتبع مسار الحزم بالباركود بين مراحل القص، التجهيز، الخياطة، والتشطيب</p>
                   </div>
                 </div>
@@ -2201,7 +2593,7 @@ export function App() {
                   {cuttingBundles.map((bnd) => (
                     <Card key={bnd.id} hover className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 space-y-2.5">
                       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-slate-900 dark:text-white">
                           <QrCode className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                           <span>{bnd.bundle_code}</span>
                         </div>
@@ -2211,7 +2603,7 @@ export function App() {
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
                           <span className="text-slate-500 block text-[10px]">اللون</span>
-                          <span className="text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
+                          <span className="text-slate-800 dark:text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
                         </div>
                         <div>
                           <span className="text-slate-500 block text-[10px]">المقاس</span>
@@ -2270,7 +2662,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">سجل فحص وتدقيق الجودة والعيوب (Quality Control Hub)</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">سجل فحص وتدقيق الجودة والعيوب (Quality Control Hub)</h4>
                     <p className="text-xs text-slate-400">تقارير الفحص المرحلي، العيوب المسجلة، وإذن الترحيل للمنتج النهائي</p>
                   </div>
                 </div>
@@ -2296,7 +2688,7 @@ export function App() {
                           <tr key={qc.id} className="hover:bg-slate-800/20">
                             <td className="py-3 px-4 font-bold text-emerald-400">{qc.inspection_number}</td>
                             <td className="py-3 px-4 text-indigo-400">{qc.production_order_number}</td>
-                            <td className="py-3 px-4 font-sans text-slate-200">{qc.inspector_name}</td>
+                            <td className="py-3 px-4 font-sans text-slate-800 dark:text-slate-200">{qc.inspector_name}</td>
                             <td className="py-3 px-4 font-sans text-slate-300">
                               {qc.inspection_type === 'final_audit'
                                 ? 'فحص نهائي وترحيل للمخزن'
@@ -2304,7 +2696,7 @@ export function App() {
                                 ? 'فحص مرحلي بالخط'
                                 : 'فحص نهاية الخط'}
                             </td>
-                            <td className="py-3 px-4 font-bold text-slate-100">{qc.inspected_quantity}</td>
+                            <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{qc.inspected_quantity}</td>
                             <td className="py-3 px-4 text-emerald-400 font-bold">{qc.passed_quantity}</td>
                             <td className="py-3 px-4 text-amber-400 font-bold">{qc.rework_quantity}</td>
                             <td className="py-3 px-4 text-red-400 font-bold">{qc.rejected_quantity}</td>
@@ -2340,7 +2732,7 @@ export function App() {
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-100">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     دورة المشتريات والموردين وفحص الاستلام والمطابقة الثلاثية
                   </h3>
                   <p className="text-xs text-slate-400">
@@ -2369,7 +2761,7 @@ export function App() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card hover>
                   <div className="text-xs text-slate-400 mb-1">أوامر الشراء النشطة</div>
-                  <div className="text-xl font-bold font-mono text-slate-100">
+                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
                     {purchaseOrders.length} <span className="text-xs font-normal text-slate-400">أوامر</span>
                   </div>
                   <div className="text-[11px] text-indigo-400 mt-1 font-medium">
@@ -2400,7 +2792,7 @@ export function App() {
 
               {/* Purchase Orders Table */}
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-200">أوامر الشراء ومتابعة التوريد</h4>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر الشراء ومتابعة التوريد</h4>
                 <Card className="overflow-hidden p-0 border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
@@ -2418,11 +2810,11 @@ export function App() {
                       <tbody className="divide-y divide-slate-800/60">
                         {purchaseOrders.map((po) => (
                           <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">{po.po_number}</td>
-                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-900 dark:text-white">{po.po_number}</td>
+                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
                             <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{po.warehouse_name}</td>
                             <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{po.order_date}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-900 dark:text-white">
                               {po.total_amount.toLocaleString()} ج.م
                             </td>
                             <td className="py-3 px-4">
@@ -2448,12 +2840,12 @@ export function App() {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
-                              <div className="flex items-center gap-1.5">
-                                {po.status === 'draft' && (
+                              <div className="flex items-center gap-1.5 justify-end">
+                                {po.status === 'draft' ? (
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="text-xs h-7 text-emerald-400 border-emerald-500/30"
+                                    className="text-xs h-7 text-emerald-600 border-emerald-500/30 font-bold"
                                     onClick={async () => {
                                       try {
                                         if (po.id.length > 20 && !po.id.startsWith('po-')) {
@@ -2469,26 +2861,40 @@ export function App() {
                                   >
                                     اعتماد الأمر
                                   </Button>
-                                )}
-
-                                {(po.status === 'approved' || po.status === 'partially_received') && (
+                                ) : (
                                   <Button
                                     size="sm"
                                     className="text-xs h-7"
                                     onClick={() => setSelectedPoForReceipt(po)}
+                                    icon={<Truck className="w-3 h-3" />}
                                   >
                                     فحص واستلام (GRN)
                                   </Button>
                                 )}
 
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs h-7 text-slate-300 hover:text-indigo-400"
-                                  onClick={() => setSelectedPoForInvoice(po)}
-                                >
-                                  مطابقة الفاتورة
-                                </Button>
+                                <ActionsMenu
+                                  variant="icon-horizontal"
+                                  items={[
+                                    {
+                                      id: 'grn',
+                                      label: 'فحص واستلام البضاعة (GRN)',
+                                      icon: <Truck className="w-3.5 h-3.5" />,
+                                      onClick: () => setSelectedPoForReceipt(po),
+                                    },
+                                    {
+                                      id: 'match',
+                                      label: 'مطابقة الفاتورة الثلاثية (3-Way Match)',
+                                      icon: <Receipt className="w-3.5 h-3.5" />,
+                                      onClick: () => setSelectedPoForInvoice(po),
+                                    },
+                                    {
+                                      id: 'print',
+                                      label: 'طباعة أمر الشراء المعتمد',
+                                      icon: <Printer className="w-3.5 h-3.5" />,
+                                      onClick: () => window.print(),
+                                    },
+                                  ]}
+                                />
                               </div>
                             </td>
                           </tr>
@@ -2503,7 +2909,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">أذون فحص واستلام البضاعة (GRN Log)</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أذون فحص واستلام البضاعة (GRN Log)</h4>
                     <p className="text-xs text-slate-400">سجل فحص الجودة والكميات المقبولة والمرفوضة المحولة للمخزن</p>
                   </div>
                 </div>
@@ -2526,9 +2932,9 @@ export function App() {
                       <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                         {goodsReceiptNotes.map((grn) => (
                           <tr key={grn.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100">{grn.grn_number}</td>
+                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-900 dark:text-white">{grn.grn_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{grn.po_number}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-200">{grn.supplier_name}</td>
+                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{grn.supplier_name}</td>
                             <td className="py-2.5 px-4 font-sans text-slate-300">{grn.quality_inspector_name}</td>
                             <td className="py-2.5 px-4">
                               <Badge variant={grn.inspection_status === 'passed' ? 'success' : 'warning'}>
@@ -2554,7 +2960,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">سجل فواتير الموردين والمطابقة الثلاثية</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">سجل فواتير الموردين والمطابقة الثلاثية</h4>
                     <p className="text-xs text-slate-400">فواتير معتمدة ومطابقة مع أوامر الشراء وأذون استلام المخزن</p>
                   </div>
                 </div>
@@ -2577,9 +2983,9 @@ export function App() {
                       <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                         {supplierInvoices.map((inv) => (
                           <tr key={inv.id} className="hover:bg-slate-800/20">
-                            <td className="py-2.5 px-4 font-bold text-slate-100">{inv.invoice_number}</td>
+                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{inv.invoice_number}</td>
                             <td className="py-2.5 px-4 text-slate-400">{inv.internal_reference}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
+                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
                             <td className="py-2.5 px-4 font-mono text-slate-700 dark:text-slate-300">{inv.po_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{inv.due_date}</td>
                             <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} ج.م</td>
@@ -2605,7 +3011,7 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">سجل الموردين المعتمدين</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">سجل الموردين المعتمدين</h4>
                     <p className="text-xs text-slate-400">بيانات الاتصال، السجل الضريبي، وشروط الدفع</p>
                   </div>
                 </div>
@@ -2614,7 +3020,7 @@ export function App() {
                   {suppliers.map((s) => (
                     <Card key={s.id} className="border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-slate-100">{s.name}</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-900 dark:text-white">{s.name}</span>
                         <span className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold">{s.code}</span>
                       </div>
                       <div className="text-xs text-slate-400 flex items-center justify-between">
@@ -2876,7 +3282,7 @@ export function App() {
               <div className="space-y-1 max-h-28 overflow-y-auto">
                 {branches.map(b => (
                   <div key={b.id} className="flex justify-between items-center text-xs bg-slate-900/60 p-1.5 rounded border border-slate-800">
-                    <span className="text-slate-200">{b.name}</span>
+                    <span className="text-slate-800 dark:text-slate-200">{b.name}</span>
                     <span className="font-mono text-slate-400 text-[11px]">{b.code}</span>
                   </div>
                 ))}
@@ -2938,6 +3344,14 @@ export function App() {
         isOpen={isCreateModelOpen}
         onClose={() => setIsCreateModelOpen(false)}
         onSuccess={handleModelCreated}
+      />
+
+      {/* MODAL 5.5: Garment Model BOM & Details Modal */}
+      <ModelDetailsBomModal
+        isOpen={selectedModelForBom !== null}
+        onClose={() => setSelectedModelForBom(null)}
+        model={selectedModelForBom}
+        inventoryItems={inventoryItems}
       />
 
       {/* MODAL 6: Create Purchase Order Modal */}

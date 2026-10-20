@@ -10,13 +10,16 @@ import {
   Package,
   RefreshCw,
   AlertCircle,
+  Printer,
+  Eye,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { ActionsMenu } from '../ui/ActionsMenu';
 import { api } from '../../api/client';
-import type { Language, Machine, MaintenanceWorkOrder, MaintenanceSparePart } from '../../types';
+import type { Language, Machine, MaintenanceWorkOrder, MaintenanceSparePart, DowntimeSummary } from '../../types';
 
 interface MaintenanceTabProps {
   lang: Language;
@@ -28,6 +31,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   const [isAddMachineModalOpen, setIsAddMachineModalOpen] = useState(false);
   const [isWorkOrderModalOpen, setIsWorkOrderModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [isSparePartModalOpen, setIsSparePartModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<MaintenanceWorkOrder | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -35,14 +39,16 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   // Initial State for Machines
   const [machines, setMachines] = useState<Machine[]>([]);
   const [workOrders, setWorkOrders] = useState<MaintenanceWorkOrder[]>([]);
+  const [downtimeSummary, setDowntimeSummary] = useState<DowntimeSummary | null>(null);
 
   const loadMaintenanceData = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [mchRes, woRes] = await Promise.allSettled([
+      const [mchRes, woRes, dtRes] = await Promise.allSettled([
         api.maintenance.getMachines(1),
         api.maintenance.getWorkOrders(1),
+        api.maintenance.getDowntimeSummary(),
       ]);
 
       if (mchRes.status === 'fulfilled' && mchRes.value?.data) {
@@ -50,6 +56,9 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
       }
       if (woRes.status === 'fulfilled' && woRes.value?.data) {
         setWorkOrders(woRes.value.data);
+      }
+      if (dtRes.status === 'fulfilled' && dtRes.value) {
+        setDowntimeSummary(dtRes.value);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات الصيانة والماكينات' : 'Failed to load maintenance data'));
@@ -62,45 +71,21 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
     loadMaintenanceData();
   }, []);
 
-  // Spare parts ledger
-  const [spareParts] = useState<MaintenanceSparePart[]>([
-    {
-      id: 'sp-1',
-      part_name: isAr ? 'سير مسنن لمقص إيستمان 10 بوصة' : 'Eastman 10" Timing Belt',
-      part_number: 'ET-TB-102',
-      quantity: 12,
-      unit_cost: 160,
-      total_cost: 1920,
-      work_order_id: 'wo-1',
-    },
-    {
-      id: 'sp-2',
-      part_name: isAr ? 'بلاطة إبرة ماكينة سنجر جوكي DDL-9000' : 'Juki DDL-9000 Needle Plate E-18',
-      part_number: 'JK-NP-900',
-      quantity: 25,
-      unit_cost: 85,
-      total_cost: 2125,
-      work_order_id: 'wo-3',
-    },
-    {
-      id: 'sp-3',
-      part_name: isAr ? 'كروشيه علوي ماكينة أوفرلوك بيجاسوس' : 'Pegasus Upper Looper M900',
-      part_number: 'PG-UL-550',
-      quantity: 8,
-      unit_cost: 110,
-      total_cost: 880,
-      work_order_id: 'wo-2',
-    },
-    {
-      id: 'sp-4',
-      part_name: isAr ? 'عنصر تسخين سيراميك لمكبس هشيما' : 'Hashima Ceramic Heating Element 450mm',
-      part_number: 'HS-HE-450',
-      quantity: 4,
-      unit_cost: 450,
-      total_cost: 1800,
-      work_order_id: 'wo-1',
-    },
-  ]);
+  // Spare parts ledger derived directly from server-backed work orders
+  const spareParts: (MaintenanceSparePart & { work_order_number?: string })[] = workOrders.flatMap((wo) =>
+    (wo.spare_parts || []).map((sp) => ({
+      ...sp,
+      work_order_id: wo.id,
+      work_order_number: wo.order_number,
+    }))
+  );
+
+  // New Spare Part Form State
+  const [selectedWoForPart, setSelectedWoForPart] = useState('');
+  const [newPartName, setNewPartName] = useState('');
+  const [newPartNumber, setNewPartNumber] = useState('');
+  const [newPartQty, setNewPartQty] = useState<number>(1);
+  const [newPartUnitCost, setNewPartUnitCost] = useState<number>(150);
 
   // New Machine Form State
   const [newMachine, setNewMachine] = useState({
@@ -218,13 +203,38 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
     }
   };
 
-  // Metrics
-  const totalMachines = machines.length;
-  const operationalCount = machines.filter((m) => m.status === 'operational').length;
-  const breakdownCount = machines.filter((m) => m.status === 'breakdown').length;
+  const handleAddSparePart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWoForPart || !newPartName || newPartQty <= 0) return;
+
+    try {
+      await (api as any).request(`/maintenance/work-orders/${selectedWoForPart}/spare-parts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          part_name: newPartName,
+          part_number: newPartNumber || undefined,
+          quantity: newPartQty,
+          unit_cost: newPartUnitCost,
+        }),
+      });
+
+      await loadMaintenanceData();
+      setIsSparePartModalOpen(false);
+      setNewPartName('');
+      setNewPartNumber('');
+      setNewPartQty(1);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إضافة قطعة الغيار' : 'Failed to add spare part'));
+    }
+  };
+
+  // Authoritative server-backed metrics
+  const totalMachines = downtimeSummary?.total_machines ?? machines.length;
+  const operationalCount = downtimeSummary?.operational_machines ?? machines.filter((m) => m.status === 'operational').length;
+  const breakdownCount = downtimeSummary?.down_machines ?? machines.filter((m) => m.status === 'breakdown').length;
   const underMaintenanceCount = machines.filter((m) => m.status === 'under_maintenance').length;
-  const totalDowntimeHours = workOrders.reduce((sum, wo) => sum + wo.downtime_hours, 0);
-  const totalMaintenanceExpense = workOrders.reduce((sum, wo) => sum + wo.total_cost, 0);
+  const totalDowntimeHours = downtimeSummary?.total_downtime_hours ?? workOrders.reduce((sum, wo) => sum + (Number(wo.downtime_hours) || 0), 0);
+  const totalMaintenanceExpense = downtimeSummary?.total_maintenance_cost ?? workOrders.reduce((sum, wo) => sum + (Number(wo.total_cost) || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -361,7 +371,19 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
           </Button>
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {activeSubTab === 'spareparts' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSparePartModalOpen(true)}
+              className="flex items-center gap-1 border-primary/40 text-primary hover:bg-primary/10"
+            >
+              <Plus className="w-4 h-4" />
+              {isAr ? 'صرف قطعة غيار لأمر صيانة' : 'Add Spare Part'}
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -446,16 +468,38 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
                       <span className="font-semibold text-foreground">{m.next_maintenance_date || 'N/A'}</span>
                     </td>
                     <td className="p-3 text-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setNewOrder((prev) => ({ ...prev, machine_id: m.id }));
-                          setIsWorkOrderModalOpen(true);
-                        }}
-                      >
-                        {isAr ? 'طلب صيانة' : 'Service'}
-                      </Button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setNewOrder((prev) => ({ ...prev, machine_id: m.id }));
+                            setIsWorkOrderModalOpen(true);
+                          }}
+                          className="text-xs py-1"
+                        >
+                          <Wrench className="w-3.5 h-3.5 me-1" />
+                          {isAr ? 'طلب صيانة' : 'Service'}
+                        </Button>
+                        <ActionsMenu
+                          variant="icon-horizontal"
+                          align={isAr ? 'left' : 'right'}
+                          items={[
+                            {
+                              id: 'barcode',
+                              label: isAr ? 'طباعة باركود الماكينة' : 'Print Asset QR',
+                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                              onClick: () => window.print(),
+                            },
+                            {
+                              id: 'orders',
+                              label: isAr ? 'سجل أعطال الماكينة' : 'Asset Breakdown History',
+                              icon: <Eye className="w-3.5 h-3.5 text-blue-500" />,
+                              onClick: () => setActiveSubTab('workorders'),
+                            },
+                          ]}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -557,18 +601,48 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
                         </Badge>
                       </td>
                       <td className="p-3 text-end">
-                        {wo.status !== 'completed' && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedOrder(wo);
-                              setIsCompleteModalOpen(true);
-                            }}
-                          >
-                            {isAr ? 'إتمام وإغلاق' : 'Complete'}
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-1.5">
+                          {wo.status !== 'completed' ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedOrder(wo);
+                                setIsCompleteModalOpen(true);
+                              }}
+                              className="text-xs py-1"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 me-1" />
+                              {isAr ? 'إتمام وإغلاق' : 'Complete'}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center">
+                              <CheckCircle className="w-3.5 h-3.5 me-1" />
+                              {isAr ? 'تم الإصلاح' : 'Closed'}
+                            </span>
+                          )}
+                          <ActionsMenu
+                            variant="icon-horizontal"
+                            align={isAr ? 'left' : 'right'}
+                            items={[
+                              {
+                                id: 'print-wo',
+                                label: isAr ? 'طباعة إذن الصيانة' : 'Print Work Order',
+                                icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                                onClick: () => window.print(),
+                              },
+                              {
+                                id: 'add-part',
+                                label: isAr ? 'صرف قطعة غيار لهذا الإذن' : 'Issue Spare Part',
+                                icon: <Package className="w-3.5 h-3.5 text-amber-500" />,
+                                onClick: () => {
+                                  setSelectedWoForPart(wo.id);
+                                  setIsSparePartModalOpen(true);
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
                       </td>
                     </tr>
                   );
@@ -595,30 +669,45 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {spareParts.map((sp) => (
-                  <tr key={sp.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-3 font-medium text-foreground">{sp.part_name}</td>
-                    <td className="p-3 font-mono text-xs text-muted-foreground">{sp.part_number}</td>
-                    <td className="p-3 font-semibold text-foreground">{sp.quantity}</td>
-                    <td className="p-3">
-                      {sp.unit_cost.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                    </td>
-                    <td className="p-3 font-semibold text-primary">
-                      {(sp.total_cost || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                    </td>
-                    <td className="p-3 text-end">
-                      <Badge variant={sp.quantity > 5 ? 'success' : 'warning'}>
-                        {sp.quantity > 5
-                          ? isAr
-                            ? 'متوفر'
-                            : 'In Stock'
-                          : isAr
-                          ? 'حد إعادة الطلب'
-                          : 'Low Stock'}
-                      </Badge>
+                {spareParts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground text-sm">
+                      {isAr ? 'لا توجد قطع غيار منصرفة لأوامر الصيانة حالياً' : 'No spare parts logged to work orders'}
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  spareParts.map((sp, idx) => (
+                    <tr key={idx} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-3 font-medium text-foreground">
+                        {sp.part_name}
+                        {sp.work_order_number && (
+                          <div className="text-[11px] text-muted-foreground font-mono">
+                            {isAr ? 'أمر صيانة: ' : 'Order: '} {sp.work_order_number}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3 font-mono text-xs text-muted-foreground">{sp.part_number || '—'}</td>
+                      <td className="p-3 font-semibold text-foreground">{sp.quantity}</td>
+                      <td className="p-3">
+                        {Number(sp.unit_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                      </td>
+                      <td className="p-3 font-semibold text-primary">
+                        {(Number(sp.total_cost) || (Number(sp.quantity) * Number(sp.unit_cost))).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                      </td>
+                      <td className="p-3 text-end">
+                        <Badge variant={Number(sp.quantity) > 5 ? 'success' : 'warning'}>
+                          {Number(sp.quantity) > 5
+                            ? isAr
+                              ? 'منصرف وموثق'
+                              : 'Logged'
+                            : isAr
+                            ? 'منصرف'
+                            : 'Logged'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -912,6 +1001,100 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
             </Button>
             <Button type="submit" variant="primary">
               {isAr ? 'تأكيد اكتمال الصيانة وتشغيل الماكينة' : 'Confirm Completion'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      {/* Modal: Add Spare Part */}
+      <Modal
+        isOpen={isSparePartModalOpen}
+        onClose={() => setIsSparePartModalOpen(false)}
+        title={isAr ? 'صرف وتسجيل قطعة غيار لأمر الصيانة' : 'Add Spare Part to Work Order'}
+      >
+        <form onSubmit={handleAddSparePart} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              {isAr ? 'أمر الصيانة المستهدف *' : 'Work Order *'}
+            </label>
+            <select
+              required
+              value={selectedWoForPart}
+              onChange={(e) => setSelectedWoForPart(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+            >
+              <option value="">{isAr ? '-- اختر أمر الشغل --' : '-- Select Work Order --'}</option>
+              {workOrders.map((wo) => (
+                <option key={wo.id} value={wo.id}>
+                  {wo.order_number} - {wo.issue_description?.slice(0, 40)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              {isAr ? 'اسم قطعة الغيار *' : 'Part Name *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={newPartName}
+              onChange={(e) => setNewPartName(e.target.value)}
+              placeholder="e.g. Needle plate, Timing belt"
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                {isAr ? 'رقم القطعة (Part #)' : 'Part Number'}
+              </label>
+              <input
+                type="text"
+                value={newPartNumber}
+                onChange={(e) => setNewPartNumber(e.target.value)}
+                placeholder="e.g. JK-NP-900"
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                {isAr ? 'الكمية المستهلكة *' : 'Quantity *'}
+              </label>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                required
+                value={newPartQty}
+                onChange={(e) => setNewPartQty(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              {isAr ? 'تكلفة الوحدة (ج.م) *' : 'Unit Cost (EGP) *'}
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              required
+              value={newPartUnitCost}
+              onChange={(e) => setNewPartUnitCost(Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => setIsSparePartModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" variant="primary">
+              {isAr ? 'تسجيل وخصم القطعة' : 'Record Spare Part'}
             </Button>
           </div>
         </form>

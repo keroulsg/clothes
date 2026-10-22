@@ -104,12 +104,16 @@ class ApiClient {
     this.onUnauthorizedCallback = callback;
   }
 
-  public setAuth(token: string, tenantId: string): void {
+  public setAuth(token: string, tenantId?: string | null): void {
     this.token = token;
-    this.currentTenantId = tenantId;
+    this.currentTenantId = tenantId || null;
     try {
       localStorage.setItem('garmentos_auth_token', token);
-      localStorage.setItem('garmentos_tenant_id', tenantId);
+      if (tenantId) {
+        localStorage.setItem('garmentos_tenant_id', tenantId);
+      } else {
+        localStorage.removeItem('garmentos_tenant_id');
+      }
     } catch {
       // Storage unavailable
     }
@@ -205,11 +209,15 @@ class ApiClient {
         body: JSON.stringify(credentials),
       });
 
-      if (res.access_token && res.tenant?.id) {
-        this.setAuth(res.access_token, res.tenant.id);
+      if (res.access_token) {
+        this.setAuth(res.access_token, res.tenant?.id || null);
         try {
           localStorage.setItem('garmentos_user_profile', JSON.stringify(res.user));
-          localStorage.setItem('garmentos_tenant_profile', JSON.stringify(res.tenant));
+          if (res.tenant) {
+            localStorage.setItem('garmentos_tenant_profile', JSON.stringify(res.tenant));
+          } else {
+            localStorage.removeItem('garmentos_tenant_profile');
+          }
         } catch {}
       }
 
@@ -698,6 +706,33 @@ class ApiClient {
         method: 'POST',
       });
     },
+
+    reactivateTenant: async (id: string): Promise<{ status: string; message: string; tenant: any }> => {
+      return this.request(`/platform-admin/tenants/${id}/reactivate`, {
+        method: 'POST',
+      });
+    },
+
+    updateTenantPlan: async (id: string, plan_tier: string): Promise<{ status: string; message: string; tenant: any }> => {
+      return this.request(`/platform-admin/tenants/${id}/plan`, {
+        method: 'PUT',
+        body: JSON.stringify({ plan_tier }),
+      });
+    },
+
+    getSystemHealth: async (): Promise<any> => {
+      return this.request('/platform-admin/system-health');
+    },
+
+    getUsers: async (params: { page?: number; per_page?: number; search?: string; role?: string } = {}): Promise<PaginatedResponse<any>> => {
+      const query = new URLSearchParams();
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      if (params.search) query.append('search', params.search);
+      if (params.role && params.role !== 'all') query.append('role', params.role);
+      const qs = query.toString();
+      return this.request(`/platform-admin/users${qs ? `?${qs}` : ''}`);
+    },
   };
 
   // --- Sales & POS Endpoints ---
@@ -732,6 +767,9 @@ class ApiClient {
     },
     getInvoices: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/sales/invoices?page=${page}`);
+    },
+    getInvoice: async (id: string): Promise<{ invoice: any }> => {
+      return this.request(`/sales/invoices/${id}`);
     },
     processPosSale: async (payload: any): Promise<{ message: string; invoice: any }> => {
       return this.request('/pos/sale', {

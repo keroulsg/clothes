@@ -177,13 +177,13 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                   {model.code}
                 </span>
                 <Badge variant="success">نشط بالكتالوج</Badge>
               </div>
-              <h4 className="text-base font-bold text-zinc-950 dark:text-zinc-50 mt-1">{model.name}</h4>
-              <p className="text-xs text-zinc-500">
+              <h4 className="text-base font-bold text-slate-950 dark:text-slate-50 mt-1">{model.name}</h4>
+              <p className="text-xs text-slate-500">
                 {model.category} • {model.season}
               </p>
             </div>
@@ -191,28 +191,28 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
           <div className="flex items-center gap-6 text-xs font-mono">
             <div>
-              <span className="text-[10px] text-zinc-500 block">التكلفة المعيارية</span>
-              <strong className="text-zinc-950 dark:text-zinc-100 text-sm">{model.target_cost} ج.م</strong>
+              <span className="text-[10px] text-slate-500 block">التكلفة المعيارية</span>
+              <strong className="text-slate-950 dark:text-slate-100 text-sm">{model.target_cost} ج.م</strong>
             </div>
             <div>
-              <span className="text-[10px] text-zinc-500 block">سعر الجملة</span>
-              <strong className="text-zinc-950 dark:text-zinc-100 text-sm">{model.wholesale_price} ج.م</strong>
+              <span className="text-[10px] text-slate-500 block">سعر الجملة</span>
+              <strong className="text-slate-950 dark:text-slate-100 text-sm">{model.wholesale_price} ج.م</strong>
             </div>
             <div>
-              <span className="text-[10px] text-zinc-500 block">سعر التجزئة</span>
+              <span className="text-[10px] text-slate-500 block">سعر التجزئة</span>
               <strong className="text-emerald-600 dark:text-emerald-400 text-sm">{model.retail_price} ج.م</strong>
             </div>
           </div>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
           <button
             onClick={() => setActiveTab('bom')}
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === 'bom'
                 ? 'bg-[#7F1625] text-white shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -223,7 +223,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === 'matrix'
                 ? 'bg-[#7F1625] text-white shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Barcode className="w-3.5 h-3.5" />
@@ -277,13 +277,13 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
             {/* Form for Creating New BOM */}
             {isAddingBom && (
-              <form onSubmit={handleSaveBom} className="p-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
-                  <h6 className="text-xs font-bold text-zinc-950 dark:text-zinc-100">تعريف إصدار شجرة مواد جديد</h6>
+              <form onSubmit={handleSaveBom} className="p-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <h6 className="text-xs font-bold text-slate-950 dark:text-slate-100">تعريف إصدار شجرة مواد جديد</h6>
                   <button
                     type="button"
                     onClick={() => setIsAddingBom(false)}
-                    className="text-xs text-zinc-500 hover:text-zinc-900"
+                    className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-300"
                   >
                     إلغاء
                   </button>
@@ -291,7 +291,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       اسم الإصدار / الوصف
                     </label>
                     <input
@@ -412,10 +412,10 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
             {/* Existing BOMs Display */}
             {boms.length === 0 ? (
-              <Card className="p-8 text-center text-zinc-400 border-dashed">
+              <Card className="p-8 text-center text-slate-400 border-dashed">
                 <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-xs">لا توجد شجرة مكونات مسجلة لهذا الموديل بعد.</p>
-                <p className="text-[11px] text-zinc-500 mt-1">
+                <p className="text-[11px] text-slate-500 mt-1">
                   يمكنك تعريف شجرة المكونات لربط استهلاك الأقمشة بحسابات التكلفة وأوامر التشغيل.
                 </p>
                 {!isAddingBom && (
@@ -426,13 +426,13 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
               </Card>
             ) : (
               boms.map((bom: any) => (
-                <Card key={bom.id} className="p-4 border-zinc-200 dark:border-zinc-800 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                <Card key={bom.id} className="p-4 border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">
+                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
                         {bom.version || 'v1.0'}
                       </span>
-                      <h6 className="text-xs font-bold text-zinc-950 dark:text-zinc-100">{bom.name || 'شجرة المكونات القياسية'}</h6>
+                      <h6 className="text-xs font-bold text-slate-950 dark:text-slate-100">{bom.name || 'شجرة المكونات القياسية'}</h6>
                       {bom.is_active ? (
                         <Badge variant="success">معتمد للإنتاج</Badge>
                       ) : (
@@ -454,7 +454,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs text-right">
-                      <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 font-semibold border-b border-zinc-200 dark:border-zinc-700">
+                      <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-700">
                         <tr>
                           <th className="py-2 px-3">المكون والخامة</th>
                           <th className="py-2 px-3">نوع المكون</th>
@@ -464,21 +464,21 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                           <th className="py-2 px-3">تكلفة الوحدة</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-mono text-[11px]">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
                         {(bom.items || []).map((it: any) => (
                           <tr key={it.id}>
-                            <td className="py-2 px-3 font-sans font-medium text-zinc-900 dark:text-zinc-100">
+                            <td className="py-2 px-3 font-sans font-medium text-slate-900 dark:text-slate-100">
                               {it.inventory_item?.name || it.component_type || 'خامة أساسية'}
                             </td>
-                            <td className="py-2 px-3 font-sans text-zinc-500">{it.component_type}</td>
-                            <td className="py-2 px-3 font-bold text-zinc-950 dark:text-zinc-50">
+                            <td className="py-2 px-3 font-sans text-slate-500">{it.component_type}</td>
+                            <td className="py-2 px-3 font-bold text-slate-950 dark:text-slate-50">
                               {Number(it.consumption_per_unit)}
                             </td>
-                            <td className="py-2 px-3 font-sans text-zinc-500">{it.unit_of_measure || 'متر'}</td>
+                            <td className="py-2 px-3 font-sans text-slate-500">{it.unit_of_measure || 'متر'}</td>
                             <td className="py-2 px-3 text-amber-600 font-semibold">
                               {Number(it.waste_tolerance_percent || 0)}%
                             </td>
-                            <td className="py-2 px-3 text-zinc-600 dark:text-zinc-400">
+                            <td className="py-2 px-3 text-slate-600 dark:text-slate-400">
                               {Number(it.unit_cost || 0) > 0 ? `${Number(it.unit_cost).toFixed(2)} ج.م` : '—'}
                             </td>
                           </tr>
@@ -497,10 +497,10 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h5 className="text-sm font-bold text-zinc-950 dark:text-zinc-100">
+                <h5 className="text-sm font-bold text-slate-950 dark:text-slate-100">
                   مصفوفة المقاسات والألوان وتوليد الباركود الدولي
                 </h5>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-slate-500">
                   توليد تلقائي للأكواد المعيارية SKU والباركود العالمي EAN-13 لكل متغير للطباعة على تيكيت الملابس
                 </p>
               </div>
@@ -514,9 +514,9 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
               </Button>
             </div>
 
-            <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
               <table className="w-full text-xs text-right">
-                <thead className="bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-300 font-semibold border-b border-zinc-200 dark:border-zinc-700">
+                <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                   <tr>
                     <th className="py-3 px-4">المقاس</th>
                     <th className="py-3 px-4">اللون</th>
@@ -526,19 +526,19 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                     <th className="py-3 px-4">سعر التجزئة</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-medium">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-medium">
                   {generatedVariants.map((v) => (
-                    <tr key={v.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                      <td className="py-3 px-4 font-mono font-bold text-zinc-950 dark:text-zinc-100">{v.size}</td>
+                    <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-950 dark:text-slate-100">{v.size}</td>
                       <td className="py-3 px-4">{v.color}</td>
                       <td className="py-3 px-4 font-mono text-[#7F1625] dark:text-rose-400 font-bold">{v.sku}</td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2 font-mono font-bold text-zinc-900 dark:text-zinc-100">
-                          <Barcode className="w-4 h-4 text-zinc-400" />
+                        <div className="flex items-center gap-2 font-mono font-bold text-slate-900 dark:text-slate-100">
+                          <Barcode className="w-4 h-4 text-slate-400" />
                           <span>{v.barcode}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-mono text-zinc-600 dark:text-zinc-400">{v.wholesale_price} ج.م</td>
+                      <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{v.wholesale_price} ج.م</td>
                       <td className="py-3 px-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
                         {v.retail_price} ج.م
                       </td>

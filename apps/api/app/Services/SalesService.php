@@ -16,6 +16,8 @@ use App\Models\SalesReturn;
 use App\Models\SalesReturnItem;
 use App\Models\SalesDeliveryNote;
 use App\Models\SalesCarton;
+use App\Models\AuditLog;
+use App\Models\ChartOfAccount;
 use App\Models\Warehouse;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -486,7 +488,7 @@ class SalesService
     }
 
     /**
-     * تسجيل مرتجع مبيعات من العميل مع خيار إعادة الإدخال للمخزن وضبط الحسابات
+     * تسجيل مرتجع مبيعات من العميل مع خيار إعادة الإدخال للمخزن وإصدار إشعار دائن وضبط الحسابات
      */
     public function createSalesReturn(array $data): SalesReturn
     {
@@ -502,16 +504,69 @@ class SalesService
                 Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
             }
 
+            $invoice = null;
             if (!empty($data['sales_invoice_id'])) {
-                SalesInvoice::where('tenant_id', $tenantId)->findOrFail($data['sales_invoice_id']);
+                $invoice = SalesInvoice::where('tenant_id', $tenantId)
+                    ->lockForUpdate()
+                    ->findOrFail($data['sales_invoice_id']);
+
+                if (in_array($invoice->status, ['void', 'cancelled'])) {
+                    throw new InvalidArgumentException("لا يمكن تسجيل مرتجع لفاتورة ملغاة أو باطلة.");
+                }
+
+                if (empty($data['customer_id']) && $invoice->customer_id) {
+                    $data['customer_id'] = $invoice->customer_id;
+                }
+
+                $invoiceItems = $invoice->items()->get();
+
+                foreach ($data['items'] as $item) {
+                    $invLine = $invoiceItems->firstWhere('variant_id', $item['variant_id']);
+                    if (!$invLine) {
+                        throw new InvalidArgumentException("الصنف المرتجع غير مدرج في فاتورة المبيعات الأصلية.");
+                    }
+
+                    $alreadyReturned = (float) SalesReturnItem::where('tenant_id', $tenantId)
+                        ->where('variant_id', $item['variant_id'])
+                        ->whereHas('salesReturn', function ($q) use ($invoice) {
+                            $q->where('sales_invoice_id', $invoice->id);
+                        })
+                        ->sum('quantity');
+
+                    $maxReturnable = max(0, (float) $invLine->quantity - $alreadyReturned);
+
+                    if ((float) $item['quantity'] > $maxReturnable) {
+                        throw new InvalidArgumentException("الكمية المرتجعة ({$item['quantity']}) تتجاوز الكمية المتبقية المسموح بإرجاعها ({$maxReturnable}) للفاتورة.");
+                    }
+                }
             }
 
             if (!empty($data['sales_order_id'])) {
-                $order = SalesOrder::where('tenant_id', $tenantId)->findOrFail($data['sales_order_id']);
+                $order = SalesOrder::where('tenant_id', $tenantId)
+                    ->lockForUpdate()
+                    ->findOrFail($data['sales_order_id']);
+
+                if ($order->status === 'cancelled') {
+                    throw new InvalidArgumentException("لا يمكن تسجيل مرتجع لأمر بيع ملغي.");
+                }
+
                 foreach ($data['items'] as $item) {
                     $orderItem = $order->items()->where('variant_id', $item['variant_id'])->first();
-                    if ($orderItem && (float)$item['quantity'] > (float)$orderItem->fulfilled_quantity) {
-                        throw new InvalidArgumentException("الكمية المرتجعة ({$item['quantity']}) تتجاوز الكمية المسلمة فعلياً ({$orderItem->fulfilled_quantity}) في أمر البيع.");
+                    if (!$orderItem) {
+                        throw new InvalidArgumentException("الصنف المرتجع غير مدرج في أمر البيع الأصلي.");
+                    }
+
+                    $alreadyReturned = (float) SalesReturnItem::where('tenant_id', $tenantId)
+                        ->where('variant_id', $item['variant_id'])
+                        ->whereHas('salesReturn', function ($q) use ($order) {
+                            $q->where('sales_order_id', $order->id);
+                        })
+                        ->sum('quantity');
+
+                    $maxReturnable = max(0, (float) $orderItem->fulfilled_quantity - $alreadyReturned);
+
+                    if ((float) $item['quantity'] > $maxReturnable) {
+                        throw new InvalidArgumentException("الكمية المرتجعة ({$item['quantity']}) تتجاوز الكمية المسلمة فعلياً ({$maxReturnable}) في أمر البيع.");
                     }
                 }
             }
@@ -522,8 +577,9 @@ class SalesService
 
             $totalAmount = 0;
             foreach ($data['items'] as $item) {
-                $totalAmount += ((float)$item['quantity'] * (float)$item['unit_price']);
+                $totalAmount += round((float)$item['quantity'] * (float)$item['unit_price'], 4);
             }
+            $totalAmount = round($totalAmount, 4);
 
             $salesReturn = SalesReturn::create([
                 'tenant_id' => $tenantId,
@@ -534,7 +590,7 @@ class SalesService
                 'warehouse_id' => $data['warehouse_id'],
                 'return_date' => $data['return_date'] ?? now()->toDateString(),
                 'total_amount' => $totalAmount,
-                'refund_status' => $data['refund_status'] ?? 'pending',
+                'refund_status' => 'credited',
                 'status' => $data['status'] ?? 'received',
                 'reason' => $data['reason'] ?? 'Customer Return',
                 'notes' => $data['notes'] ?? null,
@@ -544,7 +600,7 @@ class SalesService
             foreach ($data['items'] as $item) {
                 $qty = (float)$item['quantity'];
                 $price = (float)$item['unit_price'];
-                $lineTotal = $qty * $price;
+                $lineTotal = round($qty * $price, 4);
 
                 $returnItem = SalesReturnItem::create([
                     'tenant_id' => $tenantId,
@@ -558,8 +614,8 @@ class SalesService
                     'action_taken' => $item['action_taken'] ?? 'restock',
                 ]);
 
-                // إعادة الصنف للمخزن عبر دفتر المخازن إذا كانت الحالة جيدة والإجراء restock
-                if ($isRestocked && ($item['action_taken'] ?? 'restock') === 'restock') {
+                // إعادة الصنف للمخزن عبر دفتر المخازن فقط إذا كانت الحالة سليمة والإجراء restock
+                if ($isRestocked && ($item['action_taken'] ?? 'restock') === 'restock' && ($item['condition'] ?? 'good') === 'good') {
                     $invItem = InventoryItem::where('tenant_id', $tenantId)
                         ->where('variant_id', $item['variant_id'])
                         ->where('warehouse_id', $data['warehouse_id'])
@@ -583,16 +639,59 @@ class SalesService
                 }
             }
 
-            // إذا كان المرتجع مرتبطاً بفاتورة، يتم تخفيض الرصيد المستحق (balance_due)
-            if (!empty($data['sales_invoice_id'])) {
-                $invoice = SalesInvoice::where('tenant_id', $tenantId)->find($data['sales_invoice_id']);
-                if ($invoice) {
-                    $invoice->balance_due = max(0, (float)$invoice->balance_due - $totalAmount);
-                    $invoice->save();
+            // تحديث رصيد الفاتورة المرتبطة وتخفيض المستحق
+            if ($invoice) {
+                $invoice->balance_due = max(0, round((float)$invoice->balance_due - $totalAmount, 4));
+                if ($invoice->balance_due <= 0 && $invoice->total_amount > 0) {
+                    $invoice->status = 'paid';
+                }
+                $invoice->save();
+            }
+
+            // قيد اليومية المتوازن لإثبات إشعار الدائن عند توفر شجرة الحسابات
+            $salesAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '4010')->first();
+            $arAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '1110')->first();
+
+            if ($salesAccount && $arAccount && $totalAmount > 0) {
+                try {
+                    $accountingService = app(AccountingService::class);
+                    $accountingService->createJournalEntry([
+                        'entry_number' => 'JE-SRT-' . $salesReturn->return_number,
+                        'entry_date' => $salesReturn->return_date ? $salesReturn->return_date->toDateString() : now()->toDateString(),
+                        'description' => 'إثبات مرتجع مبيعات وإشعار دائن للفاتورة ' . ($invoice->invoice_number ?? $salesReturn->return_number),
+                        'reference_type' => 'sales_returns',
+                        'reference_id' => $salesReturn->id,
+                        'lines' => [
+                            ['account_id' => $salesAccount->id, 'debit' => $totalAmount, 'credit' => 0],
+                            ['account_id' => $arAccount->id, 'debit' => 0, 'credit' => $totalAmount],
+                        ],
+                    ]);
+                } catch (\Throwable $e) {
+                    // إذا كان القيد مسجلاً مسبقاً أو غير مطلوب
                 }
             }
 
-            return $salesReturn->load('items');
+            // تسجيل العملية في سجل الرقابة والتدقيق
+            try {
+                AuditLog::create([
+                    'tenant_id' => $tenantId,
+                    'user_id' => auth()->id(),
+                    'action' => 'sales_return_created',
+                    'auditable_type' => 'sales_returns',
+                    'auditable_id' => $salesReturn->id,
+                    'new_values' => [
+                        'return_number' => $salesReturn->return_number,
+                        'total_amount' => $totalAmount,
+                        'refund_status' => 'credited',
+                        'sales_invoice_id' => $data['sales_invoice_id'] ?? null,
+                    ],
+                    'ip_address' => request()?->ip(),
+                ]);
+            } catch (\Throwable) {
+                // تجاهل في حالة عدم توفر سياق الطلب
+            }
+
+            return $salesReturn->load(['items.variant.garmentModel', 'customer', 'warehouse', 'salesInvoice']);
         });
     }
 
@@ -617,7 +716,15 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return SalesReturn::where('tenant_id', $tenantId)
-            ->with(['customer', 'salesOrder', 'warehouse', 'items'])
+            ->with([
+                'customer',
+                'salesOrder',
+                'salesInvoice',
+                'warehouse',
+                'items.variant.garmentModel',
+                'items.variant.size',
+                'items.variant.color',
+            ])
             ->latest()
             ->paginate(20);
     }

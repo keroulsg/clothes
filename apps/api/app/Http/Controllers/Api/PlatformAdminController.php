@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -268,6 +269,195 @@ class PlatformAdminController extends Controller
                 ],
             ]);
         });
+    }
+
+    /**
+     * إعادة تفعيل حساب مستأجر معلق (Reactivate/Unsuspend Tenant)
+     */
+    public function reactivateTenant(Request $request, string $id): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        return DB::transaction(function () use ($request, $adminUser, $id) {
+            $tenant = Tenant::withoutGlobalScopes()->lockForUpdate()->findOrFail($id);
+
+            $oldStatus = $tenant->status;
+            $tenant->status = 'active';
+            $tenant->save();
+
+            AuditLog::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $adminUser->id,
+                'action' => 'admin_reactivate_tenant',
+                'auditable_type' => Tenant::class,
+                'auditable_id' => $tenant->id,
+                'old_values' => ['status' => $oldStatus],
+                'new_values' => ['status' => 'active'],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'status' => 'active',
+                'message' => 'تم إعادة تفعيل حساب المصنع/الشركة بنجاح واستئناف الخدمات.',
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                    'status' => $tenant->status,
+                ],
+            ]);
+        });
+    }
+
+    /**
+     * تعديل باقة الاشتراك للشركة (Update Tenant Plan Tier)
+     */
+    public function updateTenantPlan(Request $request, string $id): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'plan_tier' => 'required|string|in:starter,professional,enterprise',
+        ]);
+
+        return DB::transaction(function () use ($request, $adminUser, $id, $validated) {
+            $tenant = Tenant::withoutGlobalScopes()->lockForUpdate()->findOrFail($id);
+            $oldTier = $tenant->plan_tier;
+
+            $tenant->plan_tier = $validated['plan_tier'];
+            $settings = $tenant->settings ?? [];
+            if (isset($settings['subscription'])) {
+                $settings['subscription']['plan_tier'] = $validated['plan_tier'];
+                $tenant->settings = $settings;
+            }
+            $tenant->save();
+
+            AuditLog::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $adminUser->id,
+                'action' => 'admin_update_plan_tier',
+                'auditable_type' => Tenant::class,
+                'auditable_id' => $tenant->id,
+                'old_values' => ['plan_tier' => $oldTier],
+                'new_values' => ['plan_tier' => $validated['plan_tier']],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'تم تحديث باقة اشتراك الشركة بنجاح.',
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                    'plan_tier' => $tenant->plan_tier,
+                ],
+            ]);
+        });
+    }
+
+    /**
+     * فحص ومراقبة مؤشرات صحة النظام والبنية التحتية (System Health Indicators)
+     */
+    public function systemHealth(Request $request): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $dbStatus = 'healthy';
+        $dbError = null;
+        try {
+            DB::connection()->getPdo();
+            $totalTenants = Tenant::withoutGlobalScopes()->count();
+        } catch (\Throwable $e) {
+            $dbStatus = 'degraded';
+            $dbError = $e->getMessage();
+            $totalTenants = 0;
+        }
+
+        // Test Fail-Closed Multi-Tenancy Scope
+        $isolationStatus = 'enforced';
+        try {
+            // Without tenant binding, scoped models must return 0 records (1=0 condition)
+            $scopedItems = \App\Models\InventoryItem::count();
+            if ($scopedItems > 0 && !app()->has('current_tenant_id')) {
+                $isolationStatus = 'breached';
+            }
+        } catch (\Throwable $e) {
+            $isolationStatus = 'error: ' . $e->getMessage();
+        }
+
+        return response()->json([
+            'database' => [
+                'driver' => DB::connection()->getDriverName(),
+                'status' => $dbStatus,
+                'error' => $dbError,
+            ],
+            'multi_tenancy' => [
+                'isolation' => $isolationStatus,
+                'fail_closed' => true,
+            ],
+            'environment' => [
+                'php_version' => PHP_VERSION,
+                'laravel_version' => app()->version(),
+                'env' => app()->environment(),
+                'memory_usage_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
+            ],
+            'counts' => [
+                'tenants' => $totalTenants,
+                'users' => User::withoutGlobalScopes()->count(),
+                'audit_logs' => AuditLog::withoutGlobalScopes()->count(),
+            ],
+            'timestamp' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * دليل مستخدمي المنصة والشركات (Platform & Tenant Users Directory)
+     */
+    public function users(Request $request): JsonResponse
+    {
+        $adminUser = $request->user();
+        if (!$adminUser || $adminUser->role !== 'platform_admin') {
+            return response()->json([
+                'error' => 'PlatformAdminOnly',
+                'message' => 'أمان: هذا الإجراء مقصور على مشرفي منصة GarmentOS Cloud المعتمدين فقط.',
+            ], 403);
+        }
+
+        $query = User::withoutGlobalScopes()
+            ->with('tenant:id,name,code')
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('search')) {
+            $search = $request->query('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('role') && $request->query('role') !== 'all') {
+            $query->where('role', $request->query('role'));
+        }
+
+        $perPage = min(max((int) $request->query('per_page', 15), 5), 50);
+        return response()->json($query->paginate($perPage));
     }
 
     /**

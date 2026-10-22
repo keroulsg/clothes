@@ -6,7 +6,7 @@ import { Lock, Mail, AlertCircle, ShieldCheck } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
-  onSuccess: (user: ApiUser, tenant: ApiTenant) => void;
+  onSuccess: (user: ApiUser, tenant?: ApiTenant | null) => void;
   onClose?: () => void;
   isClosable?: boolean;
   onSwitchToRegister?: () => void;
@@ -119,21 +119,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         </div>
 
         {/* Quick Demo Credentials Box */}
-        <div className="p-3 rounded-xl bg-zinc-100 border border-zinc-200 text-xs space-y-2">
-          <div className="flex items-center justify-between text-[11px] font-bold text-zinc-700">
-            <span>بيانات الدخول التجريبية (اضغط للتعبئة):</span>
+        <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
+            <span>حسابات الاختبار التجريبية (اضغط للتعبئة الفورية):</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto">
             <button
               type="button"
               onClick={() => {
-                setEmail('owner@delta-garments.test');
-                setPassword('password123');
+                setEmail('qa_nile.owner@garmentos.test');
+                setPassword('Password123!@#');
               }}
-              className="p-2 text-right rounded-lg bg-white border border-zinc-300 hover:border-[#7F1625] transition-colors cursor-pointer"
+              className="p-1.5 text-right rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-[#7F1625] transition-colors cursor-pointer"
             >
-              <div className="font-bold text-[#7F1625]">مالك مصنع الدلتا</div>
-              <div className="text-[10px] text-zinc-500 font-mono truncate">owner@delta-garments.test</div>
+              <div className="font-bold text-[#7F1625] dark:text-[#f87171] text-[11px]">مالك المصنع</div>
+              <div className="text-[9px] text-slate-500 font-mono truncate">qa_nile.owner</div>
             </button>
             <button
               type="button"
@@ -141,10 +141,54 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 setEmail('admin@garmentos.com');
                 setPassword('password123');
               }}
-              className="p-2 text-right rounded-lg bg-white border border-zinc-300 hover:border-[#7F1625] transition-colors cursor-pointer"
+              className="p-1.5 text-right rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-[#7F1625] transition-colors cursor-pointer"
             >
-              <div className="font-bold text-zinc-800">مدير عام المنصة</div>
-              <div className="text-[10px] text-zinc-500 font-mono truncate">admin@garmentos.com</div>
+              <div className="font-bold text-slate-800 dark:text-white text-[11px]">مشرف المنصة</div>
+              <div className="text-[9px] text-slate-500 font-mono truncate">admin@garmentos</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('qa_nile.prod@garmentos.test');
+                setPassword('Password123!@#');
+              }}
+              className="p-1.5 text-right rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-[#7F1625] transition-colors cursor-pointer"
+            >
+              <div className="font-bold text-blue-700 dark:text-blue-400 text-[11px]">مهندس الإنتاج</div>
+              <div className="text-[9px] text-slate-500 font-mono truncate">qa_nile.prod</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('qa_nile.stock@garmentos.test');
+                setPassword('Password123!@#');
+              }}
+              className="p-1.5 text-right rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-[#7F1625] transition-colors cursor-pointer"
+            >
+              <div className="font-bold text-amber-700 dark:text-amber-400 text-[11px]">أمين المخزن</div>
+              <div className="text-[9px] text-slate-500 font-mono truncate">qa_nile.stock</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('qa_nile.acct@garmentos.test');
+                setPassword('Password123!@#');
+              }}
+              className="p-1.5 text-right rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-[#7F1625] transition-colors cursor-pointer"
+            >
+              <div className="font-bold text-emerald-700 dark:text-emerald-400 text-[11px]">المحاسب المالي</div>
+              <div className="text-[9px] text-slate-500 font-mono truncate">qa_nile.acct</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('qa_nile.qc@garmentos.test');
+                setPassword('Password123!@#');
+              }}
+              className="p-1.5 text-right rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-[#7F1625] transition-colors cursor-pointer"
+            >
+              <div className="font-bold text-purple-700 dark:text-purple-400 text-[11px]">مفتش الجودة QC</div>
+              <div className="text-[9px] text-slate-500 font-mono truncate">qa_nile.qc</div>
             </button>
           </div>
         </div>

@@ -14,14 +14,18 @@ import {
   Eye,
   Printer,
   FileText,
+  RotateCcw,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
+import { PageHeader } from '../ui/PageHeader';
+import { SalesReturnModal } from './SalesReturnModal';
+import { PosReceiptModal } from './PosReceiptModal';
 import { api } from '../../api/client';
-import type { Language, SalesOrder, SalesInvoice, ProductVariant, Quotation } from '../../types';
+import type { Language, SalesOrder, SalesInvoice, ProductVariant, Quotation, SalesReturn } from '../../types';
 
 interface SalesTabProps {
   lang: Language;
@@ -30,7 +34,7 @@ interface SalesTabProps {
 
 export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
   const isAr = lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'pos' | 'deliveries'>('orders');
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'returns' | 'pos' | 'deliveries'>('orders');
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -39,11 +43,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [deliveryNotes, setDeliveryNotes] = useState<any[]>([]);
+  const [salesReturns, setSalesReturns] = useState<SalesReturn[]>([]);
 
   // Modals
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
+  const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<SalesInvoice | null>(null);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [selectedInvoiceForReceipt, setSelectedInvoiceForReceipt] = useState<SalesInvoice | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New Order Form State
@@ -65,11 +74,12 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [ordersRes, invRes, quotesRes, delivRes] = await Promise.allSettled([
+      const [ordersRes, invRes, quotesRes, delivRes, returnsRes] = await Promise.allSettled([
         api.sales.getOrders(1),
         api.sales.getInvoices(1),
         api.sales.getQuotations(1),
         api.sales.getDeliveryNotes(1),
+        api.sales.getReturns(1),
       ]);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
@@ -83,6 +93,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
       }
       if (delivRes.status === 'fulfilled' && delivRes.value?.data) {
         setDeliveryNotes(delivRes.value.data);
+      }
+      if (returnsRes.status === 'fulfilled' && returnsRes.value?.data) {
+        setSalesReturns(returnsRes.value.data);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المبيعات' : 'Failed to load sales data'));
@@ -248,6 +261,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
 
       if (res?.invoice) {
         setInvoices((prev) => [res.invoice, ...prev]);
+        setSelectedInvoiceForReceipt(res.invoice);
+        setIsReceiptModalOpen(true);
         setPosSuccessMsg(isAr ? `تم إتمام عملية البيع بنجاح برقم: ${res.invoice.invoice_number}` : `POS Sale completed! Receipt: ${res.invoice.invoice_number}`);
       } else {
         setPosSuccessMsg(isAr ? 'تم تسجيل الفاتورة النقدية بنجاح!' : 'POS Cash Sale completed successfully!');
@@ -284,6 +299,37 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={isAr ? 'إدارة المبيعات ونقاط البيع (POS)' : 'Commercial Sales & POS'}
+        subtitle={isAr
+          ? 'إدارة أوامر البيع للعملاء، إصدار عروض الأسعار، ونقطة بيع فورية (POS).'
+          : 'Customer sales orders, quotations, invoices, and factory POS terminal.'}
+        icon={<TrendingUp className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        breadcrumbs={[
+          { label: isAr ? 'الرئيسية' : 'Home' },
+          { label: isAr ? 'المبيعات ونقطة البيع' : 'Sales & POS' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsOrderModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ أمر بيع جديد' : '+ New Sales Order'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsQuotationModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ عرض سعر' : '+ New Quote'}
+            </Button>
+          </div>
+        }
+      />
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -423,6 +469,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
             }`}
           >
             {isAr ? 'فواتير المبيعات' : 'Invoices'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('returns')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeSubTab === 'returns'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'مرتجعات المبيعات والدائن' : 'Returns & Credits'}
           </button>
           <button
             onClick={() => setActiveSubTab('deliveries')}
@@ -814,18 +870,29 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                           align={isAr ? 'left' : 'right'}
                           items={[
                             {
+                              id: 'print-receipt-80mm',
+                              label: isAr ? 'طباعة إيصال حراري (80mm)' : 'Print POS Receipt (80mm)',
+                              icon: <Receipt className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />,
+                              onClick: () => {
+                                setSelectedInvoiceForReceipt(inv);
+                                setIsReceiptModalOpen(true);
+                              },
+                            },
+                            {
+                              id: 'sales-return',
+                              label: isAr ? 'إرجاع مبيعات وإشعار دائن' : 'Sales Return & Credit Note',
+                              icon: <RotateCcw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />,
+                              onClick: () => {
+                                setSelectedInvoiceForReturn(inv);
+                                setIsReturnModalOpen(true);
+                              },
+                              disabled: inv.status === 'void',
+                            },
+                            {
                               id: 'print-inv',
                               label: isAr ? 'طباعة الفاتورة الضريبية' : 'Print Tax Invoice',
                               icon: <Printer className="w-3.5 h-3.5 text-primary" />,
                               onClick: () => window.print(),
-                            },
-                            {
-                              id: 'receipt-note',
-                              label: isAr ? 'سند القبض المالي' : 'Linked Receipt',
-                              icon: <Receipt className="w-3.5 h-3.5 text-emerald-500" />,
-                              onClick: () => {
-                                alert(isAr ? `الفاتورة ${inv.invoice_number} مسددة ومسجلة في الحسابات` : `Invoice ${inv.invoice_number} is posted.`);
-                              },
                             },
                           ]}
                         />
@@ -1216,6 +1283,114 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
           </div>
         </Modal>
       )}
+
+      {/* SALES RETURNS VIEW */}
+      {activeSubTab === 'returns' && (
+        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-[#7F1625] dark:text-[#F87171]" />
+              {isAr ? 'سجل مرتجعات المبيعات وإشعارات الدائن المعتمدة' : 'Sales Returns & Approved Credit Notes'}
+            </h3>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {salesReturns.length} {isAr ? 'عملية مرتجع مسجلة' : 'returns on file'}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-start text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="p-3 text-start">{isAr ? 'رقم المرتجع' : 'Return #'}</th>
+                  <th className="p-3 text-start">{isAr ? 'الفاتورة الأصلية' : 'Source Invoice'}</th>
+                  <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
+                  <th className="p-3 text-start">{isAr ? 'المخزن المستلم' : 'Warehouse'}</th>
+                  <th className="p-3 text-start">{isAr ? 'تاريخ المرتجع' : 'Date'}</th>
+                  <th className="p-3 text-start">{isAr ? 'إجمالي القيمة' : 'Credit Amount'}</th>
+                  <th className="p-3 text-center">{isAr ? 'حالة المخزن' : 'Restock'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الإشعار المالي' : 'Refund / Credit'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {salesReturns.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
+                      {isAr ? 'لا توجد مرتجعات مبيعات مسجلة حتى الآن' : 'No sales returns on record'}
+                    </td>
+                  </tr>
+                ) : (
+                  salesReturns.map((ret: any) => (
+                    <tr key={ret.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">
+                        {ret.return_number}
+                      </td>
+                      <td className="p-3 font-mono text-xs text-slate-600 dark:text-slate-400">
+                        {ret.sales_invoice?.invoice_number || ret.sales_order?.order_number || '—'}
+                      </td>
+                      <td className="p-3">{ret.customer?.name || 'عميل تجزئة'}</td>
+                      <td className="p-3 text-xs">{ret.warehouse?.name || 'مخزن تام'}</td>
+                      <td className="p-3 text-slate-500 font-mono text-xs">{ret.return_date}</td>
+                      <td className="p-3 font-bold text-[#7F1625] dark:text-[#F87171] font-mono">
+                        {Number(ret.total_amount).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 text-center">
+                        <Badge variant={ret.is_restocked ? 'success' : 'neutral'}>
+                          {ret.is_restocked ? (isAr ? 'مسترجع للمخزن' : 'Restocked') : (isAr ? 'خارج المخزن' : 'No restock')}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center">
+                        <Badge variant="success">
+                          {ret.refund_status === 'credited' ? (isAr ? 'دائن معتمد' : 'Credited') : ret.refund_status}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center">
+                        <ActionsMenu
+                          variant="icon-horizontal"
+                          align={isAr ? 'left' : 'right'}
+                          items={[
+                            {
+                              id: 'print-credit-note',
+                              label: isAr ? 'طباعة إشعار الدائن (Credit Slip)' : 'Print Credit Note Slip',
+                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                              onClick: () => window.print(),
+                            },
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* SALES RETURN MODAL */}
+      <SalesReturnModal
+        isOpen={isReturnModalOpen}
+        onClose={() => {
+          setIsReturnModalOpen(false);
+          setSelectedInvoiceForReturn(null);
+        }}
+        invoice={selectedInvoiceForReturn}
+        lang={lang}
+        onSuccess={() => {
+          loadSalesData();
+        }}
+      />
+
+      {/* 80mm POS THERMAL RECEIPT MODAL */}
+      <PosReceiptModal
+        isOpen={isReceiptModalOpen}
+        onClose={() => {
+          setIsReceiptModalOpen(false);
+          setSelectedInvoiceForReceipt(null);
+        }}
+        invoice={selectedInvoiceForReceipt}
+        lang={lang}
+      />
     </div>
   );
 };

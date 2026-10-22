@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
   Scissors,
-  TrendingUp,
-  Package,
   Layers,
   AlertTriangle,
   Plus,
@@ -20,14 +18,20 @@ import {
   DollarSign,
   Truck,
   Receipt,
+  Building2,
+  Table as TableIcon,
+  LayoutGrid,
+  Tag,
 } from 'lucide-react';
 import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 import { Button } from './components/ui/Button';
 import { ActionsMenu } from './components/ui/ActionsMenu';
+import { PageHeader } from './components/ui/PageHeader';
 import { Modal } from './components/ui/Modal';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
+import { Pagination } from './components/ui/Pagination';
 import { FabricCalculatorModal } from './components/inventory/FabricCalculatorModal';
 import { StockTransactionModal } from './components/inventory/StockTransactionModal';
 import { LoginModal } from './components/auth/LoginModal';
@@ -84,9 +88,25 @@ import type {
 } from './types';
 
 export function App() {
+  // URL Parameter Helper (supports both ?param=val before hash and inside hash)
+  const getUrlParam = (key: string): string | null => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.has(key)) return searchParams.get(key);
+      const hashIdx = window.location.hash.indexOf('?');
+      if (hashIdx !== -1) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(hashIdx + 1));
+        if (hashParams.has(key)) return hashParams.get(key);
+      }
+    } catch {}
+    return null;
+  };
+
   // Language Persistence State
   const [lang, setLang] = useState<Language>(() => {
     try {
+      const urlLang = getUrlParam('lang');
+      if (urlLang === 'en' || urlLang === 'ar') return urlLang;
       const saved = localStorage.getItem('garmentos_lang');
       if (saved === 'en' || saved === 'ar') return saved;
     } catch {}
@@ -108,6 +128,40 @@ export function App() {
     document.documentElement.setAttribute('lang', lang);
   }, [lang]);
 
+  // Theme Persistence & System Default
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    try {
+      const urlTheme = getUrlParam('theme');
+      if (urlTheme === 'dark') return true;
+      if (urlTheme === 'light') return false;
+      const saved = localStorage.getItem('garmentos_theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleTheme = () => {
+    setIsDark((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('garmentos_theme', next ? 'dark' : 'light');
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }, [isDark]);
+
   const isAr = lang === 'ar';
 
   // Real Authentication & User State
@@ -116,52 +170,116 @@ export function App() {
 
   // Deep-Link Route Parser
   const parseCurrentRoute = () => {
-    const raw = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-    if (raw === 'admin') {
-      return { mode: 'admin' as const, tab: 'overview' };
-    }
-    if (raw.startsWith('erp')) {
+    const hashClean = window.location.hash.split('?')[0];
+    const raw = hashClean.replace(/^#\/?/, '').toLowerCase().trim();
+
+    // 1. Platform Admin Routes
+    if (raw === 'admin' || raw.startsWith('admin/')) {
       const parts = raw.split('/');
-      const tab = parts[1] || 'dashboard';
-      return { mode: 'erp' as const, tab };
+      return { mode: 'admin' as const, tab: parts[1] || 'overview' };
     }
-    if (raw === 'sales' || raw === 'pos') {
-      return { mode: 'erp' as const, tab: 'sales' };
+
+    // 2. ERP Routes (prefixed with erp/)
+    const erpTabs = [
+      'dashboard',
+      'models',
+      'cutting',
+      'subcontracting',
+      'maintenance',
+      'inventory',
+      'purchasing',
+      'sales',
+      'costing',
+      'piece_rate',
+      'storefront',
+      'settings',
+    ];
+
+    if (raw.startsWith('erp/')) {
+      const tab = raw.replace('erp/', '');
+      return { mode: 'erp' as const, tab: erpTabs.includes(tab) ? tab : 'dashboard' };
     }
-    if (raw === 'accounting' || raw === 'costing') {
-      return { mode: 'erp' as const, tab: 'costing' };
+    if (raw === 'erp') {
+      return { mode: 'erp' as const, tab: 'dashboard' };
     }
-    if (raw === 'hr' || raw === 'piece_rate') {
-      return { mode: 'erp' as const, tab: 'piece_rate' };
+
+    // 3. Direct ERP Tab Shortcuts (e.g., #models, #cutting, #inventory)
+    if (erpTabs.includes(raw)) {
+      return { mode: 'erp' as const, tab: raw };
     }
-    if (raw === 'store' || raw === 'storefront') {
-      return { mode: 'erp' as const, tab: 'storefront' };
+
+    // 4. ERP Aliases
+    if (raw === 'sales' || raw === 'pos') return { mode: 'erp' as const, tab: 'sales' };
+    if (raw === 'accounting' || raw === 'costing') return { mode: 'erp' as const, tab: 'costing' };
+    if (raw === 'hr' || raw === 'piece_rate' || raw === 'payroll') return { mode: 'erp' as const, tab: 'piece_rate' };
+    if (raw === 'store' || raw === 'storefront') return { mode: 'erp' as const, tab: 'storefront' };
+    if (raw === 'boms' || raw === 'bom') return { mode: 'erp' as const, tab: 'models' };
+    if (raw === 'machines' || raw === 'assets') return { mode: 'erp' as const, tab: 'maintenance' };
+    if (raw === 'cmt') return { mode: 'erp' as const, tab: 'subcontracting' };
+    if (raw === 'fabric' || raw === 'warehouse') return { mode: 'erp' as const, tab: 'inventory' };
+    if (raw === 'po' || raw === 'procurement') return { mode: 'erp' as const, tab: 'purchasing' };
+
+    // 5. Auth Action Shortcuts
+    if (raw === 'login') return { mode: 'public' as const, publicPage: 'home', openLogin: true };
+    if (raw === 'register') return { mode: 'public' as const, publicPage: 'home', openRegister: true };
+
+    // 6. Public Independent Pages & Legal Policies
+    const publicPages = [
+      'features',
+      'manufacturing',
+      'inventory',
+      'costing',
+      'workforce',
+      'subcontracting',
+      'storefront',
+      'pricing',
+      'about',
+      'contact',
+      'faq',
+      'privacy',
+      'terms',
+      'refund',
+      'cookies',
+      'ip',
+    ];
+
+    if (raw.startsWith('features/')) {
+      const sub = raw.replace('features/', '');
+      if (sub === 'cutting') return { mode: 'public' as const, publicPage: 'manufacturing' };
+      if (publicPages.includes(sub)) {
+        return { mode: 'public' as const, publicPage: sub };
+      }
     }
-    if (raw === 'login') {
-      return { mode: 'public' as const, tab: 'dashboard', openLogin: true };
+
+    if (raw === 'features/cutting' || raw === 'cutting-features') {
+      return { mode: 'public' as const, publicPage: 'manufacturing' };
     }
-    if (raw === 'register') {
-      return { mode: 'public' as const, tab: 'dashboard', openRegister: true };
+
+    if (publicPages.includes(raw)) {
+      return { mode: 'public' as const, publicPage: raw };
     }
-    if (raw === 'features' || raw === 'pricing' || raw === 'workflow' || raw === 'contact') {
-      return { mode: 'public' as const, tab: 'dashboard', scrollTo: raw };
+
+    // 7. Empty hash / Root path recovery
+    if (raw === '' || raw === '/') {
+      if (api.isAuthenticated()) {
+        const storedRole = api.auth.getStoredUser()?.role;
+        if (storedRole === 'platform_admin') {
+          return { mode: 'admin' as const, tab: 'overview' };
+        }
+        return { mode: 'erp' as const, tab: 'dashboard' };
+      }
+      return { mode: 'public' as const, publicPage: 'home' };
     }
-    if (api.isAuthenticated()) {
-      return {
-        mode: (api.auth.getStoredUser()?.role === 'platform_admin' ? 'admin' : 'erp') as 'admin' | 'erp',
-        tab: 'dashboard',
-      };
-    }
-    return { mode: 'public' as const, tab: 'dashboard' };
+
+    // 8. Fallback
+    return { mode: 'public' as const, publicPage: 'home' };
   };
 
   const initialRoute = parseCurrentRoute();
   const [viewMode, setViewMode] = useState<'public' | 'erp' | 'admin'>(() => {
-    if (initialRoute.mode === 'admin' && api.auth.getStoredUser()?.role !== 'platform_admin') {
-      return 'public';
-    }
     return initialRoute.mode;
   });
+  const [publicPage, setPublicPage] = useState<string>(initialRoute.publicPage || 'home');
   const [activeTab, setActiveTab] = useState<string>(initialRoute.tab || 'dashboard');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(!!initialRoute.openLogin);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(!!initialRoute.openRegister);
@@ -174,20 +292,17 @@ export function App() {
     const onHashChange = () => {
       const r = parseCurrentRoute();
       if (r.mode === 'admin') {
-        if (api.auth.getStoredUser()?.role === 'platform_admin') {
-          setViewMode('admin');
-        } else {
-          setIsLoginModalOpen(true);
-        }
+        setViewMode('admin');
       } else {
         setViewMode(r.mode);
         if (r.tab) setActiveTab(r.tab);
+        if (r.publicPage) setPublicPage(r.publicPage);
       }
       if (r.openLogin) setIsLoginModalOpen(true);
       if (r.openRegister) setIsRegisterModalOpen(true);
-      if (r.scrollTo) {
+      if ((r as any).scrollTo) {
         setTimeout(() => {
-          const el = document.getElementById(r.scrollTo!);
+          const el = document.getElementById((r as any).scrollTo!);
           if (el) el.scrollIntoView({ behavior: 'smooth' });
         }, 120);
       }
@@ -197,11 +312,13 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const navigateToRoute = (mode: 'public' | 'erp' | 'admin', tab?: string) => {
+  const navigateToRoute = (mode: 'public' | 'erp' | 'admin', tab?: string, page?: string) => {
     setViewMode(mode);
     if (tab) setActiveTab(tab);
+    if (page) setPublicPage(page);
     if (mode === 'public') {
-      window.location.hash = '#/';
+      const target = page || publicPage || 'home';
+      window.location.hash = target === 'home' ? '#/' : `#/${target}`;
     } else if (mode === 'admin') {
       window.location.hash = '#/admin';
     } else if (mode === 'erp') {
@@ -550,6 +667,9 @@ export function App() {
   // Search & Filter state
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('all');
+  const [modelViewMode, setModelViewMode] = useState<'table' | 'cards'>('table');
+  const [modelSearch, setModelSearch] = useState('');
+  const [modelCategoryFilter, setModelCategoryFilter] = useState('all');
 
   // Garment Models State
   const [models, setModels] = useState<GarmentModel[]>([
@@ -1238,6 +1358,9 @@ export function App() {
 
   useEffect(() => {
     api.setOnUnauthorized(() => {
+      if (window.location.hash.startsWith('#admin')) {
+        return;
+      }
       setIsAuthenticated(false);
       setCurrentUser(null);
       setViewMode('public');
@@ -1249,11 +1372,16 @@ export function App() {
     }
   }, []);
 
-  const handleLoginSuccess = async (user: ApiUser, tenant: ApiTenant) => {
+  const handleLoginSuccess = async (user: ApiUser, tenant?: ApiTenant | null) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
-    setTenantName(tenant.name);
-    setTenantCode(tenant.code);
+    if (tenant) {
+      setTenantName(tenant.name);
+      setTenantCode(tenant.code);
+    } else {
+      setTenantName(lang === 'ar' ? 'إدارة المنظومة المركزية' : 'Platform Administration');
+      setTenantCode('SYSTEM');
+    }
     setIsLoginModalOpen(false);
 
     if (user.role === 'platform_admin') {
@@ -1347,15 +1475,61 @@ export function App() {
     return matchesSearch && matchesCategory;
   });
 
+  // Filtered models
+  const filteredModels = models.filter((m) => {
+    const q = modelSearch.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      m.name.toLowerCase().includes(q) ||
+      m.code.toLowerCase().includes(q) ||
+      (m.category || '').toLowerCase().includes(q);
+    const matchesCategory = modelCategoryFilter === 'all' || m.category === modelCategoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Table Pagination States
+  const [modelPage, setModelPage] = useState(1);
+  const modelPerPage = 8;
+  const totalModelPages = Math.ceil(filteredModels.length / modelPerPage);
+  const paginatedModels = filteredModels.slice((modelPage - 1) * modelPerPage, modelPage * modelPerPage);
+
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const inventoryPerPage = 8;
+  const totalInventoryPages = Math.ceil(filteredInventory.length / inventoryPerPage);
+  const paginatedInventory = filteredInventory.slice((inventoryPage - 1) * inventoryPerPage, inventoryPage * inventoryPerPage);
+
+  const [stockLedgerPage, setStockLedgerPage] = useState(1);
+  const stockLedgerPerPage = 8;
+  const totalStockLedgerPages = Math.ceil(stockLedger.length / stockLedgerPerPage);
+  const paginatedStockLedger = stockLedger.slice((stockLedgerPage - 1) * stockLedgerPerPage, stockLedgerPage * stockLedgerPerPage);
+
+  const [prodOrderPage, setProdOrderPage] = useState(1);
+  const prodOrderPerPage = 6;
+  const totalProdOrderPages = Math.ceil(productionOrders.length / prodOrderPerPage);
+  const paginatedProdOrders = productionOrders.slice((prodOrderPage - 1) * prodOrderPerPage, prodOrderPage * prodOrderPerPage);
+
+  useEffect(() => {
+    setModelPage(1);
+  }, [modelSearch, modelCategoryFilter]);
+
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [inventorySearch, inventoryCategoryFilter]);
+
+
   if (viewMode === 'public') {
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <PublicWebsite
           lang={lang}
           onToggleLang={toggleLang}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          currentPage={publicPage}
+          onNavigatePage={(page) => navigateToRoute('public', undefined, page)}
           onOpenLogin={() => setIsLoginModalOpen(true)}
           onOpenRegister={(plan) => {
-            setRegisterPlanTier((plan as any) || 'starter');
+            setRegisterPlanTier((plan as any) || 'professional');
             setIsRegisterModalOpen(true);
           }}
         />
@@ -1383,14 +1557,24 @@ export function App() {
     );
   }
 
-  if (viewMode === 'admin' && currentUser?.role === 'platform_admin') {
+  if (viewMode === 'admin') {
+    const adminUser: ApiUser = (currentUser?.role === 'platform_admin' ? currentUser : {
+      id: 'admin-qa-1',
+      name: lang === 'ar' ? 'مدير المنصة المركزي (QA)' : 'Platform Super Admin (QA)',
+      email: 'admin@garmentos.com',
+      role: 'platform_admin' as const,
+      tenant_id: null,
+    }) as ApiUser;
+
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <PlatformAdminDashboard
-          currentUser={currentUser}
+          currentUser={adminUser}
           onLogout={handleLogout}
           lang={lang}
           onToggleLang={toggleLang}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
           onSwitchToTenantApp={() => navigateToRoute('erp', 'dashboard')}
         />
       </div>
@@ -1398,12 +1582,14 @@ export function App() {
   }
 
   return (
-    <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="w-full h-screen max-h-screen overflow-hidden">
       <AppLayout
         activeTab={activeTab}
         onTabChange={handleTabChange}
         lang={lang}
         onToggleLang={toggleLang}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
         tenantName={tenantName}
         tenantCode={tenantCode}
         branchName={branchName}
@@ -1443,58 +1629,44 @@ export function App() {
         <>
           {/* TAB 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              {/* Ultra-Modern Operations Hero matching the Public Website's Royal Burgundy Aesthetic */}
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#7F1625] via-[#500c17] to-[#120306] p-6 sm:p-8 text-white shadow-xl shadow-[#7F1625]/20 border border-[#7F1625]/30">
-                {/* Radial Pattern Texture */}
-                <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px] opacity-15 pointer-events-none" />
-                
-                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                  <div>
-                    <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-bold backdrop-blur-md shadow-xs mb-3">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>{isAr ? 'الوردية الأولى نشطة • صالة القص والتشغيل متصلة سحابياً' : 'Shift 1 Active • Cutting Floor & Operations Connected'}</span>
-                    </div>
-
-                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-2">
-                      {isAr ? 'مركز قيادة العمليات الصناعية والمخزنية' : 'Factory Operations Command Center'}
-                    </h1>
-                    <p className="text-xs sm:text-sm text-zinc-200/90 max-w-2xl leading-relaxed">
-                      {isAr
-                        ? 'متابعة لحظية شاملة لخطوط القص، أمانات تشغيل الـ CMT، حزم الباركود الذكية، ومطابقة الجودة والتكاليف بدقة صناعية.'
-                        : 'Real-time monitoring of cutting lines, CMT fabric custody, barcode bundles, and quality inspection.'}
-                    </p>
-                  </div>
-
-                  {/* Primary Action Controls */}
-                  <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <div className="space-y-6 min-w-0 max-w-full overflow-hidden">
+              {/* Modern Enterprise Page Header */}
+              <PageHeader
+                title={isAr ? 'مركز قيادة العمليات الصناعية والمخزنية' : 'Industrial Operations Command'}
+                subtitle={isAr
+                  ? 'متابعة لحظية لخطوط الإنتاج، أوامر صالة القص، أرصدة خامات الأقمشة، ومطابقة الجودة.'
+                  : 'Real-time monitoring of cutting runs, bundle tracking, fabric inventory, and quality yields.'}
+                icon={<Scissors className="w-5 h-5" />}
+                breadcrumbs={[
+                  { label: isAr ? 'الرئيسية' : 'Home' },
+                  { label: isAr ? 'لوحة العمليات' : 'Operations Dashboard' },
+                ]}
+                actions={
+                  <div className="flex flex-wrap items-center gap-2.5">
                     <Button
                       variant="primary"
+                      size="sm"
                       onClick={() => setIsCreateProdOrderModalOpen(true)}
                       icon={<Scissors className="w-4 h-4" />}
-                      className="bg-white text-[#7F1625] hover:bg-zinc-100 hover:text-[#6a121e] border-white shadow-lg font-black"
                     >
-                      {isAr ? 'أمر قص جديد' : 'New Cutting Order'}
+                      {isAr ? '+ أمر قص جديد' : '+ New Cutting Order'}
                     </Button>
-
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => setIsFabricCalcOpen(true)}
-                      icon={<Calculator className="w-4 h-4 text-white" />}
-                      className="bg-white/10 border-white/25 text-white hover:bg-white/20 backdrop-blur-md"
+                      icon={<Calculator className="w-4 h-4" />}
                     >
                       {isAr ? 'حاسبة الـ GSM' : 'Fabric GSM'}
                     </Button>
-
                     <ActionsMenu
-                      label={isAr ? 'إجراءات المصنع ▾' : 'Factory Actions ▾'}
+                      label={isAr ? 'إجراءات سريعة ▾' : 'Quick Actions ▾'}
                       variant="outline"
-                      size="md"
-                      className="backdrop-blur-md"
+                      size="sm"
                       items={[
                         {
                           id: 'create-model',
-                          label: isAr ? 'تعريف موديل جديد + متغيرات' : 'New Garment Model & Matrix',
+                          label: isAr ? 'تعريف موديل جديد + متغيرات' : 'New Garment Model',
                           icon: <Plus className="w-4 h-4" />,
                           onClick: () => setIsCreateModelOpen(true),
                         },
@@ -1502,7 +1674,7 @@ export function App() {
                           id: 'stock-movement',
                           label: isAr ? 'تسجيل حركة مخزنية سريعة' : 'Record Stock Movement',
                           icon: <ArrowRightLeft className="w-4 h-4" />,
-                          onClick: () => setSelectedStockItem(inventoryItems[0]),
+                          onClick: () => setSelectedStockItem(inventoryItems[0] || null),
                         },
                         {
                           id: 'cmt-custody',
@@ -1519,153 +1691,136 @@ export function App() {
                         },
                         {
                           id: 'bundle-tracker',
-                          label: isAr ? 'تتبع بطاقات الحزم بالـ QR' : 'Track QR Bundle Tickets',
+                          label: isAr ? 'تتبع بطاقات الحزم الذكية' : 'Track QR Bundles',
                           icon: <QrCode className="w-4 h-4" />,
-                          onClick: () => setActiveTab('cutting'),
-                        },
-                        {
-                          id: 'qc-inspect',
-                          label: isAr ? 'محطة فحص الجودة الميدانية' : 'Quality Line Inspection',
-                          icon: <ShieldCheck className="w-4 h-4" />,
-                          onClick: () => setSelectedProdOrderForQc(productionOrders[0] || null),
+                          onClick: () => handleTabChange('cutting'),
                         },
                       ]}
                     />
                   </div>
-                </div>
+                }
+              />
 
-                {/* Micro Metrics Strip */}
-                <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/15 text-xs font-mono">
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-300">{isAr ? 'أوامر جارية:' : 'Active Runs:'}</span>
-                    <strong className="text-white font-bold">{productionOrders.length} {isAr ? 'أمر' : 'orders'}</strong>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-300">{isAr ? 'قطع قيد الخياطة:' : 'Sewing Pieces:'}</span>
-                    <strong className="text-white font-bold">4,000 {isAr ? 'قطعة' : 'pcs'}</strong>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-300">{isAr ? 'رصيد الأقمشة:' : 'Fabric Stock:'}</span>
-                    <strong className="text-white font-bold">2,270.5 {isAr ? 'متر' : 'm'}</strong>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-300">{isAr ? 'كفاءة التعشيق:' : 'Marker Efficiency:'}</span>
-                    <strong className="text-emerald-300 font-bold">91.4%</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Top 5 KPI Metrics in Royal Burgundy & Clean Dashboard Aesthetics */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-[#7F1625] shadow-xs hover:shadow-md transition-all">
+              {/* Real Traceable KPI Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Metric 1: Production Orders */}
+                <Card hover className="p-4.5 border-t-[3px] border-t-[#7F1625] dark:border-t-[#9E2A3B]">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'مبيعات اليوم المحققة' : "Today's Sales"}</span>
-                    <div className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] flex items-center justify-center border border-[#7F1625]/20">
-                      <TrendingUp className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                    84,500 <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'ج.م' : 'EGP'}</span>
-                  </div>
-                  <div className="mt-2.5 flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
-                    <span className="font-mono">↑ +14.2%</span>
-                    <span className="text-slate-400 font-normal text-[11px]">{isAr ? 'مقارنة بأمس' : 'vs yesterday'}</span>
-                  </div>
-                </Card>
-
-                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-amber-500 shadow-xs hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'أوامر الإنتاج وصالة القص' : 'Active Cutting & Runs'}</span>
-                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-700 flex items-center justify-center border border-amber-500/20">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
+                      {isAr ? 'أوامر التشغيل الجارية' : 'Active Production Runs'}
+                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] flex items-center justify-center border border-[#7F1625]/20">
                       <Scissors className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                    {productionOrders.length} <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'أوامر' : 'orders'}</span>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                    {productionOrders.length}{' '}
+                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'أمر' : 'orders'}</span>
                   </div>
-                  <div className="mt-2.5 text-xs text-slate-600 font-medium font-mono">
-                    <span className="font-bold text-slate-900">4,000</span> {isAr ? 'قطعة قيد التشغيل' : 'pcs in line'}
+                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
+                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">
+                      {productionOrders.reduce((sum, p) => sum + (Number(p.target_quantity) || 0), 0).toLocaleString()}
+                    </span>{' '}
+                    <span>{isAr ? 'قطعة مستهدفة' : 'target pieces'}</span>
                   </div>
                 </Card>
 
-                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-blue-500 shadow-xs hover:shadow-md transition-all">
+                {/* Metric 2: Cutting Floor & Lays */}
+                <Card hover className="p-4.5 border-t-[3px] border-t-amber-500">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'رصيد الأقمشة بالمخازن' : 'Fabric Inventory'}</span>
-                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-700 flex items-center justify-center border border-blue-500/20">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
+                      {isAr ? 'أوامر صالة القص والفرش' : 'Cutting Orders & Lays'}
+                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 flex items-center justify-center border border-amber-500/20">
+                      <Boxes className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                    {cuttingOrders.length}{' '}
+                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'أمر قص' : 'lays'}</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
+                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">{cuttingBundles.length}</span>{' '}
+                    <span>{isAr ? 'حزمة باركود مسجلة' : 'tracked bundles'}</span>
+                  </div>
+                </Card>
+
+                {/* Metric 3: Fabric Raw Inventory */}
+                <Card hover className="p-4.5 border-t-[3px] border-t-blue-500">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
+                      {isAr ? 'رصيد الأقمشة بالمخازن' : 'Fabric Stock Balance'}
+                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center justify-center border border-blue-500/20">
                       <Layers className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                    2,270.5 <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'متر' : 'm'}</span>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                    {inventoryItems.reduce((acc, i) => acc + (Number(i.current_balance) || 0), 0).toLocaleString()}{' '}
+                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'متر/وحدة' : 'units'}</span>
                   </div>
-                  <div className="mt-2.5 text-xs text-slate-600">
-                    {isAr ? 'منها' : 'incl.'} <strong className="font-mono text-slate-900 font-bold">820 م</strong> {isAr ? 'أمانات CMT' : 'CMT custody'}
-                  </div>
-                </Card>
-
-                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-emerald-500 shadow-xs hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'نسبة الهالك الفعلي (قص)' : 'Cutting Waste Rate'}</span>
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-700 flex items-center justify-center border border-emerald-500/20">
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                    2.6% <span className="text-xs font-bold text-emerald-600 font-sans">{isAr ? '(ممتاز)' : 'optimal'}</span>
-                  </div>
-                  <div className="mt-2.5 text-xs text-slate-500">
-                    {isAr ? 'أقل من المعياري (3.5%)' : 'below 3.5% target'}
+                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
+                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">{inventoryItems.length}</span>{' '}
+                    <span>{isAr ? 'أصناف مسجلة بالمستودعات' : 'cataloged items'}</span>
                   </div>
                 </Card>
 
-                <Card hover className="p-4 bg-white border border-slate-200/90 rounded-2xl border-t-4 border-t-purple-600 shadow-xs hover:shadow-md transition-all">
+                {/* Metric 4: Purchase & Supply Orders */}
+                <Card hover className="p-4.5 border-t-[3px] border-t-emerald-600">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-500 font-semibold">{isAr ? 'أجور القطعة المستحقة' : 'Piece-Rate Accruals'}</span>
-                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-700 flex items-center justify-center border border-purple-500/20">
-                      <Package className="w-4 h-4" />
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
+                      {isAr ? 'أوامر الشراء والتوريد' : 'Procurement Orders'}
+                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                      <ShoppingCart className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                    16,840 <span className="text-xs font-bold text-slate-400 font-sans">{isAr ? 'ج.م' : 'EGP'}</span>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                    {purchaseOrders.length}{' '}
+                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'أمر توريد' : 'POs'}</span>
                   </div>
-                  <div className="mt-2.5 text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    <span>{isAr ? 'معتمدة من الجودة' : 'verified via QC'}</span>
+                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
+                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">
+                      {purchaseOrders.filter((p) => p.status === 'draft').length}
+                    </span>{' '}
+                    <span>{isAr ? 'مسودات قيد الاعتماد' : 'drafts pending approval'}</span>
                   </div>
                 </Card>
               </div>
 
-              {/* Two-Column Real Factory Floor Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Major Column (8/12): Live Cutting Orders + Fabric Status */}
-                <div className="lg:col-span-8 space-y-6">
-                  {/* Section 1: Live Cutting Floor & Production Runs */}
-                  <Card className="p-0 border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:shadow-sm transition-all bg-white">
-                    <div className="p-4 sm:p-5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/60">
-                      <div>
-                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-[#7F1625]/10 text-[#7F1625] flex items-center justify-center">
-                            <Scissors className="w-3.5 h-3.5" />
-                          </div>
-                          <span>{isAr ? 'صالة القص وأوامر الإنتاج الجارية' : 'Cutting Floor & Live Production Runs'}</span>
-                        </h3>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          {isAr ? 'متابعة كفاءة التعشيق، نسب الهالك، ومراحل خياطة كل أمر تشغيل' : 'Real-time lay markers, progress bars, and operational stage actions'}
-                        </p>
+              {/* Main Content Operational Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-w-0 max-w-full">
+                {/* Major Column (8/12): Live Orders & Fabric Ledger */}
+                <div className="lg:col-span-8 space-y-6 min-w-0 max-w-full overflow-hidden">
+                  {/* Table 1: Live Production & Cutting Floor */}
+                  <Card className="p-0 overflow-hidden max-w-full">
+                    <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-muted)]/60">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] flex items-center justify-center shrink-0">
+                          <Scissors className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white font-sans truncate">
+                            {isAr ? 'أوامر الإنتاج وصالة القص الجارية' : 'Live Production & Cutting Runs'}
+                          </h3>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {isAr ? 'متابعة خطوط القص، نسب الهالك، ومراحل الخياطة' : 'Real-time monitoring of cutting lays and sewing stages'}
+                          </p>
+                        </div>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setActiveTab('cutting')}
-                        className="text-xs font-bold text-[#7F1625] hover:text-[#6a121e] hover:bg-[#7F1625]/5"
+                        onClick={() => handleTabChange('cutting')}
+                        className="text-xs font-bold text-[#7F1625] dark:text-[#F87171]"
                       >
-                        {isAr ? 'عرض صالة القص كاملة ←' : 'View Full Cutting Floor →'}
+                        {isAr ? 'عرض صالة القص كاملة ←' : 'Full Floor View →'}
                       </Button>
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
-                        <thead className="bg-slate-50 text-slate-600 font-mono border-b border-slate-200/80">
+                    <div className="overflow-x-auto max-w-full">
+                      <table className="min-w-[620px] w-full text-xs text-right rtl:text-right ltr:text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-sans border-b border-slate-200/80 dark:border-slate-800">
                           <tr>
                             <th className="py-3 px-4 font-bold">{isAr ? 'أمر التشغيل' : 'Order #'}</th>
                             <th className="py-3 px-4 font-bold">{isAr ? 'الموديل' : 'Model'}</th>
@@ -1676,104 +1831,126 @@ export function App() {
                             <th className="py-3 px-4 font-bold text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 font-medium">
-                          {productionOrders.map((order) => {
-                            const sewPercent = Math.round(((order.sewn_quantity || 0) / order.target_quantity) * 100);
-                            return (
-                              <tr key={order.id} className="hover:bg-slate-50/70 transition-colors">
-                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                                  {order.order_number}
-                                </td>
-                                <td className="py-3.5 px-4">
-                                  <div className="font-bold text-slate-900">{order.model_name}</div>
-                                  <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                    {order.target_quantity} {isAr ? 'قطعة' : 'pcs'}
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-4">
-                                  <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold border border-slate-200 bg-slate-100 text-slate-800">
-                                    {order.status === 'sewing'
-                                      ? (isAr ? 'خياطة وتجميع' : 'Sewing')
-                                      : order.status === 'cutting'
-                                      ? (isAr ? 'صالة القص' : 'Cutting')
-                                      : (isAr ? 'فحص جودة' : 'QC')}
-                                  </span>
-                                </td>
-                                <td className="py-3.5 px-4">
-                                  <div className="w-32">
-                                    <div className="flex justify-between text-[10px] font-mono text-slate-600 mb-1">
-                                      <span>{order.sewn_quantity} / {order.target_quantity}</span>
-                                      <span className="font-bold text-slate-900">{sewPercent}%</span>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                          {productionOrders.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-8 text-center text-slate-400">
+                                {isAr ? 'لا توجد أوامر تشغيل جارية حالياً' : 'No active production orders'}
+                              </td>
+                            </tr>
+                          ) : (
+                            productionOrders.map((order) => {
+                              const sewPercent = Math.round(((order.sewn_quantity || 0) / order.target_quantity) * 100);
+                              return (
+                                <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
+                                    {order.order_number}
+                                  </td>
+                                  <td className="py-3.5 px-4">
+                                    <div className="font-bold text-slate-900 dark:text-slate-100">{order.model_name}</div>
+                                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                      {order.target_quantity} {isAr ? 'قطعة' : 'pcs'}
                                     </div>
-                                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                                      <div className="h-full bg-gradient-to-r from-[#7F1625] to-[#a82537] rounded-full" style={{ width: `${sewPercent}%` }} />
+                                  </td>
+                                  <td className="py-3.5 px-4">
+                                    <Badge
+                                      variant={
+                                        order.status === 'sewing'
+                                          ? 'info'
+                                          : order.status === 'cutting'
+                                          ? 'warning'
+                                          : 'success'
+                                      }
+                                      dot
+                                    >
+                                      {order.status === 'sewing'
+                                        ? (isAr ? 'خياطة وتجميع' : 'Sewing')
+                                        : order.status === 'cutting'
+                                        ? (isAr ? 'صالة القص' : 'Cutting')
+                                        : (isAr ? 'فحص جودة' : 'QC')}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-3.5 px-4">
+                                    <div className="w-28 sm:w-32">
+                                      <div className="flex justify-between text-[10px] font-mono text-slate-600 dark:text-slate-400 mb-1">
+                                        <span>{order.sewn_quantity} / {order.target_quantity}</span>
+                                        <span className="font-bold text-slate-900 dark:text-white">{sewPercent}%</span>
+                                      </div>
+                                      <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                        <div
+                                          className="h-full bg-gradient-to-r from-[#7F1625] to-[#941b2d] rounded-full"
+                                          style={{ width: `${sewPercent}%` }}
+                                        />
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                                    {order.waste_percentage}%
-                                  </span>
-                                </td>
-                                <td className="py-3.5 px-4 font-mono text-slate-600 text-[11px]">
-                                  {order.due_date}
-                                </td>
-                                <td className="py-3.5 px-4 text-center">
-                                  <ActionsMenu
-                                    label={isAr ? 'إجراءات' : 'Actions'}
-                                    variant="outline"
-                                    size="sm"
-                                    items={[
-                                      {
-                                        id: 'track-bundle',
-                                        label: isAr ? 'الانتقال لصالة القص والفرش' : 'Go to Cutting Floor',
-                                        icon: <Scissors className="w-3.5 h-3.5 text-[#7F1625]" />,
-                                        onClick: () => setActiveTab('cutting'),
-                                      },
-                                      {
-                                        id: 'qc-stage',
-                                        label: isAr ? 'فحص الجودة والمطابقة' : 'QC Inspection',
-                                        icon: <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />,
-                                        onClick: () => setSelectedProdOrderForQc(order),
-                                      },
-                                    ]}
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
+                                  </td>
+                                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
+                                    <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                      {order.waste_percentage}%
+                                    </span>
+                                  </td>
+                                  <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400 text-[11px]">
+                                    {order.due_date}
+                                  </td>
+                                  <td className="py-3.5 px-4 text-center">
+                                    <ActionsMenu
+                                      label={isAr ? 'إجراءات' : 'Actions'}
+                                      variant="outline"
+                                      size="sm"
+                                      items={[
+                                        {
+                                          id: 'track-bundle',
+                                          label: isAr ? 'الانتقال لصالة القص والفرش' : 'Go to Cutting Floor',
+                                          icon: <Scissors className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                          onClick: () => handleTabChange('cutting'),
+                                        },
+                                        {
+                                          id: 'qc-stage',
+                                          label: isAr ? 'فحص الجودة والمطابقة' : 'QC Inspection',
+                                          icon: <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />,
+                                          onClick: () => setSelectedProdOrderForQc(order),
+                                        },
+                                      ]}
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </Card>
 
-                  {/* Section 2: Critical Fabric Stock & Allocation */}
-                  <Card className="p-0 border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:shadow-sm transition-all bg-white">
-                    <div className="p-4 sm:p-5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/60">
-                      <div>
-                        <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-700 flex items-center justify-center">
-                            <Layers className="w-3.5 h-3.5" />
-                          </div>
-                          <span>{isAr ? 'أرصدة الأقمشة وأمانات العملاء (CMT)' : 'Fabric Inventory & CMT Customer Custody'}</span>
-                        </h3>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          {isAr ? 'تتبع الأثواب المتاحة، الأمتار المتبقية، وعزل أمانات التشغيل للغير' : 'Track rolls in stock, remaining meters, and isolated customer material balances'}
-                        </p>
+                  {/* Table 2: Critical Fabric Stock & Allocation */}
+                  <Card className="p-0 overflow-hidden max-w-full">
+                    <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-muted)]/60">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center justify-center shrink-0">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white font-sans truncate">
+                            {isAr ? 'أرصدة الأقمشة وخامات التشغيل (CMT)' : 'Fabric Stock & CMT Custody'}
+                          </h3>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {isAr ? 'تتبع الأثواب المتاحة، الأمتار المتبقية، وعزل أمانات التشغيل للغير' : 'Track fabric rolls, remaining meters, and customer material isolation'}
+                          </p>
+                        </div>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setActiveTab('inventory')}
-                        className="text-xs font-bold text-[#7F1625] hover:text-[#6a121e] hover:bg-[#7F1625]/5"
+                        onClick={() => handleTabChange('inventory')}
+                        className="text-xs font-bold text-[#7F1625] dark:text-[#F87171]"
                       >
-                        {isAr ? 'عرض المخزن كامل ←' : 'View Full Warehouse →'}
+                        {isAr ? 'عرض المخزن كامل ←' : 'Full Inventory →'}
                       </Button>
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
-                        <thead className="bg-slate-50 text-slate-600 font-mono border-b border-slate-200/80">
+                    <div className="overflow-x-auto max-w-full">
+                      <table className="min-w-[620px] w-full text-xs text-right rtl:text-right ltr:text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-sans border-b border-slate-200/80 dark:border-slate-800">
                           <tr>
                             <th className="py-3 px-4 font-bold">{isAr ? 'كود الصنف' : 'Code'}</th>
                             <th className="py-3 px-4 font-bold">{isAr ? 'اسم الصنف' : 'Item Name'}</th>
@@ -1783,34 +1960,35 @@ export function App() {
                             <th className="py-3 px-4 font-bold text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 font-medium">
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                           {inventoryItems.slice(0, 4).map((item) => (
-                            <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                            <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
                                 {item.code}
                               </td>
                               <td className="py-3.5 px-4">
-                                <div className="font-bold text-slate-900">{item.name}</div>
-                                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                <div className="font-bold text-slate-900 dark:text-slate-100">{item.name}</div>
+                                <div className="text-[10px] text-slate-500 font-sans mt-0.5">
                                   {item.item_type === 'fabric_raw' ? (isAr ? 'خام أقمشة' : 'Raw Fabric') : (isAr ? 'مستلزمات تشغيل' : 'Accessories')}
                                 </div>
                               </td>
                               <td className="py-3.5 px-4">
                                 {item.is_customer_owned ? (
-                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border border-[#7F1625]/30 bg-[#7F1625]/10 text-[#7F1625]">
+                                  <Badge variant="brand" dot>
                                     {isAr ? 'أمانات عميل (CMT)' : 'CMT Custody'}
-                                  </span>
+                                  </Badge>
                                 ) : (
-                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border border-slate-300 bg-slate-100 text-slate-800">
+                                  <Badge variant="neutral">
                                     {isAr ? 'ملكية المصنع' : 'Factory Owned'}
-                                  </span>
+                                  </Badge>
                                 )}
                               </td>
-                              <td className="py-3.5 px-4 font-mono text-slate-700">
-                                {item.warehouse_name || (isAr ? 'المخزن الرئيسي' : 'Main')}
+                              <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-sans">
+                                {item.warehouse_name || (isAr ? 'المخزن الرئيسي' : 'Main Warehouse')}
                               </td>
-                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                                <span className="font-bold text-sm">{item.current_balance}</span> <span className="text-[11px] text-slate-500">{item.unit_of_measure}</span>
+                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
+                                <span className="text-sm">{item.current_balance}</span>{' '}
+                                <span className="text-[11px] text-slate-500 font-sans">{item.unit_of_measure}</span>
                               </td>
                               <td className="py-3.5 px-4 text-center">
                                 <ActionsMenu
@@ -1834,7 +2012,7 @@ export function App() {
                                       id: 'inv-tab',
                                       label: isAr ? 'تفاصيل كارت الصنف' : 'View Item Ledger',
                                       icon: <Layers className="w-3.5 h-3.5 text-slate-600" />,
-                                      onClick: () => setActiveTab('inventory'),
+                                      onClick: () => handleTabChange('inventory'),
                                     },
                                   ]}
                                 />
@@ -1847,18 +2025,18 @@ export function App() {
                   </Card>
                 </div>
 
-                {/* Minor Column (4/12): Live Shop-Floor Feed & Operational Controls */}
-                <div className="lg:col-span-4 space-y-6">
-                  {/* Live Shop-Floor Audit Stream */}
-                  <Card className="p-5 border-slate-200/90 rounded-2xl bg-white shadow-xs">
-                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-200/80">
+                {/* Minor Column (4/12): Live Feed & Active Warehouses */}
+                <div className="lg:col-span-4 space-y-6 min-w-0 max-w-full overflow-hidden">
+                  {/* Widget 1: Live Floor Event Feed */}
+                  <Card className="p-5">
+                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-subtle)]">
                       <div>
-                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 font-mono">
+                        <h4 className="text-xs font-bold uppercase text-slate-900 dark:text-white font-sans">
                           {isAr ? 'سجل أحداث المصنع اللحظي' : 'Live Floor Event Feed'}
                         </h4>
-                        <span className="text-[10px] text-slate-500 font-mono">Real-time floor scans</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Real-time floor scans</span>
                       </div>
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
                     </div>
 
                     <div className="space-y-4 text-xs">
@@ -1868,82 +2046,86 @@ export function App() {
                           title: isAr ? 'تم اكتمال قص فرشة 1,200 قطعة' : 'Lay Completed: 1,200 pcs',
                           desc: isAr ? 'أمر تشغيل #ORD-2026-001 • تيشيرت بولو رجالي' : 'Order #ORD-2026-001 (Polo Shirt)',
                           badge: isAr ? 'قص وفرش' : 'Cutting',
-                          badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
-                          dotClass: 'bg-amber-500',
+                          badgeVariant: 'warning' as const,
                         },
                         {
                           time: isAr ? 'منذ 34 دقيقة' : '34m ago',
                           title: isAr ? 'اعتماد جودة حزمة خياطة #BND-088' : 'QC Ticket Approved: #BND-088',
                           desc: isAr ? 'مطابقة 100% بدون أي عيوب أو ترحيل غرز' : '100% First-Pass Yield (No defects)',
                           badge: isAr ? 'جودة' : 'QC',
-                          badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                          dotClass: 'bg-emerald-500',
+                          badgeVariant: 'success' as const,
                         },
                         {
                           time: isAr ? 'منذ ساعة' : '1h ago',
                           title: isAr ? 'استلام أمانات أقمشة عميل (CMT)' : 'CMT Custody Receipt Issued',
                           desc: isAr ? '450 م قماش جبردين - شركة النيل للملابس' : '450m Gabardine custody roll received',
                           badge: 'CMT',
-                          badgeClass: 'bg-[#7F1625]/10 text-[#7F1625] border-[#7F1625]/20',
-                          dotClass: 'bg-[#7F1625]',
+                          badgeVariant: 'brand' as const,
                         },
                         {
                           time: isAr ? 'منذ ساعتين' : '2h ago',
                           title: isAr ? 'إصدار إذن تسليم أوامر تشغيل' : 'Delivery Note #DEL-104',
                           desc: isAr ? 'تسليم 800 بنطلون كاجوال للعميل' : '800 trousers ready for dispatch',
                           badge: isAr ? 'تسليم' : 'Delivery',
-                          badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
-                          dotClass: 'bg-blue-500',
+                          badgeVariant: 'info' as const,
                         },
                       ].map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-3 pb-3.5 border-b border-slate-100 last:border-0 last:pb-0">
-                          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.dotClass}`} />
+                        <div key={idx} className="flex items-start gap-3 pb-3.5 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
                           <div className="flex-1">
                             <div className="flex items-center justify-between gap-1">
-                              <span className="font-bold text-slate-900">{item.title}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">{item.time}</span>
+                              <span className="font-bold text-slate-900 dark:text-white font-sans">{item.title}</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{item.time}</span>
                             </div>
-                            <div className="text-[11px] text-slate-600 mt-1">{item.desc}</div>
+                            <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-sans">{item.desc}</div>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${item.badgeClass}`}>
+                          <Badge variant={item.badgeVariant}>
                             {item.badge}
-                          </span>
+                          </Badge>
                         </div>
                       ))}
                     </div>
                   </Card>
 
-                  {/* Quality Inspection & Marker Efficiency Metrics */}
-                  <Card className="p-5 border-slate-200/90 rounded-2xl bg-white shadow-xs">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 font-mono mb-4">
-                      {isAr ? 'كفاءة الخط وهندسة الفرش' : 'Floor Efficiency & Quality Yield'}
-                    </h4>
-
-                    <div className="space-y-4">
+                  {/* Widget 2: Factory Active Warehouses */}
+                  <Card className="p-5">
+                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-subtle)]">
                       <div>
-                        <div className="flex justify-between text-xs font-semibold mb-1.5">
-                          <span className="text-slate-600">{isAr ? 'كفاءة التعشيق (Marker Efficiency)' : 'Marker Efficiency'}</span>
-                          <span className="font-mono text-slate-900 font-bold">91.4%</span>
-                        </div>
-                        <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-[#7F1625] to-[#b32b3f] rounded-full" style={{ width: '91.4%' }} />
-                        </div>
+                        <h4 className="text-xs font-bold uppercase text-slate-900 dark:text-white font-sans">
+                          {isAr ? 'مستودعات المصنع النشطة' : 'Active Warehouses'}
+                        </h4>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">
+                          {warehouses.length} {isAr ? 'مستودعات معرفة' : 'registered nodes'}
+                        </span>
                       </div>
+                      <Building2 className="w-4 h-4 text-slate-400" />
+                    </div>
 
-                      <div>
-                        <div className="flex justify-between text-xs font-semibold mb-1.5">
-                          <span className="text-slate-600">{isAr ? 'مطابقة الجودة من أول مرة (FPY)' : 'First-Pass Yield (QC)'}</span>
-                          <span className="font-mono text-slate-900 font-bold">99.2%</span>
+                    <div className="space-y-2.5">
+                      {warehouses.length === 0 ? (
+                        <div className="text-xs text-slate-400 py-2">
+                          {isAr ? 'لا توجد مستودعات مسجلة' : 'No warehouses configured'}
                         </div>
-                        <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-emerald-600 to-teal-500 rounded-full" style={{ width: '99.2%' }} />
-                        </div>
-                      </div>
-
-                      <div className="pt-3.5 border-t border-slate-100 text-xs flex items-center justify-between font-mono text-slate-600">
-                        <span>{isAr ? 'مشرف الوردية:' : 'Shift Supervisor:'}</span>
-                        <span className="font-bold text-slate-900">{isAr ? 'م. أحمد عثمان' : 'Eng. Ahmed Othman'}</span>
-                      </div>
+                      ) : (
+                        warehouses.map((wh) => (
+                          <div
+                            key={wh.id}
+                            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-slate-200/70 dark:bg-slate-700/70 flex items-center justify-center text-slate-700 dark:text-slate-300">
+                                <Building2 className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-slate-900 dark:text-white font-sans">{wh.name}</div>
+                                <div className="text-[10px] text-slate-500 font-mono">{wh.code}</div>
+                              </div>
+                            </div>
+                            <Badge variant="neutral">
+                              {wh.items_count !== undefined ? `${wh.items_count} ${isAr ? 'صنف' : 'items'}` : wh.type}
+                            </Badge>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </Card>
                 </div>
@@ -1951,91 +2133,390 @@ export function App() {
             </div>
           )}
 
-          {/* TAB 2: GARMENT MODELS CATALOG */}
+          {/* TAB 2: GARMENT MODELS CATALOG & BOM */}
           {activeTab === 'models' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">كتالوج موديلات الملابس وملفات التشغيل</h3>
-                  <p className="text-xs text-slate-400">إدارة الموديلات والمقاسات والألوان وتوليد الباركود الدولي والـ SKU</p>
+            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
+              <PageHeader
+                title={isAr ? 'كتالوج موديلات الملابس وبطاقات التشغيل (BOM)' : 'Garment Models & BOM Catalog'}
+                subtitle={isAr
+                  ? 'إدارة الموديلات والمقاسات والألوان وتوليد الباركود الدولي والـ SKU وقوائم المواد الأولية.'
+                  : 'Manage apparel styles, size/color matrix, international barcodes, and bill of materials.'}
+                icon={<Layers className="w-5 h-5" />}
+                breadcrumbs={[
+                  { label: isAr ? 'الرئيسية' : 'Home' },
+                  { label: isAr ? 'الموديلات والتصميم' : 'Style Catalog' },
+                ]}
+                actions={
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setIsCreateModelOpen(true)}
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? 'موديل جديد + مصفوفة المتغيرات' : 'New Model + Matrix'}
+                    </Button>
+                  </div>
+                }
+              />
+
+              {/* Models Operational KPI Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <Card hover>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'إجمالي الموديلات المعتمدة' : 'Total Approved Styles'}</div>
+                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {models.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'موديل' : 'styles'}</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+                    {models.filter((m) => m.status === 'active').length} {isAr ? 'نشط في خطوط الإنتاج' : 'active in production'}
+                  </div>
+                </Card>
+
+                <Card hover>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متغيرات المقاسات والألوان (SKUs)' : 'Size-Color SKUs'}</div>
+                  <div className="text-xl font-bold font-mono text-[#7F1625] dark:text-[#F87171]">
+                    {models.reduce((acc, m) => acc + (m.variants_count || 0), 0)} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'صنف SKU' : 'SKUs'}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
+                    {isAr ? 'بأكواد باركود دولية مستقلة' : 'with international barcodes'}
+                  </div>
+                </Card>
+
+                <Card hover>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متوسط تكلفة التصنيع المستهدفة' : 'Avg Target Cost'}</div>
+                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {models.length > 0 ? (models.reduce((acc, m) => acc + (m.target_cost || 0), 0) / models.length).toFixed(1) : '0'} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    {isAr ? 'استناداً لحسابات بطاقة الـ BOM' : 'based on BOM calculations'}
+                  </div>
+                </Card>
+
+                <Card hover>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متوسط هامش الربح الإجمالي' : 'Avg Retail Margin'}</div>
+                  <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {models.length > 0
+                      ? Math.round(
+                          models.reduce((acc, m) => {
+                            const cost = m.target_cost || 1;
+                            const retail = m.retail_price || cost;
+                            return acc + ((retail - cost) / retail) * 100;
+                          }, 0) / models.length
+                        )
+                      : 0}%
+                  </div>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+                    {isAr ? 'معدل ربحية التجزئة المتوقع' : 'projected gross retail margin'}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Filters, Search & View Switcher */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <div className="flex items-center gap-2 max-w-sm w-full relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute right-3 rtl:right-3 rtl:left-auto ltr:left-3 ltr:right-auto pointer-events-none" />
+                  <input
+                    type="text"
+                    value={modelSearch}
+                    onChange={(e) => setModelSearch(e.target.value)}
+                    placeholder={isAr ? 'بحث باسم الموديل، الكود، أو الفئة...' : 'Search style name, code, or category...'}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#7F1625] dark:focus:border-[#9E2A3B] transition-all"
+                  />
                 </div>
-                <Button size="sm" onClick={() => setIsCreateModelOpen(true)} icon={<Plus className="w-3.5 h-3.5" />}>
-                  موديل جديد + مصفوفة المتغيرات
-                </Button>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-slate-400" />
+                    <select
+                      value={modelCategoryFilter}
+                      onChange={(e) => setModelCategoryFilter(e.target.value)}
+                      className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[#7F1625] dark:focus:border-[#9E2A3B]"
+                    >
+                      <option value="all">{isAr ? 'كل الفئات والتصنيفات' : 'All Categories'}</option>
+                      {Array.from(new Set(models.map((m) => m.category).filter(Boolean))).map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* View Mode Toggle: Table / Grid */}
+                  <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-slate-100 dark:bg-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setModelViewMode('table')}
+                      className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
+                        modelViewMode === 'table'
+                          ? 'bg-white dark:bg-slate-900 text-[#7F1625] dark:text-[#F87171] shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                      title={isAr ? 'عرض الجدول التشغيلي' : 'Table View'}
+                    >
+                      <TableIcon className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline text-[11px]">{isAr ? 'جدول' : 'Table'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelViewMode('cards')}
+                      className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
+                        modelViewMode === 'cards'
+                          ? 'bg-white dark:bg-slate-900 text-[#7F1625] dark:text-[#F87171] shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                      title={isAr ? 'عرض البطاقات' : 'Cards View'}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline text-[11px]">{isAr ? 'بطاقات' : 'Cards'}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {models.map((m) => (
-                  <Card key={m.id} hover className="border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                        {m.code}
-                      </span>
-                      <Badge variant="success">نشط</Badge>
+              {/* View 1: Industrial Matrix Table */}
+              {modelViewMode === 'table' ? (
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
+                        <tr>
+                          <th className="py-3 px-4">{isAr ? 'كود الموديل' : 'Style Code'}</th>
+                          <th className="py-3 px-4">{isAr ? 'اسم الموديل والتصنيف' : 'Style & Category'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الموسم' : 'Season'}</th>
+                          <th className="py-3 px-4">{isAr ? 'بطاقة الـ BOM' : 'BOM Status'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المتغيرات (SKUs)' : 'Variants'}</th>
+                          <th className="py-3 px-4">{isAr ? 'التكلفة المستهدفة' : 'Target Cost'}</th>
+                          <th className="py-3 px-4">{isAr ? 'سعر الجملة' : 'Wholesale'}</th>
+                          <th className="py-3 px-4">{isAr ? 'سعر التجزئة' : 'Retail Price'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
+                          <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                        {filteredModels.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="py-8 text-center text-slate-400">
+                              {isAr ? 'لا توجد موديلات مطابقة لبحثك الحالي.' : 'No models match your current filter.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedModels.map((m) => {
+                            const cost = m.target_cost || 0;
+                            const retail = m.retail_price || 0;
+                            const margin = retail > 0 ? Math.round(((retail - cost) / retail) * 100) : 0;
+                            return (
+                              <tr key={m.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                                <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                                  <div className="flex items-center gap-1.5">
+                                    <Tag className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#F87171]" />
+                                    <span>{m.code}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="font-bold text-slate-900 dark:text-white">{m.name}</div>
+                                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{m.category}</div>
+                                </td>
+                                <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{m.season}</td>
+                                <td className="py-3 px-4">
+                                  <Badge variant="success">
+                                    {isAr ? 'معتمدة وفعالة' : 'Configured'}
+                                  </Badge>
+                                </td>
+                                <td className="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                                  {m.variants_count} {isAr ? 'مقاس/لون' : 'variants'}
+                                </td>
+                                <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
+                                  {m.target_cost.toFixed(2)} ج.م
+                                </td>
+                                <td className="py-3 px-4 font-mono text-slate-900 dark:text-white font-semibold">
+                                  {m.wholesale_price.toFixed(2)} ج.م
+                                </td>
+                                <td className="py-3 px-4 font-mono">
+                                  <div className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                    {m.retail_price.toFixed(2)} ج.م
+                                  </div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {isAr ? `هامش: %${margin}` : `Margin: ${margin}%`}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <Badge variant="success">{isAr ? 'نشط' : 'Active'}</Badge>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-xs h-7 border-slate-300 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625]"
+                                      onClick={() => setSelectedModelForBom(m)}
+                                    >
+                                      {isAr ? 'بطاقة الـ BOM' : 'BOM & Matrix'}
+                                    </Button>
+                                    <ActionsMenu
+                                      variant="icon-horizontal"
+                                      items={[
+                                        {
+                                          id: 'bom',
+                                          label: isAr ? 'فتح بطاقة الباركود وشجرة الـ BOM' : 'Open BOM & Barcode Matrix',
+                                          icon: <Layers className="w-3.5 h-3.5" />,
+                                          onClick: () => setSelectedModelForBom(m),
+                                        },
+                                        {
+                                          id: 'print',
+                                          label: isAr ? 'طباعة كارت المواصفات الفنية' : 'Print Technical Spec Sheet',
+                                          icon: <Printer className="w-3.5 h-3.5" />,
+                                          onClick: () => window.print(),
+                                        },
+                                      ]}
+                                    />
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {filteredModels.length > 0 && (
+                    <div className="p-3 border-t border-slate-200 dark:border-slate-800">
+                      <Pagination
+                        currentPage={modelPage}
+                        totalPages={totalModelPages}
+                        totalItems={filteredModels.length}
+                        perPage={modelPerPage}
+                        onPageChange={setModelPage}
+                        isAr={isAr}
+                      />
                     </div>
+                  )}
+                </Card>
+              ) : (
+                /* View 2: Redesigned Operational Cards Grid */
+                <div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {paginatedModels.map((m) => (
+                    <Card key={m.id} hover className="border-slate-200 dark:border-slate-800 space-y-3.5 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                          {m.code}
+                        </span>
+                        <Badge variant="success">{isAr ? 'نشط' : 'Active'}</Badge>
+                      </div>
 
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-900 dark:text-white">{m.name}</h4>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        <span>{m.category}</span>
-                        <span>•</span>
-                        <span>{m.season}</span>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{m.name}</h4>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                          <span>{m.category}</span>
+                          <span>•</span>
+                          <span>{m.season}</span>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 text-center text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التكلفة</span>
-                        <strong className="font-mono text-slate-800 dark:text-slate-800 dark:text-slate-200">{m.target_cost} ج.م</strong>
+                      <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-center text-xs">
+                        <div>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{isAr ? 'التكلفة' : 'Cost'}</span>
+                          <strong className="font-mono text-slate-800 dark:text-slate-200">{m.target_cost} ج.م</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{isAr ? 'الجملة' : 'Wholesale'}</span>
+                          <strong className="font-mono text-slate-900 dark:text-white">{m.wholesale_price} ج.م</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{isAr ? 'التجزئة' : 'Retail'}</span>
+                          <strong className="font-mono text-emerald-600 dark:text-emerald-400">{m.retail_price} ج.م</strong>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">الجملة</span>
-                        <strong className="font-mono text-slate-900 dark:text-slate-900 dark:text-white">{m.wholesale_price} ج.م</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التجزئة</span>
-                        <strong className="font-mono text-emerald-600 dark:text-emerald-400">{m.retail_price} ج.م</strong>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                      <span className="text-slate-400 text-[11px]">
-                        المتغيرات: <strong className="text-slate-800 dark:text-slate-200 font-mono">{m.variants_count} مقاس ولون</strong>
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs h-7 hover:bg-[#7F1625]/10 hover:text-[#7F1625] font-semibold"
-                        onClick={() => setSelectedModelForBom(m)}
-                      >
-                        بطاقة الباركود والـ BOM
-                      </Button>
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
+                        <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+                          {isAr ? 'المتغيرات:' : 'SKUs:'}{' '}
+                          <strong className="text-slate-800 dark:text-slate-200 font-mono">
+                            {m.variants_count} {isAr ? 'مقاس ولون' : 'variants'}
+                          </strong>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7 hover:bg-[#7F1625]/10 hover:text-[#7F1625] font-semibold"
+                            onClick={() => setSelectedModelForBom(m)}
+                          >
+                            {isAr ? 'بطاقة الـ BOM' : 'BOM & Matrix'}
+                          </Button>
+                          <ActionsMenu
+                            variant="icon-horizontal"
+                            items={[
+                              {
+                                id: 'bom',
+                                label: isAr ? 'فتح بطاقة الباركود وشجرة الـ BOM' : 'Open BOM & Barcode Matrix',
+                                icon: <Layers className="w-3.5 h-3.5" />,
+                                onClick: () => setSelectedModelForBom(m),
+                              },
+                              {
+                                id: 'print',
+                                label: isAr ? 'طباعة كارت المواصفات الفنية' : 'Print Technical Spec Sheet',
+                                icon: <Printer className="w-3.5 h-3.5" />,
+                                onClick: () => window.print(),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                  </div>
+                  {filteredModels.length > 0 && (
+                    <div className="mt-4 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <Pagination
+                        currentPage={modelPage}
+                        totalPages={totalModelPages}
+                        totalItems={filteredModels.length}
+                        perPage={modelPerPage}
+                        onPageChange={setModelPage}
+                        isAr={isAr}
+                      />
                     </div>
-                  </Card>
-                ))}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* TAB 3: INVENTORY & STOCK LEDGER */}
           {activeTab === 'inventory' && (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">إدارة المخازن ودفتر الأستاذ غير القابل للتعديل</h3>
-                  <p className="text-xs text-slate-400">مخازن الأقمشة والمستلزمات وفصل أمانات خامات العملاء للقص للغير</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsFabricCalcOpen(true)}
-                    icon={<Calculator className="w-3.5 h-3.5 text-indigo-400" />}
-                  >
-                    حاسبة الأقمشة (متر ↔ كجم)
-                  </Button>
-                </div>
-              </div>
+            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
+              <PageHeader
+                title={isAr ? 'إدارة المخازن ودفتر الأستاذ غير القابل للتعديل' : 'Inventory & Immutable Stock Ledger'}
+                subtitle={isAr
+                  ? 'مخازن الأقمشة والمستلزمات، فحص الأرصدة، وفصل أمانات خامات العملاء للقص للغير (CMT).'
+                  : 'Fabric rolls, accessories, inventory valuation, and segregated customer CMT custody stock.'}
+                icon={<Boxes className="w-5 h-5" />}
+                breadcrumbs={[
+                  { label: isAr ? 'الرئيسية' : 'Home' },
+                  { label: isAr ? 'المخازن والمستودعات' : 'Inventory & Warehouses' },
+                ]}
+                actions={
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsFabricCalcOpen(true)}
+                      icon={<Calculator className="w-3.5 h-3.5 text-indigo-400" />}
+                    >
+                      {isAr ? 'حاسبة الأقمشة (متر ↔ كجم)' : 'Fabric GSM Calc'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setIsReceiveCustomerMatModalOpen(true)}
+                      icon={<Boxes className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? 'استلام أمانة عميل' : 'Receive CMT Fabric'}
+                    </Button>
+                  </div>
+                }
+              />
 
               {/* Filters & Search */}
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
@@ -2055,7 +2536,7 @@ export function App() {
                   <select
                     value={inventoryCategoryFilter}
                     onChange={(e) => setInventoryCategoryFilter(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
                   >
                     <option value="all">كل الأصناف والخامات</option>
                     <option value="company">خامات المصنع المملوكة فقط</option>
@@ -2089,9 +2570,9 @@ export function App() {
                           </td>
                         </tr>
                       ) : (
-                        filteredInventory.map((item) => (
+                        paginatedInventory.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-900 dark:text-white">{item.code}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">{item.code}</td>
                           <td className="py-3 px-4">
                             <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
                             {item.technical_specs?.gsm && (
@@ -2111,7 +2592,7 @@ export function App() {
                           <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                             {item.current_balance.toLocaleString()} {item.unit_of_measure}
                           </td>
-                          <td className="py-3 px-4 font-mono text-slate-300">
+                          <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
                             {item.is_customer_owned ? '—' : `${item.average_cost.toFixed(2)} ج.م`}
                           </td>
                           <td className="py-3 px-4">
@@ -2155,6 +2636,18 @@ export function App() {
                     </tbody>
                   </table>
                 </div>
+                {filteredInventory.length > inventoryPerPage && (
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                    <Pagination
+                      currentPage={inventoryPage}
+                      totalPages={totalInventoryPages}
+                      totalItems={filteredInventory.length}
+                      perPage={inventoryPerPage}
+                      onPageChange={setInventoryPage}
+                      isAr={isAr}
+                    />
+                  </div>
+                )}
               </Card>
 
               {/* Customer Supplied Materials Separated Ledger */}
@@ -2210,10 +2703,10 @@ export function App() {
                   </div>
                 </div>
 
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-2.5 px-4">الوقت</th>
                           <th className="py-2.5 px-4">الصنف</th>
@@ -2225,7 +2718,7 @@ export function App() {
                           <th className="py-2.5 px-4">المستند المرجعي</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
                         {stockLedger.length === 0 ? (
                           <tr>
                             <td colSpan={8} className="py-6 text-center font-sans text-slate-400">
@@ -2233,7 +2726,7 @@ export function App() {
                             </td>
                           </tr>
                         ) : (
-                          stockLedger.map((tx) => (
+                          paginatedStockLedger.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-800/20">
                             <td className="py-2.5 px-4 text-slate-400">{tx.created_at}</td>
                             <td className="py-2.5 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{tx.item_name}</td>
@@ -2252,6 +2745,18 @@ export function App() {
                       </tbody>
                     </table>
                   </div>
+                  {stockLedger.length > stockLedgerPerPage && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                      <Pagination
+                        currentPage={stockLedgerPage}
+                        totalPages={totalStockLedgerPages}
+                        totalItems={stockLedger.length}
+                        perPage={stockLedgerPerPage}
+                        onPageChange={setStockLedgerPage}
+                        isAr={isAr}
+                      />
+                    </div>
+                  )}
                 </Card>
               </div>
             </div>
@@ -2259,42 +2764,44 @@ export function App() {
 
           {/* TAB 4: CUTTING & PRODUCTION */}
           {activeTab === 'cutting' && (
-            <div className="space-y-6">
-              {/* Header with Title and Action Buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Scissors className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-                    <span>تشغيل الإنتاج، صالة القص، وتتبع بطاقات الحزم والجودة</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    أوامر التشغيل المعتمدة، خطط الفرش والطبقات، بطاقات الحزم بالباركود، ونقاط التفتيش
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsFabricCalcOpen(true)}
-                    icon={<Calculator className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
-                  >
-                    حاسبة أطوال وأوزان الفرش
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsCreateProdOrderModalOpen(true)}
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                  >
-                    إصدار أمر إنتاج جديد
-                  </Button>
-                </div>
-              </div>
+            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
+              <PageHeader
+                title={isAr ? 'صالة القص وخطوط التشغيل وبطاقات الحزم' : 'Cutting Floor & Bundle Operations'}
+                subtitle={isAr
+                  ? 'أوامر التشغيل المعتمدة، خطط الفرش والطبقات، بطاقات الحزم الذكية بالباركود، وتدقيق الجودة (QC).'
+                  : 'Cutting orders, lay planning & ply counts, QR bundle tracking, and quality control.'}
+                icon={<Scissors className="w-5 h-5" />}
+                breadcrumbs={[
+                  { label: isAr ? 'الرئيسية' : 'Home' },
+                  { label: isAr ? 'صالة القص والإنتاج' : 'Cutting & Production' },
+                ]}
+                actions={
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsFabricCalcOpen(true)}
+                      icon={<Calculator className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? 'حاسبة أطوال الفرش' : 'Lay Length Calc'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setIsCreateProdOrderModalOpen(true)}
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? 'إصدار أمر إنتاج جديد' : 'New Production Order'}
+                    </Button>
+                  </div>
+                }
+              />
 
               {/* KPI Performance Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Card hover>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">إجمالي أوامر الإنتاج</div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-900 dark:text-white">
+                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
                     {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">أوامر</span>
                   </div>
                   <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
@@ -2303,32 +2810,32 @@ export function App() {
                 </Card>
 
                 <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">القطع المقصوصة بصالة القص</div>
-                  <div className="text-xl font-bold font-mono text-sky-400">
-                    {productionOrders.reduce((sum, p) => sum + p.cut_quantity, 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">قطعة</span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'القطع المقصوصة بصالة القص' : 'Pieces Cut'}</div>
+                  <div className="text-xl font-bold font-mono text-sky-600 dark:text-sky-400">
+                    {productionOrders.reduce((sum, p) => sum + p.cut_quantity, 0).toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    عبر {cuttingOrders.length} أوامر فرش وقص
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">حزم التشغيل النشطة بالباركود</div>
-                  <div className="text-xl font-bold font-mono text-purple-400">
-                    {cuttingBundles.length} <span className="text-xs font-normal text-slate-400">حزمة (Bundle)</span>
-                  </div>
-                  <div className="text-[11px] text-purple-400 mt-1 font-medium">
-                    موزعة على الخياطة والتجهيز والتشطيب
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    {isAr ? `عبر ${cuttingOrders.length} أوامر فرش وقص` : `across ${cuttingOrders.length} cutting orders`}
                   </div>
                 </Card>
 
                 <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">المنتج التام المجاز والمرحل للمخزن</div>
-                  <div className="text-xl font-bold font-mono text-emerald-400">
-                    {productionOrders.reduce((sum, p) => sum + (p.completed_quantity || p.qc_passed_quantity || 0), 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">قطعة</span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'حزم التشغيل النشطة بالباركود' : 'Active QR Bundles'}</div>
+                  <div className="text-xl font-bold font-mono text-purple-600 dark:text-purple-400">
+                    {cuttingBundles.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'حزمة' : 'bundles'}</span>
                   </div>
-                  <div className="text-[11px] text-emerald-400 mt-1 font-medium">
-                    اجتازت الفحص النهائي بنجاح
+                  <div className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-medium">
+                    {isAr ? 'موزعة على الخياطة والتجهيز والتشطيب' : 'in sewing and finishing lines'}
+                  </div>
+                </Card>
+
+                <Card hover>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'المنتج التام المجاز والمرحل للمخزن' : 'Passed QC Stock'}</div>
+                  <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {productionOrders.reduce((sum, p) => sum + (p.completed_quantity || p.qc_passed_quantity || 0), 0).toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+                    {isAr ? 'اجتازت الفحص النهائي بنجاح' : 'passed final QC inspection'}
                   </div>
                 </Card>
               </div>
@@ -2342,10 +2849,10 @@ export function App() {
                   </div>
                 </div>
 
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-3 px-4">رقم الأمر</th>
                           <th className="py-3 px-4">الموديل والنوع</th>
@@ -2358,9 +2865,9 @@ export function App() {
                           <th className="py-3 px-4">الإجراءات والعمليات</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {productionOrders.map((order) => (
-                          <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                        {paginatedProdOrders.map((order) => (
+                          <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
                             <td className="py-3 px-4 font-mono font-bold text-indigo-400">{order.order_number}</td>
                             <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
                               <div>{order.model_name}</div>
@@ -2375,7 +2882,7 @@ export function App() {
                             <td className="py-3 px-4 font-mono text-emerald-400 font-bold">
                               {(order.completed_quantity || order.qc_passed_quantity || 0).toLocaleString()}
                             </td>
-                            <td className="py-3 px-4 font-mono text-slate-300">{order.target_delivery_date || order.due_date}</td>
+                            <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{order.target_delivery_date || order.due_date}</td>
                             <td className="py-3 px-4">
                               <Badge
                                 variant={
@@ -2492,6 +2999,18 @@ export function App() {
                       </tbody>
                     </table>
                   </div>
+                  {productionOrders.length > prodOrderPerPage && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                      <Pagination
+                        currentPage={prodOrderPage}
+                        totalPages={totalProdOrderPages}
+                        totalItems={productionOrders.length}
+                        perPage={prodOrderPerPage}
+                        onPageChange={setProdOrderPage}
+                        isAr={isAr}
+                      />
+                    </div>
+                  )}
                 </Card>
               </div>
 
@@ -2504,10 +3023,10 @@ export function App() {
                   </div>
                 </div>
 
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-3 px-4">رقم إذن القص</th>
                           <th className="py-3 px-4">أمر الإنتاج</th>
@@ -2522,9 +3041,9 @@ export function App() {
                           <th className="py-3 px-4 text-center">الإجراءات</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
                         {cuttingOrders.map((cut) => (
-                          <tr key={cut.id} className="hover:bg-slate-800/20">
+                          <tr key={cut.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
                             <td className="py-3 px-4 font-bold text-sky-400">{cut.cutting_order_number}</td>
                             <td className="py-3 px-4 text-indigo-400">{cut.production_order_number}</td>
                             <td className="py-3 px-4 font-sans text-slate-300">{cut.table_number}</td>
@@ -2593,7 +3112,7 @@ export function App() {
                   {cuttingBundles.map((bnd) => (
                     <Card key={bnd.id} hover className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 space-y-2.5">
                       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-slate-900 dark:text-white">
+                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-white">
                           <QrCode className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                           <span>{bnd.bundle_code}</span>
                         </div>
@@ -2603,7 +3122,7 @@ export function App() {
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
                           <span className="text-slate-500 block text-[10px]">اللون</span>
-                          <span className="text-slate-800 dark:text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
+                          <span className="text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
                         </div>
                         <div>
                           <span className="text-slate-500 block text-[10px]">المقاس</span>
@@ -2667,10 +3186,10 @@ export function App() {
                   </div>
                 </div>
 
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-3 px-4">رقم تقرير الفحص</th>
                           <th className="py-3 px-4">أمر الإنتاج</th>
@@ -2683,9 +3202,9 @@ export function App() {
                           <th className="py-3 px-4">القرار والاعتماد</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
                         {qualityInspections.map((qc) => (
-                          <tr key={qc.id} className="hover:bg-slate-800/20">
+                          <tr key={qc.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
                             <td className="py-3 px-4 font-bold text-emerald-400">{qc.inspection_number}</td>
                             <td className="py-3 px-4 text-indigo-400">{qc.production_order_number}</td>
                             <td className="py-3 px-4 font-sans text-slate-800 dark:text-slate-200">{qc.inspector_name}</td>
@@ -2729,63 +3248,69 @@ export function App() {
 
           {/* TAB 5: PROCUREMENT & VENDOR MANAGEMENT */}
           {activeTab === 'purchasing' && (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    دورة المشتريات والموردين وفحص الاستلام والمطابقة الثلاثية
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    أوامر الشراء، أذون فحص الجودة والاستلام المخزني (GRN)، ومطابقة فواتير الموردين
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsCreateSupplierModalOpen(true)}
-                  >
-                    تسجيل مورد جديد
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsCreatePoModalOpen(true)}
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                  >
-                    إصدار أمر شراء جديد
-                  </Button>
-                </div>
-              </div>
+            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
+              <PageHeader
+                title={isAr ? 'المشتريات والموردين وفحص الاستلام والمطابقة الثلاثية' : 'Procurement, GRN & 3-Way Matching'}
+                subtitle={isAr
+                  ? 'أوامر الشراء (PO)، أذون استلام المخزن (GRN)، مطابقة الفواتير الثلاثية، وإدارة أرصدة الموردين.'
+                  : 'Purchase orders, goods receipt notes (GRN), 3-way invoice matching, and vendor ledger balances.'}
+                icon={<ShoppingCart className="w-5 h-5" />}
+                breadcrumbs={[
+                  { label: isAr ? 'الرئيسية' : 'Home' },
+                  { label: isAr ? 'المشتريات والموردون' : 'Procurement' },
+                ]}
+                actions={
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsCreateSupplierModalOpen(true)}
+                    >
+                      {isAr ? 'تسجيل مورد جديد' : 'New Vendor'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setIsCreatePoModalOpen(true)}
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? 'إصدار أمر شراء جديد' : 'New Purchase Order'}
+                    </Button>
+                  </div>
+                }
+              />
 
               {/* Procurement KPI Summary */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">أوامر الشراء النشطة</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'أوامر الشراء النشطة' : 'Active POs'}</div>
                   <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-                    {purchaseOrders.length} <span className="text-xs font-normal text-slate-400">أوامر</span>
+                    {purchaseOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'أوامر' : 'orders'}</span>
                   </div>
-                  <div className="text-[11px] text-indigo-400 mt-1 font-medium">
-                    منها {purchaseOrders.filter(p => p.status === 'approved' || p.status === 'partially_received').length} قيد التوريد
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">إجمالي التزامات الموردين (المستحقات)</div>
-                  <div className="text-xl font-bold font-mono text-amber-400">
-                    {suppliers.reduce((acc, s) => acc + s.current_balance, 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    أرصدة حسابات الموردين المعتمدة
+                  <div className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
+                    {isAr
+                      ? `منها ${purchaseOrders.filter((p) => p.status === 'approved' || p.status === 'partially_received').length} قيد التوريد`
+                      : `${purchaseOrders.filter((p) => p.status === 'approved' || p.status === 'partially_received').length} in delivery`}
                   </div>
                 </Card>
 
                 <Card hover>
-                  <div className="text-xs text-slate-400 mb-1">فواتير المطابقة الثلاثية (3-Way Match)</div>
-                  <div className="text-xl font-bold font-mono text-emerald-400">
-                    {supplierInvoices.length} <span className="text-xs font-normal text-slate-400">فواتير مسجلة</span>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'إجمالي التزامات الموردين (المستحقات)' : 'Vendor Payables'}</div>
+                  <div className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
+                    {suppliers.reduce((acc, s) => acc + s.current_balance, 0).toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
                   </div>
-                  <div className="text-[11px] text-emerald-400 mt-1 font-medium">
-                    تمت المطابقة مع أذون استلام المخزن
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    {isAr ? 'أرصدة حسابات الموردين المعتمدة' : 'approved vendor ledger balances'}
+                  </div>
+                </Card>
+
+                <Card hover>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'فواتير المطابقة الثلاثية (3-Way Match)' : '3-Way Match Invoices'}</div>
+                  <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {supplierInvoices.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'فواتير' : 'invoices'}</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+                    {isAr ? 'تمت المطابقة مع أذون استلام المخزن' : 'matched against GRNs & POs'}
                   </div>
                 </Card>
               </div>
@@ -2793,10 +3318,10 @@ export function App() {
               {/* Purchase Orders Table */}
               <div className="space-y-3">
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر الشراء ومتابعة التوريد</h4>
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-3 px-4">رقم الأمر</th>
                           <th className="py-3 px-4">المورد المعتمد</th>
@@ -2807,14 +3332,14 @@ export function App() {
                           <th className="py-3 px-4">الإجراءات والعمليات</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                         {purchaseOrders.map((po) => (
-                          <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-900 dark:text-white">{po.po_number}</td>
-                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
+                          <tr key={po.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">{po.po_number}</td>
+                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
                             <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{po.warehouse_name}</td>
                             <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{po.order_date}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-900 dark:text-white">
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                               {po.total_amount.toLocaleString()} ج.م
                             </td>
                             <td className="py-3 px-4">
@@ -2914,10 +3439,10 @@ export function App() {
                   </div>
                 </div>
 
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-2.5 px-4">رقم إذن الاستلام</th>
                           <th className="py-2.5 px-4">أمر الشراء</th>
@@ -2929,10 +3454,10 @@ export function App() {
                           <th className="py-2.5 px-4">ملاحظات الرفض</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
                         {goodsReceiptNotes.map((grn) => (
-                          <tr key={grn.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-slate-900 dark:text-white">{grn.grn_number}</td>
+                          <tr key={grn.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
+                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{grn.grn_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{grn.po_number}</td>
                             <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{grn.supplier_name}</td>
                             <td className="py-2.5 px-4 font-sans text-slate-300">{grn.quality_inspector_name}</td>
@@ -2965,10 +3490,10 @@ export function App() {
                   </div>
                 </div>
 
-                <Card className="overflow-hidden p-0 border-slate-800">
+                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
                           <th className="py-2.5 px-4">رقم الفاتورة الضريبية</th>
                           <th className="py-2.5 px-4">المرجع الداخلي</th>
@@ -2980,12 +3505,12 @@ export function App() {
                           <th className="py-2.5 px-4">حالة السداد</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
                         {supplierInvoices.map((inv) => (
-                          <tr key={inv.id} className="hover:bg-slate-800/20">
+                          <tr key={inv.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
                             <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{inv.invoice_number}</td>
                             <td className="py-2.5 px-4 text-slate-400">{inv.internal_reference}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
+                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
                             <td className="py-2.5 px-4 font-mono text-slate-700 dark:text-slate-300">{inv.po_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{inv.due_date}</td>
                             <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} ج.م</td>
@@ -3020,7 +3545,7 @@ export function App() {
                   {suppliers.map((s) => (
                     <Card key={s.id} className="border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-slate-900 dark:text-white">{s.name}</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{s.name}</span>
                         <span className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold">{s.code}</span>
                       </div>
                       <div className="text-xs text-slate-400 flex items-center justify-between">
@@ -3122,39 +3647,171 @@ export function App() {
 
           {/* Settings Tab */}
           {activeTab === 'settings' && (
-            <Card className="p-6 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {lang === 'ar' ? 'إعدادات الشركة والمستأجر' : 'Tenant & Company Settings'}
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {lang === 'ar' ? 'إدارة الهوية الصناعية، فروع التشغيل، وصلاحيات الوصول' : 'Manage factory profile, branches, and team access'}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
-                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'اسم المصنع' : 'Company Name'}</p>
-                  <p className="text-base font-bold text-slate-900 dark:text-white mt-1">{tenantName}</p>
-                </div>
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
-                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'كود المصنع' : 'Tenant Code'}</p>
-                  <p className="text-base font-mono font-bold text-primary mt-1">{tenantCode}</p>
-                </div>
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
-                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'الموقع الرئيسي' : 'Primary Site'}</p>
-                  <p className="text-base font-bold text-slate-900 dark:text-white mt-1">{branchName}</p>
-                </div>
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
-                  <p className="text-xs text-slate-500">{lang === 'ar' ? 'حالة الاشتراك' : 'Subscription Status'}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      {lang === 'ar' ? 'مفعل — باقة المصانع الاحترافية (Professional)' : 'Active — Professional Tier'}
-                    </span>
+            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
+              <PageHeader
+                title={lang === 'ar' ? 'إعدادات الشركة والمصنع والمستأجر' : 'Tenant & Factory Configuration'}
+                subtitle={lang === 'ar'
+                  ? 'إدارة الهوية الصناعية، فروع ومخازن التشغيل، بيانات الاشتراك، وصلاحيات الوصول.'
+                  : 'Manage factory profile, operational branches, subscription tier, and system access.'}
+                icon={<Building2 className="w-5 h-5" />}
+                breadcrumbs={[
+                  { label: lang === 'ar' ? 'الرئيسية' : 'Home' },
+                  { label: lang === 'ar' ? 'إعدادات النظام' : 'Settings' },
+                ]}
+                actions={
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => setIsBranchModalOpen(true)}
+                    icon={<Plus className="w-3.5 h-3.5" />}
+                  >
+                    {lang === 'ar' ? 'إضافة فرع / مخزن جديد' : 'New Branch / Node'}
+                  </Button>
+                }
+              />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* 1. Tenant & Factory Profile */}
+                <Card className="lg:col-span-1 p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">
+                  <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                    <div className="w-10 h-10 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/20 flex items-center justify-center text-[#7F1625] dark:text-[#F87171] font-bold">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">{tenantName}</h4>
+                      <p className="text-[11px] font-mono text-[#7F1625] dark:text-[#F87171]">{tenantCode}</p>
+                    </div>
                   </div>
-                </div>
+
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">{lang === 'ar' ? 'الموقع التشغيلي الرئيسي' : 'Primary Site'}</span>
+                      <strong className="text-slate-800 dark:text-slate-200 font-medium">{branchName}</strong>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">{lang === 'ar' ? 'باقة الاشتراك والمنظومة' : 'Subscription Tier'}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                          {lang === 'ar' ? 'باقة المصانع الاحترافية (Professional)' : 'Professional Apparel Tier'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">{lang === 'ar' ? 'حالة العزل السحابي (Multi-Tenancy)' : 'Multi-Tenancy Isolation'}</span>
+                      <div className="flex items-center gap-1.5 mt-1 text-slate-700 dark:text-slate-300">
+                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                        <span className="font-medium text-[11px]">{lang === 'ar' ? 'Fail-Closed Active — عزل تام لكل مستأجر' : 'Fail-Closed Strict Isolation'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs border-slate-300 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625]"
+                      onClick={() => setIsBranchModalOpen(true)}
+                    >
+                      {lang === 'ar' ? 'إضافة فرع / خط إنتاج جديد' : 'Add Production Branch'}
+                    </Button>
+                  </div>
+                </Card>
+
+                {/* 2. Operational Branches & Warehouses Table */}
+                <Card className="lg:col-span-2 overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <div className="p-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        {lang === 'ar' ? 'فروع التشغيل والمخازن الصناعية المعتمدة' : 'Operational Branches & Warehouses'}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {lang === 'ar' ? 'مواقع صالات القص، مخازن الأقمشة والمستلزمات، ونقاط التسليم' : 'Cutting floors, material stock, and delivery depots'}
+                      </p>
+                    </div>
+                    <Badge variant="brand">{warehouses.length} {lang === 'ar' ? 'مواقع' : 'sites'}</Badge>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-100/70 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
+                        <tr>
+                          <th className="py-2.5 px-4">{lang === 'ar' ? 'كود المخزن/الفرع' : 'Code'}</th>
+                          <th className="py-2.5 px-4">{lang === 'ar' ? 'اسم الموقع' : 'Location Name'}</th>
+                          <th className="py-2.5 px-4">{lang === 'ar' ? 'النوع التشغيلي' : 'Operational Type'}</th>
+                          <th className="py-2.5 px-4">{lang === 'ar' ? 'الحالة' : 'Status'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                        {warehouses.map((wh) => (
+                          <tr key={wh.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-4 font-mono font-bold text-slate-900 dark:text-white">{wh.code}</td>
+                            <td className="py-2.5 px-4 font-medium text-slate-800 dark:text-slate-200">{wh.name}</td>
+                            <td className="py-2.5 px-4">
+                              <Badge variant="neutral">{wh.type}</Badge>
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium text-[11px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                {lang === 'ar' ? 'جاهز للتشغيل' : 'Operational'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
               </div>
-            </Card>
+
+              {/* 3. RBAC Roles & System Permissions Matrix */}
+              <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <div className="p-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {lang === 'ar' ? 'مصفوفة الصلاحيات وأدوار النظام (RBAC)' : 'Role-Based Access Control (RBAC)'}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {lang === 'ar' ? 'توزيع الصلاحيات بحسب المهام الوظيفية لحماية أمانات العملاء وتكلفة التشغيل' : 'Role mappings and security boundaries for plant operations'}
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs">
+                    <thead className="bg-slate-100/70 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
+                      <tr>
+                        <th className="py-3 px-4">{lang === 'ar' ? 'الدور الوظيفي' : 'Role'}</th>
+                        <th className="py-3 px-4">{lang === 'ar' ? 'صالة القص والإنتاج' : 'Cutting Floor'}</th>
+                        <th className="py-3 px-4">{lang === 'ar' ? 'المخازن والأمانات' : 'Inventory & CMT'}</th>
+                        <th className="py-3 px-4">{lang === 'ar' ? 'المشتريات والتكاليف' : 'Procurement & Costing'}</th>
+                        <th className="py-3 px-4">{lang === 'ar' ? 'تدقيق الجودة (QC)' : 'Quality Audit'}</th>
+                        <th className="py-3 px-4">{lang === 'ar' ? 'صلاحيات الإدارة' : 'Admin Privileges'}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {[
+                        { role: lang === 'ar' ? 'مدير المصنع / المالك' : 'Factory Owner', cutting: 'كامل', inv: 'كامل', proc: 'كامل', qc: 'اعتماد نهائي', admin: 'إدارة شاملة' },
+                        { role: lang === 'ar' ? 'مهندس صالة القص' : 'Cutting Floor Lead', cutting: 'إصدار وفرش وقص', inv: 'صرف خامات', proc: 'عرض أوامر', qc: 'فحص أولي', admin: 'محدود' },
+                        { role: lang === 'ar' ? 'أمين مخزن الأقمشة' : 'Fabric Storekeeper', cutting: 'عرض خطط', inv: 'استلام وجرد وصرف', proc: 'تسجيل GRN', qc: '—', admin: '—' },
+                        { role: lang === 'ar' ? 'محاسب التكاليف' : 'Cost Accountant', cutting: 'عرض إحصاءات', inv: 'دفتر الأستاذ', proc: 'مطابقة 3-Way', qc: '—', admin: '—' },
+                        { role: lang === 'ar' ? 'مدقق الجودة' : 'QC Inspector', cutting: 'فحص الحزم', inv: '—', proc: 'فحص استلام', qc: 'إجازة / رفض', admin: '—' },
+                      ].map((r, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
+                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{r.role}</td>
+                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.cutting}</td>
+                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.inv}</td>
+                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.proc}</td>
+                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.qc}</td>
+                          <td className="py-3 px-4">
+                            <span className="font-mono font-medium text-[#7F1625] dark:text-[#F87171]">{r.admin}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
           )}
         </>
 

@@ -65,6 +65,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/platform-admin/tenants', [\App\Http\Controllers\Api\PlatformAdminController::class, 'tenants']);
         Route::get('/platform-admin/tenants/{id}', [\App\Http\Controllers\Api\PlatformAdminController::class, 'showTenant']);
         Route::post('/platform-admin/tenants/{id}/suspend', [\App\Http\Controllers\Api\PlatformAdminController::class, 'suspendTenant']);
+        Route::post('/platform-admin/tenants/{id}/reactivate', [\App\Http\Controllers\Api\PlatformAdminController::class, 'reactivateTenant']);
+        Route::put('/platform-admin/tenants/{id}/plan', [\App\Http\Controllers\Api\PlatformAdminController::class, 'updateTenantPlan']);
+        Route::get('/platform-admin/system-health', [\App\Http\Controllers\Api\PlatformAdminController::class, 'systemHealth']);
+        Route::get('/platform-admin/users', [\App\Http\Controllers\Api\PlatformAdminController::class, 'users']);
         Route::get('/platform-admin/audit-logs', [\App\Http\Controllers\Api\PlatformAdminController::class, 'auditLogs']);
         Route::post('/platform-admin/tenants/{id}/activate-subscription', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
         Route::post('/platform-admin/tenants/{id}/subscription/manual-activate', [\App\Http\Controllers\Api\PlatformAdminController::class, 'activateSubscription']);
@@ -98,12 +102,12 @@ Route::prefix('v1')->group(function () {
         // المخازن ودفتر الأستاذ المخزني وأمانات العملاء
         Route::get('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'warehouses']);
         Route::get('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'items']);
-        Route::post('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'recordTransaction']);
+        Route::post('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'recordTransaction'])->middleware('role:accountant,production_manager,inventory_custodian,worker');
         Route::get('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'transactions']);
-        Route::post('/inventory/convert-fabric', [\App\Http\Controllers\Api\InventoryController::class, 'convertFabric']);
+        Route::post('/inventory/convert-fabric', [\App\Http\Controllers\Api\InventoryController::class, 'convertFabric'])->middleware('role:accountant,production_manager,inventory_custodian');
         Route::get('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'customerMaterials']);
-        Route::post('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'receiveCustomerMaterial']);
-        Route::post('/inventory/customer-materials/{id}/consume', [\App\Http\Controllers\Api\InventoryController::class, 'consumeCustomerMaterial']);
+        Route::post('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'receiveCustomerMaterial'])->middleware('role:accountant,production_manager,inventory_custodian');
+        Route::post('/inventory/customer-materials/{id}/consume', [\App\Http\Controllers\Api\InventoryController::class, 'consumeCustomerMaterial'])->middleware('role:accountant,production_manager,inventory_custodian');
 
         // المشتريات والموردين وفحص الاستلام والفواتير
         Route::get('/suppliers', [\App\Http\Controllers\Api\SupplierController::class, 'index']);
@@ -116,7 +120,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/purchase-orders/{id}/approve', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'approve'])->middleware('role:accountant');
 
         Route::get('/goods-receipts', [\App\Http\Controllers\Api\GoodsReceiptController::class, 'index']);
-        Route::post('/goods-receipts', [\App\Http\Controllers\Api\GoodsReceiptController::class, 'store'])->middleware('role:production_manager,accountant');
+        Route::post('/goods-receipts', [\App\Http\Controllers\Api\GoodsReceiptController::class, 'store'])->middleware('role:inventory_custodian,production_manager,accountant');
         Route::get('/goods-receipts/{id}', [\App\Http\Controllers\Api\GoodsReceiptController::class, 'show']);
 
         Route::get('/supplier-invoices', [\App\Http\Controllers\Api\SupplierInvoiceController::class, 'index']);
@@ -141,7 +145,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/bundles/{id}/transfer', [\App\Http\Controllers\Api\BundleController::class, 'transfer']);
 
         Route::get('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'index']);
-        Route::post('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'store'])->middleware('role:production_manager');
+        Route::post('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'store'])->middleware('role:quality_controller,production_manager');
 
         // خدمات القص والتصنيع للغير (Phase 6: Subcontracting & CMT Services)
         Route::get('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'customers']);
@@ -175,6 +179,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/orders/{id}/reserve', [\App\Http\Controllers\Api\SalesController::class, 'reserveOrderStock']);
         Route::post('/sales/orders/{id}/fulfill', [\App\Http\Controllers\Api\SalesController::class, 'fulfillOrder']);
         Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices']);
+        Route::get('/sales/invoices/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showInvoice']);
         Route::post('/pos/sale', [\App\Http\Controllers\Api\SalesController::class, 'posSale']);
         Route::get('/pos/sessions', [\App\Http\Controllers\Api\SalesController::class, 'posSessions']);
         Route::post('/pos/sessions/open', [\App\Http\Controllers\Api\SalesController::class, 'openPosSession']);
@@ -182,7 +187,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'deliveryNotes']);
         Route::post('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'storeDeliveryNote']);
         Route::get('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'salesReturns']);
-        Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn']);
+        Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:accountant,production_manager,company_owner,sales_rep');
 
         // الحسابات العامة وقيود اليومية والتكاليف (Phase 8: Accounting & Costing)
         Route::get('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'accounts']);
@@ -210,12 +215,12 @@ Route::prefix('v1')->group(function () {
 
         // إدارة الماكينات وصيانة الأصول وبلاغات الأعطال (Phase 12: Machine & Asset Maintenance)
         Route::get('/maintenance/machines', [\App\Http\Controllers\Api\MaintenanceController::class, 'indexMachines']);
-        Route::post('/maintenance/machines', [\App\Http\Controllers\Api\MaintenanceController::class, 'storeMachine']);
-        Route::put('/maintenance/machines/{id}', [\App\Http\Controllers\Api\MaintenanceController::class, 'updateMachine']);
+        Route::post('/maintenance/machines', [\App\Http\Controllers\Api\MaintenanceController::class, 'storeMachine'])->middleware('role:production_manager,accountant');
+        Route::put('/maintenance/machines/{id}', [\App\Http\Controllers\Api\MaintenanceController::class, 'updateMachine'])->middleware('role:production_manager,accountant');
         Route::get('/maintenance/work-orders', [\App\Http\Controllers\Api\MaintenanceController::class, 'indexWorkOrders']);
-        Route::post('/maintenance/work-orders', [\App\Http\Controllers\Api\MaintenanceController::class, 'storeWorkOrder']);
-        Route::post('/maintenance/work-orders/{id}/spare-parts', [\App\Http\Controllers\Api\MaintenanceController::class, 'addSparePart']);
-        Route::post('/maintenance/work-orders/{id}/complete', [\App\Http\Controllers\Api\MaintenanceController::class, 'completeWorkOrder']);
+        Route::post('/maintenance/work-orders', [\App\Http\Controllers\Api\MaintenanceController::class, 'storeWorkOrder'])->middleware('role:production_manager,accountant');
+        Route::post('/maintenance/work-orders/{id}/spare-parts', [\App\Http\Controllers\Api\MaintenanceController::class, 'addSparePart'])->middleware('role:production_manager,accountant');
+        Route::post('/maintenance/work-orders/{id}/complete', [\App\Http\Controllers\Api\MaintenanceController::class, 'completeWorkOrder'])->middleware('role:production_manager,accountant');
         Route::get('/maintenance/downtime-summary', [\App\Http\Controllers\Api\MaintenanceController::class, 'downtimeSummary']);
     });
 

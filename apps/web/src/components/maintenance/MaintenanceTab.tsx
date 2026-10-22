@@ -18,6 +18,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
+import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import type { Language, Machine, MaintenanceWorkOrder, MaintenanceSparePart, DowntimeSummary } from '../../types';
 
@@ -238,6 +239,37 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={isAr ? 'صيانة الماكينات والأصول الصناعية' : 'Machine Assets & Maintenance'}
+        subtitle={isAr
+          ? 'سجل ماكينات الخياطة والقص، أوامر الصيانة الدورية والطارئة، وتتبع ساعات التوقف وقطع الغيار.'
+          : 'Machine asset registry, emergency & preventative work orders, downtime logs, and spare parts.'}
+        icon={<Wrench className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        breadcrumbs={[
+          { label: isAr ? 'الرئيسية' : 'Home' },
+          { label: isAr ? 'صيانة الماكينات' : 'Machine Assets' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsWorkOrderModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ أمر صيانة' : '+ Work Order'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddMachineModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ إضافة ماكينة' : '+ New Machine'}
+            </Button>
+          </div>
+        }
+      />
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">

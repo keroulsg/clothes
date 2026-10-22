@@ -18,6 +18,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
+import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import type { Language, Employee, PieceRate, PieceWorkLog, Payroll } from '../../types';
 
@@ -208,6 +209,45 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={isAr ? 'إدارة الموارد البشرية وأجور القطعة' : 'Workforce & Piece-Rate Payroll'}
+        subtitle={isAr
+          ? 'إدارة عمال الإنتاج، تسعير العمليات، تسجيل سجلات إنتاجية القطعة، وإصدار مسيرات الرواتب.'
+          : 'Worker registry, operation piece-rate pricing, production work logs, and payroll runs.'}
+        icon={<Users className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        breadcrumbs={[
+          { label: isAr ? 'الرئيسية' : 'Home' },
+          { label: isAr ? 'أجور القطعة والعمال' : 'Workforce & Piece-Rate' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsLogModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ تسجيل إنتاجية عامل' : '+ Log Piece-Work'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRateModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ تسعيرة عملية' : '+ Piece Rate'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPayrollModalOpen(true)}
+              icon={<Calculator className="w-4 h-4" />}
+            >
+              {isAr ? 'إصدار مسير رواتب' : 'Generate Payroll'}
+            </Button>
+          </div>
+        }
+      />
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">

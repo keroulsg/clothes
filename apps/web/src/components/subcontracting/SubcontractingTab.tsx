@@ -13,6 +13,7 @@ import {
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { PageHeader } from '../ui/PageHeader';
 import type {
   Customer,
   JobOrder,
@@ -84,48 +85,43 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
-              خدمات القص للغير والتصنيع الكامل (Subcontracting & CMT)
-            </h2>
-            <Badge variant="info">المرحلة 6</Badge>
+      {/* Enterprise Page Header */}
+      <PageHeader
+        title="خدمات القص للغير والتصنيع الكامل (Subcontracting & CMT)"
+        subtitle="إدارة عقود تشغيل الغير، الفصل الصارم لأمانات خامات العملاء، وتتبع عمليات التطريز والطباعة والتسليم والفوترة."
+        icon={<Boxes className="w-5 h-5" />}
+        breadcrumbs={[
+          { label: 'الرئيسية' },
+          { label: 'التشغيل والتصنيع للغير' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={onOpenCreateJob}
+              icon={<Plus className="w-3.5 h-3.5" />}
+            >
+              أمر تشغيل جديد
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenReceiveMaterial}
+              icon={<Boxes className="w-3.5 h-3.5 text-primary" />}
+            >
+              استلام أمانة قماش
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenExternalOp}
+              icon={<Scissors className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />}
+            >
+              تشغيل خارجي (مطبعة/تطريز)
+            </Button>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-            إدارة عقود تشغيل الغير، الفصل الصارم لأمانات خامات العملاء، وتتبع عمليات التطريز والطباعة والتسليم والفوترة.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            size="sm"
-            onClick={onOpenCreateJob}
-            icon={<Plus className="w-3.5 h-3.5" />}
-          >
-            أمر تشغيل جديد
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onOpenReceiveMaterial}
-            icon={<Boxes className="w-3.5 h-3.5 text-primary" />}
-          >
-            استلام أمانة قماش
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onOpenExternalOp}
-            icon={<Scissors className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />}
-          >
-            تشغيل خارجي (مطبعة/تطريز)
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

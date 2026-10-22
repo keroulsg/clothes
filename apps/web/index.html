@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>GarmentOS Cloud | المنظومة السحابية لإدارة مصانع وورش الملابس</title>
     <meta name="description" content="منظومة سحابية متخصصة لإدارة صالات القص، تتبع حزم الإنتاج بالباركود، إدارة المخازن والأقمشة، وعقود التشغيل للغير CMT مع عزل آمن للبيانات." />
     <!-- Google Fonts: Cairo & Inter -->
@@ -14,8 +17,10 @@
     <script>
       (function () {
         try {
+          var urlParams = new URLSearchParams(window.location.search);
+          var urlTheme = urlParams.get('theme');
           var saved = localStorage.getItem('garmentos_theme');
-          var isDark = saved ? (saved === 'dark') : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var isDark = urlTheme ? (urlTheme === 'dark') : (saved ? (saved === 'dark') : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
           var root = document.documentElement;
           if (isDark) {
             root.classList.add('dark');

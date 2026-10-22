@@ -2,31 +2,39 @@ import React from 'react';
 import { PackageOpen } from 'lucide-react';
 import { Button } from './Button';
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   title: string;
-  description: string;
-  actionText?: string;
-  onAction?: () => void;
+  description?: string;
   icon?: React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
+  className?: string;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   title,
   description,
-  actionText,
-  onAction,
   icon,
+  actionLabel,
+  onAction,
+  className = '',
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/30 my-4">
-      <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 mb-4 border border-slate-200 dark:border-slate-700/50">
-        {icon || <PackageOpen className="w-8 h-8 text-primary" />}
+    <div
+      className={`flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 ${className}`}
+    >
+      <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] flex items-center justify-center mb-3.5 border border-[#7F1625]/20">
+        {icon || <PackageOpen className="w-6 h-6" />}
       </div>
-      <h4 className="text-base font-semibold text-slate-900 dark:text-slate-200 mb-1">{title}</h4>
-      <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm mb-5 leading-relaxed">{description}</p>
-      {actionText && onAction && (
-        <Button size="sm" onClick={onAction}>
-          {actionText}
+      <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">{title}</h3>
+      {description && (
+        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-sm mb-4 leading-relaxed">
+          {description}
+        </p>
+      )}
+      {actionLabel && onAction && (
+        <Button variant="primary" size="sm" onClick={onAction}>
+          {actionLabel}
         </Button>
       )}
     </div>

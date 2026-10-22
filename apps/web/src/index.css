@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (.dark &);
+
 @theme {
   --color-primary: #7F1625;
   --color-primary-hover: #6a121e;
@@ -21,39 +23,81 @@
 }
 
 :root {
-  /* ───── GarmentOS ERP Modern Design Tokens ───── */
+  /* ───── GarmentOS ERP Semantic Color System (Light Mode) ───── */
   --brand-primary: #7F1625;
   --brand-primary-hover: #6a121e;
   --brand-primary-light: #941b2d;
-  --brand-gradient: linear-gradient(135deg, #7F1625 0%, #4f0c16 50%, #120306 100%);
-  --brand-soft: #f4abb9;
+  --brand-gradient: linear-gradient(135deg, #7F1625 0%, #941b2d 100%);
+  --brand-subtle: rgba(127, 22, 37, 0.08);
+  --brand-border: rgba(127, 22, 37, 0.22);
 
   --font-sans: 'Cairo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
 
   /* Surfaces & High-Contrast Backdrop */
   --bg-app: #F8FAFC;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
   --bg-sidebar: #ffffff;
   --bg-header: #ffffff;
   --bg-card: #ffffff;
   --bg-muted: #F1F5F9;
   --bg-hover: #F8FAFC;
 
-  /* Borders */
-  --border-color: #E2E8F0;
+  /* Borders & Dividers */
+  --border-subtle: #E2E8F0;
   --border-strong: #CBD5E1;
+  --border-color: #E2E8F0;
 
-  /* Text - Pure High Contrast */
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #64748B;
+  /* Typography - Pure High Contrast (Near-black main, dark readable neutral gray secondary) */
+  --text-primary: #090D16;
+  --text-secondary: #334155;
+  --text-muted: #475569;
   --text-inverse: #ffffff;
 
-  /* Semantic */
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-danger: #EF4444;
-  --color-info: #0284C7;
+  /* Status Colors */
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-info: #2563EB;
+}
+
+/* ───── Dark Theme Tokens: Restrained Burgundy Card Surfaces on Neutral Charcoal ───── */
+.dark, [data-theme="dark"] {
+  --brand-primary: #9E2A3B;
+  --brand-primary-hover: #B8354A;
+  --brand-primary-light: #C44358;
+  --brand-gradient: linear-gradient(135deg, #9E2A3B 0%, #7F1625 100%);
+  --brand-subtle: rgba(158, 42, 59, 0.20);
+  --brand-border: rgba(158, 42, 59, 0.35);
+
+  /* Charcoal App Canvas & Header/Sidebar */
+  --bg-app: #0C0E12;
+  --bg-sidebar: #10131A;
+  --bg-header: #10131A;
+
+  /* Restrained Dark Burgundy Card Surfaces (derived from #7F1625) */
+  --bg-surface: #180D11;
+  --bg-card: #180D11;
+  --bg-elevated: #221218;
+  --bg-muted: #1E1216;
+  --bg-hover: #26141B;
+
+  /* Burgundy-Charcoal Borders */
+  --border-subtle: #2C1820;
+  --border-strong: #452430;
+  --border-color: #2C1820;
+
+  /* Typography - Crisp White & Light Gray (WCAG AAA compliant) */
+  --text-primary: #F8FAFC;
+  --text-secondary: #E2E8F0;
+  --text-muted: #94A3B8;
+  --text-inverse: #090D16;
+
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-danger: #F87171;
+  --color-info: #60A5FA;
 }
 
 @layer base {
@@ -67,6 +111,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    width: 100%;
+    height: 100%;
+    max-width: 100vw;
   }
 
   body {
@@ -75,12 +122,26 @@
     padding: 0;
     background-color: var(--bg-app);
     color: var(--text-primary);
-    min-height: 100vh;
+    width: 100%;
+    height: 100%;
+    max-width: 100vw;
     overflow-x: hidden;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    max-width: 100vw;
   }
 }
 
-/* ───── Directional & Localization ───── */
+/* ───── Crucial Arabic Typography Protection ───── */
+/* In Arabic script, letter-spacing completely breaks character glyph connections */
+[dir="rtl"], [dir="rtl"] * {
+  letter-spacing: normal !important;
+}
+
+/* ───── Directional Alignment ───── */
 [dir="rtl"] { text-align: right; direction: rtl; }
 [dir="ltr"] { text-align: left; direction: ltr; }
 
@@ -91,32 +152,36 @@
   color: #ffffff !important;
   font-weight: 700;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px -2px rgba(127, 22, 37, 0.35);
+  box-shadow: 0 2px 8px -1px rgba(127, 22, 37, 0.35);
 }
 .btn-brand-primary:hover {
   background: linear-gradient(135deg, #6a121e 0%, #7F1625 100%) !important;
   border-color: #6a121e !important;
-  transform: translateY(-1.5px);
-  box-shadow: 0 6px 18px -2px rgba(127, 22, 37, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -1px rgba(127, 22, 37, 0.45);
 }
 .btn-brand-primary:active {
   transform: translateY(0);
 }
 
 /* ───── Custom Modern Scrollbar ───── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+::-webkit-scrollbar-thumb { background: #94A3B8; border-radius: 9999px; }
+.dark ::-webkit-scrollbar-thumb { background: #452430; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #64748B; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #7F1625; }
 
 /* ───── Form Controls ───── */
 input:not([type="checkbox"]):not([type="radio"]),
 select, textarea {
-  border-color: #E2E8F0;
+  border-color: var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
   transition: all 0.15s ease-in-out;
 }
 input::placeholder, textarea::placeholder {
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .form-control:focus, .form-select:focus,
@@ -132,15 +197,12 @@ input:focus, select:focus, textarea:focus {
   outline-offset: 2px !important;
 }
 
-/* ───── Royal Burgundy Website Hero Patterns ───── */
-.burgundy-pattern {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
-  background-size: 20px 20px;
+/* ───── Subtle Industrial Grid Pattern ───── */
+.industrial-grid {
+  background-image: radial-gradient(rgba(127, 22, 37, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.85);
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+.dark .industrial-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
 }

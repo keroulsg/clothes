@@ -38,6 +38,22 @@ class EnsureRole
             }
         }
 
+        // خريطة ترادف الأدوار المعتمدة بالمنظومة (Role Aliases & Normalized Sets)
+        $roleAliases = [
+            'accountant' => ['accountant', 'financial_accountant'],
+            'financial_accountant' => ['accountant', 'financial_accountant'],
+            'production_manager' => ['production_manager', 'production_engineer'],
+            'production_engineer' => ['production_manager', 'production_engineer'],
+            'quality_controller' => ['quality_controller', 'qc'],
+            'qc' => ['quality_controller', 'qc'],
+            'inventory_custodian' => ['inventory_custodian', 'warehouse', 'storekeeper', 'warehouse_manager'],
+            'warehouse' => ['inventory_custodian', 'warehouse', 'storekeeper', 'warehouse_manager'],
+            'storekeeper' => ['inventory_custodian', 'warehouse', 'storekeeper', 'warehouse_manager'],
+            'warehouse_manager' => ['inventory_custodian', 'warehouse', 'storekeeper', 'warehouse_manager'],
+            'worker' => ['worker', 'operator'],
+            'operator' => ['worker', 'operator'],
+        ];
+
         // فصل صريح: مشرف المنصة العام (platform_admin) محظور من تنفيذ العمليات التشغيلية والمالية داخل الشركات المستأجرة
         if ($userRole === 'platform_admin') {
             return response()->json([
@@ -47,7 +63,10 @@ class EnsureRole
         }
 
         // مالك الشركة (company_owner) يمتلك صلاحيات تشغيلية كاملة داخل شركته فقط
-        if ($userRole === 'company_owner' || in_array($userRole, $allowedRoles, true)) {
+        $effectiveUserRoles = $roleAliases[$userRole] ?? [$userRole];
+        $isAuthorized = $userRole === 'company_owner' || !empty(array_intersect($effectiveUserRoles, $allowedRoles));
+
+        if ($isAuthorized) {
             return $next($request);
         }
 

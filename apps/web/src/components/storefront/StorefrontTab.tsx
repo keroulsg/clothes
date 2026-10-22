@@ -13,6 +13,7 @@ import {
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { PageHeader } from '../ui/PageHeader';
 import { Modal } from '../ui/Modal';
 import { api } from '../../api/client';
 import type { Language, StoreOrder, ProductVariant } from '../../types';
@@ -129,6 +130,46 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={isAr ? 'المتجر الإلكتروني والمبيعات المباشرة' : 'Multi-Tenant Digital Storefront'}
+        subtitle={isAr
+          ? 'إدارة المتجر الإلكتروني، معالجة طلبات الأونلاين، تتبع الشحن، وتكامل المخزون الآني.'
+          : 'E-commerce orders management, checkout routing, delivery dispatch, and live stock sync.'}
+        icon={<Store className="w-5 h-5" />}
+        breadcrumbs={[
+          { label: isAr ? 'الرئيسية' : 'Home' },
+          { label: isAr ? 'المتجر الإلكتروني' : 'Storefront' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={activeSubTab === 'orders' ? 'primary' : 'outline'}
+              onClick={() => setActiveSubTab('orders')}
+              icon={<ShoppingBag className="w-3.5 h-3.5" />}
+            >
+              {isAr ? 'سجل الطلبات' : 'Orders'}
+            </Button>
+            <Button
+              size="sm"
+              variant={activeSubTab === 'preview' ? 'primary' : 'outline'}
+              onClick={() => setActiveSubTab('preview')}
+              icon={<Store className="w-3.5 h-3.5" />}
+            >
+              {isAr ? 'معاينة المتجر' : 'Storefront Preview'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={loadStoreOrders}
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />}
+            >
+              {isAr ? 'تحديث' : 'Refresh'}
+            </Button>
+          </div>
+        }
+      />
+
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">

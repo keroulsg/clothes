@@ -571,12 +571,50 @@ export interface SalesOrder {
 
 export interface SalesInvoiceItem {
   id: string;
+  variant_id?: string;
+  inventory_item_id?: string;
   description: string;
   quantity: number;
   unit_price: number;
   tax_rate: number;
   tax_amount: number;
   total_price: number;
+  returned_quantity?: number;
+  remaining_returnable_quantity?: number;
+  variant?: ProductVariant;
+}
+
+export interface SalesReturnItem {
+  id?: string;
+  sales_return_id?: string;
+  variant_id: string;
+  inventory_item_id?: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  condition?: 'good' | 'defective' | 'scrap';
+  action_taken?: 'restock' | 'repair' | 'discard';
+  variant?: ProductVariant;
+}
+
+export interface SalesReturn {
+  id: string;
+  return_number: string;
+  customer_id?: string;
+  sales_order_id?: string;
+  sales_invoice_id?: string;
+  warehouse_id: string;
+  return_date: string;
+  total_amount: number;
+  refund_status: 'pending' | 'credited' | 'refunded';
+  status: 'draft' | 'received' | 'inspected' | 'restocked' | 'rejected';
+  reason: string;
+  notes?: string;
+  is_restocked: boolean;
+  created_at?: string;
+  customer?: Customer;
+  salesInvoice?: SalesInvoice;
+  items?: SalesReturnItem[];
 }
 
 export interface SalesInvoice {

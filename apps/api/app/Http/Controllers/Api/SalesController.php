@@ -107,11 +107,53 @@ class SalesController extends Controller
 
     public function invoices(): JsonResponse
     {
-        $invoices = SalesInvoice::with(['customer', 'salesOrder', 'items.variant.garmentModel'])
+        $invoices = SalesInvoice::with([
+            'customer',
+            'salesOrder.warehouse',
+            'items.variant.garmentModel',
+            'items.variant.size',
+            'items.variant.color',
+        ])
             ->latest()
             ->paginate(20);
 
         return response()->json($invoices);
+    }
+
+    public function showInvoice(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $invoice = SalesInvoice::where('tenant_id', $tenantId)
+            ->with([
+                'customer',
+                'salesOrder.warehouse',
+                'items.variant.garmentModel',
+                'items.variant.size',
+                'items.variant.color',
+            ])
+            ->findOrFail($id);
+
+        $returnedQuantities = \App\Models\SalesReturnItem::where('tenant_id', $tenantId)
+            ->whereHas('salesReturn', function ($q) use ($id) {
+                $q->where('sales_invoice_id', $id);
+            })
+            ->select('variant_id', \Illuminate\Support\Facades\DB::raw('SUM(quantity) as total_returned'))
+            ->groupBy('variant_id')
+            ->pluck('total_returned', 'variant_id');
+
+        $invoiceData = $invoice->toArray();
+        if (!empty($invoiceData['items'])) {
+            foreach ($invoiceData['items'] as &$item) {
+                $variantId = $item['variant_id'] ?? null;
+                $alreadyReturned = (float)($returnedQuantities[$variantId] ?? 0);
+                $item['returned_quantity'] = $alreadyReturned;
+                $item['remaining_returnable_quantity'] = max(0, (float)$item['quantity'] - $alreadyReturned);
+            }
+        }
+
+        return response()->json([
+            'invoice' => $invoiceData,
+        ]);
     }
 
     public function posSale(Request $request): JsonResponse
@@ -259,12 +301,19 @@ class SalesController extends Controller
             'items.*.action_taken' => 'nullable|string|in:restock,repair,discard',
         ]);
 
-        $salesReturn = $this->salesService->createSalesReturn($validated);
+        try {
+            $salesReturn = $this->salesService->createSalesReturn($validated);
 
-        return response()->json([
-            'message' => 'تم تسجيل مرتجع المبيعات بنجاح',
-            'sales_return' => $salesReturn,
-        ], 201);
+            return response()->json([
+                'message' => 'تم تسجيل مرتجع المبيعات بنجاح',
+                'sales_return' => $salesReturn,
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvalidReturnData',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 }
 

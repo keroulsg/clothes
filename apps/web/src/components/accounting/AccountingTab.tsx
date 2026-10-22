@@ -20,6 +20,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
+import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import type { Language, ChartOfAccount, JournalEntry, ProductionCostSheet, PaymentVoucher } from '../../types';
 
@@ -227,6 +228,45 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={isAr ? 'الإدارة المالية والتكاليف الصناعية' : 'Financial Accounting & Industrial Costing'}
+        subtitle={isAr
+          ? 'دليل الحسابات، قيود اليومية، سندات القبض والصرف، وتكلفة أوامر الإنتاج الفعلية.'
+          : 'Chart of accounts, journal entries, vouchers, and actual production cost sheets.'}
+        icon={<Receipt className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        breadcrumbs={[
+          { label: isAr ? 'الرئيسية' : 'Home' },
+          { label: isAr ? 'المالية والتكاليف' : 'Finance & Costing' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsJournalModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ قيد يومية جديد' : '+ Journal Entry'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsVoucherModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              {isAr ? '+ سند مالي' : '+ Voucher'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCalcCostModalOpen(true)}
+              icon={<Calculator className="w-4 h-4" />}
+            >
+              {isAr ? 'احتساب تكلفة أمر' : 'Cost Order'}
+            </Button>
+          </div>
+        }
+      />
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">

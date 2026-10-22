@@ -58,4 +58,9 @@ class SalesInvoice extends Model
     {
         return $this->hasMany(SalesInvoiceItem::class);
     }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 }

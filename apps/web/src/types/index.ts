@@ -624,7 +624,7 @@ export interface SalesInvoice {
   customer_name: string;
   customer_id?: string;
   invoice_type: 'standard' | 'pos_receipt' | 'tax_invoice';
-  status: 'draft' | 'issued' | 'paid' | 'partially_paid' | 'void';
+  status: 'draft' | 'issued' | 'paid' | 'partially_paid' | 'void' | 'refunded' | 'credited' | 'partially_refunded' | 'partially_credited';
   payment_method: 'cash' | 'card' | 'bank_transfer' | 'credit' | 'check';
   subtotal: number;
   tax_amount: number;
@@ -635,6 +635,12 @@ export interface SalesInvoice {
   invoice_date: string;
   due_date?: string;
   items?: SalesInvoiceItem[];
+  tenant?: {
+    id: string;
+    code: string;
+    name: string;
+    settings?: Record<string, any>;
+  };
 }
 
 export interface PosSession {

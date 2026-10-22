@@ -575,9 +575,22 @@ class SalesService
                 ProductVariant::where('tenant_id', $tenantId)->findOrFail($item['variant_id']);
             }
 
+            // حساب الإجمالي بالاعتماد على أسعار الخادم الموثقة بالفاتورة/الأمر الأصلي لمنع التلاعب المالي
             $totalAmount = 0;
             foreach ($data['items'] as $item) {
-                $totalAmount += round((float)$item['quantity'] * (float)$item['unit_price'], 4);
+                $unitPrice = (float) $item['unit_price'];
+                if ($invoice) {
+                    $invLine = $invoiceItems->firstWhere('variant_id', $item['variant_id']);
+                    if ($invLine) {
+                        $unitPrice = (float) $invLine->unit_price;
+                    }
+                } elseif (!empty($order)) {
+                    $orderItem = $order->items()->where('variant_id', $item['variant_id'])->first();
+                    if ($orderItem) {
+                        $unitPrice = (float) $orderItem->unit_price;
+                    }
+                }
+                $totalAmount += round((float)$item['quantity'] * $unitPrice, 4);
             }
             $totalAmount = round($totalAmount, 4);
 
@@ -600,6 +613,17 @@ class SalesService
             foreach ($data['items'] as $item) {
                 $qty = (float)$item['quantity'];
                 $price = (float)$item['unit_price'];
+                if ($invoice) {
+                    $invLine = $invoiceItems->firstWhere('variant_id', $item['variant_id']);
+                    if ($invLine) {
+                        $price = (float) $invLine->unit_price;
+                    }
+                } elseif (!empty($order)) {
+                    $orderItem = $order->items()->where('variant_id', $item['variant_id'])->first();
+                    if ($orderItem) {
+                        $price = (float) $orderItem->unit_price;
+                    }
+                }
                 $lineTotal = round($qty * $price, 4);
 
                 $returnItem = SalesReturnItem::create([
@@ -639,36 +663,52 @@ class SalesService
                 }
             }
 
-            // تحديث رصيد الفاتورة المرتبطة وتخفيض المستحق
+            // تحديث رصيد الفاتورة المرتبطة وحالتها المحاسبية بدقة دون ادعاء السداد
             if ($invoice) {
                 $invoice->balance_due = max(0, round((float)$invoice->balance_due - $totalAmount, 4));
-                if ($invoice->balance_due <= 0 && $invoice->total_amount > 0) {
-                    $invoice->status = 'paid';
+
+                $allInvItems = $invoice->items()->get();
+                $totalOriginalQty = (float) $allInvItems->sum('quantity');
+
+                $totalReturnedQty = (float) SalesReturnItem::where('tenant_id', $tenantId)
+                    ->whereHas('salesReturn', function ($q) use ($invoice) {
+                        $q->where('sales_invoice_id', $invoice->id);
+                    })
+                    ->sum('quantity');
+
+                $isFullyReturned = $totalReturnedQty >= $totalOriginalQty;
+
+                if ($isFullyReturned) {
+                    $invoice->status = ((float)$invoice->paid_amount > 0) ? 'refunded' : 'credited';
+                } else {
+                    if ((float)$invoice->paid_amount > 0) {
+                        $invoice->status = 'partially_refunded';
+                    } elseif ($invoice->balance_due <= 0) {
+                        $invoice->status = 'credited';
+                    } else {
+                        $invoice->status = 'partially_credited';
+                    }
                 }
                 $invoice->save();
             }
 
-            // قيد اليومية المتوازن لإثبات إشعار الدائن عند توفر شجرة الحسابات
+            // قيد اليومية المتوازن لإثبات إشعار الدائن عند توفر شجرة الحسابات (إلزامية التوازن والذرية)
             $salesAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '4010')->first();
             $arAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '1110')->first();
 
             if ($salesAccount && $arAccount && $totalAmount > 0) {
-                try {
-                    $accountingService = app(AccountingService::class);
-                    $accountingService->createJournalEntry([
-                        'entry_number' => 'JE-SRT-' . $salesReturn->return_number,
-                        'entry_date' => $salesReturn->return_date ? $salesReturn->return_date->toDateString() : now()->toDateString(),
-                        'description' => 'إثبات مرتجع مبيعات وإشعار دائن للفاتورة ' . ($invoice->invoice_number ?? $salesReturn->return_number),
-                        'reference_type' => 'sales_returns',
-                        'reference_id' => $salesReturn->id,
-                        'lines' => [
-                            ['account_id' => $salesAccount->id, 'debit' => $totalAmount, 'credit' => 0],
-                            ['account_id' => $arAccount->id, 'debit' => 0, 'credit' => $totalAmount],
-                        ],
-                    ]);
-                } catch (\Throwable $e) {
-                    // إذا كان القيد مسجلاً مسبقاً أو غير مطلوب
-                }
+                $accountingService = app(AccountingService::class);
+                $accountingService->createJournalEntry([
+                    'entry_number' => 'JE-SRT-' . $salesReturn->return_number,
+                    'entry_date' => $salesReturn->return_date ? $salesReturn->return_date->toDateString() : now()->toDateString(),
+                    'description' => 'إثبات مرتجع مبيعات وإشعار دائن للفاتورة ' . ($invoice->invoice_number ?? $salesReturn->return_number),
+                    'reference_type' => 'sales_returns',
+                    'reference_id' => $salesReturn->id,
+                    'lines' => [
+                        ['account_id' => $salesAccount->id, 'debit' => $totalAmount, 'credit' => 0],
+                        ['account_id' => $arAccount->id, 'debit' => 0, 'credit' => $totalAmount],
+                    ],
+                ]);
             }
 
             // تسجيل العملية في سجل الرقابة والتدقيق

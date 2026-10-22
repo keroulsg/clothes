@@ -40,23 +40,23 @@
   2. Implemented dedicated `Sales Returns` sub-tab and row ActionsMenu trigger in `SalesTab.tsx`.
   3. Hardened `SalesService::createSalesReturn` and `SalesController` with database row-locking (`lockForUpdate`), strict item validation against original invoice/order, restocking inventory movement logging, automatic credit note deduction from `balance_due`, balanced double-entry accounting posting (`4010` Sales Revenue vs `1110` Accounts Receivable), and audit logging.
   4. Added `GET /api/v1/sales/invoices/{id}` with authoritative `remaining_returnable_quantity`.
-* **Automated Regression Test:** `apps/api/tests/Feature/SalesReturnAndPosReceiptPhase07BTest.php` (9 tests passing).
-* **Definition of Done:** Authorized user opens return modal from invoice, selects valid quantities, selects restock warehouse, submits successfully without duplicate execution, invoice balance updates, inventory ledger reflects restocked items, and return record displays in returns list.
+* **Automated Regression Test:** `apps/api/tests/Feature/SalesReturnAndPosReceiptPhase07BTest.php` (13 tests passing, 65 assertions).
+* **Definition of Done:** Authorized user opens return modal from invoice, selects valid quantities, selects restock warehouse, submits successfully without duplicate execution, invoice balance updates honestly (refunded/credited), authoritative server pricing enforced, inventory ledger reflects restocked items, and return record displays in returns list.
 
 ---
 
 ### DEF-03: Missing Thermal POS Receipt Print Preview for Factory Outlets
 * **Issue ID:** `DEF-03`
-* **Severity:** **P2 (Normal) — [RESOLVED IN PHASE 07B]**
+* **Severity:** **P2 (Normal) — [RESOLVED IN PHASE 07B & FORENSICALLY RE-AUDITED]**
 * **Affected Route:** `#/erp/sales` (POS Tab & Invoices Tab)
 * **Affected API / Entities:** `PosSale`, `SalesInvoice`, `PosReceiptModal.tsx`
 * **Root Cause & Evidence:**
-  Completing a POS cash sale displayed a toast alert and updated stock, but did not provide a standard 80mm thermal receipt pop-up ready for `window.print()`.
+  Completing a POS cash sale displayed a toast alert and updated stock, but did not provide a standard 80mm thermal receipt pop-up ready for `window.print()`. Hardcoded fallback company/tax identities were eliminated during forensic re-audit.
 * **Fix Applied:**
-  1. Implemented `apps/web/src/components/sales/PosReceiptModal.tsx` featuring high-contrast 80mm thermal receipt typography, factory branding, tax registration number, cashier ID, itemized breakdown with VAT/discounts, and print-specific CSS that hides all application chrome and headers during printing.
+  1. Implemented `apps/web/src/components/sales/PosReceiptModal.tsx` featuring high-contrast 80mm thermal receipt typography, dynamic tenant branding from authenticated session/persisted invoice, honest missing tax handling (no fake tax numbers), cashier ID, itemized breakdown with VAT/discounts, and print-specific CSS that hides all application chrome and headers during printing.
   2. Integrated POS cash sale completion to automatically trigger receipt preview.
-  3. Added "طباعة إيصال حراري (80mm)" action to Invoice row ActionsMenu for reprint at any time.
-* **Automated Regression Test:** `apps/api/tests/Feature/SalesReturnAndPosReceiptPhase07BTest.php` (testPosCashSaleGeneratesPersistedInvoiceAndReceiptData) and frontend production build.
+  3. Added "طباعة إيصال حراري (80mm)" action to Invoice row ActionsMenu for reprint at any time with fresh server rehydration.
+* **Automated Regression Test:** `apps/api/tests/Feature/SalesReturnAndPosReceiptPhase07BTest.php` (13 tests passing) and frontend production build.
 * **Definition of Done:** Cashier completes sale, printable modal opens automatically with real persisted sale data, print layout formats strictly to 80mm roll, and reprints can be generated directly from invoice history.
 
 ---

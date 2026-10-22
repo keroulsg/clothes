@@ -36,6 +36,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
     protected User $salesRepA;
     protected User $workerA;
     protected User $ownerB;
+    protected User $platformAdmin;
     protected Warehouse $warehouseA;
     protected Customer $customerA;
     protected GarmentModel $modelA;
@@ -45,6 +46,15 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->platformAdmin = User::create([
+            'name' => 'مشرف المنصة العام',
+            'email' => 'superadmin@garmentos.test',
+            'role' => 'platform_admin',
+            'tenant_id' => null,
+            'password' => bcrypt('Pass123!'),
+            'is_active' => true,
+        ]);
 
         $this->tenantA = Tenant::create([
             'code' => 'TENANT-RET-01',
@@ -615,5 +625,257 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
         $this->assertEquals($initialReturnCount, SalesReturn::count());
         $this->assertEquals($initialTxCount, InventoryTransaction::count());
         $this->assertEquals(1000.0, (float) $invoice->fresh()->balance_due);
+    }
+
+    /**
+     * 10. الحماية ضد التلاعب بأسعار المرتجع من طرف العميل (Authoritative Server Pricing)
+     */
+    public function test_authoritative_server_pricing_prevents_client_price_tampering(): void
+    {
+        Sanctum::actingAs($this->accountantA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-PRICE-TAMPER',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'payment_method' => 'credit',
+            'subtotal' => 300.0,
+            'total_amount' => 300.0,
+            'balance_due' => 300.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => 'تيشيرت بولو 150ج للقطعة',
+            'quantity' => 2.0,
+            'unit_price' => 150.0,
+            'total_price' => 300.0,
+        ]);
+
+        // يحاول العميل إرسال سعر مضخم 99999 بدلاً من 150
+        $res = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'محاولة احتيال بسعر مضخم',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 99999.0],
+            ],
+        ]);
+
+        $res->assertStatus(201);
+        $return = SalesReturn::where('sales_invoice_id', $invoice->id)->firstOrFail();
+
+        // الخادم يجب أن يفرض السعر الأصلي 150 وليس 99999
+        $this->assertEquals(150.0, (float) $return->total_amount);
+        $this->assertEquals(150.0, (float) $return->items->first()->unit_price);
+        $this->assertEquals(150.0, (float) $invoice->fresh()->balance_due);
+    }
+
+    /**
+     * 11. الفاتورة المسددة بالكامل يتم وسمها كـ refunded عند إرجاعها وليس paid
+     */
+    public function test_fully_paid_invoice_returns_mark_invoice_as_refunded(): void
+    {
+        Sanctum::actingAs($this->salesRepA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-PAID-REFUND',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'pos_receipt',
+            'status' => 'paid',
+            'payment_method' => 'cash',
+            'subtotal' => 400.0,
+            'total_amount' => 400.0,
+            'paid_amount' => 400.0,
+            'balance_due' => 0.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => 'قطعتين مدفوعة كاش',
+            'quantity' => 2.0,
+            'unit_price' => 200.0,
+            'total_price' => 400.0,
+        ]);
+
+        // إرجاع القطعتين بالكامل
+        $res = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'استرجاع كامل لمبيعات نقدية',
+            'is_restocked' => true,
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 2.0, 'unit_price' => 200.0, 'condition' => 'good', 'action_taken' => 'restock'],
+            ],
+        ]);
+
+        $res->assertStatus(201);
+        $invFresh = $invoice->fresh();
+
+        // يجب أن تتحول الحالة إلى refunded ولا تظل paid ورصيد balance_due لا يكون سالباً
+        $this->assertEquals('refunded', $invFresh->status);
+        $this->assertEquals(0.0, (float) $invFresh->balance_due);
+        $this->assertEquals(400.0, (float) $invFresh->paid_amount);
+    }
+
+    /**
+     * 12. مصفوفة الصلاحيات الكاملة (Full RBAC Matrix for Sales Invoices and Returns)
+     */
+    public function test_full_role_authorization_matrix_for_sales_and_returns(): void
+    {
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-RBAC-MATRIX',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'payment_method' => 'credit',
+            'subtotal' => 500.0,
+            'total_amount' => 500.0,
+            'balance_due' => 500.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => 'صنف اختبار الصلاحيات',
+            'quantity' => 5.0,
+            'unit_price' => 100.0,
+            'total_price' => 500.0,
+        ]);
+
+        // 1. زائر غير مسجل (Unauthenticated): مرفوض 401
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(401);
+        $this->postJson('/api/v1/sales/returns', [])->assertStatus(401);
+
+        // 2. عامل تشغيل (Worker): قراءة الفاتورة 403، وتسجيل المرتجع 403
+        Sanctum::actingAs($this->workerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(403);
+        $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'Worker unauthorized return',
+            'items' => [['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 100.0]],
+        ])->assertStatus(403);
+
+        // 3. مدير إنتاج (Production Manager): مسموح له قراءة الفاتورة، لكن مرفوض من إنشاء مرتجع مالي تجاري (403)
+        $prodManager = User::create([
+            'name' => 'مدير الإنتاج',
+            'email' => 'pm@nile-ret.test',
+            'role' => 'production_manager',
+            'tenant_id' => $this->tenantA->id,
+            'password' => bcrypt('Pass123!'),
+            'is_active' => true,
+        ]);
+        Sanctum::actingAs($prodManager);
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
+        $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'PM attempt return',
+            'items' => [['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 100.0]],
+        ])->assertStatus(403);
+
+        // 4. مشرف المنصة العام (Platform Super Admin): محظور 403 من العمليات التشغيلية للمستأجر
+        Sanctum::actingAs($this->platformAdmin);
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(403);
+        $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'Platform admin attempt',
+            'items' => [['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 100.0]],
+        ])->assertStatus(403);
+
+        // 5. المحاسب المالي (financial_accountant) ومسؤول المبيعات (sales_rep) ومالك الشركة (company_owner): مسموح
+        Sanctum::actingAs($this->accountantA);
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
+
+        Sanctum::actingAs($this->salesRepA);
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
+
+        Sanctum::actingAs($this->ownerA);
+        $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
+    }
+
+    /**
+     * 13. هوية الشركة والبيانات الضريبية الحقيقية على الفاتورة والإيصال دون بيانات وهمية
+     */
+    public function test_receipt_company_identity_and_tax_isolation_across_tenants(): void
+    {
+        // تهيئة مستأجر ب برقم ضريبي معتمد
+        $this->tenantA->settings = ['tax_number' => '100-200-300'];
+        $this->tenantA->save();
+
+        // مستأجر ب بدون رقم ضريبي
+        $this->tenantB->settings = [];
+        $this->tenantB->save();
+
+        Sanctum::actingAs($this->ownerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $invA = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-TENANT-A',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'pos_receipt',
+            'status' => 'paid',
+            'payment_method' => 'cash',
+            'subtotal' => 200.0,
+            'total_amount' => 200.0,
+            'paid_amount' => 200.0,
+            'balance_due' => 0.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        $resA = $this->getJson("/api/v1/sales/invoices/{$invA->id}");
+        $resA->assertStatus(200);
+        $resA->assertJsonPath('invoice.tenant.name', 'مصنع النيل للملابس الجاهزة');
+        $resA->assertJsonPath('invoice.tenant.settings.tax_number', '100-200-300');
+
+        // مستخدم من مستأجر ب
+        Sanctum::actingAs($this->ownerB);
+        app()->instance('current_tenant_id', $this->tenantB->id);
+
+        // محاولة مستأجر ب قراءة فاتورة مستأجر أ تفشل فوراً (404 / عزل تام)
+        $this->getJson("/api/v1/sales/invoices/{$invA->id}")->assertStatus(404);
+
+        // إنشاء فاتورة لمستأجر ب
+        $invB = SalesInvoice::create([
+            'tenant_id' => $this->tenantB->id,
+            'invoice_number' => 'INV-TENANT-B',
+            'customer_name' => 'عميل الدلتا',
+            'invoice_type' => 'pos_receipt',
+            'status' => 'paid',
+            'payment_method' => 'cash',
+            'subtotal' => 100.0,
+            'total_amount' => 100.0,
+            'paid_amount' => 100.0,
+            'balance_due' => 0.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        $resB = $this->getJson("/api/v1/sales/invoices/{$invB->id}");
+        $resB->assertStatus(200);
+        $resB->assertJsonPath('invoice.tenant.name', 'مصنع الدلتا المنافس');
+        // الرقم الضريبي غير موجود للمستأجر ب
+        $this->assertNull($resB->json('invoice.tenant.settings.tax_number'));
     }
 }

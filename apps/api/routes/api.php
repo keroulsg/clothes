@@ -179,7 +179,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/orders/{id}/reserve', [\App\Http\Controllers\Api\SalesController::class, 'reserveOrderStock']);
         Route::post('/sales/orders/{id}/fulfill', [\App\Http\Controllers\Api\SalesController::class, 'fulfillOrder']);
         Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices']);
-        Route::get('/sales/invoices/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showInvoice']);
+        Route::get('/sales/invoices/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showInvoice'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::post('/pos/sale', [\App\Http\Controllers\Api\SalesController::class, 'posSale']);
         Route::get('/pos/sessions', [\App\Http\Controllers\Api\SalesController::class, 'posSessions']);
         Route::post('/pos/sessions/open', [\App\Http\Controllers\Api\SalesController::class, 'openPosSession']);
@@ -187,7 +187,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'deliveryNotes']);
         Route::post('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'storeDeliveryNote']);
         Route::get('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'salesReturns']);
-        Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:accountant,production_manager,company_owner,sales_rep');
+        Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep');
 
         // الحسابات العامة وقيود اليومية والتكاليف (Phase 8: Accounting & Costing)
         Route::get('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'accounts']);

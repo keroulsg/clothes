@@ -25,6 +25,7 @@ export interface ApiTenant {
   status: string;
   plan_tier: string;
   is_paid?: boolean;
+  settings?: Record<string, any>;
 }
 
 export interface LoginResponse {

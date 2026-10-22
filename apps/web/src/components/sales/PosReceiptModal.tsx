@@ -2,6 +2,7 @@ import React from 'react';
 import { Printer } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { api } from '../../api/client';
 import type { Language, SalesInvoice } from '../../types';
 
 interface PosReceiptModalProps {
@@ -18,8 +19,8 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
   onClose,
   invoice,
   lang,
-  factoryName = 'مصنع النيل للملابس الجاهزة',
-  factoryTaxId = '100-244-901',
+  factoryName,
+  factoryTaxId,
 }) => {
   const isAr = lang === 'ar';
 
@@ -29,16 +30,41 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
     window.print();
   };
 
+  const storedTenant = api.auth.getStoredTenant();
+  const effectiveFactoryName =
+    factoryName ||
+    (invoice as any)?.tenant?.name ||
+    storedTenant?.name ||
+    (isAr ? 'منشأة الملابس الجاهزة' : 'Garment Manufacturing Factory');
+
+  const rawTaxId =
+    factoryTaxId ||
+    (invoice as any)?.tenant?.settings?.tax_number ||
+    (invoice as any)?.tenant?.settings?.tax_id ||
+    storedTenant?.settings?.tax_number;
+
+  const effectiveTaxId = rawTaxId ? String(rawTaxId).trim() : null;
+
+  const isPaid = invoice.status === 'paid';
+  const isRefunded = invoice.status === 'refunded' || invoice.status === 'credited';
+  const isPartiallyRefunded = invoice.status === 'partially_refunded' || invoice.status === 'partially_credited';
+
   const invoiceItems = invoice.items || [];
   const totalAmount = Number(invoice.total_amount) || 0;
   const subtotal = Number(invoice.subtotal) || totalAmount;
   const taxAmount = Number(invoice.tax_amount) || 0;
   const discountAmount = Number(invoice.discount_amount) || 0;
+  const balanceDue = Number(invoice.balance_due) || 0;
+
   const paymentMethodLabel = invoice.payment_method === 'cash'
     ? (isAr ? 'نقدي (Cash)' : 'Cash')
     : invoice.payment_method === 'card'
     ? (isAr ? 'بطاقة بنكية (Card)' : 'Card')
-    : invoice.payment_method || 'Cash';
+    : invoice.payment_method === 'bank_transfer'
+    ? (isAr ? 'تحويل بنكي' : 'Bank Transfer')
+    : invoice.payment_method === 'credit'
+    ? (isAr ? 'آجل (Credit)' : 'Credit')
+    : invoice.payment_method || '—';
 
   return (
     <Modal
@@ -94,31 +120,66 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
           >
             {/* Header */}
             <div className="text-center space-y-1 pb-3 border-b border-dashed border-black">
-              <p className="text-sm font-black tracking-tight uppercase">{factoryName}</p>
-              <p className="text-[10px] text-zinc-700">منفذ بيع المصنع والمعرض التجاري</p>
-              <p className="text-[10px]">الرقم الضريبي: {factoryTaxId}</p>
-              <div className="inline-block px-2 py-0.5 mt-1 border border-black rounded text-[10px] font-bold">
-                إيصال بيع نقدي فوري (POS)
+              <p className="text-sm font-black tracking-tight uppercase">{effectiveFactoryName}</p>
+              <p className="text-[10px] text-zinc-700">
+                {isAr ? 'منفذ بيع المصنع والمعرض التجاري' : 'Factory Outlet & Commercial Showroom'}
+              </p>
+              {effectiveTaxId ? (
+                <p className="text-[10px] font-mono">
+                  {isAr ? `الرقم الضريبي: ${effectiveTaxId}` : `Tax ID: ${effectiveTaxId}`}
+                </p>
+              ) : (
+                <p className="text-[9px] text-zinc-500 italic">
+                  {isAr ? 'الرقم الضريبي: غير مسجل' : 'Tax ID: Not Registered'}
+                </p>
+              )}
+
+              {/* Status Badge */}
+              <div className="pt-1">
+                {isPaid && (
+                  <div className="inline-block px-2 py-0.5 border border-black rounded text-[10px] font-bold">
+                    {isAr ? 'إيصال بيع نقدي فوري (POS) - مسدد' : 'POS Cash Sale Receipt - PAID'}
+                  </div>
+                )}
+                {isRefunded && (
+                  <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold">
+                    {isAr ? 'إيصال مسترجع بالكامل (REFUNDED)' : 'Fully Refunded Receipt'}
+                  </div>
+                )}
+                {isPartiallyRefunded && (
+                  <div className="inline-block px-2 py-0.5 border border-black rounded text-[10px] font-bold">
+                    {isAr ? 'إيصال مسترجع جزئياً (PARTIAL RETURN)' : 'Partially Returned Receipt'}
+                  </div>
+                )}
+                {!isPaid && !isRefunded && !isPartiallyRefunded && (
+                  <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold text-amber-900">
+                    {isAr ? `مسودة بيع غير مسددة (${invoice.status})` : `UNPAID RECEIPT (${invoice.status})`}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Receipt Metadata */}
             <div className="py-2.5 border-b border-dashed border-black text-[11px] space-y-1">
               <div className="flex justify-between">
-                <span>رقم الفاتورة:</span>
+                <span>{isAr ? 'رقم الفاتورة:' : 'Invoice #:'}</span>
                 <span className="font-bold font-mono">{invoice.invoice_number}</span>
               </div>
               <div className="flex justify-between">
-                <span>التاريخ والوقت:</span>
-                <span>{invoice.invoice_date} {new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{isAr ? 'التاريخ:' : 'Date:'}</span>
+                <span>{invoice.invoice_date}</span>
               </div>
               <div className="flex justify-between">
-                <span>العميل:</span>
-                <span>{invoice.customer_name || 'عميل نقدي'}</span>
+                <span>{isAr ? 'العميل:' : 'Customer:'}</span>
+                <span>{invoice.customer_name || (isAr ? 'عميل نقدي' : 'Cash Customer')}</span>
               </div>
               <div className="flex justify-between">
-                <span>طريقة السداد:</span>
+                <span>{isAr ? 'طريقة السداد:' : 'Payment:'}</span>
                 <span className="font-bold">{paymentMethodLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>{isAr ? 'حالة السداد:' : 'Status:'}</span>
+                <span className="font-bold font-mono uppercase">{invoice.status}</span>
               </div>
             </div>
 
@@ -172,9 +233,15 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
                 </div>
               )}
               <div className="flex justify-between text-sm font-black pt-1 border-t border-black">
-                <span>الصافي المطلوب:</span>
+                <span>{isAr ? 'الصافي الإجمالي:' : 'Total Amount:'}</span>
                 <span className="font-mono">{totalAmount.toFixed(2)} ج.م</span>
               </div>
+              {balanceDue > 0 && (
+                <div className="flex justify-between text-xs font-bold pt-1 text-red-900">
+                  <span>{isAr ? 'المتبقي غير المسدد:' : 'Balance Due:'}</span>
+                  <span className="font-mono">{balanceDue.toFixed(2)} ج.م</span>
+                </div>
+              )}
             </div>
 
             {/* Barcode / Verification Stamp */}

@@ -108,6 +108,7 @@ class SalesController extends Controller
     public function invoices(): JsonResponse
     {
         $invoices = SalesInvoice::with([
+            'tenant',
             'customer',
             'salesOrder.warehouse',
             'items.variant.garmentModel',
@@ -125,6 +126,7 @@ class SalesController extends Controller
         $tenantId = app('current_tenant_id');
         $invoice = SalesInvoice::where('tenant_id', $tenantId)
             ->with([
+                'tenant',
                 'customer',
                 'salesOrder.warehouse',
                 'items.variant.garmentModel',

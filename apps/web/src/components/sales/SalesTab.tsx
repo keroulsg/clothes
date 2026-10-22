@@ -873,9 +873,17 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                               id: 'print-receipt-80mm',
                               label: isAr ? 'طباعة إيصال حراري (80mm)' : 'Print POS Receipt (80mm)',
                               icon: <Receipt className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />,
-                              onClick: () => {
+                              onClick: async () => {
                                 setSelectedInvoiceForReceipt(inv);
                                 setIsReceiptModalOpen(true);
+                                try {
+                                  const fresh = await api.sales.getInvoice(inv.id);
+                                  if (fresh?.invoice) {
+                                    setSelectedInvoiceForReceipt(fresh.invoice);
+                                  }
+                                } catch {
+                                  // Fallback to currently selected invoice
+                                }
                               },
                             },
                             {

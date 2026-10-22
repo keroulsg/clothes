@@ -107,14 +107,16 @@ class SalesController extends Controller
 
     public function invoices(): JsonResponse
     {
-        $invoices = SalesInvoice::with([
-            'tenant',
-            'customer',
-            'salesOrder.warehouse',
-            'items.variant.garmentModel',
-            'items.variant.size',
-            'items.variant.color',
-        ])
+        $tenantId = app('current_tenant_id');
+        $invoices = SalesInvoice::where('tenant_id', $tenantId)
+            ->with([
+                'tenant',
+                'customer',
+                'salesOrder.warehouse',
+                'items.variant.garmentModel',
+                'items.variant.size',
+                'items.variant.color',
+            ])
             ->latest()
             ->paginate(20);
 
@@ -284,6 +286,26 @@ class SalesController extends Controller
         return response()->json($returns);
     }
 
+    public function showSalesReturn(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $salesReturn = \App\Models\SalesReturn::where('tenant_id', $tenantId)
+            ->with([
+                'customer',
+                'salesOrder',
+                'salesInvoice',
+                'warehouse',
+                'items.variant.garmentModel',
+                'items.variant.size',
+                'items.variant.color',
+            ])
+            ->findOrFail($id);
+
+        return response()->json([
+            'sales_return' => $salesReturn,
+        ]);
+    }
+
     public function storeSalesReturn(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -295,6 +317,9 @@ class SalesController extends Controller
             'reason' => 'required|string|max:255',
             'is_restocked' => 'nullable|boolean',
             'notes' => 'nullable|string',
+            'refund_payment' => 'nullable|boolean',
+            'refund_payment_method' => 'nullable|string|in:cash,card,bank_transfer',
+            'refund_account_id' => 'nullable|uuid|exists:chart_of_accounts,id',
             'items' => 'required|array|min:1',
             'items.*.variant_id' => 'required|uuid|exists:product_variants,id',
             'items.*.quantity' => 'required|numeric|min:0.0001',
@@ -313,6 +338,32 @@ class SalesController extends Controller
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'InvalidReturnData',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function refundSalesReturn(string $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'amount' => 'nullable|numeric|min:0.01',
+            'payment_method' => 'nullable|string|in:cash,card,bank_transfer',
+            'account_id' => 'nullable|uuid|exists:chart_of_accounts,id',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $result = $this->salesService->processSalesReturnRefund($id, $validated);
+
+            return response()->json([
+                'message' => 'تم صرف الاسترداد النقدي للمرتجع وإثبات السند المحاسبي بنجاح',
+                'sales_return' => $result['sales_return'],
+                'payment_voucher' => $result['payment_voucher'],
+                'invoice' => $result['invoice'],
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'RefundProcessingError',
                 'message' => $e->getMessage(),
             ], 422);
         }

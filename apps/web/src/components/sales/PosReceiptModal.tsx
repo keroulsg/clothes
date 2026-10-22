@@ -46,8 +46,10 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
   const effectiveTaxId = rawTaxId ? String(rawTaxId).trim() : null;
 
   const isPaid = invoice.status === 'paid';
-  const isRefunded = invoice.status === 'refunded' || invoice.status === 'credited';
-  const isPartiallyRefunded = invoice.status === 'partially_refunded' || invoice.status === 'partially_credited';
+  const isRefunded = invoice.status === 'refunded';
+  const isPartiallyRefunded = invoice.status === 'partially_refunded';
+  const isCredited = invoice.status === 'credited';
+  const isPartiallyCredited = invoice.status === 'partially_credited';
 
   const invoiceItems = invoice.items || [];
   const totalAmount = Number(invoice.total_amount) || 0;
@@ -142,16 +144,26 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
                   </div>
                 )}
                 {isRefunded && (
-                  <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold">
-                    {isAr ? 'إيصال مسترجع بالكامل (REFUNDED)' : 'Fully Refunded Receipt'}
+                  <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold text-red-900">
+                    {isAr ? 'إيصال مسترجع ومسدد نقداً (REFUNDED)' : 'Cash Refunded Receipt'}
                   </div>
                 )}
                 {isPartiallyRefunded && (
-                  <div className="inline-block px-2 py-0.5 border border-black rounded text-[10px] font-bold">
-                    {isAr ? 'إيصال مسترجع جزئياً (PARTIAL RETURN)' : 'Partially Returned Receipt'}
+                  <div className="inline-block px-2 py-0.5 border border-black rounded text-[10px] font-bold text-amber-900">
+                    {isAr ? 'إيصال مسترجع ومسدد جزئياً نقداً (PARTIALLY REFUNDED)' : 'Partially Cash Refunded Receipt'}
                   </div>
                 )}
-                {!isPaid && !isRefunded && !isPartiallyRefunded && (
+                {isCredited && (
+                  <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold text-indigo-900">
+                    {isAr ? 'إشعار دائن - مرتجع بضاعة (CREDIT NOTE)' : 'Credit Note - Returned Goods'}
+                  </div>
+                )}
+                {isPartiallyCredited && (
+                  <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold text-indigo-900">
+                    {isAr ? 'إشعار دائن جزئي (PARTIAL CREDIT NOTE)' : 'Partial Credit Note'}
+                  </div>
+                )}
+                {!isPaid && !isRefunded && !isPartiallyRefunded && !isCredited && !isPartiallyCredited && (
                   <div className="inline-block px-2 py-0.5 border border-dashed border-black rounded text-[10px] font-bold text-amber-900">
                     {isAr ? `مسودة بيع غير مسددة (${invoice.status})` : `UNPAID RECEIPT (${invoice.status})`}
                   </div>
@@ -166,8 +178,18 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
                 <span className="font-bold font-mono">{invoice.invoice_number}</span>
               </div>
               <div className="flex justify-between">
-                <span>{isAr ? 'التاريخ:' : 'Date:'}</span>
-                <span>{invoice.invoice_date}</span>
+                <span>{isAr ? 'التاريخ والوقت:' : 'Date & Time:'}</span>
+                <span className="font-mono">
+                  {(invoice as any)?.created_at
+                    ? new Date((invoice as any).created_at).toLocaleString(isAr ? 'ar-EG' : 'en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : invoice.invoice_date}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>{isAr ? 'العميل:' : 'Customer:'}</span>

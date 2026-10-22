@@ -178,7 +178,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/orders', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesOrder']);
         Route::post('/sales/orders/{id}/reserve', [\App\Http\Controllers\Api\SalesController::class, 'reserveOrderStock']);
         Route::post('/sales/orders/{id}/fulfill', [\App\Http\Controllers\Api\SalesController::class, 'fulfillOrder']);
-        Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices']);
+        Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::get('/sales/invoices/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showInvoice'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::post('/pos/sale', [\App\Http\Controllers\Api\SalesController::class, 'posSale']);
         Route::get('/pos/sessions', [\App\Http\Controllers\Api\SalesController::class, 'posSessions']);
@@ -186,8 +186,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/pos/sessions/{id}/close', [\App\Http\Controllers\Api\SalesController::class, 'closePosSession']);
         Route::get('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'deliveryNotes']);
         Route::post('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'storeDeliveryNote']);
-        Route::get('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'salesReturns']);
+        Route::get('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'salesReturns'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
+        Route::get('/sales/returns/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep');
+        Route::post('/sales/returns/{id}/refund', [\App\Http\Controllers\Api\SalesController::class, 'refundSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant');
 
         // الحسابات العامة وقيود اليومية والتكاليف (Phase 8: Accounting & Costing)
         Route::get('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'accounts']);

@@ -18,6 +18,7 @@ use App\Models\SalesDeliveryNote;
 use App\Models\SalesCarton;
 use App\Models\AuditLog;
 use App\Models\ChartOfAccount;
+use App\Models\PaymentVoucher;
 use App\Models\Warehouse;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -665,7 +666,9 @@ class SalesService
 
             // تحديث رصيد الفاتورة المرتبطة وحالتها المحاسبية بدقة دون ادعاء السداد
             if ($invoice) {
-                $invoice->balance_due = max(0, round((float)$invoice->balance_due - $totalAmount, 4));
+                $balanceDueOld = (float) $invoice->balance_due;
+                $offset = min($balanceDueOld, $totalAmount);
+                $invoice->balance_due = max(0, round($balanceDueOld - $offset, 4));
 
                 $allInvItems = $invoice->items()->get();
                 $totalOriginalQty = (float) $allInvItems->sum('quantity');
@@ -678,25 +681,26 @@ class SalesService
 
                 $isFullyReturned = $totalReturnedQty >= $totalOriginalQty;
 
+                // التمييز الصارم (Scope C): إشعار الدائن Credit Note يثبت استرجاع البضاعة وتخفيض المديونية
+                // ولا يغير حالة الفاتورة إلى refunded إلا في حال صرف استرداد نقدي فعلي مسجل بسند صرف
                 if ($isFullyReturned) {
-                    $invoice->status = ((float)$invoice->paid_amount > 0) ? 'refunded' : 'credited';
+                    $invoice->status = 'credited';
                 } else {
-                    if ((float)$invoice->paid_amount > 0) {
-                        $invoice->status = 'partially_refunded';
-                    } elseif ($invoice->balance_due <= 0) {
-                        $invoice->status = 'credited';
-                    } else {
-                        $invoice->status = 'partially_credited';
-                    }
+                    $invoice->status = 'partially_credited';
                 }
                 $invoice->save();
             }
 
-            // قيد اليومية المتوازن لإثبات إشعار الدائن عند توفر شجرة الحسابات (إلزامية التوازن والذرية)
-            $salesAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '4010')->first();
-            $arAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '1110')->first();
+            // قيد اليومية المتوازن لإثبات إشعار الدائن عند توفر شجرة الحسابات (إلزامية التوازن والذرية - Scope D)
+            $hasAccounts = ChartOfAccount::where('tenant_id', $tenantId)->exists();
+            if ($hasAccounts && $totalAmount > 0) {
+                $salesAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '4010')->first();
+                $arAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '1110')->first();
 
-            if ($salesAccount && $arAccount && $totalAmount > 0) {
+                if (!$salesAccount || !$arAccount) {
+                    throw new InvalidArgumentException("الحساب المحاسبي المطلوب (4010 أو 1110) غير متوفر في شجرة الحسابات لإثبات القيد المحاسبي للمرتجع.");
+                }
+
                 $accountingService = app(AccountingService::class);
                 $accountingService->createJournalEntry([
                     'entry_number' => 'JE-SRT-' . $salesReturn->return_number,
@@ -711,6 +715,11 @@ class SalesService
                 ]);
             }
 
+            // صرف استرداد نقدي فوري مع المرتجع إذا طُلب صراحة وكانت الفاتورة مسددة (Scope C & D)
+            if (!empty($data['refund_payment']) && $invoice) {
+                $this->executeRefundTransaction($salesReturn, $invoice, $data);
+            }
+
             // تسجيل العملية في سجل الرقابة والتدقيق
             try {
                 AuditLog::create([
@@ -722,7 +731,7 @@ class SalesService
                     'new_values' => [
                         'return_number' => $salesReturn->return_number,
                         'total_amount' => $totalAmount,
-                        'refund_status' => 'credited',
+                        'refund_status' => $salesReturn->fresh()->refund_status,
                         'sales_invoice_id' => $data['sales_invoice_id'] ?? null,
                     ],
                     'ip_address' => request()?->ip(),
@@ -732,6 +741,149 @@ class SalesService
             }
 
             return $salesReturn->load(['items.variant.garmentModel', 'customer', 'warehouse', 'salesInvoice']);
+        });
+    }
+
+    /**
+     * تنفيذ الصرف النقدي لمرتجع مبيعات (سند صرف، تحديث رصيد الخزينة، وقيد محاسبي متوازن)
+     */
+    public function executeRefundTransaction(SalesReturn $salesReturn, SalesInvoice $invoice, array $data = []): array
+    {
+        $tenantId = app('current_tenant_id');
+        $returnAmount = (float) $salesReturn->total_amount;
+        $paidAmount = (float) $invoice->paid_amount;
+
+        if ($paidAmount <= 0) {
+            throw new InvalidArgumentException("لا يمكن صرف استرداد نقدي لفاتورة لم يتم سداد أي مبالغ نقدية منها، أو تم استردادها بالكامل.");
+        }
+
+        $maxRefundable = min($returnAmount, $paidAmount);
+        $refundAmount = isset($data['amount']) ? (float)$data['amount'] : $maxRefundable;
+        $refundAmount = round($refundAmount, 4);
+
+        if ($refundAmount <= 0 || $refundAmount > $maxRefundable) {
+            throw new InvalidArgumentException("قيمة الاسترداد النقدي ({$refundAmount}) غير صالحة أو تتجاوز الحد الأقصى القابل للاسترداد ({$maxRefundable}).");
+        }
+
+        // حساب النقدية / البنك
+        $accountId = $data['account_id'] ?? $data['refund_account_id'] ?? null;
+        if ($accountId) {
+            $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)->lockForUpdate()->findOrFail($accountId);
+        } else {
+            $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
+                ->where('code', '1010')
+                ->lockForUpdate()
+                ->first();
+        }
+
+        if (!$cashAccount) {
+            throw new InvalidArgumentException("حساب النقدية بالصندوق (1010) غير متوفر أو غير نشط في شجرة الحسابات لصرف الاسترداد النقدي.");
+        }
+
+        // إنشاء سند صرف رسمي
+        $paymentMethod = $data['payment_method'] ?? $data['refund_payment_method'] ?? 'cash';
+        $voucherNumber = 'PV-REF-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
+
+        $paymentVoucher = PaymentVoucher::create([
+            'tenant_id' => $tenantId,
+            'voucher_number' => $voucherNumber,
+            'voucher_type' => 'payment',
+            'party_type' => 'customer',
+            'party_id' => $invoice->customer_id ?? $salesReturn->customer_id,
+            'party_name' => $invoice->customer_name ?? 'العميل',
+            'payment_method' => $paymentMethod,
+            'account_id' => $cashAccount->id,
+            'amount' => $refundAmount,
+            'voucher_date' => now()->toDateString(),
+            'notes' => $data['notes'] ?? ('صرف استرداد نقدي لمرتجع المبيعات ' . $salesReturn->return_number),
+        ]);
+
+        // قيد اليومية المحاسبي المتوازن: مدين 1110 (تخفيض دائنية العميل) / دائن 1010 (خروج النقدية من الخزينة)
+        $arAccount = ChartOfAccount::where('tenant_id', $tenantId)->where('code', '1110')->first();
+        if ($arAccount) {
+            $accountingService = app(AccountingService::class);
+            $accountingService->createJournalEntry([
+                'entry_number' => 'JE-REF-' . $salesReturn->return_number,
+                'entry_date' => now()->toDateString(),
+                'description' => 'إثبات صرف استرداد نقدي للمرتجع ' . $salesReturn->return_number . ' وسند الصرف ' . $voucherNumber,
+                'reference_type' => 'sales_returns_refund',
+                'reference_id' => $salesReturn->id,
+                'lines' => [
+                    ['account_id' => $arAccount->id, 'debit' => $refundAmount, 'credit' => 0],
+                    ['account_id' => $cashAccount->id, 'debit' => 0, 'credit' => $refundAmount],
+                ],
+            ]);
+        }
+
+        // تحديث حالة استرداد المرتجع
+        $salesReturn->refund_status = 'refunded';
+        $salesReturn->save();
+
+        // تحديث المبلغ المسدد وحالة الفاتورة
+        $invoice->paid_amount = max(0, round((float)$invoice->paid_amount - $refundAmount, 4));
+
+        $allInvItems = $invoice->items()->get();
+        $totalOriginalQty = (float) $allInvItems->sum('quantity');
+        $totalReturnedQty = (float) SalesReturnItem::where('tenant_id', $tenantId)
+            ->whereHas('salesReturn', function ($q) use ($invoice) {
+                $q->where('sales_invoice_id', $invoice->id);
+            })
+            ->sum('quantity');
+
+        $isFullyReturned = ($totalReturnedQty >= $totalOriginalQty);
+        $invoice->status = $isFullyReturned ? 'refunded' : 'partially_refunded';
+        $invoice->save();
+
+        // تسجيل في سجل الرقابة والتدقيق
+        try {
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id(),
+                'action' => 'sales_return_refunded',
+                'auditable_type' => 'sales_returns',
+                'auditable_id' => $salesReturn->id,
+                'new_values' => [
+                    'return_number' => $salesReturn->return_number,
+                    'refund_amount' => $refundAmount,
+                    'payment_voucher_id' => $paymentVoucher->id,
+                    'refund_status' => 'refunded',
+                ],
+                'ip_address' => request()?->ip(),
+            ]);
+        } catch (\Throwable) {}
+
+        return [
+            'payment_voucher' => $paymentVoucher,
+            'sales_return' => $salesReturn,
+            'invoice' => $invoice,
+        ];
+    }
+
+    /**
+     * معالجة صرف استرداد نقدي لمرتجع مبيعات محدد
+     */
+    public function processSalesReturnRefund(string $returnId, array $data): array
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($returnId, $data, $tenantId) {
+            $salesReturn = SalesReturn::where('tenant_id', $tenantId)
+                ->lockForUpdate()
+                ->findOrFail($returnId);
+
+            if ($salesReturn->refund_status === 'refunded') {
+                throw new InvalidArgumentException("تم استرداد هذا المرتجع مسبقاً.");
+            }
+
+            if (!$salesReturn->sales_invoice_id) {
+                throw new InvalidArgumentException("لا يمكن صرف استرداد نقدي لمرتجع غير مرتبط بفاتورة مبيعات.");
+            }
+
+            $invoice = SalesInvoice::where('tenant_id', $tenantId)
+                ->lockForUpdate()
+                ->findOrFail($salesReturn->sales_invoice_id);
+
+            return $this->executeRefundTransaction($salesReturn, $invoice, $data);
         });
     }
 

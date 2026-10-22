@@ -861,7 +861,41 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                         {Number(inv.total_amount).toLocaleString()} ج.م
                       </td>
                       <td className="p-3">
-                        <Badge variant="success">{inv.status}</Badge>
+                        <Badge
+                          variant={
+                            inv.status === 'paid'
+                              ? 'success'
+                              : inv.status === 'refunded'
+                              ? 'danger'
+                              : inv.status === 'partially_refunded'
+                              ? 'warning'
+                              : inv.status === 'credited'
+                              ? 'info'
+                              : inv.status === 'partially_credited'
+                              ? 'warning'
+                              : inv.status === 'issued'
+                              ? 'neutral'
+                              : 'danger'
+                          }
+                        >
+                          {isAr
+                            ? inv.status === 'paid'
+                              ? 'مسددة'
+                              : inv.status === 'refunded'
+                              ? 'مستردة نقداً'
+                              : inv.status === 'partially_refunded'
+                              ? 'مستردة جزئياً نقداً'
+                              : inv.status === 'credited'
+                              ? 'إشعار دائن (مرتجع)'
+                              : inv.status === 'partially_credited'
+                              ? 'إشعار دائن جزئي'
+                              : inv.status === 'issued'
+                              ? 'صادرة'
+                              : inv.status === 'void'
+                              ? 'ملغاة'
+                              : inv.status
+                            : inv.status.replace('_', ' ').toUpperCase()}
+                        </Badge>
                       </td>
                       <td className="p-3 text-slate-500 dark:text-slate-400">{inv.invoice_date}</td>
                       <td className="p-3 text-center">
@@ -1023,8 +1057,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                 value={newOrderDeliveryDate}
                 onChange={(e) => setNewOrderDeliveryDate(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
-              >
-              </input>
+              />
             </div>
           </div>
 

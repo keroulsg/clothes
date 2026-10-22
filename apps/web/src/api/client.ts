@@ -805,8 +805,17 @@ class ApiClient {
     getReturns: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/sales/returns?page=${page}`);
     },
+    getReturn: async (id: string): Promise<{ sales_return: any }> => {
+      return this.request(`/sales/returns/${id}`);
+    },
     createReturn: async (payload: any): Promise<{ message: string; return: any }> => {
       return this.request('/sales/returns', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    refundReturn: async (id: string, payload: { amount?: number; payment_method?: string; account_id?: string; notes?: string } = {}): Promise<{ message: string; sales_return: any; payment_voucher: any; invoice: any }> => {
+      return this.request(`/sales/returns/${id}/refund`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });

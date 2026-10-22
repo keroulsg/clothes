@@ -679,7 +679,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
     }
 
     /**
-     * 11. الفاتورة المسددة بالكامل يتم وسمها كـ refunded عند إرجاعها وليس paid
+     * 11. الفاتورة المسددة عند إرجاعها بدون صرف تصدر إشعار دائن (credited)، وتصبح (refunded) فقط عند الصرف النقدي الفعلي
      */
     public function test_fully_paid_invoice_returns_mark_invoice_as_refunded(): void
     {
@@ -711,11 +711,11 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
             'total_price' => 400.0,
         ]);
 
-        // إرجاع القطعتين بالكامل
+        // 1. تسجيل إرجاع القطعتين بالكامل كإشعار دائن (Credit Note) دون صرف نقدي
         $res = $this->postJson('/api/v1/sales/returns', [
             'warehouse_id' => $this->warehouseA->id,
             'sales_invoice_id' => $invoice->id,
-            'reason' => 'استرجاع كامل لمبيعات نقدية',
+            'reason' => 'استرجاع كامل لمبيعات نقدية مع إشعار دائن',
             'is_restocked' => true,
             'items' => [
                 ['variant_id' => $this->variantA->id, 'quantity' => 2.0, 'unit_price' => 200.0, 'condition' => 'good', 'action_taken' => 'restock'],
@@ -723,12 +723,49 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
         ]);
 
         $res->assertStatus(201);
-        $invFresh = $invoice->fresh();
+        $returnId = $res->json('sales_return.id');
+        $this->assertEquals('credited', $res->json('sales_return.refund_status'));
 
-        // يجب أن تتحول الحالة إلى refunded ولا تظل paid ورصيد balance_due لا يكون سالباً
-        $this->assertEquals('refunded', $invFresh->status);
-        $this->assertEquals(0.0, (float) $invFresh->balance_due);
-        $this->assertEquals(400.0, (float) $invFresh->paid_amount);
+        // في مرحلة إشعار الدائن: الفاتورة credited وليست refunded لأن المال لم يخرج بعد
+        $invCredited = $invoice->fresh();
+        $this->assertEquals('credited', $invCredited->status);
+        $this->assertEquals(0.0, (float) $invCredited->balance_due);
+        $this->assertEquals(400.0, (float) $invCredited->paid_amount);
+
+        // 2. محاولة مسؤول المبيعات صرف استرداد نقدي من الخزينة ترفض (403) لعدم الصلاحية المالية
+        $salesRepRefund = $this->postJson("/api/v1/sales/returns/{$returnId}/refund", [
+            'amount' => 400.0,
+            'payment_method' => 'cash',
+        ]);
+        $salesRepRefund->assertStatus(403);
+
+        // 3. المحاسب المالي المعتمد ينفذ الصرف النقدي الفعلي بنجاح (200)
+        Sanctum::actingAs($this->accountantA);
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $initialCash = (float) $cashAccount->current_balance;
+
+        $refundRes = $this->postJson("/api/v1/sales/returns/{$returnId}/refund", [
+            'amount' => 400.0,
+            'payment_method' => 'cash',
+        ]);
+
+        $refundRes->assertStatus(200);
+        $refundRes->assertJsonPath('sales_return.refund_status', 'refunded');
+
+        // تحقق من حالة الفاتورة بعد الصرف الفعلي
+        $invRefunded = $invoice->fresh();
+        $this->assertEquals('refunded', $invRefunded->status);
+        $this->assertEquals(0.0, (float) $invRefunded->balance_due);
+        $this->assertEquals(0.0, (float) $invRefunded->paid_amount);
+
+        // تحقق من خصم الخزينة وإنشاء سند الصرف
+        $this->assertEquals($initialCash - 400.0, (float) $cashAccount->fresh()->current_balance);
+        $this->assertTrue(
+            \App\Models\PaymentVoucher::where('tenant_id', $this->tenantA->id)
+                ->where('voucher_type', 'payment')
+                ->where('amount', 400.0)
+                ->exists()
+        );
     }
 
     /**
@@ -761,13 +798,17 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
         ]);
 
         // 1. زائر غير مسجل (Unauthenticated): مرفوض 401
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(401);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(401);
+        $this->getJson('/api/v1/sales/returns')->assertStatus(401);
         $this->postJson('/api/v1/sales/returns', [])->assertStatus(401);
 
-        // 2. عامل تشغيل (Worker): قراءة الفاتورة 403، وتسجيل المرتجع 403
+        // 2. عامل تشغيل (Worker): قراءة الفواتير 403، قراءة المرتجعات 403، تسجيل المرتجع 403
         Sanctum::actingAs($this->workerA);
         app()->instance('current_tenant_id', $this->tenantA->id);
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(403);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(403);
+        $this->getJson('/api/v1/sales/returns')->assertStatus(403);
         $this->postJson('/api/v1/sales/returns', [
             'warehouse_id' => $this->warehouseA->id,
             'sales_invoice_id' => $invoice->id,
@@ -775,7 +816,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
             'items' => [['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 100.0]],
         ])->assertStatus(403);
 
-        // 3. مدير إنتاج (Production Manager): مسموح له قراءة الفاتورة، لكن مرفوض من إنشاء مرتجع مالي تجاري (403)
+        // 3. مدير إنتاج (Production Manager): مسموح له قراءة الفواتير، لكن مرفوض من إنشاء مرتجع مالي تجاري (403)
         $prodManager = User::create([
             'name' => 'مدير الإنتاج',
             'email' => 'pm@nile-ret.test',
@@ -785,6 +826,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
             'is_active' => true,
         ]);
         Sanctum::actingAs($prodManager);
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(200);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
         $this->postJson('/api/v1/sales/returns', [
             'warehouse_id' => $this->warehouseA->id,
@@ -795,7 +837,9 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
 
         // 4. مشرف المنصة العام (Platform Super Admin): محظور 403 من العمليات التشغيلية للمستأجر
         Sanctum::actingAs($this->platformAdmin);
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(403);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(403);
+        $this->getJson('/api/v1/sales/returns')->assertStatus(403);
         $this->postJson('/api/v1/sales/returns', [
             'warehouse_id' => $this->warehouseA->id,
             'sales_invoice_id' => $invoice->id,
@@ -805,12 +849,15 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
 
         // 5. المحاسب المالي (financial_accountant) ومسؤول المبيعات (sales_rep) ومالك الشركة (company_owner): مسموح
         Sanctum::actingAs($this->accountantA);
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(200);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
 
         Sanctum::actingAs($this->salesRepA);
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(200);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
 
         Sanctum::actingAs($this->ownerA);
+        $this->getJson('/api/v1/sales/invoices')->assertStatus(200);
         $this->getJson("/api/v1/sales/invoices/{$invoice->id}")->assertStatus(200);
     }
 
@@ -877,5 +924,318 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
         $resB->assertJsonPath('invoice.tenant.name', 'مصنع الدلتا المنافس');
         // الرقم الضريبي غير موجود للمستأجر ب
         $this->assertNull($resB->json('invoice.tenant.settings.tax_number'));
+    }
+
+    /**
+     * 14. الفاتورة غير المسددة عند إرجاعها جزئياً ثم كلياً (Unpaid Invoice Partial and Full Returns)
+     */
+    public function test_unpaid_invoice_full_and_partial_returns_financial_integrity(): void
+    {
+        Sanctum::actingAs($this->salesRepA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-UNPAID-RETURNS',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'payment_method' => 'credit',
+            'subtotal' => 1000.0,
+            'total_amount' => 1000.0,
+            'paid_amount' => 0.0,
+            'balance_due' => 1000.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => '5 قطع بسعر 200ج',
+            'quantity' => 5.0,
+            'unit_price' => 200.0,
+            'total_price' => 1000.0,
+        ]);
+
+        // مرتجع جزئي أول: إرجاع قطعتين (400ج)
+        $res1 = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'مرتجع جزئي أول',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 2.0, 'unit_price' => 200.0],
+            ],
+        ]);
+        $res1->assertStatus(201);
+        $res1->assertJsonPath('sales_return.refund_status', 'credited');
+
+        $inv1 = $invoice->fresh();
+        $this->assertEquals('partially_credited', $inv1->status);
+        $this->assertEquals(600.0, (float) $inv1->balance_due);
+        $this->assertEquals(0.0, (float) $inv1->paid_amount);
+
+        // مرتجع ثانٍ مكمل: إرجاع 3 قطع الباقية (600ج)
+        $res2 = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'مرتجع نهائي مكمل',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 3.0, 'unit_price' => 200.0],
+            ],
+        ]);
+        $res2->assertStatus(201);
+        $res2->assertJsonPath('sales_return.refund_status', 'credited');
+
+        $inv2 = $invoice->fresh();
+        $this->assertEquals('credited', $inv2->status);
+        $this->assertEquals(0.0, (float) $inv2->balance_due);
+        $this->assertEquals(0.0, (float) $inv2->paid_amount);
+
+        // لا يمكن أن يكون هناك قيد نقدي لخروج أموال من الخزينة لفاتورة غير مسددة
+        $this->assertFalse(
+            \App\Models\PaymentVoucher::where('tenant_id', $this->tenantA->id)
+                ->where('voucher_type', 'payment')
+                ->exists()
+        );
+    }
+
+    /**
+     * 15. فاتورة مسددة جزئياً ومرتجع يخلي المديونية المتبقية دون صرف نقدي
+     */
+    public function test_partially_paid_invoice_return_clearing_receivable(): void
+    {
+        Sanctum::actingAs($this->accountantA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        // فاتورة بـ 1000ج، مدفوع منها 400ج كاش، والمتبقي 600ج آجل
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-PARTIAL-CLEAR',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'standard',
+            'status' => 'partially_paid',
+            'payment_method' => 'credit',
+            'subtotal' => 1000.0,
+            'total_amount' => 1000.0,
+            'paid_amount' => 400.0,
+            'balance_due' => 600.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => '5 قطع بسعر 200ج',
+            'quantity' => 5.0,
+            'unit_price' => 200.0,
+            'total_price' => 1000.0,
+        ]);
+
+        // إرجاع 3 قطع بقيمة 600ج (تخلي المديونية الآجلة بالكامل دون صرف نقدي)
+        $res = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'إرجاع يعادل المتبقي الآجل',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 3.0, 'unit_price' => 200.0],
+            ],
+        ]);
+        $res->assertStatus(201);
+        $res->assertJsonPath('sales_return.refund_status', 'credited');
+
+        $invFresh = $invoice->fresh();
+        // بما أن 3 قطع فقط من 5 أُرجعت، الحالة partially_credited ورصيد المديونية صفر
+        $this->assertEquals('partially_credited', $invFresh->status);
+        $this->assertEquals(0.0, (float) $invFresh->balance_due);
+        $this->assertEquals(400.0, (float) $invFresh->paid_amount);
+    }
+
+    /**
+     * 16. حظر صرف استرداد نقدي لفاتورة غير مسددة، ومنع تكرار الصرف لنفس المرتجع
+     */
+    public function test_cannot_refund_cash_on_unpaid_invoice_and_repeated_refunds_rejected(): void
+    {
+        Sanctum::actingAs($this->accountantA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        // فاتورة غير مسددة إطلاقاً
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-UNPAID-NO-REFUND',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'subtotal' => 200.0,
+            'total_amount' => 200.0,
+            'paid_amount' => 0.0,
+            'balance_due' => 200.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => 'قطعة واحدة',
+            'quantity' => 1.0,
+            'unit_price' => 200.0,
+            'total_price' => 200.0,
+        ]);
+
+        $res = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'مرتجع فاتورة آجلة',
+            'items' => [['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 200.0]],
+        ]);
+        $res->assertStatus(201);
+        $returnId = $res->json('sales_return.id');
+
+        // محاولة صرف استرداد نقدي لفاتورة لم يسدد منها أي مبالغ نقدية ترفض (422)
+        $refundRes = $this->postJson("/api/v1/sales/returns/{$returnId}/refund", [
+            'amount' => 200.0,
+            'payment_method' => 'cash',
+        ]);
+        $refundRes->assertStatus(422);
+        $this->assertStringContainsString('لم يتم سداد أي مبالغ', $refundRes->json('message'));
+    }
+
+    /**
+     * 17. عزل قائمة فواتير المبيعات بين المستأجرين (Cross-Tenant Invoices List Isolation)
+     */
+    public function test_cross_tenant_invoice_list_data_isolation(): void
+    {
+        // فاتورة للمستأجر A
+        SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-LIST-TENANT-A',
+            'customer_name' => 'عميل النيل',
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'total_amount' => 300.0,
+            'balance_due' => 300.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        // فاتورة للمستأجر B
+        SalesInvoice::create([
+            'tenant_id' => $this->tenantB->id,
+            'invoice_number' => 'INV-LIST-TENANT-B',
+            'customer_name' => 'عميل الدلتا',
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'total_amount' => 700.0,
+            'balance_due' => 700.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        // فحص قائمة فواتير المستأجر A
+        Sanctum::actingAs($this->ownerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $resA = $this->getJson('/api/v1/sales/invoices');
+        $resA->assertStatus(200);
+        $invoiceNumbersA = collect($resA->json('data'))->pluck('invoice_number')->all();
+        $this->assertContains('INV-LIST-TENANT-A', $invoiceNumbersA);
+        $this->assertNotContains('INV-LIST-TENANT-B', $invoiceNumbersA);
+
+        // فحص قائمة فواتير المستأجر B
+        Sanctum::actingAs($this->ownerB);
+        app()->instance('current_tenant_id', $this->tenantB->id);
+
+        $resB = $this->getJson('/api/v1/sales/invoices');
+        $resB->assertStatus(200);
+        $invoiceNumbersB = collect($resB->json('data'))->pluck('invoice_number')->all();
+        $this->assertContains('INV-LIST-TENANT-B', $invoiceNumbersB);
+        $this->assertNotContains('INV-LIST-TENANT-A', $invoiceNumbersB);
+    }
+
+    /**
+     * 18. فشل الحسابات المحاسبية الإلزامية يؤدي إلى تراجع ذري كامل دون أثر جانبي
+     */
+    public function test_missing_required_accounts_causes_atomic_rollback(): void
+    {
+        Sanctum::actingAs($this->accountantA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $invoice = SalesInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'INV-ACC-ROLLBACK',
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'invoice_type' => 'standard',
+            'status' => 'issued',
+            'total_amount' => 400.0,
+            'balance_due' => 400.0,
+            'invoice_date' => now()->toDateString(),
+        ]);
+
+        SalesInvoiceItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'sales_invoice_id' => $invoice->id,
+            'variant_id' => $this->variantA->id,
+            'description' => 'قطعتين',
+            'quantity' => 2.0,
+            'unit_price' => 200.0,
+            'total_price' => 400.0,
+        ]);
+
+        // حذف حساب 4010 مؤقتاً لمحاكاة غياب حساب محاسبي إلزامي
+        $account4010 = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
+        $account4010Id = $account4010->id;
+        $account4010->delete();
+
+        $initialReturns = SalesReturn::count();
+
+        $res = $this->postJson('/api/v1/sales/returns', [
+            'warehouse_id' => $this->warehouseA->id,
+            'sales_invoice_id' => $invoice->id,
+            'reason' => 'اختبار نقص الحساب',
+            'items' => [['variant_id' => $this->variantA->id, 'quantity' => 1.0, 'unit_price' => 200.0]],
+        ]);
+
+        // يجب الرفض 422 لغياب الحساب الإلزامي والتراجع الكامل
+        $res->assertStatus(422);
+        $this->assertStringContainsString('غير متوفر في شجرة الحسابات', $res->json('message'));
+        $this->assertEquals($initialReturns, SalesReturn::count());
+        $this->assertEquals(400.0, (float) $invoice->fresh()->balance_due);
+    }
+
+    /**
+     * 19. تفاصيل المرتجع عبر showSalesReturn وعزل المستأجرين
+     */
+    public function test_show_sales_return_detail_and_cross_tenant_isolation(): void
+    {
+        Sanctum::actingAs($this->salesRepA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $returnA = SalesReturn::create([
+            'tenant_id' => $this->tenantA->id,
+            'return_number' => 'SRT-SHOW-A',
+            'customer_id' => $this->customerA->id,
+            'warehouse_id' => $this->warehouseA->id,
+            'return_date' => now()->toDateString(),
+            'total_amount' => 200.0,
+            'refund_status' => 'credited',
+            'status' => 'received',
+            'reason' => 'معاينة المرتجع',
+        ]);
+
+        // المستأجر A يستعرض المرتجع بنجاح
+        $resA = $this->getJson("/api/v1/sales/returns/{$returnA->id}");
+        $resA->assertStatus(200);
+        $resA->assertJsonPath('sales_return.return_number', 'SRT-SHOW-A');
+
+        // المستأجر B يحاول قراءة نفس المرتجع -> 404 محجوب تماماً
+        Sanctum::actingAs($this->ownerB);
+        app()->instance('current_tenant_id', $this->tenantB->id);
+
+        $resB = $this->getJson("/api/v1/sales/returns/{$returnA->id}");
+        $resB->assertStatus(404);
     }
 }

@@ -31,7 +31,7 @@
 | **REQ-SUB-01** | Subcontracting Job Orders & Outside Ops | `JobOrder.php`, `ExternalOperation.php` | `SubcontractingTab.tsx`, `JobDetailsModal.tsx` | `SubcontractingAndCmtTest.php` | **VERIFIED COMPLETE** |
 | **REQ-SUB-02** | CMT Service Delivery & Invoicing | `JobDeliveryNote.php`, `JobInvoice.php` | `JobDeliveryModal.tsx`, `JobInvoiceModal.tsx` | `SubcontractingAndCmtTest.php` | **VERIFIED COMPLETE** |
 | **REQ-SAL-01** | Commercial Sales Orders & POS Checkout | `SalesOrder.php`, `PosSale.php` | `SalesTab.tsx` (`#/erp/sales`) | `SalesAndPosTest.php` | **VERIFIED COMPLETE** |
-| **REQ-SAL-02** | Sales Return Workflow & Credit Notes | `SalesController.php`, `SalesService.php`, `SalesReturn.php` | `SalesReturnModal.tsx`, `SalesTab.tsx` (`#/erp/sales`) | `SalesReturnAndPosReceiptPhase07BTest.php` (13 tests, 65 assertions) | **VERIFIED COMPLETE** |
+| **REQ-SAL-02** | Sales Return Workflow & Credit Notes | `SalesController.php`, `SalesService.php`, `SalesReturn.php` | `SalesReturnModal.tsx`, `SalesTab.tsx` (`#/erp/sales`) | `SalesReturnAndPosReceiptPhase07BTest.php` (19 tests, 116 assertions) | **VERIFIED COMPLETE** |
 | **REQ-SAL-03** | 80mm POS Thermal Receipt Template | `PosReceiptModal.tsx`, `SalesController.php` | `SalesTab.tsx` (`#/erp/sales`) | `SalesReturnAndPosReceiptPhase07BTest.php`, Vite build | **VERIFIED COMPLETE** |
 | **REQ-ACC-01** | Balanced Double-Entry Journal System | `JournalEntry.php`, `JournalEntryLine.php` | `AccountingTab.tsx` (`#/erp/costing`) | `AccountingAndCostingTest.php` | **VERIFIED COMPLETE** |
 | **REQ-ACC-02** | Payment & Receipt Vouchers | `Voucher.php`, `AccountingController.php` | `AccountingTab.tsx` | `AccountingAndCostingTest.php` | **VERIFIED COMPLETE** |

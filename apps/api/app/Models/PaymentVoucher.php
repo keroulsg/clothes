@@ -18,12 +18,15 @@ class PaymentVoucher extends Model
         'voucher_type',
         'party_type',
         'party_id',
+        'sales_return_id',
         'party_name',
         'payment_method',
         'account_id',
         'amount',
         'voucher_date',
         'notes',
+        'idempotency_key',
+        'payload_hash',
     ];
 
     protected $casts = [
@@ -34,5 +37,10 @@ class PaymentVoucher extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(ChartOfAccount::class, 'account_id');
+    }
+
+    public function salesReturn(): BelongsTo
+    {
+        return $this->belongsTo(SalesReturn::class, 'sales_return_id');
     }
 }

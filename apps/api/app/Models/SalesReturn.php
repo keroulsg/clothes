@@ -59,4 +59,9 @@ class SalesReturn extends Model
     {
         return $this->hasMany(SalesReturnItem::class);
     }
+
+    public function refundVouchers(): HasMany
+    {
+        return $this->hasMany(PaymentVoucher::class, 'sales_return_id');
+    }
 }

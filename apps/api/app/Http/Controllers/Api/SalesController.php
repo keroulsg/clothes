@@ -318,6 +318,8 @@ class SalesController extends Controller
             'is_restocked' => 'nullable|boolean',
             'notes' => 'nullable|string',
             'refund_payment' => 'nullable|boolean',
+            'amount' => 'nullable|numeric|min:0.01',
+            'idempotency_key' => 'nullable|string|max:100',
             'refund_payment_method' => 'nullable|string|in:cash,card,bank_transfer',
             'refund_account_id' => 'nullable|uuid|exists:chart_of_accounts,id',
             'items' => 'required|array|min:1',
@@ -328,6 +330,10 @@ class SalesController extends Controller
             'items.*.action_taken' => 'nullable|string|in:restock,repair,discard',
         ]);
 
+        if ($request->header('X-Idempotency-Key') && empty($validated['idempotency_key'])) {
+            $validated['idempotency_key'] = $request->header('X-Idempotency-Key');
+        }
+
         try {
             $salesReturn = $this->salesService->createSalesReturn($validated);
 
@@ -335,6 +341,11 @@ class SalesController extends Controller
                 'message' => 'تم تسجيل مرتجع المبيعات بنجاح',
                 'sales_return' => $salesReturn,
             ], 201);
+        } catch (\Symfony\Component\HttpKernel\Exception\ConflictHttpException $e) {
+            return response()->json([
+                'error' => 'IdempotencyConflict',
+                'message' => $e->getMessage(),
+            ], 409);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'InvalidReturnData',
@@ -350,7 +361,12 @@ class SalesController extends Controller
             'payment_method' => 'nullable|string|in:cash,card,bank_transfer',
             'account_id' => 'nullable|uuid|exists:chart_of_accounts,id',
             'notes' => 'nullable|string|max:500',
+            'idempotency_key' => 'nullable|string|max:100',
         ]);
+
+        if ($request->header('X-Idempotency-Key') && empty($validated['idempotency_key'])) {
+            $validated['idempotency_key'] = $request->header('X-Idempotency-Key');
+        }
 
         try {
             $result = $this->salesService->processSalesReturnRefund($id, $validated);
@@ -361,6 +377,11 @@ class SalesController extends Controller
                 'payment_voucher' => $result['payment_voucher'],
                 'invoice' => $result['invoice'],
             ]);
+        } catch (\Symfony\Component\HttpKernel\Exception\ConflictHttpException $e) {
+            return response()->json([
+                'error' => 'IdempotencyConflict',
+                'message' => $e->getMessage(),
+            ], 409);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'RefundProcessingError',

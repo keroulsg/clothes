@@ -495,6 +495,8 @@ class EndToEndBusinessJourneysTest extends TestCase
         // 2. Customer returns 1 piece due to size fitting
         $initialBalance = $this->fgItem->fresh()->current_balance;
 
+        app(AccountingService::class)->initializeDefaultChartOfAccounts($this->tenant->id);
+
         $return = $salesService->createSalesReturn([
             'warehouse_id' => $this->fgWarehouse->id,
             'customer_id' => $this->customer->id,

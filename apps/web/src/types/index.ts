@@ -606,7 +606,7 @@ export interface SalesReturn {
   warehouse_id: string;
   return_date: string;
   total_amount: number;
-  refund_status: 'pending' | 'credited' | 'refunded';
+  refund_status: 'pending' | 'credited' | 'refunded' | 'partially_refunded';
   status: 'draft' | 'received' | 'inspected' | 'restocked' | 'rejected';
   reason: string;
   notes?: string;

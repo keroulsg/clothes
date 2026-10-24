@@ -201,6 +201,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/accounting/cost-sheets', [\App\Http\Controllers\Api\AccountingController::class, 'costSheets']);
         Route::post('/accounting/cost-sheets/{productionOrderId}/calculate', [\App\Http\Controllers\Api\AccountingController::class, 'calculateCost'])->middleware('role:accountant,production_manager');
 
+        // التقارير المالية والقوائم الختامية المتقدمة (Phase 08B: Advanced Financial Reporting & Industrial Costing)
+        Route::get('/accounting/reports/trial-balance', [\App\Http\Controllers\Api\AccountingController::class, 'trialBalance'])->middleware('role:accountant,financial_accountant,company_owner');
+        Route::get('/accounting/reports/income-statement', [\App\Http\Controllers\Api\AccountingController::class, 'incomeStatement'])->middleware('role:accountant,financial_accountant,company_owner');
+        Route::get('/accounting/reports/balance-sheet', [\App\Http\Controllers\Api\AccountingController::class, 'balanceSheet'])->middleware('role:accountant,financial_accountant,company_owner');
+        Route::get('/accounting/reports/vat-summary', [\App\Http\Controllers\Api\AccountingController::class, 'vatSummary'])->middleware('role:accountant,financial_accountant,company_owner');
+        Route::get('/accounting/reports/cost-variance', [\App\Http\Controllers\Api\AccountingController::class, 'costVariance'])->middleware('role:accountant,financial_accountant,company_owner,production_manager');
+
         // الموارد البشرية وأجور القطعة ومسيرات الرواتب (Phase 9: HR & Piece-Rate Payroll)
         Route::get('/hr/employees', [\App\Http\Controllers\Api\HrController::class, 'employees']);
         Route::post('/hr/employees', [\App\Http\Controllers\Api\HrController::class, 'storeEmployee'])->middleware('role:accountant,production_manager');

@@ -202,6 +202,30 @@ class ApiClient {
     return data as T;
   }
 
+  public async downloadFile(endpoint: string, defaultFilename: string): Promise<void> {
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    if (this.currentTenantId) {
+      headers['X-Tenant-ID'] = this.currentTenantId;
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new ApiError('فشل تنزيل التقرير المالي من الخادم', response.status, 'DownloadError');
+    }
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = defaultFilename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(downloadUrl);
+    document.body.removeChild(a);
+  }
+
   // --- Auth Endpoints ---
   public auth = {
     login: async (credentials: { email: string; password: string }): Promise<LoginResponse> => {
@@ -858,6 +882,31 @@ class ApiClient {
       return this.request(`/accounting/cost-sheets/${productionOrderId}/calculate`, {
         method: 'POST',
       });
+    },
+    // Phase 08B: Financial Reporting Endpoints
+    getTrialBalance: async (params?: { from_date?: string; to_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/reports/trial-balance${q ? `?${q}` : ''}`);
+    },
+    getIncomeStatement: async (params?: { from_date?: string; to_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/reports/income-statement${q ? `?${q}` : ''}`);
+    },
+    getBalanceSheet: async (params?: { as_of_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/reports/balance-sheet${q ? `?${q}` : ''}`);
+    },
+    getVatSummary: async (params?: { from_date?: string; to_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/reports/vat-summary${q ? `?${q}` : ''}`);
+    },
+    getCostVariance: async (params?: { production_order_id?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/reports/cost-variance${q ? `?${q}` : ''}`);
+    },
+    downloadReportCsv: async (reportType: string, params?: Record<string, string>): Promise<void> => {
+      const query = new URLSearchParams({ ...(params || {}), export: 'csv' }).toString();
+      return this.downloadFile(`/accounting/reports/${reportType}?${query}`, `${reportType}-${new Date().toISOString().slice(0, 10)}.csv`);
     },
   };
 

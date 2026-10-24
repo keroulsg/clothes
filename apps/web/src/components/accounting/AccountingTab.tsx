@@ -22,6 +22,7 @@ import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
 import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
+import { FinancialReportsView } from './FinancialReportsView';
 import type { Language, ChartOfAccount, JournalEntry, ProductionCostSheet, PaymentVoucher } from '../../types';
 
 interface AccountingTabProps {
@@ -30,7 +31,7 @@ interface AccountingTabProps {
 
 export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const isAr = lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'journals' | 'vouchers' | 'costing'>('accounts');
+  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'journals' | 'vouchers' | 'costing' | 'reports'>('accounts');
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [isCalcCostModalOpen, setIsCalcCostModalOpen] = useState(false);
@@ -416,6 +417,16 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
           >
             {isAr ? 'بطاقات التكلفة الصناعية للقطعة' : 'Cost Sheets'}
           </button>
+          <button
+            onClick={() => setActiveSubTab('reports')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeSubTab === 'reports'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'القوائم والتقارير الختامية المتقدمة' : 'Financial Reports'}
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -737,6 +748,11 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
             </table>
           </div>
         </Card>
+      )}
+
+      {/* ADVANCED FINANCIAL REPORTS & INDUSTRIAL COSTING VIEW */}
+      {activeSubTab === 'reports' && (
+        <FinancialReportsView lang={lang} />
       )}
 
       {/* Balanced Journal Entry Modal */}

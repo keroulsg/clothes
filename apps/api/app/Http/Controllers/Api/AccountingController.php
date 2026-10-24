@@ -8,13 +8,16 @@ use App\Models\JournalEntry;
 use App\Models\PaymentVoucher;
 use App\Models\ProductionCostSheet;
 use App\Services\AccountingService;
+use App\Services\FinancialReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AccountingController extends Controller
 {
     public function __construct(
-        protected AccountingService $accountingService
+        protected AccountingService $accountingService,
+        protected FinancialReportService $financialReportService
     ) {}
 
     public function accounts(): JsonResponse
@@ -128,5 +131,126 @@ class AccountingController extends Controller
             'message' => 'تم احتساب التكلفة الفعلية لأمر الإنتاج بنجاح',
             'cost_sheet' => $sheet,
         ]);
+    }
+
+    /**
+     * تقرير ميزان المراجعة الآلي
+     */
+    public function trialBalance(Request $request): JsonResponse|StreamedResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date',
+            'export' => 'nullable|string|in:csv,xlsx',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $report = $this->financialReportService->getTrialBalance(
+            $tenantId,
+            $validated['from_date'] ?? null,
+            $validated['to_date'] ?? null
+        );
+
+        if (($validated['export'] ?? null) === 'csv') {
+            return $this->financialReportService->exportReportToCsv('trial-balance', $report);
+        }
+
+        return response()->json($report);
+    }
+
+    /**
+     * تقرير قائمة الدخل (الأرباح والخسائر)
+     */
+    public function incomeStatement(Request $request): JsonResponse|StreamedResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date',
+            'export' => 'nullable|string|in:csv,xlsx',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $report = $this->financialReportService->getIncomeStatement(
+            $tenantId,
+            $validated['from_date'] ?? null,
+            $validated['to_date'] ?? null
+        );
+
+        if (($validated['export'] ?? null) === 'csv') {
+            return $this->financialReportService->exportReportToCsv('income-statement', $report);
+        }
+
+        return response()->json($report);
+    }
+
+    /**
+     * تقرير الميزانية العمومية
+     */
+    public function balanceSheet(Request $request): JsonResponse|StreamedResponse
+    {
+        $validated = $request->validate([
+            'as_of_date' => 'nullable|date',
+            'export' => 'nullable|string|in:csv,xlsx',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $report = $this->financialReportService->getBalanceSheet(
+            $tenantId,
+            $validated['as_of_date'] ?? null
+        );
+
+        if (($validated['export'] ?? null) === 'csv') {
+            return $this->financialReportService->exportReportToCsv('balance-sheet', $report);
+        }
+
+        return response()->json($report);
+    }
+
+    /**
+     * تقرير ملخص إقرار ضريبة القيمة المضافة
+     */
+    public function vatSummary(Request $request): JsonResponse|StreamedResponse
+    {
+        $validated = $request->validate([
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date',
+            'export' => 'nullable|string|in:csv,xlsx',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $report = $this->financialReportService->getVatReturnSummary(
+            $tenantId,
+            $validated['from_date'] ?? null,
+            $validated['to_date'] ?? null
+        );
+
+        if (($validated['export'] ?? null) === 'csv') {
+            return $this->financialReportService->exportReportToCsv('vat-summary', $report);
+        }
+
+        return response()->json($report);
+    }
+
+    /**
+     * كشف انحرافات تكلفة التصنيع الصناعي
+     */
+    public function costVariance(Request $request): JsonResponse|StreamedResponse
+    {
+        $validated = $request->validate([
+            'production_order_id' => 'nullable|uuid',
+            'export' => 'nullable|string|in:csv,xlsx',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $report = $this->financialReportService->getManufacturingCostVariance(
+            $tenantId,
+            $validated['production_order_id'] ?? null
+        );
+
+        if (($validated['export'] ?? null) === 'csv') {
+            return $this->financialReportService->exportReportToCsv('cost-variance', $report);
+        }
+
+        return response()->json($report);
     }
 }

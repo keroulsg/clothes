@@ -43,6 +43,15 @@ class Tenant extends Model
         return $this->hasMany(AuditLog::class);
     }
 
+    public function getManufacturingOverheadRate(): float
+    {
+        $rate = $this->settings['manufacturing_overhead_rate'] ?? null;
+        if ($rate !== null && is_numeric($rate) && (float)$rate >= 0.0 && (float)$rate <= 1.0) {
+            return (float) $rate;
+        }
+        return 0.15; // 15% default standard
+    }
+
     public function isPaid(): bool
     {
         return (bool) ($this->settings['subscription']['is_paid'] ?? false);

@@ -739,12 +739,47 @@ export interface PieceRate {
 export interface PieceWorkLog {
   id: string;
   employee_id: string;
+  production_order_id?: string;
+  cutting_bundle_id?: string;
   completed_quantity: number;
   unit_rate: number;
   total_amount: number;
   work_date: string;
   status: string;
+  approved_by?: number;
+  approved_at?: string;
+  rejection_reason?: string;
   employee?: Employee;
+}
+
+export interface QualityDefectAdjustment {
+  id: string;
+  tenant_id: string;
+  employee_id: string;
+  production_order_id: string;
+  cutting_bundle_id?: string;
+  quality_defect_id?: string;
+  quality_inspection_id?: string;
+  production_stage_id?: string;
+  investigation_notes?: string;
+  proposed_penalty_amount: number;
+  adjustment_reason: string;
+  status: 'pending_approval' | 'approved' | 'rejected' | 'objected' | 'settled' | 'reversed';
+  reported_by?: number;
+  approved_by?: number;
+  approved_at?: string;
+  worker_objection_notes?: string;
+  objection_submitted_at?: string;
+  settled_payroll_id?: string;
+  settled_payroll_item_id?: string;
+  reversal_reason?: string;
+  reversed_by?: number;
+  reversed_at?: string;
+  created_at: string;
+  employee?: Employee;
+  approver?: { id: number; name: string };
+  reporter?: { id: number; name: string };
+  reverser?: { id: number; name: string };
 }
 
 export interface PayrollItem {

@@ -11,6 +11,9 @@ import {
   Layers,
   RefreshCw,
   Info,
+  Settings,
+  Sliders,
+  Check,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -41,6 +44,12 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reportData, setReportData] = useState<any | null>(null);
 
+  // Configurable Overhead Rate (Phase 09B)
+  const [overheadRate, setOverheadRate] = useState<number>(0.15);
+  const [isEditingOverhead, setIsEditingOverhead] = useState<boolean>(false);
+  const [tempOverheadPercent, setTempOverheadPercent] = useState<number>(15);
+  const [overheadSaving, setOverheadSaving] = useState<boolean>(false);
+
   const fetchReport = async () => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -55,13 +64,42 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
       } else if (activeReport === 'vat-summary') {
         res = await api.accounting.getVatSummary({ from_date: fromDate, to_date: toDate });
       } else if (activeReport === 'cost-variance') {
-        res = await api.accounting.getCostVariance();
+        const [varianceRes, costingRes] = await Promise.allSettled([
+          api.accounting.getCostVariance(),
+          api.tenant.getCostingSettings(),
+        ]);
+        if (varianceRes.status === 'fulfilled') {
+          res = varianceRes.value;
+        }
+        if (costingRes.status === 'fulfilled' && costingRes.value) {
+          setOverheadRate(costingRes.value.manufacturing_overhead_rate);
+          setTempOverheadPercent(costingRes.value.manufacturing_overhead_percentage);
+        }
       }
       setReportData(res);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تحميل بيانات التقرير المالي' : 'Failed to load report data'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveOverheadRate = async () => {
+    if (tempOverheadPercent < 0 || tempOverheadPercent > 100) {
+      alert(isAr ? 'يجب أن تكون النسبة بين 0% و 100%' : 'Rate must be between 0% and 100%');
+      return;
+    }
+    setOverheadSaving(true);
+    try {
+      const rate = tempOverheadPercent / 100;
+      const res = await api.tenant.updateCostingSettings({ manufacturing_overhead_rate: rate });
+      setOverheadRate(res.manufacturing_overhead_rate);
+      setIsEditingOverhead(false);
+      await fetchReport();
+    } catch (err: any) {
+      alert(err?.message || (isAr ? 'فشل تحديث نسبة التكاليف غير المباشرة' : 'Failed to update overhead rate'));
+    } finally {
+      setOverheadSaving(false);
     }
   };
 
@@ -647,6 +685,76 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 </Card>
               </div>
 
+              {/* Phase 09B Configurable Manufacturing Overhead Settings Card */}
+              <Card className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-xl">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                      <Sliders className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        {isAr ? 'نسبة التكاليف الصناعية غير المباشرة المعتمدة للشركة:' : 'Configured Manufacturing Overhead Rate:'}
+                        <span className="text-primary font-mono font-extrabold text-sm">
+                          {Number(overheadRate * 100).toFixed(1)}%
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {isAr
+                          ? 'تطبق هذه النسبة على بطاقات التكلفة الجديدة. بطاقات التكلفة المعتمدة تاريخياً مثبتة بلقطة غير قابلة للتغيير.'
+                          : 'Applied to newly calculated cost sheets. Finalized historical cost sheets remain strictly snapshot-immutable.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isEditingOverhead ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsEditingOverhead(true)}
+                      className="text-xs py-1"
+                    >
+                      <Settings className="w-3.5 h-3.5 me-1" />
+                      {isAr ? 'تعديل النسبة' : 'Change Rate'}
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={tempOverheadPercent}
+                        onChange={(e) => setTempOverheadPercent(Number(e.target.value))}
+                        className="w-20 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-center"
+                      />
+                      <span className="text-xs font-bold">%</span>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={overheadSaving}
+                        onClick={handleSaveOverheadRate}
+                        className="text-xs py-1"
+                      >
+                        {overheadSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3.5 h-3.5 me-1" />}
+                        {isAr ? 'حفظ' : 'Save'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setTempOverheadPercent(overheadRate * 100);
+                          setIsEditingOverhead(false);
+                        }}
+                        className="text-xs py-1"
+                      >
+                        {isAr ? 'إلغاء' : 'Cancel'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
               {/* Table of Orders Variance */}
               <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f1523]/90 shadow-sm">
                 <table className="w-full text-xs text-start">
@@ -658,8 +766,9 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                       <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'معياري / قطعة' : 'Std/Piece'}</th>
                       <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'إجمالي المعياري' : 'Total Std'}</th>
                       <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'إجمالي الفعلي' : 'Total Actual'}</th>
+                      <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'نسبة غير المباشرة' : 'Overhead %'}</th>
                       <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'الانحراف (وفر/عجز)' : 'Variance'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-center">{isAr ? 'تبعية المرحلة 9 (الأجور)' : 'Phase 09 Labor'}</th>
+                      <th className="py-2.5 px-3 font-semibold text-center">{isAr ? 'مطابقة أجور المرحلة 9' : 'Phase 09 Labor Reconciled'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -673,16 +782,25 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                         <td className="py-2 px-3 text-end font-mono">{Number(ord.standard_cost_per_piece || 0).toLocaleString()} ج.م</td>
                         <td className="py-2 px-3 text-end font-mono">{Number(ord.standard_total_cost || 0).toLocaleString()} ج.م</td>
                         <td className="py-2 px-3 text-end font-mono font-medium">{Number(ord.actual_total_cost || 0).toLocaleString()} ج.م</td>
+                        <td className="py-2 px-3 text-end font-mono text-slate-500">
+                          {Number(((ord.actual_cost_breakdown?.applied_overhead_rate ?? 0.15) * 100)).toFixed(1)}%
+                        </td>
                         <td className={`py-2 px-3 text-end font-mono font-bold ${ord.variance_amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {ord.variance_amount >= 0 ? `+${Number(ord.variance_amount).toLocaleString()}` : Number(ord.variance_amount).toLocaleString()} ج.م
                         </td>
                         <td className="py-2 px-3 text-center">
-                          {ord.labor_dependency?.status === 'verified' ? (
+                          {ord.labor_dependency?.status === 'verified' && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600">
-                              {isAr ? 'معتمد بسجلات إنتاجية' : 'Verified'}
+                              {isAr ? 'مطابق ومعتمد بالكامل' : 'Verified & Reconciled'}
                             </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600">
+                          )}
+                          {ord.labor_dependency?.status === 'partially_verified' && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600" title={ord.labor_dependency?.note}>
+                              {isAr ? 'توثيق أجور جزئي' : 'Partially Verified'}
+                            </span>
+                          )}
+                          {ord.labor_dependency?.status === 'incomplete_dependency_phase_09' && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600" title={ord.labor_dependency?.note}>
                               {isAr ? 'معلق على المرحلة 9' : 'Phase 09 Pending'}
                             </span>
                           )}

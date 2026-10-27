@@ -650,6 +650,7 @@ class FinancialReportService
                 $actualLaborCost = (float)$costSheet->direct_labor_cost;
                 $actualSubcontractCost = (float)$costSheet->subcontracted_services_cost;
                 $actualOverheadCost = (float)$costSheet->allocated_overhead_cost;
+                $appliedOverheadRate = (float)($costSheet->applied_overhead_rate ?? 0.15);
             } else {
                 // احتساب تكلفة الخامات المباشرة الفعلية من حركات المخزن
                 $actualMaterialsCost = (float) DB::table('inventory_transactions')
@@ -664,20 +665,32 @@ class FinancialReportService
                     ->where('production_order_id', $order->id)
                     ->sum('total_amount');
 
-                $actualOverheadCost = round(($actualMaterialsCost + $actualLaborCost) * 0.15, 4);
+                $tenant = \App\Models\Tenant::find($tenantId);
+                $appliedOverheadRate = $tenant ? $tenant->getManufacturingOverheadRate() : 0.15;
+                $actualOverheadCost = round(($actualMaterialsCost + $actualLaborCost) * $appliedOverheadRate, 4);
             }
 
-            // 3. فحص تبعية المرحلة 9 لأجور العمالة (Phase 09 Dependency Integrity Check)
+            // 3. فحص تبعية المرحلة 9 لأجور العمالة ومطابقة كميات التشغيل الفعلية
             $hasPieceWorkLogs = PieceWorkLog::where('tenant_id', $tenantId)
                 ->where('production_order_id', $order->id)
                 ->exists();
 
             $laborStatus = 'verified';
-            $laborNote = 'بيانات أجور العمالة المباشرة مستندة لسجلات إنتاجية معتمدة';
+            $laborNote = 'بيانات أجور العمالة المباشرة مستندة لسجلات إنتاجية معتمدة ومطابقة لكميات التشغيل الفعلية';
 
             if (!$hasPieceWorkLogs && $actualLaborCost <= 0) {
                 $laborStatus = 'incomplete_dependency_phase_09';
                 $laborNote = 'بيانات أجور العمالة المباشرة غير متوفرة بعد أو معلقة على المرحلة 9 (Phase 09 Direct Labor & Piece-Rate)';
+            } elseif ($completedPieces > 0) {
+                $loggedPieces = (int) PieceWorkLog::where('tenant_id', $tenantId)
+                    ->where('production_order_id', $order->id)
+                    ->whereIn('status', ['verified', 'approved'])
+                    ->sum('completed_quantity');
+
+                if ($loggedPieces < $completedPieces && $actualLaborCost > 0) {
+                    $laborStatus = 'partially_verified';
+                    $laborNote = "تم توثيق أجور العمالة لـ ({$loggedPieces} قطعة) من إجمالي ({$completedPieces} قطعة منجزة)";
+                }
             }
 
             $actualTotalCost = round($actualMaterialsCost + $actualLaborCost + $actualSubcontractCost + $actualOverheadCost, 4);
@@ -720,6 +733,7 @@ class FinancialReportService
                     'labor' => $actualLaborCost,
                     'subcontract' => $actualSubcontractCost,
                     'overhead' => $actualOverheadCost,
+                    'applied_overhead_rate' => $appliedOverheadRate,
                 ],
                 'actual_total_cost' => $actualTotalCost,
                 'actual_cost_per_piece' => $actualCostPerPiece,

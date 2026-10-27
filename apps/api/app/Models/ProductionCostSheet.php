@@ -21,6 +21,7 @@ class ProductionCostSheet extends Model
         'direct_labor_cost',
         'subcontracted_services_cost',
         'allocated_overhead_cost',
+        'applied_overhead_rate',
         'total_cost',
         'cost_per_piece',
         'status',
@@ -32,6 +33,7 @@ class ProductionCostSheet extends Model
         'direct_labor_cost' => 'decimal:4',
         'subcontracted_services_cost' => 'decimal:4',
         'allocated_overhead_cost' => 'decimal:4',
+        'applied_overhead_rate' => 'decimal:4',
         'total_cost' => 'decimal:4',
         'cost_per_piece' => 'decimal:4',
     ];

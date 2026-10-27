@@ -398,4 +398,64 @@ class TenantController extends Controller
             'subscription' => $subscription,
         ]);
     }
+
+    /**
+     * جلب إعدادات التكاليف الصناعية ونسبة التكاليف غير المباشرة للشركة
+     */
+    public function getCostingSettings(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        $overheadRate = $tenant->getManufacturingOverheadRate();
+        $overheadPercentage = round($overheadRate * 100, 2);
+
+        return response()->json([
+            'tenant_id' => $tenant->id,
+            'manufacturing_overhead_rate' => $overheadRate,
+            'manufacturing_overhead_percentage' => $overheadPercentage,
+            'default_rate' => 0.15,
+            'is_customized' => isset($tenant->settings['manufacturing_overhead_rate']),
+        ]);
+    }
+
+    /**
+     * تحديث نسبة التكاليف غير المباشرة الصناعية للشركة (0% - 100%)
+     */
+    public function updateCostingSettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'manufacturing_overhead_rate' => 'required|numeric|min:0|max:1',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        $oldRate = $tenant->getManufacturingOverheadRate();
+        $newRate = round((float) $validated['manufacturing_overhead_rate'], 4);
+
+        $settings = $tenant->settings ?? [];
+        $settings['manufacturing_overhead_rate'] = $newRate;
+        $tenant->settings = $settings;
+        $tenant->save();
+
+        \App\Models\AuditLog::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $request->user()->id,
+            'action' => 'update_manufacturing_overhead_rate',
+            'auditable_type' => Tenant::class,
+            'auditable_id' => $tenant->id,
+            'old_values' => ['manufacturing_overhead_rate' => $oldRate],
+            'new_values' => ['manufacturing_overhead_rate' => $newRate],
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'message' => 'تم تحديث نسبة التكاليف غير المباشرة الصناعية بنجاح دون المساس بالتكاليف التاريخية المعتمدة.',
+            'tenant_id' => $tenant->id,
+            'manufacturing_overhead_rate' => $newRate,
+            'manufacturing_overhead_percentage' => round($newRate * 100, 2),
+        ]);
+    }
 }
+

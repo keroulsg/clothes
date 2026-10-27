@@ -299,10 +299,32 @@ class ApiClient {
     },
   };
 
-  // --- Tenant Profile ---
+  // --- Tenant Profile & Settings ---
   public tenant = {
     getProfile: async (): Promise<{ tenant: ApiTenant; user?: ApiUser }> => {
       return this.request<{ tenant: ApiTenant; user?: ApiUser }>('/tenant/profile');
+    },
+    getCostingSettings: async (): Promise<{
+      tenant_id: string;
+      manufacturing_overhead_rate: number;
+      manufacturing_overhead_percentage: number;
+      default_rate: number;
+      is_customized: boolean;
+    }> => {
+      return this.request('/tenant/settings/costing');
+    },
+    updateCostingSettings: async (payload: {
+      manufacturing_overhead_rate: number;
+    }): Promise<{
+      message: string;
+      tenant_id: string;
+      manufacturing_overhead_rate: number;
+      manufacturing_overhead_percentage: number;
+    }> => {
+      return this.request('/tenant/settings/costing', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
     },
   };
 
@@ -944,6 +966,69 @@ class ApiClient {
     },
     generatePayroll: async (payload: { payroll_period: string; period_start: string; period_end: string }): Promise<{ message: string; payroll: any }> => {
       return this.request('/hr/payrolls/generate', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    markPayrollPaid: async (id: string): Promise<{ message: string; payroll: any }> => {
+      return this.request(`/hr/payrolls/${id}/pay`, {
+        method: 'POST',
+      });
+    },
+    approvePieceWorkLog: async (id: string): Promise<{ message: string; work_log: any }> => {
+      return this.request(`/hr/piece-work-logs/${id}/approve`, {
+        method: 'POST',
+      });
+    },
+    rejectPieceWorkLog: async (id: string, rejection_reason: string): Promise<{ message: string; work_log: any }> => {
+      return this.request(`/hr/piece-work-logs/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ rejection_reason }),
+      });
+    },
+    getDefectAdjustments: async (page = 1, params: { status?: string; employee_id?: string; production_order_id?: string } = {}): Promise<PaginatedResponse<any>> => {
+      const searchParams = new URLSearchParams({ page: page.toString() });
+      if (params.status) searchParams.append('status', params.status);
+      if (params.employee_id) searchParams.append('employee_id', params.employee_id);
+      if (params.production_order_id) searchParams.append('production_order_id', params.production_order_id);
+      return this.request(`/hr/defect-adjustments?${searchParams.toString()}`);
+    },
+    createDefectAdjustment: async (payload: {
+      employee_id: string;
+      production_order_id: string;
+      cutting_bundle_id?: string;
+      quality_defect_id?: string;
+      quality_inspection_id?: string;
+      production_stage_id?: string;
+      investigation_notes?: string;
+      proposed_penalty_amount: number;
+      adjustment_reason: string;
+    }): Promise<{ message: string; defect_adjustment: any }> => {
+      return this.request('/hr/defect-adjustments', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    approveDefectAdjustment: async (id: string, payload?: { approved_amount?: number }): Promise<{ message: string; defect_adjustment: any }> => {
+      return this.request(`/hr/defect-adjustments/${id}/approve`, {
+        method: 'POST',
+        body: payload ? JSON.stringify(payload) : undefined,
+      });
+    },
+    rejectDefectAdjustment: async (id: string, payload: { rejection_reason: string }): Promise<{ message: string; defect_adjustment: any }> => {
+      return this.request(`/hr/defect-adjustments/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    recordWorkerObjection: async (id: string, payload: { objection_notes: string }): Promise<{ message: string; defect_adjustment: any }> => {
+      return this.request(`/hr/defect-adjustments/${id}/object`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    reverseDefectAdjustment: async (id: string, payload: { reversal_reason: string }): Promise<{ message: string; defect_adjustment: any }> => {
+      return this.request(`/hr/defect-adjustments/${id}/reverse`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });

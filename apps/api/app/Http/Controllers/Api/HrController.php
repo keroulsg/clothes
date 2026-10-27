@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Payroll;
 use App\Models\PieceRate;
 use App\Models\PieceWorkLog;
+use App\Models\QualityDefectAdjustment;
 use App\Services\PayrollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -152,4 +153,152 @@ class HrController extends Controller
             'payroll' => $payroll,
         ], 201);
     }
+
+    public function approvePieceWorkLog(Request $request, string $id): JsonResponse
+    {
+        $log = $this->payrollService->approvePieceWorkLog($id, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم اعتماد سجل إنتاجية العامل بنجاح',
+            'work_log' => $log,
+        ]);
+    }
+
+    public function rejectPieceWorkLog(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:255',
+        ]);
+
+        $log = $this->payrollService->rejectPieceWorkLog($id, $request->user()->id, $validated['rejection_reason']);
+
+        return response()->json([
+            'message' => 'تم رفض سجل الإنتاجية وتوثيق سبب الرفض بنجاح',
+            'work_log' => $log,
+        ]);
+    }
+
+    public function defectAdjustments(Request $request): JsonResponse
+    {
+        $query = QualityDefectAdjustment::with(['employee', 'productionOrder', 'cuttingBundle', 'approver', 'reporter', 'reverser'])
+            ->latest();
+
+        if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->query('employee_id'));
+        }
+
+        if ($request->has('status')) {
+            $query->where('status', $request->query('status'));
+        }
+
+        if ($request->has('production_order_id')) {
+            $query->where('production_order_id', $request->query('production_order_id'));
+        }
+
+        return response()->json($query->paginate(20));
+    }
+
+    public function storeDefectAdjustment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|uuid',
+            'production_order_id' => 'required|uuid',
+            'cutting_bundle_id' => 'nullable|uuid',
+            'quality_defect_id' => 'nullable|uuid',
+            'quality_inspection_id' => 'nullable|uuid',
+            'production_stage_id' => 'nullable|uuid',
+            'investigation_notes' => 'nullable|string',
+            'proposed_penalty_amount' => 'required|numeric|min:0',
+            'adjustment_reason' => 'required|string|max:255',
+        ]);
+
+        $adjustment = $this->payrollService->createQualityDefectAdjustment($validated, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم تسجيل تقرير عيب الجودة والتحقيق المبدئي بنجاح (معلق للاعتماد ولا يخصم تلقائياً)',
+            'defect_adjustment' => $adjustment,
+        ], 201);
+    }
+
+    public function approveDefectAdjustment(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'approved_amount' => 'nullable|numeric|min:0',
+        ]);
+
+        $adjustment = $this->payrollService->approveQualityDefectAdjustment(
+            $id,
+            $request->user()->id,
+            isset($validated['approved_amount']) ? (float)$validated['approved_amount'] : null
+        );
+
+        return response()->json([
+            'message' => 'تم اعتماد خصم عيب الجودة بواسطة مدير الإنتاج بنجاح وسيدرج في مسير الرواتب القادم',
+            'defect_adjustment' => $adjustment,
+        ]);
+    }
+
+    public function rejectDefectAdjustment(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:255',
+        ]);
+
+        $adjustment = $this->payrollService->rejectQualityDefectAdjustment(
+            $id,
+            $request->user()->id,
+            $validated['rejection_reason']
+        );
+
+        return response()->json([
+            'message' => 'تم رفض الخصم وإسقاط العقوبة بنجاح دون أي اقتطاع مالي',
+            'defect_adjustment' => $adjustment,
+        ]);
+    }
+
+    public function recordWorkerObjection(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'objection_notes' => 'required|string|max:1000',
+        ]);
+
+        $adjustment = $this->payrollService->recordWorkerObjection(
+            $id,
+            $validated['objection_notes']
+        );
+
+        return response()->json([
+            'message' => 'تم تسجيل تظلم واعتراض العامل بنجاح وتوثيق التاريخ لإعادة النظر',
+            'defect_adjustment' => $adjustment,
+        ]);
+    }
+
+    public function reverseDefectAdjustment(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reversal_reason' => 'required|string|max:255',
+        ]);
+
+        $adjustment = $this->payrollService->reverseQualityDefectAdjustment(
+            $id,
+            $request->user()->id,
+            $validated['reversal_reason']
+        );
+
+        return response()->json([
+            'message' => 'تم إلغاء الخصم وتوثيق قيد التسوية التعويضي بنجاح دون حذف السجلات التاريخية',
+            'defect_adjustment' => $adjustment,
+        ]);
+    }
+
+    public function markPayrollPaid(Request $request, string $id): JsonResponse
+    {
+        $payroll = $this->payrollService->markPayrollPaid($id);
+
+        return response()->json([
+            'message' => 'تم قفل مسير الرواتب واعتماده كمسير مدفوع نهائياً',
+            'payroll' => $payroll,
+        ]);
+    }
 }
+

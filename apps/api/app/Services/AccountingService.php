@@ -197,12 +197,26 @@ class AccountingService
      */
     public function calculateProductionCost(string $productionOrderId, array $overrides = []): ProductionCostSheet
     {
-        $tenantId = app('current_tenant_id');
+        $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (!$tenantId) {
+            $orderLookup = ProductionOrder::withoutGlobalScopes()->findOrFail($productionOrderId);
+            $tenantId = $orderLookup->tenant_id;
+            app()->instance('current_tenant_id', $tenantId);
+        }
 
         return DB::transaction(function () use ($productionOrderId, $overrides, $tenantId) {
             $order = ProductionOrder::where('tenant_id', $tenantId)
                 ->where('id', $productionOrderId)
                 ->firstOrFail();
+
+            $existingCostSheet = ProductionCostSheet::where('tenant_id', $tenantId)
+                ->where('production_order_id', $order->id)
+                ->first();
+
+            if ($existingCostSheet && $existingCostSheet->status === 'approved' && empty($overrides['force_recalculate'])) {
+                // لا يجوز إعادة احتساب أو تعديل بطاقة التكلفة الصناعية المعتمدة تاريخياً
+                return $existingCostSheet->load(['productionOrder', 'garmentModel']);
+            }
 
             // 1. حساب تكلفة الخامات المباشرة الفعلية من حركات المخزن المرتبطة بأمر الإنتاج
             $materialsCost = isset($overrides['direct_materials_cost'])
@@ -223,10 +237,16 @@ class AccountingService
 
             $subcontractCost = (float)($overrides['subcontracted_services_cost'] ?? 0);
 
-            // 3. تقدير التكاليف غير المباشرة المخصصة (15% من التكاليف المباشرة كمعيار صناعي)
+            // 3. جلب نسبة التكاليف غير المباشرة المعتمدة للمستأجر (الافتراضي 15% وتتراوح بين 0% و 100%)
+            $tenant = \App\Models\Tenant::find($tenantId);
+            $overheadRate = $tenant ? $tenant->getManufacturingOverheadRate() : 0.15;
+            if (isset($overrides['applied_overhead_rate']) && is_numeric($overrides['applied_overhead_rate'])) {
+                $overheadRate = max(0.0, min(1.0, (float)$overrides['applied_overhead_rate']));
+            }
+
             $overheadCost = isset($overrides['allocated_overhead_cost'])
                 ? (float)$overrides['allocated_overhead_cost']
-                : round(($materialsCost + $laborCost) * 0.15, 4);
+                : round(($materialsCost + $laborCost) * $overheadRate, 4);
 
             $totalCost = round($materialsCost + $laborCost + $subcontractCost + $overheadCost, 4);
             $totalPieces = max(1, (int)($order->total_completed_quantity ?: ($order->total_planned_quantity ?: ($order->total_quantity ?? 1))));
@@ -244,6 +264,7 @@ class AccountingService
                     'direct_labor_cost' => $laborCost,
                     'subcontracted_services_cost' => $subcontractCost,
                     'allocated_overhead_cost' => $overheadCost,
+                    'applied_overhead_rate' => $overheadRate,
                     'total_cost' => $totalCost,
                     'cost_per_piece' => $costPerPiece,
                     'status' => 'calculated',

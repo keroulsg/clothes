@@ -86,6 +86,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
         Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription']);
+        Route::get('/tenant/settings/costing', [TenantController::class, 'getCostingSettings']);
+        Route::put('/tenant/settings/costing', [TenantController::class, 'updateCostingSettings'])->middleware('role:company_owner,accountant');
 
         // الفروع ومواقع العمل
         Route::get('/branches', [BranchController::class, 'index']);
@@ -215,8 +217,20 @@ Route::prefix('v1')->group(function () {
         Route::post('/hr/piece-rates', [\App\Http\Controllers\Api\HrController::class, 'storePieceRate'])->middleware('role:accountant,production_manager');
         Route::get('/hr/piece-work-logs', [\App\Http\Controllers\Api\HrController::class, 'pieceWorkLogs']);
         Route::post('/hr/piece-work-logs', [\App\Http\Controllers\Api\HrController::class, 'storePieceWorkLog']);
+        Route::post('/hr/piece-work-logs/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approvePieceWorkLog'])->middleware('role:production_manager,accountant,company_owner');
+        Route::post('/hr/piece-work-logs/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectPieceWorkLog'])->middleware('role:production_manager,accountant,company_owner');
+
+        // تسويات عيوب الجودة والخصومات المعتمدة (Phase 09B)
+        Route::get('/hr/defect-adjustments', [\App\Http\Controllers\Api\HrController::class, 'defectAdjustments']);
+        Route::post('/hr/defect-adjustments', [\App\Http\Controllers\Api\HrController::class, 'storeDefectAdjustment'])->middleware('role:production_manager,quality_controller,accountant,company_owner');
+        Route::post('/hr/defect-adjustments/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approveDefectAdjustment'])->middleware('role:production_manager,company_owner');
+        Route::post('/hr/defect-adjustments/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectDefectAdjustment'])->middleware('role:production_manager,company_owner');
+        Route::post('/hr/defect-adjustments/{id}/object', [\App\Http\Controllers\Api\HrController::class, 'recordWorkerObjection']);
+        Route::post('/hr/defect-adjustments/{id}/reverse', [\App\Http\Controllers\Api\HrController::class, 'reverseDefectAdjustment'])->middleware('role:production_manager,company_owner');
+
         Route::get('/hr/payrolls', [\App\Http\Controllers\Api\HrController::class, 'payrolls']);
         Route::post('/hr/payrolls/generate', [\App\Http\Controllers\Api\HrController::class, 'generatePayroll'])->middleware('role:accountant');
+        Route::post('/hr/payrolls/{id}/pay', [\App\Http\Controllers\Api\HrController::class, 'markPayrollPaid'])->middleware('role:accountant,company_owner');
 
         // إدارة المتجر الإلكتروني داخل الـ ERP (Phase 11: Storefront ERP)
         Route::get('/storefront/orders', [\App\Http\Controllers\Api\StorefrontController::class, 'orders']);

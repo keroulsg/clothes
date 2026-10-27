@@ -23,6 +23,9 @@ class PieceWorkLog extends Model
         'unit_rate',
         'total_amount',
         'status',
+        'approved_by',
+        'approved_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -30,11 +33,17 @@ class PieceWorkLog extends Model
         'unit_rate' => 'decimal:4',
         'total_amount' => 'decimal:4',
         'work_date' => 'date',
+        'approved_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function productionOrder(): BelongsTo

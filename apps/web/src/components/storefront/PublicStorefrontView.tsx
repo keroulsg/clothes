@@ -90,11 +90,12 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const res = await api.storefront.getPublicStore(tenantIdentifier);
+      const activeTenant = tenantIdentifier || 'msnaa-aldlta-llmlabs-algahz-429';
+      const res = await api.storefront.getPublicStore(activeTenant);
       if (res) {
         setStoreSettings(res.store_settings);
         setTenantInfo(res.tenant);
-        setVariants(res.catalog?.variants || res.variants || []);
+        setVariants(res.products || res.catalog?.variants || res.variants || []);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر تحميل بيانات المتجر' : 'Failed to load storefront'));
@@ -122,8 +123,8 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
   const cartTotal = cartSubtotal + shippingFee;
 
   const handleAddToCart = (variant: any) => {
-    const price = Number(variant.retail_price) > 0 ? Number(variant.retail_price) : 250;
-    const available = Number(variant.available_quantity ?? variant.current_balance ?? 99);
+    const price = Number(variant.price ?? variant.retail_price ?? 250);
+    const available = Number(variant.in_stock ?? variant.available_quantity ?? variant.current_balance ?? 99);
 
     setCart((prev) => {
       const existing = prev.find((i) => i.variant_id === variant.id);
@@ -137,10 +138,10 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
         ...prev,
         {
           variant_id: variant.id,
-          product_name: variant.garment_model?.name || variant.sku,
+          product_name: variant.model_name || variant.garment_model?.name || variant.sku,
           sku: variant.sku,
-          size: variant.size?.name || variant.size_name || 'L',
-          color: variant.color?.name || variant.color_name || 'Navy',
+          size: variant.size?.name || variant.size_name || variant.size || 'L',
+          color: variant.color?.name || variant.color_name || variant.color || 'Navy',
           quantity: 1,
           unit_price: price,
           available_stock: available,
@@ -223,11 +224,12 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
 
   // Filter products
   const filteredVariants = variants.filter((v) => {
-    const name = (v.garment_model?.name || v.sku || '').toLowerCase();
-    const matchesSearch = !searchQuery || name.includes(searchQuery.toLowerCase());
+    const name = (v.model_name || v.garment_model?.name || v.sku || '').toLowerCase();
+    const matchesSearch = !searchQuery || name.includes(searchQuery.toLowerCase()) || (v.sku && v.sku.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory =
       selectedCategory === 'all' ||
-      (v.garment_model?.category || '').toLowerCase() === selectedCategory.toLowerCase();
+      (v.garment_model?.category || '').toLowerCase() === selectedCategory.toLowerCase() ||
+      name.includes(selectedCategory.toLowerCase());
     return matchesSearch && matchesCategory;
   });
 
@@ -476,8 +478,8 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredVariants.map((v) => {
-              const price = Number(v.retail_price) > 0 ? Number(v.retail_price) : 250;
-              const inStock = Number(v.available_quantity ?? v.current_balance ?? 10) > 0;
+              const price = Number(v.price ?? v.retail_price ?? 250);
+              const inStock = Number(v.in_stock ?? v.available_quantity ?? v.current_balance ?? 10) > 0;
 
               return (
                 <Card
@@ -526,13 +528,13 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
                     </div>
 
                     <h3 className="font-bold text-sm line-clamp-1">
-                      {v.garment_model?.name || v.sku}
+                      {v.model_name || v.garment_model?.name || v.sku}
                     </h3>
 
                     <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      <span>{isAr ? 'المقاس:' : 'Size:'} {v.size?.name || v.size_name || 'L'}</span>
+                      <span>{isAr ? 'المقاس:' : 'Size:'} {v.size?.name || v.size_name || v.size || 'L'}</span>
                       <span>•</span>
-                      <span>{isAr ? 'اللون:' : 'Color:'} {v.color?.name || v.color_name || 'Navy'}</span>
+                      <span>{isAr ? 'اللون:' : 'Color:'} {v.color?.name || v.color_name || v.color || 'Navy'}</span>
                     </div>
 
                     <p className="text-[11px] font-mono text-slate-400 mt-0.5">

@@ -120,6 +120,15 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
             >
               <span>{isAr ? 'استكشف صالة القص' : 'Explore Cutting Engine'}</span>
             </button>
+
+            <button
+              onClick={() => {
+                window.location.hash = '#/store';
+              }}
+              className="px-5 py-3 rounded-xl border border-emerald-400/40 bg-emerald-500/20 hover:bg-emerald-500/30 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer backdrop-blur-md shadow-md"
+            >
+              <span>{isAr ? 'المتجر الإلكتروني العام' : 'Public Storefront'}</span>
+            </button>
           </div>
         </div>
       </section>

@@ -1624,6 +1624,7 @@ export function App() {
   }
 
   if (viewMode === 'store') {
+    const activeTenantSlug = storeTenantSlug || (currentUser as any)?.tenant?.subdomain || currentUser?.tenant_id || 'msnaa-aldlta-llmlabs-algahz-429';
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <PublicStorefrontView
@@ -1631,7 +1632,7 @@ export function App() {
           onToggleLang={toggleLang}
           isDark={isDark}
           onToggleTheme={toggleTheme}
-          tenantIdentifier={storeTenantSlug}
+          tenantIdentifier={activeTenantSlug}
           onNavigateToTracking={(orderNumber, phone) => {
             setTrackOrderInitial({ orderNumber, phone });
             window.location.hash = '#/store/track';
@@ -1643,11 +1644,12 @@ export function App() {
   }
 
   if (viewMode === 'store_track') {
+    const activeTenantSlug = storeTenantSlug || (currentUser as any)?.tenant?.subdomain || currentUser?.tenant_id || 'msnaa-aldlta-llmlabs-algahz-429';
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <PublicOrderTracker
           lang={lang}
-          tenantIdentifier={storeTenantSlug}
+          tenantIdentifier={activeTenantSlug}
           initialOrderNumber={trackOrderInitial.orderNumber}
           initialPhone={trackOrderInitial.phone}
           onNavigateHome={() => {

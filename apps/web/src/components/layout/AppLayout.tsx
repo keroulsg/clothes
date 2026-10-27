@@ -271,6 +271,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </button>
           )}
 
+          {/* Public Storefront Quick Launch */}
+          <button
+            onClick={() => window.open('#/store', '_blank')}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors text-xs font-bold cursor-pointer"
+            title={isAr ? 'فتح متجر العملاء العام في نافذة جديدة' : 'Open Public Storefront in new tab'}
+          >
+            <Store className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">{isAr ? 'متجر العملاء' : 'Storefront'}</span>
+          </button>
+
           {/* Dark / Light Mode Toggle */}
           {onToggleTheme && (
             <button

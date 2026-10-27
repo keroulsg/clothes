@@ -14,6 +14,7 @@ import {
   Receipt,
   Users,
   Store,
+  Truck,
 } from 'lucide-react';
 import type { Language } from '../../types';
 
@@ -238,6 +239,30 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
           >
             {isAr ? 'تواصل معنا' : 'Contact'}
           </button>
+
+          {/* Public Storefront Direct Access */}
+          <button
+            onClick={() => {
+              window.location.hash = '#/store';
+              setMobileMenuOpen(false);
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors cursor-pointer text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center gap-1.5 border border-emerald-500/30 ms-1"
+            title={isAr ? 'فتح متجر المعرض والبيع المباشر للعملاء' : 'Open Public Storefront'}
+          >
+            <Store className="w-3.5 h-3.5" />
+            <span>{isAr ? 'المتجر الإلكتروني' : 'Storefront'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              window.location.hash = '#/store/track';
+              setMobileMenuOpen(false);
+            }}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-700 dark:text-slate-300 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800"
+            title={isAr ? 'تتبع طلبك ورقم الشحنة' : 'Track Order'}
+          >
+            {isAr ? 'تتبع طلبك' : 'Track Order'}
+          </button>
         </nav>
 
         {/* Action Controls & Mobile Menu Toggle */}
@@ -377,6 +402,29 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
                   }`}
                 >
                   {isAr ? 'تواصل معنا' : 'Contact'}
+                </button>
+
+                {/* Direct Storefront & Tracking for Mobile */}
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    window.location.hash = '#/store';
+                  }}
+                  className="w-full text-start px-3 py-2 rounded-xl text-xs font-black transition-all bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center gap-2 border border-emerald-500/30"
+                >
+                  <Store className="w-4 h-4" />
+                  <span>{isAr ? 'المتجر الإلكتروني للعملاء' : 'Public Storefront'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    window.location.hash = '#/store/track';
+                  }}
+                  className="w-full text-start px-3 py-2 rounded-xl text-xs font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2"
+                >
+                  <Truck className="w-4 h-4 text-slate-400" />
+                  <span>{isAr ? 'تتبع الطلبات والشحنات' : 'Track Orders'}</span>
                 </button>
               </div>
 

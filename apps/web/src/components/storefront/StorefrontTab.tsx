@@ -324,6 +324,28 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
           { label: isAr ? 'الرئيسية' : 'Home' },
           { label: isAr ? 'المتجر الإلكتروني' : 'Storefront' },
         ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open('#/store/track', '_blank')}
+              className="flex items-center gap-1.5"
+            >
+              <Truck className="w-4 h-4 text-primary" />
+              <span>{isAr ? 'تتبع طلبات العملاء' : 'Track Orders'}</span>
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => window.open((storeSettings as any)?.slug ? `#/store/${(storeSettings as any).slug}` : '#/store', '_blank')}
+              className="flex items-center gap-1.5 shadow-sm"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>{isAr ? 'فتح المتجر الإلكتروني للعملاء' : 'Open Public Store'}</span>
+            </Button>
+          </div>
+        }
       />
 
       {/* KPI Cards */}

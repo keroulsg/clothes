@@ -60,6 +60,8 @@ import { SalesTab } from './components/sales/SalesTab';
 import { AccountingTab } from './components/accounting/AccountingTab';
 import { HrTab } from './components/hr/HrTab';
 import { StorefrontTab } from './components/storefront/StorefrontTab';
+import { PublicStorefrontView } from './components/storefront/PublicStorefrontView';
+import { PublicOrderTracker } from './components/storefront/PublicOrderTracker';
 import { MaintenanceTab } from './components/maintenance/MaintenanceTab';
 import type {
   Language,
@@ -208,22 +210,34 @@ export function App() {
       return { mode: 'erp' as const, tab: raw };
     }
 
-    // 4. ERP Aliases
+    // 4. Standalone Public Storefront & Customer Order Tracking Routes
+    if (raw === 'store/track' || raw.startsWith('store/track') || raw === 'track' || raw.startsWith('track/')) {
+      return { mode: 'store_track' as const };
+    }
+    if (raw.startsWith('store/') || raw.startsWith('shop/')) {
+      const slug = raw.replace(/^(store|shop)\//, '').trim();
+      return { mode: 'store' as const, tenantSlug: slug };
+    }
+    if (raw === 'store' || raw === 'shop') {
+      return { mode: 'store' as const };
+    }
+
+    // 5. ERP Aliases
     if (raw === 'sales' || raw === 'pos') return { mode: 'erp' as const, tab: 'sales' };
     if (raw === 'accounting' || raw === 'costing') return { mode: 'erp' as const, tab: 'costing' };
     if (raw === 'hr' || raw === 'piece_rate' || raw === 'payroll') return { mode: 'erp' as const, tab: 'piece_rate' };
-    if (raw === 'store' || raw === 'storefront') return { mode: 'erp' as const, tab: 'storefront' };
+    if (raw === 'storefront') return { mode: 'erp' as const, tab: 'storefront' };
     if (raw === 'boms' || raw === 'bom') return { mode: 'erp' as const, tab: 'models' };
     if (raw === 'machines' || raw === 'assets') return { mode: 'erp' as const, tab: 'maintenance' };
     if (raw === 'cmt') return { mode: 'erp' as const, tab: 'subcontracting' };
     if (raw === 'fabric' || raw === 'warehouse') return { mode: 'erp' as const, tab: 'inventory' };
     if (raw === 'po' || raw === 'procurement') return { mode: 'erp' as const, tab: 'purchasing' };
 
-    // 5. Auth Action Shortcuts
+    // 6. Auth Action Shortcuts
     if (raw === 'login') return { mode: 'public' as const, publicPage: 'home', openLogin: true };
     if (raw === 'register') return { mode: 'public' as const, publicPage: 'home', openRegister: true };
 
-    // 6. Public Independent Pages & Legal Policies
+    // 7. Public Independent Pages & Legal Policies
     const publicPages = [
       'features',
       'manufacturing',
@@ -259,8 +273,14 @@ export function App() {
       return { mode: 'public' as const, publicPage: raw };
     }
 
-    // 7. Empty hash / Root path recovery
+    // 8. Empty hash / Root path recovery (checks for tenant subdomains)
     if (raw === '' || raw === '/') {
+      const hostname = window.location.hostname.toLowerCase();
+      const isSubdomain = hostname.split('.').length > 2 || (hostname.endsWith('.localhost') && hostname !== 'localhost');
+      if (isSubdomain && !['admin', 'api', 'www', 'app'].some((s) => hostname.startsWith(`${s}.`))) {
+        return { mode: 'store' as const };
+      }
+
       if (api.isAuthenticated()) {
         const storedRole = api.auth.getStoredUser()?.role;
         if (storedRole === 'platform_admin') {
@@ -271,18 +291,20 @@ export function App() {
       return { mode: 'public' as const, publicPage: 'home' };
     }
 
-    // 8. Fallback
+    // 9. Fallback
     return { mode: 'public' as const, publicPage: 'home' };
   };
 
   const initialRoute = parseCurrentRoute();
-  const [viewMode, setViewMode] = useState<'public' | 'erp' | 'admin'>(() => {
+  const [viewMode, setViewMode] = useState<'public' | 'erp' | 'admin' | 'store' | 'store_track'>(() => {
     return initialRoute.mode;
   });
-  const [publicPage, setPublicPage] = useState<string>(initialRoute.publicPage || 'home');
-  const [activeTab, setActiveTab] = useState<string>(initialRoute.tab || 'dashboard');
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(!!initialRoute.openLogin);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(!!initialRoute.openRegister);
+  const [storeTenantSlug, setStoreTenantSlug] = useState<string | undefined>((initialRoute as any).tenantSlug);
+  const [trackOrderInitial, setTrackOrderInitial] = useState<{ orderNumber?: string; phone?: string }>({});
+  const [publicPage, setPublicPage] = useState<string>((initialRoute as any).publicPage || 'home');
+  const [activeTab, setActiveTab] = useState<string>((initialRoute as any).tab || 'dashboard');
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(!!(initialRoute as any).openLogin);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(!!(initialRoute as any).openRegister);
   const [registerPlanTier, setRegisterPlanTier] = useState<string>('starter');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -293,13 +315,18 @@ export function App() {
       const r = parseCurrentRoute();
       if (r.mode === 'admin') {
         setViewMode('admin');
+      } else if (r.mode === 'store') {
+        setViewMode('store');
+        if ((r as any).tenantSlug) setStoreTenantSlug((r as any).tenantSlug);
+      } else if (r.mode === 'store_track') {
+        setViewMode('store_track');
       } else {
         setViewMode(r.mode);
-        if (r.tab) setActiveTab(r.tab);
-        if (r.publicPage) setPublicPage(r.publicPage);
+        if ((r as any).tab) setActiveTab((r as any).tab);
+        if ((r as any).publicPage) setPublicPage((r as any).publicPage);
       }
-      if (r.openLogin) setIsLoginModalOpen(true);
-      if (r.openRegister) setIsRegisterModalOpen(true);
+      if ((r as any).openLogin) setIsLoginModalOpen(true);
+      if ((r as any).openRegister) setIsRegisterModalOpen(true);
       if ((r as any).scrollTo) {
         setTimeout(() => {
           const el = document.getElementById((r as any).scrollTo!);
@@ -312,10 +339,11 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const navigateToRoute = (mode: 'public' | 'erp' | 'admin', tab?: string, page?: string) => {
+  const navigateToRoute = (mode: 'public' | 'erp' | 'admin' | 'store' | 'store_track', tab?: string, page?: string, slug?: string) => {
     setViewMode(mode);
     if (tab) setActiveTab(tab);
     if (page) setPublicPage(page);
+    if (slug) setStoreTenantSlug(slug);
     if (mode === 'public') {
       const target = page || publicPage || 'home';
       window.location.hash = target === 'home' ? '#/' : `#/${target}`;
@@ -323,6 +351,10 @@ export function App() {
       window.location.hash = '#/admin';
     } else if (mode === 'erp') {
       window.location.hash = `#/erp/${tab || activeTab}`;
+    } else if (mode === 'store') {
+      window.location.hash = slug ? `#/store/${slug}` : '#/store';
+    } else if (mode === 'store_track') {
+      window.location.hash = '#/store/track';
     }
   };
 
@@ -1551,6 +1583,41 @@ export function App() {
           onSwitchToLogin={() => {
             setIsRegisterModalOpen(false);
             setIsLoginModalOpen(true);
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (viewMode === 'store') {
+    return (
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <PublicStorefrontView
+          lang={lang}
+          onToggleLang={toggleLang}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          tenantIdentifier={storeTenantSlug}
+          onNavigateToTracking={(orderNumber, phone) => {
+            setTrackOrderInitial({ orderNumber, phone });
+            window.location.hash = '#/store/track';
+          }}
+          onNavigateToErp={() => navigateToRoute('erp', 'dashboard')}
+        />
+      </div>
+    );
+  }
+
+  if (viewMode === 'store_track') {
+    return (
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <PublicOrderTracker
+          lang={lang}
+          tenantIdentifier={storeTenantSlug}
+          initialOrderNumber={trackOrderInitial.orderNumber}
+          initialPhone={trackOrderInitial.phone}
+          onNavigateHome={() => {
+            window.location.hash = storeTenantSlug ? `#/store/${storeTenantSlug}` : '#/store';
           }}
         />
       </div>

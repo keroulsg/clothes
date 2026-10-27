@@ -250,8 +250,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/maintenance/downtime-summary', [\App\Http\Controllers\Api\MaintenanceController::class, 'downtimeSummary']);
     });
 
-    // واجهة المتجر الإلكتروني العامة (Phase 10: Public E-Commerce Storefront)
+    // واجهة المتجر الإلكتروني العامة وتتبع الطلبات (Phase 10 & Phase A: Public Storefront & Tracking)
     Route::get('/storefront/public/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'publicStore']);
     Route::post('/storefront/order/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'placeOrder']);
+    Route::get('/storefront/track/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'trackOrder']);
+    Route::post('/storefront/receipt/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'submitReceipt']);
 });
 

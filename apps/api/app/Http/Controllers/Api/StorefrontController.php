@@ -260,4 +260,116 @@ class StorefrontController extends Controller
             ], 422);
         }
     }
+
+    /**
+     * تتبع طلب الشراء للعملاء دون اشتراط تسجيل دخول
+     */
+    public function trackOrder(Request $request, ?string $tenantId = null): JsonResponse
+    {
+        $tenant = $this->domainResolver->resolveStorefrontTenant($request, $tenantId);
+        $resolvedTenantId = $tenant?->id;
+
+        $orderNumber = $request->query('order_number') ?: $request->input('order_number');
+        $customerPhone = $request->query('customer_phone') ?: $request->input('customer_phone');
+
+        if (!$orderNumber || !$customerPhone) {
+            return response()->json([
+                'error' => 'MissingTrackingParameters',
+                'message' => 'يرجى إدخال رقم الطلب ورقم الهاتف المسجل لمتابعة حالة الشحنة.',
+            ], 422);
+        }
+
+        $order = $this->storefrontService->trackOrder($orderNumber, $customerPhone, $resolvedTenantId);
+
+        if (!$order) {
+            return response()->json([
+                'error' => 'OrderNotFound',
+                'message' => 'لم نتمكن من العثور على طلب مطابق لرقم الطلب ورقم الهاتف المدخلين.',
+            ], 404);
+        }
+
+        $settings = $this->storefrontService->getStoreDetails($order->tenant_id);
+
+        return response()->json([
+            'order' => [
+                'id' => $order->id,
+                'order_number' => $order->order_number,
+                'status' => $order->status,
+                'customer_name' => $order->customer_name,
+                'shipping_address' => $order->shipping_address,
+                'city' => $order->city,
+                'payment_method' => $order->payment_method,
+                'payment_status' => $order->payment_status,
+                'payment_rejection_reason' => $order->payment_rejection_reason,
+                'instapay_reference' => $order->instapay_reference,
+                'instapay_receipt_url' => $order->instapay_receipt_url,
+                'subtotal' => $order->subtotal,
+                'shipping_fee' => $order->shipping_fee,
+                'total_amount' => $order->total_amount,
+                'created_at' => $order->created_at?->toIso8601String(),
+                'items' => $order->items->map(fn($item) => [
+                    'id' => $item->id,
+                    'product_name' => $item->product_name ?: ($item->variant?->garmentModel?->name ?? 'منتج ملابس'),
+                    'sku' => $item->sku ?: ($item->variant?->sku ?? ''),
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'total_price' => $item->total_price,
+                    'size' => $item->variant?->size?->name,
+                    'color' => $item->variant?->color?->name,
+                ]),
+            ],
+            'store_info' => [
+                'store_name' => $settings['store_settings']->store_name ?? 'Garment Store',
+                'currency' => $order->tenant?->currency ?? 'EGP',
+                'instapay_account_name' => $settings['store_settings']->instapay_account_name ?? '',
+                'instapay_handle' => $settings['store_settings']->instapay_handle ?? '',
+                'instapay_instructions' => $settings['store_settings']->instapay_instructions ?? '',
+                'contact_whatsapp' => $settings['store_settings']->contact_whatsapp ?? '',
+            ],
+        ]);
+    }
+
+    /**
+     * رفع أو تحديث إيصال/مرجع تحويل InstaPay من طرف العميل
+     */
+    public function submitReceipt(Request $request, ?string $tenantId = null): JsonResponse
+    {
+        $tenant = $this->domainResolver->resolveStorefrontTenant($request, $tenantId);
+        $resolvedTenantId = $tenant?->id;
+
+        $validated = $request->validate([
+            'order_number' => 'required|string|max:100',
+            'customer_phone' => 'required|string|max:50',
+            'instapay_reference' => 'required|string|max:100',
+            'instapay_receipt_url' => 'nullable|string',
+        ]);
+
+        try {
+            $order = $this->storefrontService->submitCustomerReceipt(
+                $validated['order_number'],
+                $validated['customer_phone'],
+                $validated['instapay_reference'],
+                $validated['instapay_receipt_url'] ?? null,
+                $resolvedTenantId
+            );
+
+            return response()->json([
+                'message' => 'تم استلام بيانات التحويل بنجاح، وسيقوم فريق المراجعة بتأكيد الطلب وشحنه.',
+                'order' => [
+                    'order_number' => $order->order_number,
+                    'status' => $order->status,
+                    'payment_method' => $order->payment_method,
+                    'payment_status' => $order->payment_status,
+                    'instapay_reference' => $order->instapay_reference,
+                    'instapay_receipt_url' => $order->instapay_receipt_url,
+                ],
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvalidReceiptSubmission',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
 }
+

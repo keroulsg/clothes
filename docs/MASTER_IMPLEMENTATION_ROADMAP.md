@@ -37,54 +37,30 @@ flowchart TD
 
 | Phase | Title | Verified Status | Remaining Technical Tasks | Target Milestone |
 | :--- | :--- | :--- | :--- | :--- |
-| **Phase 00** | Monorepo & Database Foundation | **VERIFIED COMPLETE** | Zero schema drift, strict health probes. | Complete |
-| **Phase 00A** | Visual System & WCAG Recovery | **VERIFIED COMPLETE** | Royal Burgundy palette & high-contrast slate. | Complete |
-| **Phase 01** | Multi-Tenancy & RBAC Engine | **VERIFIED COMPLETE** | Fail-closed TenantScope active. | Complete |
-| **Phase 02** | Design System & Reusable Components | **VERIFIED COMPLETE** | ActionsMenu, Modals, Pagination active. | Complete |
-| **Phase 03** | Styles, Sizes/Colors & Stock Ledger | **VERIFIED COMPLETE** | Variant barcode matrix and BOM details connected. | Complete |
-| **Phase 04** | Purchasing, Suppliers & 3-Way Match | **VERIFIED COMPLETE** | GRN inspection, invoice tolerance verification. | Complete |
-| **Phase 05** | Cutting Floor, Lay Planning & Bundles | **VERIFIED COMPLETE** | QR bundle transfers and AQL inspections. | Complete |
-| **Phase 06** | Subcontracting & CMT Custody | **VERIFIED COMPLETE** | Outside operations and customer material isolation. | Complete |
-| **Phase 07B**| Commercial Sales & Return Automation | **VERIFIED COMPLETE** | Sales return modal, credit note posting & 80mm thermal receipt verified. | Complete |
-| **Phase 08B**| Advanced Accounting & Financial Reports | **IN QUEUE (Phase +2)** | Trial balance CSV export & VAT return summary. | Sprint 2 |
-| **Phase 09B**| HR Biometric Integration & Overtime | **IN QUEUE (Phase +3)** | Biometric attendance sync & penalty calculation. | Sprint 3 |
-| **Phase 10** | Storefront & COD Orders | **VERIFIED COMPLETE** | Authoritative pricing & domain verification active. | Complete |
-| **Phase 11** | Machine Registry & Maintenance | **VERIFIED COMPLETE** | MTBF/MTTR metrics & work order spare parts. | Complete |
-| **Phase 12** | Commercial Go-Live & Security Gate | **VERIFIED COMPLETE** | 8 end-to-end integration journeys passing. | Production Gate |
+| **Phase 00-06**| Core Foundations, Catalog, Purchasing, Cutting & Subcontracting | **VERIFIED COMPLETE** | Master data, BOM, 3-way match, bundle QR & CMT custody. | Baseline Complete |
+| **Phase 07B**| Commercial Sales & Return Automation | **VERIFIED COMPLETE** | Sales return modal, credit note posting & 80mm thermal receipt verified. | Complete (`2de5c57`) |
+| **Phase 08B**| Advanced Accounting & Industrial Costing | **VERIFIED COMPLETE** | Trial balance, income statement, balance sheet, VAT summary & cost variance. | Complete (`5b76e5d`) |
+| **Phase 09B**| Workforce & Piece-Rate HR Rules | **VERIFIED COMPLETE** | QC defect deductions, worker objections, overhead configuration & payroll integrity. | Complete (`4383316`) |
+| **Phase 10** | Storefront Multi-Theme Engine & InstaPay Audit | **VERIFIED COMPLETE** | 4 theme families, tenant branding, manual InstaPay audit & stock sync. | Complete (`c0f404b`, `03ad16f`) |
+| **Phase A**  | **Current-System Acceptance & Missing Journeys** | **IN PROGRESS (Current Sprint)** | Repair POS/sales flows, standalone customer store routes, public order tracking, receipt submission & PostgreSQL CI concurrency. | Sprint Gate |
+| **Phase B**  | **Raw-Material & Finished-Goods Warehouses** | **PLANNED (Phase +1)** | Multi-warehouse zones/bins, reserved/on-hand stock, transfers, cycle counts & movement ledger. | Sprint Gate |
+| **Phase C**  | **Product Catalog, POS, Invoices & Returns** | **PLANNED (Phase +2)** | Barcode search, POS quantity validation, authorized discounts, returns/credit notes & thermal layout. | Sprint Gate |
+| **Phase D**  | **Workforce, Attendance, Overtime & Payroll** | **PLANNED (Phase +3)** | Piece-rate, hourly & agreed rate methods, spreadsheet attendance grid, biometric import & payroll locking. | Sprint Gate |
+| **Phase E**  | **Financial Vouchers, Cheques, Receivables & Installments** | **PLANNED (Phase +4)** | Receipt/payment vouchers, statements, cheque registers, installment agreements & idempotent posting. | Sprint Gate |
+| **Phase E2** | **Complete UI/UX Design System** | **PLANNED (Phase +5)** | Consistent typography, spacing, RTL/LTR, dark/light contrast & standardized printable documents. | Sprint Gate |
+| **Phase F**  | **Fully Functional Public Storefront** | **PLANNED (Phase +6)** | Full e-commerce pages across 4 themes (Home, Categories, Cart, Checkout, Policies) with tenant branding. | Sprint Gate |
+| **Phase G**  | **Waslat Worsh Marketplace** | **PLANNED (Phase +7)** | Workshop profiles, RFQ bidding, quote-to-job-order conversion reusing `SubcontractingService`. | Sprint Gate |
+| **Phase H**  | **Final Operational Readiness** | **PLANNED (Phase +8)** | E2E integration test suite, PostgreSQL CI validation, backup/restore & production release documentation. | Production Gate |
 
 ---
 
-## 3. The Next Three Implementation Phases (Ordered by Dependencies)
+## 3. Active Phase: Phase A — Current-System Acceptance & Missing Journeys
 
-### Phase 1: Commercial Sales & Returns Completion (Phase 07B)
-* **Dependency:** Phase 03 (Inventory Ledger) + Phase 05 (Finished Goods Stock).
-* **Objective:** Close remaining commercial gaps by implementing a dedicated **Sales Return & Credit Note Modal** from the invoice row, and a **Thermal POS Receipt Print Preview** for outlet cashiers.
-* **Core Entities:** `SalesOrder`, `SalesInvoice`, `SalesReturn`, `CreditNote`, `InventoryTransaction`.
-* **Deliverable:** Full return lifecycle returning goods to warehouse with ledger credit note.
-
-### Phase 2: Industrial Costing & Financial Reporting (Phase 08B)
-* **Dependency:** Phase 07B (Sales Revenue) + Phase 04 (Purchasing Costs) + Phase 09 (Labor Costs).
-* **Objective:** Provide automated **Trial Balance, Income Statement & Balance Sheet Exports** (Excel/CSV) and an **Audited Manufacturing Cost Variance Sheet** comparing standard BOM cost vs. actual cutting/sewing costs.
-* **Core Entities:** `Account`, `JournalEntry`, `JournalEntryLine`, `ProductionCostSheet`.
-* **Deliverable:** Live financial statements accessible to authorized Financial Accountants and Factory Owners.
-
-### Phase 3: Advanced Workforce & Piece-Rate Rules (Phase 09B)
-* **Dependency:** Phase 05 (Bundle Operations) + Phase 08B (Payroll Expenses).
-* **Objective:** Expand the HR tab to handle **Overtime Multipliers, Production Defect Deductions**, and **Worker Attendance Webhooks** (biometric machine integration).
-* **Core Entities:** `Employee`, `PieceRate`, `DailyWorkLog`, `PayrollRun`, `AttendanceRecord`.
-* **Deliverable:** Automated monthly payroll run including piece work + hourly overtime - QC penalty deductions.
-
----
-
-## 4. Immediate First Implementation Task
-
-* **Task ID:** `TASK-07B-01`
-* **Title:** Implement Sales Return & Credit Note Modal in `SalesTab.tsx`
-* **Route:** `#/erp/sales`
-* **Components:** `apps/web/src/components/sales/SalesReturnModal.tsx`, `apps/web/src/api/client.ts`, `apps/api/app/Http/Controllers/Api/SalesController.php`
-* **Acceptance Criteria:**
-  1. User can click "إرجاع مبيعات" from any paid or delivered sales order/invoice.
-  2. Input returned quantities with reason (defect, customer exchange, size mismatch).
-  3. API creates negative stock movement in `inventory_transactions` returning units to designated warehouse.
-  4. Generates offsetting credit note entry in accounting ledger.
-  5. Tested with automated regression test in `tests/Feature/SalesReturnTest.php`.
+* **Dependency:** Phase 07B (Sales), Phase 08B (Accounting), Phase 10 (Storefront Themes).
+* **Objective:**
+  1. Inspect and repair POS, sales invoices, and drawer balances end-to-end.
+  2. Implement standalone public customer storefront routes (`#/store/:tenantSlug`), real product browsing, checkout, order creation, InstaPay receipt submission, and customer order tracking (`#/store/track`).
+  3. Verify seamless integration among products, stock, sales, payments, and customer accounts.
+  4. Document and configure PostgreSQL CI requirements for the 5 skipped concurrency tests.
+* **Core Entities:** `StoreOrder`, `SalesInvoice`, `InventoryItem`, `InventoryTransaction`, `PosSession`.
+* **Deliverable:** Working standalone public customer storefront journey, customer order lookup, InstaPay receipt upload, and automated test coverage.

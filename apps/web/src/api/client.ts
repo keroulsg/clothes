@@ -1098,6 +1098,36 @@ class ApiClient {
         body: JSON.stringify({ approved, rejection_reason }),
       });
     },
+
+    // Public Consumer Storefront API
+    getPublicStore: async (tenantIdOrSlug?: string): Promise<any> => {
+      const endpoint = tenantIdOrSlug ? `/storefront/public/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/public';
+      return this.request(endpoint);
+    },
+    placePublicOrder: async (payload: any, tenantIdOrSlug?: string): Promise<{ message: string; order: any }> => {
+      const endpoint = tenantIdOrSlug ? `/storefront/order/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/order';
+      return this.request(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    trackOrder: async (params: { order_number: string; customer_phone: string; tenant_id?: string }): Promise<{ order: any; store_info: any }> => {
+      const query = new URLSearchParams({
+        order_number: params.order_number,
+        customer_phone: params.customer_phone,
+      });
+      const endpoint = params.tenant_id
+        ? `/storefront/track/${encodeURIComponent(params.tenant_id)}?${query.toString()}`
+        : `/storefront/track?${query.toString()}`;
+      return this.request(endpoint);
+    },
+    submitReceipt: async (payload: { order_number: string; customer_phone: string; instapay_reference: string; instapay_receipt_url?: string; tenant_id?: string }): Promise<{ message: string; order: any }> => {
+      const endpoint = payload.tenant_id ? `/storefront/receipt/${encodeURIComponent(payload.tenant_id)}` : '/storefront/receipt';
+      return this.request(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
   };
 
   public public = {

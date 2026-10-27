@@ -413,4 +413,92 @@ class StorefrontService
         // القيمة القياسية الافتراضية للشحن الموثوق
         return 50.0;
     }
+
+    /**
+     * تتبع طلب الشراء للعميل العام بواسطة رقم الطلب ورقم الهاتف
+     */
+    public function trackOrder(string $orderNumber, string $phone, ?string $tenantId = null): ?StoreOrder
+    {
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+
+        $query = StoreOrder::withoutGlobalScopes()
+            ->with(['items.variant.garmentModel', 'items.variant.size', 'items.variant.color', 'tenant'])
+            ->where('order_number', trim($orderNumber));
+
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        $order = $query->first();
+
+        if (!$order) {
+            return null;
+        }
+
+        $orderPhoneClean = preg_replace('/[^0-9]/', '', $order->customer_phone);
+        if ($orderPhoneClean !== $cleanPhone && !str_ends_with($orderPhoneClean, $cleanPhone) && !str_ends_with($cleanPhone, $orderPhoneClean)) {
+            return null;
+        }
+
+        return $order;
+    }
+
+    /**
+     * رفع أو تحديث إيصال/مرجع تحويل InstaPay من طرف العميل
+     * يعيد حالة الدفع تلقائياً إلى pending_review لتمكين الإدارة من التدقيق
+     */
+    public function submitCustomerReceipt(
+        string $orderNumber,
+        string $phone,
+        string $instapayReference,
+        ?string $receiptUrl = null,
+        ?string $tenantId = null
+    ): StoreOrder {
+        $order = $this->trackOrder($orderNumber, $phone, $tenantId);
+
+        if (!$order) {
+            throw new InvalidArgumentException('لم يتم العثور على الطلب أو رقم الهاتف غير مطابق.');
+        }
+
+        if ($order->payment_method !== 'instapay') {
+            throw new InvalidArgumentException('هذا الطلب غير مخصص للدفع عبر InstaPay.');
+        }
+
+        if (in_array($order->status, ['cancelled', 'delivered'], true)) {
+            throw new InvalidArgumentException('لا يمكن رفع إيصال دفع لطلب تم إلغاؤه أو تسليمه.');
+        }
+
+        return DB::transaction(function () use ($order, $instapayReference, $receiptUrl) {
+            $lockedOrder = StoreOrder::withoutGlobalScopes()->lockForUpdate()->find($order->id);
+
+            $updateData = [
+                'instapay_reference' => trim($instapayReference),
+                'payment_status' => 'pending_review',
+            ];
+
+            if ($receiptUrl) {
+                $updateData['instapay_receipt_url'] = trim($receiptUrl);
+            }
+
+            $lockedOrder->update($updateData);
+
+            \App\Models\AuditLog::create([
+                'tenant_id' => $lockedOrder->tenant_id,
+                'user_id' => null,
+                'action' => 'storefront.customer_receipt_submitted',
+                'auditable_type' => StoreOrder::class,
+                'auditable_id' => $lockedOrder->id,
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'old_values' => ['payment_status' => $order->payment_status],
+                'new_values' => [
+                    'payment_status' => 'pending_review',
+                    'instapay_reference' => $instapayReference,
+                ],
+            ]);
+
+            return $lockedOrder->fresh(['items', 'tenant']);
+        });
+    }
 }
+

@@ -103,13 +103,18 @@ Route::prefix('v1')->group(function () {
 
         // المخازن ودفتر الأستاذ المخزني وأمانات العملاء
         Route::get('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'warehouses']);
+        Route::post('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouse'])->middleware('role:company_owner,accountant,production_manager');
         Route::get('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'items']);
+        Route::post('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'storeItem'])->middleware('role:company_owner,accountant,production_manager,warehouse_manager,inventory_custodian');
+        Route::put('/inventory/items/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'updateItem'])->middleware('role:company_owner,accountant,production_manager,warehouse_manager,inventory_custodian');
+        Route::get('/inventory/items/{id}/label', [\App\Http\Controllers\Api\InventoryController::class, 'itemLabel']);
         Route::post('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'recordTransaction'])->middleware('role:accountant,production_manager,inventory_custodian,worker');
         Route::get('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'transactions']);
         Route::post('/inventory/convert-fabric', [\App\Http\Controllers\Api\InventoryController::class, 'convertFabric'])->middleware('role:accountant,production_manager,inventory_custodian');
         Route::get('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'customerMaterials']);
         Route::post('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'receiveCustomerMaterial'])->middleware('role:accountant,production_manager,inventory_custodian');
         Route::post('/inventory/customer-materials/{id}/consume', [\App\Http\Controllers\Api\InventoryController::class, 'consumeCustomerMaterial'])->middleware('role:accountant,production_manager,inventory_custodian');
+
 
         // المشتريات والموردين وفحص الاستلام والفواتير
         Route::get('/suppliers', [\App\Http\Controllers\Api\SupplierController::class, 'index']);

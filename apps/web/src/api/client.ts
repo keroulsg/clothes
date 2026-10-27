@@ -640,16 +640,84 @@ class ApiClient {
       return this.request<{ warehouses: any[] }>('/warehouses');
     },
 
-    getItems: async (params: { warehouse_id?: string; item_type?: string; search?: string; page?: number; per_page?: number } = {}): Promise<PaginatedResponse<any>> => {
+    createWarehouse: async (payload: {
+      name: string;
+      code: string;
+      type: string;
+      branch_id?: string;
+      address?: string;
+      allow_negative_stock?: boolean;
+    }): Promise<{ message: string; warehouse: any }> => {
+      return this.request<{ message: string; warehouse: any }>('/warehouses', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getItems: async (params: {
+      warehouse_id?: string;
+      item_type?: string;
+      category?: string;
+      search?: string;
+      page?: number;
+      per_page?: number;
+    } = {}): Promise<PaginatedResponse<any>> => {
       const query = new URLSearchParams();
       if (params.warehouse_id && params.warehouse_id !== 'all') query.append('warehouse_id', params.warehouse_id);
       if (params.item_type && params.item_type !== 'all') query.append('item_type', params.item_type);
+      if (params.category && params.category !== 'all') query.append('category', params.category);
       if (params.search) query.append('search', params.search);
       if (params.page) query.append('page', params.page.toString());
       if (params.per_page) query.append('per_page', params.per_page.toString());
 
       const qs = query.toString();
       return this.request<PaginatedResponse<any>>(`/inventory/items${qs ? `?${qs}` : ''}`);
+    },
+
+    createItem: async (payload: {
+      warehouse_id: string;
+      item_type: string;
+      code: string;
+      name: string;
+      unit_of_measure: string;
+      reorder_level?: number;
+      average_cost?: number;
+      initial_balance?: number;
+      storage_zone?: string;
+      rack_location?: string;
+      shelf_bin_location?: string;
+      technical_specs?: Record<string, any>;
+      is_customer_owned?: boolean;
+      customer_name?: string;
+      variant_id?: string;
+    }): Promise<{ message: string; item: any }> => {
+      return this.request<{ message: string; item: any }>('/inventory/items', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    updateItem: async (id: string, payload: {
+      name?: string;
+      reorder_level?: number;
+      average_cost?: number;
+      storage_zone?: string;
+      rack_location?: string;
+      shelf_bin_location?: string;
+      technical_specs?: Record<string, any>;
+    }): Promise<{ message: string; item: any }> => {
+      return this.request<{ message: string; item: any }>(`/inventory/items/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getItemLabel: async (id: string): Promise<{ success: boolean; label: any }> => {
+      return this.request<{ success: boolean; label: any }>(`/inventory/items/${id}/label`);
+    },
+
+    getCustomerMaterials: async (): Promise<{ customer_materials: any[] }> => {
+      return this.request<{ customer_materials: any[] }>('/inventory/customer-materials');
     },
 
     getTransactions: async (params: { page?: number; per_page?: number } = {}): Promise<any> => {

@@ -37,6 +37,75 @@ class InventoryItem extends Model
         'technical_specs' => 'array',
     ];
 
+    protected $appends = [
+        'storage_zone',
+        'rack_location',
+        'shelf_bin_location',
+        'reserved_quantity',
+        'available_quantity',
+    ];
+
+    public function getStorageZoneAttribute(): ?string
+    {
+        return $this->technical_specs['storage_zone'] ?? $this->technical_specs['zone'] ?? null;
+    }
+
+    public function getRackLocationAttribute(): ?string
+    {
+        return $this->technical_specs['rack_location'] ?? $this->technical_specs['rack'] ?? null;
+    }
+
+    public function getShelfBinLocationAttribute(): ?string
+    {
+        return $this->technical_specs['shelf_bin_location'] ?? $this->technical_specs['shelf_bin'] ?? null;
+    }
+
+    public function getReservedQuantityAttribute(): float
+    {
+        $specs = $this->technical_specs;
+        if (isset($specs['reserved_quantity'])) {
+            return (float) $specs['reserved_quantity'];
+        }
+
+        // Check if there are reserved quantities in sales orders
+        try {
+            if ($this->variant_id) {
+                return (float) \Illuminate\Support\Facades\DB::table('sales_order_items')
+                    ->join('sales_orders', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                    ->where('sales_orders.tenant_id', $this->tenant_id)
+                    ->where('sales_orders.status', 'confirmed')
+                    ->where('sales_order_items.variant_id', $this->variant_id)
+                    ->sum('sales_order_items.quantity');
+            }
+        } catch (\Throwable $e) {}
+
+        return 0.0;
+    }
+
+    public function getAvailableQuantityAttribute(): float
+    {
+        $current = (float) $this->current_balance;
+        $reserved = (float) $this->reserved_quantity;
+        return max(0.0, round($current - $reserved, 4));
+    }
+
+    public function scopeRawMaterials($query)
+    {
+        return $query->whereIn('item_type', [
+            'fabric_raw', 'fabric',
+            'accessory_raw', 'accessory',
+            'packaging', 'raw_material',
+            'yarn', 'thread', 'trims'
+        ]);
+    }
+
+    public function scopeFinishedGoods($query)
+    {
+        return $query->whereIn('item_type', [
+            'finished_good', 'finished_product'
+        ]);
+    }
+
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
@@ -52,3 +121,4 @@ class InventoryItem extends Model
         return $this->hasMany(InventoryTransaction::class);
     }
 }
+

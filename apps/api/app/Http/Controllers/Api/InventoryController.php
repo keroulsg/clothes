@@ -39,11 +39,61 @@ class InventoryController extends Controller
     }
 
     /**
-     * عرض كروت الأصناف المخزنية مع الفلترة والبحث
+     * إنشاء مخزن جديد تابع للشركة
+     */
+    public function storeWarehouse(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => 'required|string|max:50',
+            'type' => 'required|string|in:fabric,accessories,finished_goods,wip,returns,customer_deposits',
+            'branch_id' => 'nullable|string|exists:branches,id',
+            'address' => 'nullable|string|max:500',
+            'allow_negative_stock' => 'nullable|boolean',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+
+        $exists = Warehouse::where('tenant_id', $tenantId)->where('code', $validated['code'])->exists();
+        if ($exists) {
+            return response()->json([
+                'error' => 'DuplicateWarehouseCode',
+                'message' => 'كود المستودع مستخدم مسبقاً في شركتك.',
+            ], 422);
+        }
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $tenantId,
+            'name' => $validated['name'],
+            'code' => $validated['code'],
+            'type' => $validated['type'],
+            'branch_id' => $validated['branch_id'] ?? null,
+            'address' => $validated['address'] ?? null,
+            'allow_negative_stock' => $validated['allow_negative_stock'] ?? false,
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'تم إنشاء المستودع بنجاح.',
+            'warehouse' => $warehouse,
+        ], 201);
+    }
+
+    /**
+     * عرض كروت الأصناف المخزنية مع الفلترة والبحث وفصل المواد الخام عن البضاعة تامة الصنع
      */
     public function items(Request $request): JsonResponse
     {
         $query = InventoryItem::with(['warehouse', 'variant.garmentModel', 'variant.size', 'variant.color']);
+
+        // فلترة بحسب تصنيف الخامات vs المنتجات الجاهزة
+        if ($request->has('category') && $request->category !== 'all') {
+            if ($request->category === 'raw_materials') {
+                $query->rawMaterials();
+            } elseif ($request->category === 'finished_goods') {
+                $query->finishedGoods();
+            }
+        }
 
         if ($request->has('warehouse_id') && $request->warehouse_id !== 'all') {
             $query->where('warehouse_id', $request->warehouse_id);
@@ -65,10 +115,202 @@ class InventoryController extends Controller
             });
         }
 
-        $items = $query->orderBy('name')->paginate($request->input('per_page', 20));
+        $items = $query->orderBy('name')->paginate($request->input('per_page', 25));
 
         return response()->json($items);
     }
+
+    /**
+     * تعريف صنف مخزني جديد (خامة إنتاج أو منتج تام الصنع) مع تحديد موضع الرف / الستاند
+     */
+    public function storeItem(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'warehouse_id' => 'required|string|exists:warehouses,id',
+            'item_type' => 'required|string|in:fabric_raw,accessory_raw,finished_good,packaging,fabric,accessory,finished_product,yarn,thread,trims',
+            'code' => 'required|string|max:100',
+            'name' => 'required|string|max:255',
+            'unit_of_measure' => 'required|string|max:50',
+            'reorder_level' => 'nullable|numeric|min:0',
+            'average_cost' => 'nullable|numeric|min:0',
+            'initial_balance' => 'nullable|numeric|min:0',
+            'variant_id' => 'nullable|string|exists:product_variants,id',
+            'is_customer_owned' => 'nullable|boolean',
+            'customer_name' => 'nullable|string|max:255',
+            'storage_zone' => 'nullable|string|max:100',
+            'rack_location' => 'nullable|string|max:100',
+            'shelf_bin_location' => 'nullable|string|max:100',
+            'technical_specs' => 'nullable|array',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+
+        // التحقق من ملكية المخزن للشركة
+        $warehouse = Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+        if (!$warehouse) {
+            return response()->json([
+                'error' => 'CrossTenantAccessDenied',
+                'message' => 'المخزن المحدد غير تابع لشركتك.',
+            ], 403);
+        }
+
+        // منع تكرار الكود داخل نفس الشركة
+        $exists = InventoryItem::where('tenant_id', $tenantId)->where('code', $validated['code'])->exists();
+        if ($exists) {
+            return response()->json([
+                'error' => 'DuplicateItemCode',
+                'message' => 'كود الصنف مستخدم مسبقاً في شركتك.',
+            ], 422);
+        }
+
+        $specs = $validated['technical_specs'] ?? [];
+        if (!empty($validated['storage_zone'])) $specs['storage_zone'] = $validated['storage_zone'];
+        if (!empty($validated['rack_location'])) $specs['rack_location'] = $validated['rack_location'];
+        if (!empty($validated['shelf_bin_location'])) $specs['shelf_bin_location'] = $validated['shelf_bin_location'];
+
+        $initialBalance = (float) ($validated['initial_balance'] ?? 0.0);
+        $avgCost = (float) ($validated['average_cost'] ?? 0.0);
+
+        $item = DB::transaction(function () use ($tenantId, $validated, $specs, $initialBalance, $avgCost) {
+            $created = InventoryItem::create([
+                'tenant_id' => $tenantId,
+                'warehouse_id' => $validated['warehouse_id'],
+                'variant_id' => $validated['variant_id'] ?? null,
+                'item_type' => $validated['item_type'],
+                'code' => $validated['code'],
+                'name' => $validated['name'],
+                'unit_of_measure' => $validated['unit_of_measure'],
+                'reorder_level' => $validated['reorder_level'] ?? 0.0,
+                'current_balance' => $initialBalance,
+                'average_cost' => $avgCost,
+                'is_customer_owned' => $validated['is_customer_owned'] ?? false,
+                'customer_name' => $validated['customer_name'] ?? null,
+                'technical_specs' => $specs,
+            ]);
+
+            // إذا كان هناك رصيد افتتاحي، تسجيل حركة إثبات رصيد أولي في دفتر الأستاذ
+            if ($initialBalance > 0) {
+                InventoryTransaction::create([
+                    'tenant_id' => $tenantId,
+                    'inventory_item_id' => $created->id,
+                    'warehouse_id' => $created->warehouse_id,
+                    'user_id' => auth()->id(),
+                    'transaction_type' => 'adjustment_positive',
+                    'direction' => 'IN',
+                    'quantity' => $initialBalance,
+                    'unit_cost' => $avgCost,
+                    'total_cost' => round($initialBalance * $avgCost, 4),
+                    'balance_before' => 0.0,
+                    'balance_after' => $initialBalance,
+                    'reference_type' => 'opening_balance',
+                    'reference_number' => 'OPN-' . strtoupper(substr($created->id, 0, 8)),
+                    'notes' => 'رصيد افتتاحي تأسيسي للصنف المخزني',
+                ]);
+            }
+
+            return $created;
+        });
+
+        $item->load(['warehouse', 'variant.garmentModel', 'variant.size', 'variant.color']);
+
+        return response()->json([
+            'message' => 'تم إنشاء كارت الصنف المخزني وتوثيق موضع التخزين بنجاح.',
+            'item' => $item,
+        ], 201);
+    }
+
+    /**
+     * تحديث بيانات كارت الصنف وموضع التخزين
+     */
+    public function updateItem(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $item = InventoryItem::where('tenant_id', $tenantId)->find($id);
+
+        if (!$item) {
+            return response()->json([
+                'error' => 'ItemNotFound',
+                'message' => 'الصنف المخزني غير موجود أو غير تابع لشركتك.',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => 'nullable|string|max:255',
+            'reorder_level' => 'nullable|numeric|min:0',
+            'average_cost' => 'nullable|numeric|min:0',
+            'storage_zone' => 'nullable|string|max:100',
+            'rack_location' => 'nullable|string|max:100',
+            'shelf_bin_location' => 'nullable|string|max:100',
+            'technical_specs' => 'nullable|array',
+        ]);
+
+        if (isset($validated['name'])) $item->name = $validated['name'];
+        if (isset($validated['reorder_level'])) $item->reorder_level = $validated['reorder_level'];
+        if (isset($validated['average_cost'])) $item->average_cost = $validated['average_cost'];
+
+        $specs = $item->technical_specs ?? [];
+        if (isset($validated['technical_specs'])) {
+            $specs = array_merge($specs, $validated['technical_specs']);
+        }
+        if (isset($validated['storage_zone'])) $specs['storage_zone'] = $validated['storage_zone'];
+        if (isset($validated['rack_location'])) $specs['rack_location'] = $validated['rack_location'];
+        if (isset($validated['shelf_bin_location'])) $specs['shelf_bin_location'] = $validated['shelf_bin_location'];
+
+        $item->technical_specs = $specs;
+        $item->save();
+
+        $item->load(['warehouse', 'variant.garmentModel', 'variant.size', 'variant.color']);
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات الصنف المخزني وموضع التخزين بنجاح.',
+            'item' => $item,
+        ]);
+    }
+
+    /**
+     * استخراج بيانات بطاقة الباركود الحراري للرف / الصنف (Thermal Barcode Label)
+     */
+    public function itemLabel(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $item = InventoryItem::with(['warehouse', 'variant.garmentModel', 'variant.size', 'variant.color', 'tenant'])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$item) {
+            return response()->json([
+                'error' => 'ItemNotFound',
+                'message' => 'الصنف المخزني غير موجود.',
+            ], 404);
+        }
+
+        $labelData = [
+            'item_id' => $item->id,
+            'company_name' => $item->tenant?->name ?? 'GarmentOS Cloud',
+            'item_code' => $item->code,
+            'item_name' => $item->name,
+            'item_type' => $item->item_type,
+            'unit_of_measure' => $item->unit_of_measure,
+            'current_balance' => (float) $item->current_balance,
+            'storage_zone' => $item->storage_zone ?? 'المنطقة العامة',
+            'rack_location' => $item->rack_location ?? 'R-01',
+            'shelf_bin_location' => $item->shelf_bin_location ?? 'B-01',
+            'warehouse_name' => $item->warehouse?->name ?? 'المخزن الرئيسي',
+            'barcode_value' => $item->variant?->barcode ?? $item->code,
+            'model_name' => $item->variant?->garmentModel?->name ?? null,
+            'size' => $item->variant?->size?->name ?? null,
+            'color' => $item->variant?->color?->name ?? null,
+            'gsm' => $item->technical_specs['gsm'] ?? null,
+            'usable_width' => $item->technical_specs['usable_width_meters'] ?? null,
+            'generated_at' => now()->toIso8601String(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'label' => $labelData,
+        ]);
+    }
+
 
     /**
      * تسجيل حركة مخزنية رسمية (إذن استلام، إذن صرف، تسوية)

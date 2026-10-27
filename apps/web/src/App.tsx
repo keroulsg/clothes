@@ -34,6 +34,9 @@ import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { Pagination } from './components/ui/Pagination';
 import { FabricCalculatorModal } from './components/inventory/FabricCalculatorModal';
 import { StockTransactionModal } from './components/inventory/StockTransactionModal';
+import { WarehouseManagerTab } from './components/inventory/WarehouseManagerTab';
+import { CreateInventoryItemModal } from './components/inventory/CreateInventoryItemModal';
+import { ItemBarcodeLabelModal } from './components/inventory/ItemBarcodeLabelModal';
 import { LoginModal } from './components/auth/LoginModal';
 import { RegisterModal } from './components/auth/RegisterModal';
 import { PublicWebsite } from './components/public/PublicWebsite';
@@ -381,6 +384,8 @@ export function App() {
   const [isCreateModelOpen, setIsCreateModelOpen] = useState(false);
   const [selectedStockItem, setSelectedStockItem] = useState<InventoryItem | null>(null);
   const [selectedModelForBom, setSelectedModelForBom] = useState<GarmentModel | null>(null);
+  const [isCreateInventoryItemModalOpen, setIsCreateInventoryItemModalOpen] = useState(false);
+  const [selectedItemForBarcode, setSelectedItemForBarcode] = useState<InventoryItem | null>(null);
 
   // Procurement States
   const [isCreatePoModalOpen, setIsCreatePoModalOpen] = useState(false);
@@ -697,8 +702,6 @@ export function App() {
   const [companySuccessMsg, setCompanySuccessMsg] = useState('');
 
   // Search & Filter state
-  const [inventorySearch, setInventorySearch] = useState('');
-  const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('all');
   const [modelViewMode, setModelViewMode] = useState<'table' | 'cards'>('table');
   const [modelSearch, setModelSearch] = useState('');
   const [modelCategoryFilter, setModelCategoryFilter] = useState('all');
@@ -942,7 +945,7 @@ export function App() {
   const [stockLedger, setStockLedger] = useState<InventoryTransaction[]>([]);
 
   // Customer Materials State
-  const [customerMaterials] = useState<CustomerMaterial[]>([
+  const [customerMaterials, setCustomerMaterials] = useState<CustomerMaterial[]>([
     {
       id: 'cm-1',
       customer_name: 'شركة أزياء الصغار',
@@ -1072,7 +1075,7 @@ export function App() {
       // 2. Warehouses from database
       try {
         const whRes = await api.inventory.getWarehouses();
-        if (whRes.warehouses && whRes.warehouses.length > 0) {
+        if (whRes && Array.isArray(whRes.warehouses)) {
           const mappedWh: Warehouse[] = whRes.warehouses.map((w: any) => ({
             id: w.id,
             name: w.name,
@@ -1080,6 +1083,8 @@ export function App() {
             type: w.type || 'fabric',
             allow_negative_stock: Boolean(w.allow_negative_stock),
             items_count: w.items_count ?? (w.items ? w.items.length : 0),
+            address: w.address,
+            branch_id: w.branch_id,
           }));
           setWarehouses(mappedWh);
         }
@@ -1090,7 +1095,7 @@ export function App() {
       // 3. Branches from database
       try {
         const branchRes = await api.branches.getBranches();
-        if (branchRes.branches && branchRes.branches.length > 0) {
+        if (branchRes && Array.isArray(branchRes.branches)) {
           const mappedBranches: Branch[] = branchRes.branches.map((b: any) => ({
             id: b.id,
             tenant_id: b.tenant_id,
@@ -1110,7 +1115,7 @@ export function App() {
       // 4. Garment Models
       try {
         const modelsRes = await api.models.getModels();
-        if (modelsRes.data && modelsRes.data.length > 0) {
+        if (modelsRes && Array.isArray(modelsRes.data)) {
           const mappedModels: GarmentModel[] = modelsRes.data.map((m: any) => ({
             id: m.id,
             code: m.code,
@@ -1133,7 +1138,7 @@ export function App() {
       // 5. Suppliers
       try {
         const supRes = await api.suppliers.getSuppliers();
-        if (supRes.data && supRes.data.length > 0) {
+        if (supRes && Array.isArray(supRes.data)) {
           const mappedSuppliers: Supplier[] = supRes.data.map((s: any) => ({
             id: s.id,
             name: s.name,
@@ -1156,7 +1161,7 @@ export function App() {
       try {
         const poRes = await api.procurement.getPurchaseOrders();
         const poList = poRes.data || (poRes as any).purchase_orders;
-        if (Array.isArray(poList) && poList.length > 0) {
+        if (Array.isArray(poList)) {
           const mappedPo: PurchaseOrder[] = poList.map((po: any) => ({
             id: po.id,
             po_number: po.po_number,
@@ -1196,7 +1201,7 @@ export function App() {
       // 7. Production Orders
       try {
         const prodRes = await api.production.getProductionOrders();
-        if (prodRes.data && prodRes.data.length > 0) {
+        if (prodRes && Array.isArray(prodRes.data)) {
           const mappedProd: ProductionOrder[] = prodRes.data.map((p: any) => ({
             id: p.id,
             order_number: p.order_number,
@@ -1219,7 +1224,7 @@ export function App() {
       // 8. Cutting Orders & Bundles
       try {
         const cutRes = await api.production.getCuttingOrders();
-        if (cutRes.data && cutRes.data.length > 0) {
+        if (cutRes && Array.isArray(cutRes.data)) {
           const mappedCut: CuttingOrder[] = cutRes.data.map((c: any) => ({
             id: c.id,
             cutting_order_number: c.cutting_order_number,
@@ -1246,7 +1251,7 @@ export function App() {
 
       try {
         const bundleRes = await api.production.getBundles();
-        if (bundleRes.data && bundleRes.data.length > 0) {
+        if (bundleRes && Array.isArray(bundleRes.data)) {
           const mappedBundles: CuttingBundle[] = bundleRes.data.map((b: any) => ({
             id: b.id,
             bundle_code: b.bundle_code,
@@ -1265,10 +1270,10 @@ export function App() {
         console.warn('Bundles fetch error:', err);
       }
 
-      // 9. Subcontracting customers & jobs
+      // 9. Subcontracting customers, jobs, receipts, and deliveries
       try {
         const custRes = await api.subcontracting.getCustomers();
-        if (custRes.data && custRes.data.length > 0) {
+        if (custRes && Array.isArray(custRes.data)) {
           const mappedCust: Customer[] = custRes.data.map((c: any) => ({
             id: c.id,
             name: c.name,
@@ -1289,7 +1294,7 @@ export function App() {
 
       try {
         const jobsRes = await api.subcontracting.getJobs();
-        if (jobsRes.data && jobsRes.data.length > 0) {
+        if (jobsRes && Array.isArray(jobsRes.data)) {
           const mappedJobs: JobOrder[] = jobsRes.data.map((j: any) => ({
             id: j.id,
             order_number: j.order_number,
@@ -1329,14 +1334,51 @@ export function App() {
         console.warn('Subcontracting jobs fetch error:', err);
       }
 
-      // 10. Paginated inventory items from database
       try {
-        const itemsRes = await api.inventory.getItems({ per_page: 50 });
-        if (itemsRes.data && itemsRes.data.length > 0) {
+        const cmrRes = await api.subcontracting.getMaterialReceipts();
+        if (cmrRes && Array.isArray(cmrRes.data)) {
+          setCustomerMaterialReceipts(cmrRes.data);
+        }
+      } catch (err: any) {
+        console.warn('Subcontracting material receipts fetch error:', err);
+      }
+
+      try {
+        const extRes = await api.subcontracting.getExternalOperations();
+        if (extRes && Array.isArray(extRes.data)) {
+          setExternalOperations(extRes.data);
+        }
+      } catch (err: any) {
+        console.warn('Subcontracting external operations fetch error:', err);
+      }
+
+      try {
+        const delRes = await api.subcontracting.getDeliveryNotes();
+        if (delRes && Array.isArray(delRes.data)) {
+          setJobDeliveryNotes(delRes.data);
+        }
+      } catch (err: any) {
+        console.warn('Subcontracting delivery notes fetch error:', err);
+      }
+
+      try {
+        const invRes = await api.subcontracting.getInvoices();
+        if (invRes && Array.isArray(invRes.data)) {
+          setJobInvoices(invRes.data);
+        }
+      } catch (err: any) {
+        console.warn('Subcontracting invoices fetch error:', err);
+      }
+
+      // 10. Paginated inventory items from database with location support
+      try {
+        const itemsRes = await api.inventory.getItems({ per_page: 100 });
+        if (itemsRes && Array.isArray(itemsRes.data)) {
           const mappedItems: InventoryItem[] = itemsRes.data.map((it: any) => ({
             id: it.id,
             warehouse_id: it.warehouse_id,
             warehouse_name: it.warehouse?.name || 'المخزن الرئيسي',
+            variant_id: it.variant_id,
             item_type: it.item_type || 'fabric_raw',
             code: it.code,
             name: it.name,
@@ -1346,6 +1388,13 @@ export function App() {
             reorder_level: Number(it.reorder_level || 0),
             is_customer_owned: Boolean(it.is_customer_owned),
             customer_name: it.customer?.name || (it.is_customer_owned ? 'عميل تشغيل للغير' : undefined),
+            storage_zone: it.storage_zone || it.technical_specs?.storage_zone,
+            rack_location: it.rack_location || it.technical_specs?.rack_location,
+            shelf_bin_location: it.shelf_bin_location || it.technical_specs?.shelf_bin_location,
+            reserved_quantity: Number(it.reserved_quantity || 0),
+            available_quantity: Number(it.available_quantity !== undefined ? it.available_quantity : it.current_balance),
+            variant: it.variant,
+            warehouse: it.warehouse,
             technical_specs: it.technical_specs || undefined,
           }));
           setInventoryItems(mappedItems);
@@ -1354,11 +1403,21 @@ export function App() {
         console.warn('Inventory items fetch error:', err);
       }
 
-      // 11. Authoritative stock ledger transactions
+      // 11. Customer CMT materials from database
+      try {
+        const cmRes = await api.inventory.getCustomerMaterials();
+        if (cmRes && Array.isArray(cmRes.customer_materials)) {
+          setCustomerMaterials(cmRes.customer_materials);
+        }
+      } catch (err: any) {
+        console.warn('Customer materials fetch error:', err);
+      }
+
+      // 12. Authoritative stock ledger transactions
       try {
         const txRes = await api.inventory.getTransactions({ per_page: 50 });
         const txList = txRes.data || txRes.transactions;
-        if (Array.isArray(txList) && txList.length > 0) {
+        if (Array.isArray(txList)) {
           const mappedTx: InventoryTransaction[] = txList.map((tx: any) => ({
             id: tx.id,
             item_code: tx.item?.code || tx.item_code || 'ITEM',
@@ -1462,7 +1521,7 @@ export function App() {
       id: newTxRecord.id,
       item_code: selectedStockItem.code,
       item_name: selectedStockItem.name,
-      warehouse_name: selectedStockItem.warehouse_name,
+      warehouse_name: selectedStockItem.warehouse_name || 'المخزن الرئيسي',
       transaction_type: newTxRecord.transaction_type,
       direction: newTxRecord.direction || direction,
       quantity: Number(newTxRecord.quantity),
@@ -1477,7 +1536,7 @@ export function App() {
       id: 'tx-' + Date.now(),
       item_code: selectedStockItem.code,
       item_name: selectedStockItem.name,
-      warehouse_name: selectedStockItem.warehouse_name,
+      warehouse_name: selectedStockItem.warehouse_name || 'المخزن الرئيسي',
       transaction_type: direction === 'IN' ? 'goods_receipt' : 'material_issuance',
       direction,
       quantity,
@@ -1495,17 +1554,6 @@ export function App() {
   const handleModelCreated = (newModel: GarmentModel) => {
     setModels([newModel, ...models]);
   };
-
-  // Filtered inventory
-  const filteredInventory = inventoryItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-                          item.code.toLowerCase().includes(inventorySearch.toLowerCase());
-    const matchesCategory = inventoryCategoryFilter === 'all' ||
-                            (inventoryCategoryFilter === 'customer' && item.is_customer_owned) ||
-                            (inventoryCategoryFilter === 'company' && !item.is_customer_owned) ||
-                            (item.item_type === inventoryCategoryFilter);
-    return matchesSearch && matchesCategory;
-  });
 
   // Filtered models
   const filteredModels = models.filter((m) => {
@@ -1525,16 +1573,6 @@ export function App() {
   const totalModelPages = Math.ceil(filteredModels.length / modelPerPage);
   const paginatedModels = filteredModels.slice((modelPage - 1) * modelPerPage, modelPage * modelPerPage);
 
-  const [inventoryPage, setInventoryPage] = useState(1);
-  const inventoryPerPage = 8;
-  const totalInventoryPages = Math.ceil(filteredInventory.length / inventoryPerPage);
-  const paginatedInventory = filteredInventory.slice((inventoryPage - 1) * inventoryPerPage, inventoryPage * inventoryPerPage);
-
-  const [stockLedgerPage, setStockLedgerPage] = useState(1);
-  const stockLedgerPerPage = 8;
-  const totalStockLedgerPages = Math.ceil(stockLedger.length / stockLedgerPerPage);
-  const paginatedStockLedger = stockLedger.slice((stockLedgerPage - 1) * stockLedgerPerPage, stockLedgerPage * stockLedgerPerPage);
-
   const [prodOrderPage, setProdOrderPage] = useState(1);
   const prodOrderPerPage = 6;
   const totalProdOrderPages = Math.ceil(productionOrders.length / prodOrderPerPage);
@@ -1543,10 +1581,6 @@ export function App() {
   useEffect(() => {
     setModelPage(1);
   }, [modelSearch, modelCategoryFilter]);
-
-  useEffect(() => {
-    setInventoryPage(1);
-  }, [inventorySearch, inventoryCategoryFilter]);
 
 
   if (viewMode === 'public') {
@@ -2550,283 +2584,22 @@ export function App() {
             </div>
           )}
 
-          {/* TAB 3: INVENTORY & STOCK LEDGER */}
+          {/* TAB 3: INVENTORY & WAREHOUSE MANAGEMENT */}
           {activeTab === 'inventory' && (
-            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-              <PageHeader
-                title={isAr ? 'إدارة المخازن ودفتر الأستاذ غير القابل للتعديل' : 'Inventory & Immutable Stock Ledger'}
-                subtitle={isAr
-                  ? 'مخازن الأقمشة والمستلزمات، فحص الأرصدة، وفصل أمانات خامات العملاء للقص للغير (CMT).'
-                  : 'Fabric rolls, accessories, inventory valuation, and segregated customer CMT custody stock.'}
-                icon={<Boxes className="w-5 h-5" />}
-                breadcrumbs={[
-                  { label: isAr ? 'الرئيسية' : 'Home' },
-                  { label: isAr ? 'المخازن والمستودعات' : 'Inventory & Warehouses' },
-                ]}
-                actions={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setIsFabricCalcOpen(true)}
-                      icon={<Calculator className="w-3.5 h-3.5 text-indigo-400" />}
-                    >
-                      {isAr ? 'حاسبة الأقمشة (متر ↔ كجم)' : 'Fabric GSM Calc'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => setIsReceiveCustomerMatModalOpen(true)}
-                      icon={<Boxes className="w-3.5 h-3.5" />}
-                    >
-                      {isAr ? 'استلام أمانة عميل' : 'Receive CMT Fabric'}
-                    </Button>
-                  </div>
-                }
-              />
-
-              {/* Filters & Search */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-2 max-w-sm w-full relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute right-3 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={inventorySearch}
-                    onChange={(e) => setInventorySearch(e.target.value)}
-                    placeholder="بحث باسم الخامة، الكود، أو العميل..."
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Filter className="w-3.5 h-3.5 text-slate-400" />
-                  <select
-                    value={inventoryCategoryFilter}
-                    onChange={(e) => setInventoryCategoryFilter(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
-                  >
-                    <option value="all">كل الأصناف والخامات</option>
-                    <option value="company">خامات المصنع المملوكة فقط</option>
-                    <option value="customer">أمانات خامات العملاء فقط</option>
-                    <option value="fabric_raw">الأقمشة</option>
-                    <option value="accessory_raw">المستلزمات والإكسسوارات</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Inventory Items Table */}
-              <Card className="overflow-hidden p-0 border-slate-200 dark:border-slate-800">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
-                      <tr>
-                        <th className="py-3 px-4">كود الصنف</th>
-                        <th className="py-3 px-4">اسم الخامة والمواصفات</th>
-                        <th className="py-3 px-4">الملكية والنوع</th>
-                        <th className="py-3 px-4">المخزن الحالي</th>
-                        <th className="py-3 px-4">الرصيد الدفتري</th>
-                        <th className="py-3 px-4">متوسط التكلفة</th>
-                        <th className="py-3 px-4">الإجراءات</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
-                      {filteredInventory.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="py-8 text-center text-slate-400">
-                            لا توجد أصناف مخزنية مسجلة حالياً في قاعدة البيانات.
-                          </td>
-                        </tr>
-                      ) : (
-                        paginatedInventory.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">{item.code}</td>
-                          <td className="py-3 px-4">
-                            <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
-                            {item.technical_specs?.gsm && (
-                              <div className="text-[10px] text-slate-400">
-                                GSM: {item.technical_specs.gsm} جم/م² • عرض: {item.technical_specs.usable_width_meters} م
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            {item.is_customer_owned ? (
-                              <Badge variant="warning">أمانات: {item.customer_name}</Badge>
-                            ) : (
-                              <Badge variant="success">مملوك للمصنع</Badge>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-slate-400">{item.warehouse_name}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                            {item.current_balance.toLocaleString()} {item.unit_of_measure}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
-                            {item.is_customer_owned ? '—' : `${item.average_cost.toFixed(2)} ج.م`}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-1.5 justify-end">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-xs h-7"
-                                onClick={() => setSelectedStockItem(item)}
-                              >
-                                تسجيل حركة
-                              </Button>
-
-                              <ActionsMenu
-                                variant="icon-horizontal"
-                                items={[
-                                  {
-                                    id: 'movement',
-                                    label: 'تسجيل حركة مخزنية سريعة',
-                                    icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
-                                    onClick: () => setSelectedStockItem(item),
-                                  },
-                                  {
-                                    id: 'calc',
-                                    label: 'حاسبة تحويل الأقمشة (متر ↔ كجم)',
-                                    icon: <Calculator className="w-3.5 h-3.5" />,
-                                    onClick: () => setIsFabricCalcOpen(true),
-                                  },
-                                  {
-                                    id: 'print',
-                                    label: 'طباعة كارت الصنف وباركود الرف',
-                                    icon: <Printer className="w-3.5 h-3.5" />,
-                                    onClick: () => window.print(),
-                                  },
-                                ]}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      )))}
-                    </tbody>
-                  </table>
-                </div>
-                {filteredInventory.length > inventoryPerPage && (
-                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                    <Pagination
-                      currentPage={inventoryPage}
-                      totalPages={totalInventoryPages}
-                      totalItems={filteredInventory.length}
-                      perPage={inventoryPerPage}
-                      onPageChange={setInventoryPage}
-                      isAr={isAr}
-                    />
-                  </div>
-                )}
-              </Card>
-
-              {/* Customer Supplied Materials Separated Ledger */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أرصدة خامات العملاء (أمانات تشغيل للغير)</h4>
-                    <p className="text-xs text-slate-400">خامات لا تسجل كأصول للمصنع ولا تدخل ضمن حسابات تكلفة البضاعة المباعة</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {customerMaterials.map((cm) => (
-                    <Card key={cm.id} className="border-amber-500/20 bg-amber-500/5 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-400">{cm.customer_name}</span>
-                        <span className="font-mono text-[11px] text-slate-400">{cm.fabric_code}</span>
-                      </div>
-                      <h5 className="text-xs font-semibold text-slate-900 dark:text-white">{cm.fabric_name}</h5>
-                      <div className="text-[11px] text-slate-400">
-                        كثافة النسيج: <strong className="text-slate-300 font-mono">{cm.gsm} GSM</strong> • العرض الصالح: <strong className="text-slate-300 font-mono">{cm.usable_width_meters} م</strong>
-                      </div>
-
-                      <div className="grid grid-cols-4 gap-1.5 p-2 rounded-lg bg-slate-900 border border-slate-800 text-center text-[10px]">
-                        <div>
-                          <span className="text-slate-400 block">المستلم</span>
-                          <strong className="font-mono text-slate-800 dark:text-slate-200">{cm.received_meters} م</strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">المستهلك</span>
-                          <strong className="font-mono text-sky-400">{cm.consumed_meters} م</strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">الهالك</span>
-                          <strong className="font-mono text-rose-400">{cm.waste_meters} م</strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">المتبقي</span>
-                          <strong className="font-mono text-emerald-400">{cm.remaining_meters} م</strong>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-
-              {/* Immutable Stock Ledger (Audit Trail) */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">دفتر الأستاذ المخزني (سجل التدقيق غير القابل للتعديل)</h4>
-                    <p className="text-xs text-slate-400">كل حركة مخزنية تسجل آلياً وتثبت الرصيد السابق واللاحق والمستند المرجعي</p>
-                  </div>
-                </div>
-
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-2.5 px-4">الوقت</th>
-                          <th className="py-2.5 px-4">الصنف</th>
-                          <th className="py-2.5 px-4">نوع الحركة</th>
-                          <th className="py-2.5 px-4">الاتجاه</th>
-                          <th className="py-2.5 px-4">الكمية</th>
-                          <th className="py-2.5 px-4">قبل الحركة</th>
-                          <th className="py-2.5 px-4">بعد الحركة</th>
-                          <th className="py-2.5 px-4">المستند المرجعي</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                        {stockLedger.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="py-6 text-center font-sans text-slate-400">
-                              لا توجد حركات مسجلة في دفتر الأستاذ بعد.
-                            </td>
-                          </tr>
-                        ) : (
-                          paginatedStockLedger.map((tx) => (
-                          <tr key={tx.id} className="hover:bg-slate-800/20">
-                            <td className="py-2.5 px-4 text-slate-400">{tx.created_at}</td>
-                            <td className="py-2.5 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{tx.item_name}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-300">{tx.transaction_type}</td>
-                            <td className="py-2.5 px-4">
-                              <Badge variant={tx.direction === 'IN' ? 'success' : 'danger'}>
-                                {tx.direction}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{tx.quantity.toLocaleString()}</td>
-                            <td className="py-2.5 px-4 text-slate-400">{tx.balance_before.toLocaleString()}</td>
-                            <td className="py-2.5 px-4 text-emerald-400 font-bold">{tx.balance_after.toLocaleString()}</td>
-                            <td className="py-2.5 px-4 text-indigo-400">{tx.reference_number || '—'}</td>
-                          </tr>
-                        )))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {stockLedger.length > stockLedgerPerPage && (
-                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                      <Pagination
-                        currentPage={stockLedgerPage}
-                        totalPages={totalStockLedgerPages}
-                        totalItems={stockLedger.length}
-                        perPage={stockLedgerPerPage}
-                        onPageChange={setStockLedgerPage}
-                        isAr={isAr}
-                      />
-                    </div>
-                  )}
-                </Card>
-              </div>
-            </div>
+            <WarehouseManagerTab
+              inventoryItems={inventoryItems}
+              warehouses={warehouses}
+              customerMaterials={customerMaterials}
+              stockLedger={stockLedger}
+              onOpenCreateItemModal={() => setIsCreateInventoryItemModalOpen(true)}
+              onOpenStockMovementModal={(item) => setSelectedStockItem(item)}
+              onOpenFabricCalcModal={() => setIsFabricCalcOpen(true)}
+              onOpenReceiveCustomerMatModal={() => setIsReceiveCustomerMatModalOpen(true)}
+              onOpenBarcodeLabelModal={(item) => setSelectedItemForBarcode(item)}
+              onRefreshData={loadBackendData}
+              isLoading={isDataLoading}
+              isAr={isAr}
+            />
           )}
 
           {/* TAB 4: CUTTING & PRODUCTION */}
@@ -4037,6 +3810,27 @@ export function App() {
         onClose={() => setSelectedStockItem(null)}
         item={selectedStockItem}
         onSuccess={handleStockTransactionSuccess}
+      />
+
+      {/* MODAL 4.1: Create Inventory Item Modal */}
+      <CreateInventoryItemModal
+        isOpen={isCreateInventoryItemModalOpen}
+        onClose={() => setIsCreateInventoryItemModalOpen(false)}
+        warehouses={warehouses}
+        onItemCreated={(newItem) => {
+          setInventoryItems((prev) => [newItem, ...prev]);
+          loadBackendData();
+        }}
+        isAr={isAr}
+      />
+
+      {/* MODAL 4.2: Item & Shelf Barcode Thermal Label Modal */}
+      <ItemBarcodeLabelModal
+        isOpen={selectedItemForBarcode !== null}
+        onClose={() => setSelectedItemForBarcode(null)}
+        item={selectedItemForBarcode}
+        tenantName={tenantName}
+        isAr={isAr}
       />
 
       {/* MODAL 0: Real Authentication Modal */}

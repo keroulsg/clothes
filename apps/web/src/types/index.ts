@@ -94,14 +94,17 @@ export interface Warehouse {
   code: string;
   type: 'fabric' | 'accessories' | 'wip' | 'finished_goods' | 'returns' | 'customer_deposits';
   allow_negative_stock: boolean;
-  items_count: number;
+  items_count?: number;
+  address?: string;
+  branch_id?: string;
 }
 
 export interface InventoryItem {
   id: string;
   warehouse_id: string;
-  warehouse_name: string;
-  item_type: 'fabric_raw' | 'accessory_raw' | 'finished_good' | 'packaging';
+  warehouse_name?: string;
+  variant_id?: string;
+  item_type: 'fabric_raw' | 'accessory_raw' | 'finished_good' | 'packaging' | 'fabric' | 'accessory' | 'finished_product' | 'yarn' | 'thread' | 'trims';
   code: string;
   name: string;
   unit_of_measure: string;
@@ -110,10 +113,25 @@ export interface InventoryItem {
   reorder_level: number;
   is_customer_owned: boolean;
   customer_name?: string;
+  storage_zone?: string;
+  rack_location?: string;
+  shelf_bin_location?: string;
+  reserved_quantity?: number;
+  available_quantity?: number;
+  variant?: ProductVariant;
+  warehouse?: Warehouse;
   technical_specs?: {
     gsm?: number;
     usable_width_meters?: number;
     fiber_composition?: string;
+    storage_zone?: string;
+    rack_location?: string;
+    shelf_bin_location?: string;
+    roll_count?: number;
+    roll_number?: string;
+    color?: string;
+    size?: string;
+    [key: string]: any;
   };
 }
 

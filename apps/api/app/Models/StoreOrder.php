@@ -20,20 +20,34 @@ class StoreOrder extends Model
         'shipping_address',
         'city',
         'payment_method',
+        'payment_status',
+        'instapay_reference',
+        'instapay_receipt_url',
+        'payment_reviewed_by',
+        'payment_reviewed_at',
+        'payment_rejection_reason',
         'status',
         'subtotal',
         'shipping_fee',
         'total_amount',
+        'inventory_synced',
     ];
 
     protected $casts = [
         'subtotal' => 'decimal:4',
         'shipping_fee' => 'decimal:4',
         'total_amount' => 'decimal:4',
+        'inventory_synced' => 'boolean',
+        'payment_reviewed_at' => 'datetime',
     ];
 
     public function items(): HasMany
     {
         return $this->hasMany(StoreOrderItem::class);
+    }
+
+    public function paymentReviewer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'payment_reviewed_by');
     }
 }

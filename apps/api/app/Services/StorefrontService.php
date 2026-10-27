@@ -13,8 +13,68 @@ use InvalidArgumentException;
 
 class StorefrontService
 {
+    public const THEME_MODERN_FASHION = 'modern_fashion';
+    public const THEME_KIDS_BABY = 'kids_baby';
+    public const THEME_PREMIUM_BRAND = 'premium_brand';
+    public const THEME_WHOLESALE_UNIFORM = 'wholesale_uniform';
+
+    public const AVAILABLE_THEMES = [
+        self::THEME_MODERN_FASHION => [
+            'id' => self::THEME_MODERN_FASHION,
+            'name_ar' => 'الموضة العصرية (Modern Fashion)',
+            'name_en' => 'Modern Fashion',
+            'description_ar' => 'تصميم عصري جذاب يناسب الملابس الشبابية والأزياء الجاهزة مع استعراض صور كبير وشبكة منتجات أنيقة.',
+            'description_en' => 'Clean, vibrant contemporary fashion with immersive cards and dynamic badges.',
+            'default_palette' => [
+                'primary' => '#0284c7',
+                'secondary' => '#0f172a',
+                'accent' => '#f43f5e',
+                'bg' => '#f8fafc',
+            ],
+        ],
+        self::THEME_KIDS_BABY => [
+            'id' => self::THEME_KIDS_BABY,
+            'name_ar' => 'أطفال ومواليد (Kids & Baby)',
+            'name_en' => 'Kids & Baby',
+            'description_ar' => 'ألوان دافئة مبهجة، حواف دائرية ناعمة، ووسوم الفئات العمرية ومقاسات الأطفال وشهادات القطن الصحي.',
+            'description_en' => 'Playful, pastel & warm tones, soft rounded borders, friendly age and safety badges.',
+            'default_palette' => [
+                'primary' => '#f97316',
+                'secondary' => '#fed7aa',
+                'accent' => '#10b981',
+                'bg' => '#fffbeb',
+            ],
+        ],
+        self::THEME_PREMIUM_BRAND => [
+            'id' => self::THEME_PREMIUM_BRAND,
+            'name_ar' => 'علامة فاخرة (Premium Brand)',
+            'name_en' => 'Premium Brand',
+            'description_ar' => 'تصميم راقٍ بطابع فاخر داكن، لمسات برونزية وذهبية، وتنسيق أنيق للملابس الرسمية والفاخرة.',
+            'description_en' => 'Luxury dark/editorial feel, gold/bronze accents, refined typography and high-fashion aesthetics.',
+            'default_palette' => [
+                'primary' => '#d97706',
+                'secondary' => '#18181b',
+                'accent' => '#b45309',
+                'bg' => '#09090b',
+            ],
+        ],
+        self::THEME_WHOLESALE_UNIFORM => [
+            'id' => self::THEME_WHOLESALE_UNIFORM,
+            'name_ar' => 'الجملة والزي الموحد (Wholesale & Uniform)',
+            'name_en' => 'Wholesale & Uniform',
+            'description_ar' => 'مخصص لتجارة الجملة واليونيفورم وتوريدات الشركات مع عرض كميات الحد الأدنى للطلب (MOQ) وجداول المقاسات المجمعة.',
+            'description_en' => 'B2B oriented, dense catalog tables, MOQ badges, bulk tier breakdown and procurement quotation request.',
+            'default_palette' => [
+                'primary' => '#2563eb',
+                'secondary' => '#1e293b',
+                'accent' => '#059669',
+                'bg' => '#f1f5f9',
+            ],
+        ],
+    ];
+
     /**
-     * جلب إعدادات وكتالوج المتجر العام للمصنع
+     * جلب إعدادات وكتالوج المتجر العام للمصنع بما فيها ثيمات العرض وبوابات الدفع
      */
     public function getStoreDetails(string $tenantId): array
     {
@@ -22,11 +82,22 @@ class StorefrontService
             ['tenant_id' => $tenantId],
             [
                 'store_name' => 'Garment Factory Direct Store',
+                'theme_id' => self::THEME_MODERN_FASHION,
+                'theme_config' => [
+                    'primary_color' => '#0284c7',
+                    'font_family' => 'Cairo, sans-serif',
+                    'direction' => 'rtl',
+                ],
                 'is_store_enabled' => true,
                 'allow_cod' => true,
                 'allow_card_payment' => false,
+                'allow_instapay' => true,
+                'instapay_account_name' => 'GarmentOS Factory Operations',
+                'instapay_handle' => 'factory@instapay',
+                'instapay_instructions' => 'يرجى تحويل قيمة الفاتورة عبر تطبيق InstaPay إلى المعرف أعلاه، ثم إرفاق رقم العملية المرجعي لتأكيد الشحن.',
                 'currency' => 'EGP',
-                'banner_title' => 'أرقى ملابس الأطفال من المصنع مباشرة',
+                'direction' => 'rtl',
+                'banner_title' => 'أرقى منتجات الملابس من المصنع مباشرة',
                 'banner_subtitle' => 'جودة تصدير، خامات قطنية 100%، وأسعار جملة وتجزئة مباشرة من خط الإنتاج.',
             ]
         );
@@ -36,7 +107,7 @@ class StorefrontService
             ->with(['garmentModel', 'size', 'color'])
             ->get()
             ->map(function ($variant) use ($tenantId) {
-                $availableStock = InventoryItem::withoutGlobalScopes()
+                $availableStock = (float) InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
                     ->where('variant_id', $variant->id)
                     ->where('is_customer_owned', false)
@@ -51,18 +122,60 @@ class StorefrontService
                     'size' => $variant->size?->name ?? '',
                     'color' => $variant->color?->name ?? '',
                     'price' => (float) ($variant->retail_price > 0 ? $variant->retail_price : $variant->wholesale_price),
-                    'in_stock' => (float) $availableStock,
+                    'in_stock' => $availableStock,
                 ];
             });
 
         return [
             'store_settings' => $settings,
+            'available_themes' => self::AVAILABLE_THEMES,
             'products' => $variants,
         ];
     }
 
     /**
-     * تسجيل طلب شراء إلكتروني جديد من متجر المصنع مع التحقق الأمني الكامل من الأسعار والمنتجات
+     * تحديث إعدادات وهوية وثيم متجر المصنع
+     */
+    public function updateStoreSettings(string $tenantId, array $data): TenantStoreSetting
+    {
+        $settings = TenantStoreSetting::withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $tenantId],
+            [
+                'store_name' => $data['store_name'] ?? 'Garment Factory Direct Store',
+                'theme_id' => self::THEME_MODERN_FASHION,
+                'is_store_enabled' => true,
+            ]
+        );
+
+        if (isset($data['theme_id']) && !array_key_exists($data['theme_id'], self::AVAILABLE_THEMES)) {
+            throw new InvalidArgumentException('الثيم المختار غير مدعوم في النظام.');
+        }
+
+        $fillableData = array_intersect_key($data, array_flip([
+            'store_name',
+            'theme_id',
+            'theme_config',
+            'is_store_enabled',
+            'allow_cod',
+            'allow_card_payment',
+            'allow_instapay',
+            'instapay_account_name',
+            'instapay_handle',
+            'instapay_instructions',
+            'currency',
+            'direction',
+            'banner_title',
+            'banner_subtitle',
+            'contact_whatsapp',
+        ]));
+
+        $settings->update($fillableData);
+
+        return $settings->fresh();
+    }
+
+    /**
+     * تسجيل طلب شراء إلكتروني جديد من متجر المصنع مع التحقق الأمني الكامل والخصم المباشر من المخزون
      */
     public function placeStoreOrder(string $tenantId, array $data): StoreOrder
     {
@@ -101,6 +214,18 @@ class StorefrontService
                     throw new InvalidArgumentException('يجب تحديد كمية صالحة (1 على الأقل).');
                 }
 
+                // Inventory Synchronization: check available inventory stock
+                $availableStock = (float) InventoryItem::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('variant_id', $variant->id)
+                    ->where('is_customer_owned', false)
+                    ->lockForUpdate()
+                    ->sum('current_balance');
+
+                if ($availableStock > 0 && $availableStock < $qty) {
+                    throw new InvalidArgumentException("الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر: " . (int)$availableStock);
+                }
+
                 // Security P0: Compute unit price authoritatively from database record. Never trust client unit_price!
                 $authoritativeUnitPrice = (float) ($variant->retail_price > 0 ? $variant->retail_price : $variant->wholesale_price);
                 if ($authoritativeUnitPrice <= 0) {
@@ -122,11 +247,35 @@ class StorefrontService
                     'unit_price' => $authoritativeUnitPrice,
                     'total_price' => $lineTotal,
                 ];
+
+                // Deduct inventory balance directly from the warehouse item
+                $invItem = InventoryItem::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('variant_id', $variant->id)
+                    ->where('is_customer_owned', false)
+                    ->orderByDesc('current_balance')
+                    ->first();
+
+                if ($invItem && (float)$invItem->current_balance >= $qty) {
+                    $invItem->decrement('current_balance', $qty);
+                }
             }
 
             // Security P0: Calculate shipping authoritatively on the server. Never trust client-supplied shipping_fee!
             $shipping = $this->calculateAuthoritativeShipping($tenantId, $data['city'] ?? 'Cairo', $subtotal);
             $total = round($subtotal + $shipping, 4);
+
+            $paymentMethod = $data['payment_method'] ?? 'cod';
+            if (!in_array($paymentMethod, ['cod', 'card_mock', 'instapay'], true)) {
+                throw new InvalidArgumentException('طريقة الدفع المختارة غير مقبولة.');
+            }
+
+            // Determine initial payment status
+            $paymentStatus = match ($paymentMethod) {
+                'cod' => 'cod_pending',
+                'instapay' => !empty($data['instapay_reference']) || !empty($data['instapay_receipt_url']) ? 'pending_review' : 'pending_payment',
+                default => 'pending',
+            };
 
             $order = StoreOrder::withoutGlobalScopes()->create([
                 'tenant_id' => $tenantId,
@@ -135,11 +284,15 @@ class StorefrontService
                 'customer_phone' => $data['customer_phone'] ?? '',
                 'shipping_address' => $data['shipping_address'] ?? '',
                 'city' => $data['city'] ?? 'Cairo',
-                'payment_method' => $data['payment_method'] ?? 'cod', // COD or card_mock
+                'payment_method' => $paymentMethod,
+                'payment_status' => $paymentStatus,
+                'instapay_reference' => $data['instapay_reference'] ?? null,
+                'instapay_receipt_url' => $data['instapay_receipt_url'] ?? null,
                 'status' => 'new',
                 'subtotal' => $subtotal,
                 'shipping_fee' => $shipping,
                 'total_amount' => $total,
+                'inventory_synced' => true,
             ]);
 
             foreach ($orderItemsData as $itemData) {
@@ -149,6 +302,63 @@ class StorefrontService
 
             return $order->load('items');
         });
+    }
+
+    /**
+     * اعتماد أو رفض تحويل InstaPay يدوياً بواسطة المدير أو المحاسب
+     * قاعدة حرجة: لا يتم اعتماد الدفع أبداً بناءً على صورة إيصال فقط، بل بمراجعة بشرية مؤكدة
+     */
+    public function verifyInstaPayPayment(string $tenantId, string $orderId, string $userId, bool $approved, ?string $rejectionReason = null): StoreOrder
+    {
+        $order = StoreOrder::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($orderId);
+
+        if ($order->payment_method !== 'instapay') {
+            throw new InvalidArgumentException('لا يمكن مراجعة تحويل InstaPay لطلب لا يستخدم هذه الطريقة.');
+        }
+
+        if ($approved) {
+            $order->update([
+                'payment_status' => 'verified_paid',
+                'payment_reviewed_by' => $userId,
+                'payment_reviewed_at' => now(),
+                'payment_rejection_reason' => null,
+            ]);
+        } else {
+            $order->update([
+                'payment_status' => 'rejected',
+                'payment_rejection_reason' => $rejectionReason ?: 'تم رفض التحويل لعدم مطابقة الحساب البنكي',
+                'payment_reviewed_by' => $userId,
+                'payment_reviewed_at' => now(),
+            ]);
+        }
+
+        return $order->fresh(['items', 'paymentReviewer']);
+    }
+
+    /**
+     * استعادة المخزون عند إلغاء طلب الشراء
+     */
+    public function restoreOrderInventory(StoreOrder $order): void
+    {
+        if (!$order->inventory_synced) {
+            return;
+        }
+
+        foreach ($order->items as $item) {
+            $invItem = InventoryItem::withoutGlobalScopes()
+                ->where('tenant_id', $order->tenant_id)
+                ->where('variant_id', $item->variant_id)
+                ->where('is_customer_owned', false)
+                ->first();
+
+            if ($invItem) {
+                $invItem->increment('current_balance', $item->quantity);
+            }
+        }
+
+        $order->update(['inventory_synced' => false]);
     }
 
     /**

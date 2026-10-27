@@ -64,7 +64,7 @@ class StorefrontController extends Controller
     }
 
     /**
-     * تسجيل طلب شراء من المتجر الإلكتروني
+     * تسجيل طلب شراء من المتجر الإلكتروني مع دعم COD و InstaPay والخصم المباشر من المخزون
      */
     public function placeOrder(Request $request, ?string $tenantId = null): JsonResponse
     {
@@ -91,7 +91,9 @@ class StorefrontController extends Controller
             'customer_phone' => 'required|string|max:50',
             'shipping_address' => 'required|string',
             'city' => 'nullable|string|max:100',
-            'payment_method' => 'required|string|in:cod,card_mock',
+            'payment_method' => 'required|string|in:cod,card_mock,instapay',
+            'instapay_reference' => 'nullable|string|max:100',
+            'instapay_receipt_url' => 'nullable|string',
             'shipping_fee' => 'nullable|numeric|min:0',
             'items' => 'required|array|min:1',
             'items.*.variant_id' => 'required|uuid',
@@ -117,18 +119,72 @@ class StorefrontController extends Controller
     }
 
     /**
+     * استعراض وتعديل إعدادات وهوية وثيم المتجر للشركة داخل الـ ERP
+     */
+    public function settings(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $details = $this->storefrontService->getStoreDetails($tenantId);
+
+        return response()->json($details);
+    }
+
+    /**
+     * تحديث إعدادات وهوية المتجر
+     */
+    public function updateSettings(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'store_name' => 'nullable|string|max:255',
+            'theme_id' => 'nullable|string|in:modern_fashion,kids_baby,premium_brand,wholesale_uniform',
+            'theme_config' => 'nullable|array',
+            'is_store_enabled' => 'nullable|boolean',
+            'allow_cod' => 'nullable|boolean',
+            'allow_card_payment' => 'nullable|boolean',
+            'allow_instapay' => 'nullable|boolean',
+            'instapay_account_name' => 'nullable|string|max:255',
+            'instapay_handle' => 'nullable|string|max:100',
+            'instapay_instructions' => 'nullable|string',
+            'currency' => 'nullable|string|max:10',
+            'direction' => 'nullable|string|in:rtl,ltr',
+            'banner_title' => 'nullable|string|max:255',
+            'banner_subtitle' => 'nullable|string',
+            'contact_whatsapp' => 'nullable|string|max:50',
+        ]);
+
+        try {
+            $updated = $this->storefrontService->updateStoreSettings($tenantId, $validated);
+
+            return response()->json([
+                'message' => 'تم حفظ إعدادات وهوية وثيم المتجر الإلكتروني بنجاح',
+                'store_settings' => $updated,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvalidSettings',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
      * استعراض الطلبات الإلكترونية للشركة داخل لوحة التحكم
      */
     public function orders(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $orders = StoreOrder::where('tenant_id', $tenantId)->with('items')->latest()->paginate(20);
+        $orders = StoreOrder::where('tenant_id', $tenantId)
+            ->with(['items', 'paymentReviewer'])
+            ->latest()
+            ->paginate(20);
 
         return response()->json($orders);
     }
 
     /**
-     * تحديث حالة طلب المتجر الإلكتروني
+     * تحديث حالة طلب المتجر الإلكتروني (تأكيد، شحن، تسليم، إلغاء)
      */
     public function updateStatus(Request $request, string $id): JsonResponse
     {
@@ -139,12 +195,53 @@ class StorefrontController extends Controller
             'status' => 'required|string|in:new,confirmed,preparing,shipped,delivered,cancelled',
         ]);
 
-        $order->update(['status' => $validated['status']]);
+        $nextStatus = $validated['status'];
+
+        if ($nextStatus === 'cancelled' && $order->status !== 'cancelled') {
+            $this->storefrontService->restoreOrderInventory($order);
+        }
+
+        $order->update(['status' => $nextStatus]);
 
         return response()->json([
             'message' => 'تم تحديث حالة طلب الشراء بنجاح',
-            'order' => $order->load('items'),
+            'order' => $order->load(['items', 'paymentReviewer']),
         ]);
     }
-}
 
+    /**
+     * مراجعة واعتماد/رفض تحويل InstaPay يدوياً بواسطة المدير أو المحاسب
+     * لا يتم الاعتماد الآلي أبداً بمجرد رفع الإيصال، بل يلزم اعتماد بشري موثق
+     */
+    public function verifyPayment(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'approved' => 'required|boolean',
+            'rejection_reason' => 'nullable|string|max:255',
+        ]);
+
+        try {
+            $order = $this->storefrontService->verifyInstaPayPayment(
+                $tenantId,
+                $id,
+                $request->user()->id,
+                (bool)$validated['approved'],
+                $validated['rejection_reason'] ?? null
+            );
+
+            return response()->json([
+                'message' => $validated['approved']
+                    ? 'تم اعتماد تحويل InstaPay بنجاح وتوثيق العملية في سجل التدقيق'
+                    : 'تم رفض تحويل InstaPay وتسجيل سبب الرفض بنجاح',
+                'order' => $order,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvalidPaymentVerification',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+}

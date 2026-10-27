@@ -806,7 +806,34 @@ export interface Payroll {
   items?: PayrollItem[];
 }
 
-// Phase 10: E-Commerce Storefront
+// Phase 10: E-Commerce Storefront & Theme Architecture
+export type StorefrontThemeId = 'modern_fashion' | 'kids_baby' | 'premium_brand' | 'wholesale_uniform';
+
+export interface ThemeConfig {
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  bg_color?: string;
+  font_family?: string;
+  direction?: 'rtl' | 'ltr';
+  logo_url?: string;
+  banner_image?: string;
+}
+
+export interface StorefrontThemeMeta {
+  id: StorefrontThemeId;
+  name_ar: string;
+  name_en: string;
+  description_ar: string;
+  description_en: string;
+  default_palette: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    bg: string;
+  };
+}
+
 export interface StoreOrderItem {
   id: string;
   variant_id: string;
@@ -824,23 +851,42 @@ export interface StoreOrder {
   customer_phone: string;
   shipping_address: string;
   city: string;
-  payment_method: string;
+  payment_method: 'cod' | 'card_mock' | 'instapay' | string;
+  payment_status: 'pending' | 'cod_pending' | 'pending_review' | 'verified_paid' | 'rejected';
+  instapay_reference?: string;
+  instapay_receipt_url?: string;
+  payment_reviewed_by?: string;
+  payment_reviewed_at?: string;
+  payment_rejection_reason?: string;
   status: 'new' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled';
   subtotal: number;
   shipping_fee: number;
   total_amount: number;
+  inventory_synced?: boolean;
   created_at: string;
   items?: StoreOrderItem[];
+  payment_reviewer?: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
 export interface TenantStoreSetting {
   id: string;
   store_name: string;
+  theme_id: StorefrontThemeId;
+  theme_config?: ThemeConfig;
   subdomain?: string;
   is_store_enabled: boolean;
   allow_cod: boolean;
   allow_card_payment: boolean;
+  allow_instapay: boolean;
+  instapay_account_name?: string;
+  instapay_handle?: string;
+  instapay_instructions?: string;
   currency: string;
+  direction?: 'rtl' | 'ltr';
   banner_title?: string;
   banner_subtitle?: string;
   contact_whatsapp?: string;

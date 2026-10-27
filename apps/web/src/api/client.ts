@@ -1072,7 +1072,7 @@ class ApiClient {
     },
   };
 
-  // --- Storefront Orders (ERP side) ---
+  // --- Storefront Orders & Themes (ERP side) ---
   public storefront = {
     getOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/storefront/orders?page=${page}`);
@@ -1081,6 +1081,21 @@ class ApiClient {
       return this.request(`/storefront/orders/${id}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
+      });
+    },
+    getSettings: async (): Promise<any> => {
+      return this.request('/storefront/settings');
+    },
+    updateSettings: async (data: any): Promise<any> => {
+      return this.request('/storefront/settings', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    verifyPayment: async (id: string, approved: boolean, rejection_reason?: string): Promise<{ message: string; order: any }> => {
+      return this.request(`/storefront/orders/${id}/verify-payment`, {
+        method: 'POST',
+        body: JSON.stringify({ approved, rejection_reason }),
       });
     },
   };

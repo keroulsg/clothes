@@ -15,11 +15,18 @@ class TenantStoreSetting extends Model
     protected $fillable = [
         'tenant_id',
         'store_name',
+        'theme_id',
+        'theme_config',
         'subdomain',
         'is_store_enabled',
         'allow_cod',
         'allow_card_payment',
+        'allow_instapay',
+        'instapay_account_name',
+        'instapay_handle',
+        'instapay_instructions',
         'currency',
+        'direction',
         'banner_title',
         'banner_subtitle',
         'contact_whatsapp',
@@ -29,6 +36,8 @@ class TenantStoreSetting extends Model
         'is_store_enabled' => 'boolean',
         'allow_cod' => 'boolean',
         'allow_card_payment' => 'boolean',
+        'allow_instapay' => 'boolean',
+        'theme_config' => 'array',
     ];
 
     public function tenant(): BelongsTo

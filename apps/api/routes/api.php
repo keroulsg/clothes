@@ -232,9 +232,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/hr/payrolls/generate', [\App\Http\Controllers\Api\HrController::class, 'generatePayroll'])->middleware('role:accountant');
         Route::post('/hr/payrolls/{id}/pay', [\App\Http\Controllers\Api\HrController::class, 'markPayrollPaid'])->middleware('role:accountant,company_owner');
 
-        // إدارة المتجر الإلكتروني داخل الـ ERP (Phase 11: Storefront ERP)
+        // إدارة المتجر الإلكتروني داخل الـ ERP (Phase 10: Storefront ERP & Themes)
+        Route::get('/storefront/settings', [\App\Http\Controllers\Api\StorefrontController::class, 'settings']);
+        Route::put('/storefront/settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateSettings'])->middleware('role:company_owner,production_manager,accountant');
         Route::get('/storefront/orders', [\App\Http\Controllers\Api\StorefrontController::class, 'orders']);
         Route::patch('/storefront/orders/{id}/status', [\App\Http\Controllers\Api\StorefrontController::class, 'updateStatus']);
+        Route::post('/storefront/orders/{id}/verify-payment', [\App\Http\Controllers\Api\StorefrontController::class, 'verifyPayment'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');
 
         // إدارة الماكينات وصيانة الأصول وبلاغات الأعطال (Phase 12: Machine & Asset Maintenance)
         Route::get('/maintenance/machines', [\App\Http\Controllers\Api\MaintenanceController::class, 'indexMachines']);

@@ -389,4 +389,159 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         $orderRes->assertStatus(422);
         $this->assertStringContainsString('غير متوفرة حالياً بالمخزن', $orderRes->json('message'));
     }
+
+    public function test_consecutive_orders_cannot_oversell_the_last_unit(): void
+    {
+        $this->inventoryA->update(['current_balance' => 1]);
+
+        // Order 1 takes the last unit
+        $res1 = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل 1',
+            'customer_phone' => '01011111111',
+            'shipping_address' => 'القاهرة',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 1],
+            ],
+        ]);
+        $res1->assertStatus(201);
+        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->current_balance);
+
+        // Order 2 tries to order 1 unit when stock is 0
+        $res2 = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل 2',
+            'customer_phone' => '01022222222',
+            'shipping_address' => 'الجيزة',
+            'city' => 'Giza',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 1],
+            ],
+        ]);
+        $res2->assertStatus(422);
+        $this->assertStringContainsString('غير متوفرة حالياً بالمخزن', $res2->json('message'));
+        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->current_balance);
+    }
+
+    public function test_repeated_cancellation_cannot_restore_inventory_more_than_once(): void
+    {
+        $this->inventoryA->update(['current_balance' => 10]);
+
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل تجريبي',
+            'customer_phone' => '01033333333',
+            'shipping_address' => 'القاهرة',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 4],
+            ],
+        ]);
+        $orderRes->assertStatus(201);
+        $orderId = $orderRes->json('order.id');
+        $this->assertEquals(6.0, (float)$this->inventoryA->fresh()->current_balance);
+
+        Sanctum::actingAs($this->managerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        // First cancellation restores 4 units -> 10
+        $cancel1 = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'cancelled']);
+        $cancel1->assertStatus(200);
+        $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+
+        // Repeated cancellation call must not restore inventory again
+        $cancel2 = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'cancelled']);
+        $cancel2->assertStatus(200);
+        $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+
+        // Direct service calls must also remain strictly idempotent
+        $orderModel = StoreOrder::find($orderId);
+        app(StorefrontService::class)->restoreOrderInventory($orderModel);
+        app(StorefrontService::class)->restoreOrderInventory($orderModel);
+        $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+    }
+
+    public function test_cannot_ship_unverified_instapay_order(): void
+    {
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل InstaPay',
+            'customer_phone' => '01044444444',
+            'shipping_address' => 'المعادي',
+            'city' => 'Cairo',
+            'payment_method' => 'instapay',
+            'instapay_reference' => 'TXN-SHIP-TEST',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 1],
+            ],
+        ]);
+        $orderRes->assertStatus(201);
+        $orderId = $orderRes->json('order.id');
+
+        Sanctum::actingAs($this->managerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        // Trying to ship before payment is verified must fail with 422
+        $shipAttempt = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'shipped']);
+        $shipAttempt->assertStatus(422);
+        $shipAttempt->assertJsonFragment(['error' => 'UnverifiedPayment']);
+
+        // Verify payment
+        $this->postJson("/api/v1/storefront/orders/{$orderId}/verify-payment", ['approved' => true])->assertStatus(200);
+
+        // Now shipping must succeed
+        $shipSuccess = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'shipped']);
+        $shipSuccess->assertStatus(200);
+        $this->assertEquals('shipped', $shipSuccess->json('order.status'));
+    }
+
+    public function test_cannot_cancel_already_delivered_order(): void
+    {
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل منتهي',
+            'customer_phone' => '01055555555',
+            'shipping_address' => 'مدينة نصر',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 1],
+            ],
+        ]);
+        $orderId = $orderRes->json('order.id');
+
+        Sanctum::actingAs($this->managerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        // Ship and Deliver
+        $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'shipped'])->assertStatus(200);
+        $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'delivered'])->assertStatus(200);
+
+        // Attempt to cancel delivered order must fail
+        $cancelDelivered = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'cancelled']);
+        $cancelDelivered->assertStatus(422);
+        $cancelDelivered->assertJsonFragment(['error' => 'InvalidStatusTransition']);
+    }
+
+    public function test_cross_tenant_cannot_verify_payment(): void
+    {
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل أ',
+            'customer_phone' => '01066666666',
+            'shipping_address' => 'مصر الجديدة',
+            'city' => 'Cairo',
+            'payment_method' => 'instapay',
+            'instapay_reference' => 'TXN-TENANT-A',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 1],
+            ],
+        ]);
+        $orderId = $orderRes->json('order.id');
+
+        // Manager B (belongs to Tenant B) attempts to verify Tenant A's order
+        Sanctum::actingAs($this->managerB);
+        app()->instance('current_tenant_id', $this->tenantB->id);
+
+        $crossAttempt = $this->postJson("/api/v1/storefront/orders/{$orderId}/verify-payment", ['approved' => true]);
+        $crossAttempt->assertStatus(404);
+    }
 }

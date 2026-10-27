@@ -197,6 +197,22 @@ class StorefrontController extends Controller
 
         $nextStatus = $validated['status'];
 
+        // Integrity check: If order was already delivered, it cannot be cancelled
+        if ($order->status === 'delivered' && $nextStatus === 'cancelled') {
+            return response()->json([
+                'error' => 'InvalidStatusTransition',
+                'message' => 'لا يمكن إلغاء طلب تم تسليمه للعميل بالفعل.',
+            ], 422);
+        }
+
+        // Integrity check: InstaPay order cannot be dispatched or delivered without verified payment
+        if ($order->payment_method === 'instapay' && in_array($nextStatus, ['shipped', 'delivered'], true) && $order->payment_status !== 'verified_paid') {
+            return response()->json([
+                'error' => 'UnverifiedPayment',
+                'message' => 'لا يمكن شحن أو تسليم طلب InstaPay قبل اعتماد وتأكيد التحويل البنكي من الإدارة.',
+            ], 422);
+        }
+
         if ($nextStatus === 'cancelled' && $order->status !== 'cancelled') {
             $this->storefrontService->restoreOrderInventory($order);
         }

@@ -214,15 +214,17 @@ class StorefrontService
                     throw new InvalidArgumentException('يجب تحديد كمية صالحة (1 على الأقل).');
                 }
 
-                // Inventory Synchronization: check available inventory stock
-                $availableStock = (float) InventoryItem::withoutGlobalScopes()
+                // Inventory Synchronization: check and lock available inventory stock
+                $invItem = InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
                     ->where('variant_id', $variant->id)
                     ->where('is_customer_owned', false)
                     ->lockForUpdate()
-                    ->sum('current_balance');
+                    ->first();
 
-                if ($availableStock > 0 && $availableStock < $qty) {
+                $availableStock = $invItem ? (float)$invItem->current_balance : 0.0;
+
+                if ($availableStock < $qty) {
                     throw new InvalidArgumentException("الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر: " . (int)$availableStock);
                 }
 
@@ -248,17 +250,8 @@ class StorefrontService
                     'total_price' => $lineTotal,
                 ];
 
-                // Deduct inventory balance directly from the warehouse item
-                $invItem = InventoryItem::withoutGlobalScopes()
-                    ->where('tenant_id', $tenantId)
-                    ->where('variant_id', $variant->id)
-                    ->where('is_customer_owned', false)
-                    ->orderByDesc('current_balance')
-                    ->first();
-
-                if ($invItem && (float)$invItem->current_balance >= $qty) {
-                    $invItem->decrement('current_balance', $qty);
-                }
+                // Deduct inventory balance directly from the locked warehouse item
+                $invItem->decrement('current_balance', $qty);
             }
 
             // Security P0: Calculate shipping authoritatively on the server. Never trust client-supplied shipping_fee!
@@ -310,55 +303,83 @@ class StorefrontService
      */
     public function verifyInstaPayPayment(string $tenantId, string $orderId, string $userId, bool $approved, ?string $rejectionReason = null): StoreOrder
     {
-        $order = StoreOrder::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->findOrFail($orderId);
+        return DB::transaction(function () use ($tenantId, $orderId, $userId, $approved, $rejectionReason) {
+            $order = StoreOrder::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->lockForUpdate()
+                ->findOrFail($orderId);
 
-        if ($order->payment_method !== 'instapay') {
-            throw new InvalidArgumentException('لا يمكن مراجعة تحويل InstaPay لطلب لا يستخدم هذه الطريقة.');
-        }
+            if ($order->payment_method !== 'instapay') {
+                throw new InvalidArgumentException('لا يمكن مراجعة تحويل InstaPay لطلب لا يستخدم هذه الطريقة.');
+            }
 
-        if ($approved) {
-            $order->update([
-                'payment_status' => 'verified_paid',
-                'payment_reviewed_by' => $userId,
-                'payment_reviewed_at' => now(),
-                'payment_rejection_reason' => null,
-            ]);
-        } else {
-            $order->update([
-                'payment_status' => 'rejected',
-                'payment_rejection_reason' => $rejectionReason ?: 'تم رفض التحويل لعدم مطابقة الحساب البنكي',
-                'payment_reviewed_by' => $userId,
-                'payment_reviewed_at' => now(),
-            ]);
-        }
+            if ($order->status === 'cancelled') {
+                throw new InvalidArgumentException('لا يمكن مراجعة أو اعتماد الدفع لطلب ملغي مسبقاً.');
+            }
 
-        return $order->fresh(['items', 'paymentReviewer']);
+            if ((float)$order->total_amount <= 0) {
+                throw new InvalidArgumentException('قيمة الطلب غير صالحة للمراجعة والتدقيق المالي.');
+            }
+
+            if ($approved && $order->payment_status === 'verified_paid') {
+                throw new InvalidArgumentException('هذا الطلب تم تدقيقه واعتماد دفعه مسبقاً.');
+            }
+
+            // Validate reviewer belongs to tenant
+            $reviewer = \App\Models\User::where('tenant_id', $tenantId)->find($userId);
+            if (!$reviewer) {
+                throw new InvalidArgumentException('المستخدم المدقق غير مصرح له بمراجعة مدفوعات هذه الشركة.');
+            }
+
+            if ($approved) {
+                $order->update([
+                    'payment_status' => 'verified_paid',
+                    'payment_reviewed_by' => $userId,
+                    'payment_reviewed_at' => now(),
+                    'payment_rejection_reason' => null,
+                ]);
+            } else {
+                $order->update([
+                    'payment_status' => 'rejected',
+                    'payment_rejection_reason' => $rejectionReason ?: 'تم رفض التحويل لعدم مطابقة الحساب البنكي',
+                    'payment_reviewed_by' => $userId,
+                    'payment_reviewed_at' => now(),
+                ]);
+            }
+
+            return $order->fresh(['items', 'paymentReviewer']);
+        });
     }
 
     /**
-     * استعادة المخزون عند إلغاء طلب الشراء
+     * استعادة المخزون عند إلغاء طلب الشراء مع ضمان عدم التكرار
      */
     public function restoreOrderInventory(StoreOrder $order): void
     {
-        if (!$order->inventory_synced) {
-            return;
-        }
+        DB::transaction(function () use ($order) {
+            $lockedOrder = StoreOrder::withoutGlobalScopes()
+                ->lockForUpdate()
+                ->find($order->id);
 
-        foreach ($order->items as $item) {
-            $invItem = InventoryItem::withoutGlobalScopes()
-                ->where('tenant_id', $order->tenant_id)
-                ->where('variant_id', $item->variant_id)
-                ->where('is_customer_owned', false)
-                ->first();
-
-            if ($invItem) {
-                $invItem->increment('current_balance', $item->quantity);
+            if (!$lockedOrder || !$lockedOrder->inventory_synced) {
+                return;
             }
-        }
 
-        $order->update(['inventory_synced' => false]);
+            foreach ($lockedOrder->items as $item) {
+                $invItem = InventoryItem::withoutGlobalScopes()
+                    ->where('tenant_id', $lockedOrder->tenant_id)
+                    ->where('variant_id', $item->variant_id)
+                    ->where('is_customer_owned', false)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($invItem) {
+                    $invItem->increment('current_balance', $item->quantity);
+                }
+            }
+
+            $lockedOrder->update(['inventory_synced' => false]);
+        });
     }
 
     /**

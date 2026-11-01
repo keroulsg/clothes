@@ -23,7 +23,7 @@ export const ManufacturingPage: React.FC<FeaturePageProps> = ({ lang, onOpenRegi
     <div className="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-12">
       {/* Header */}
       <div className="text-center space-y-4 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#7F1625]/20 bg-[#7F1625]/10 text-[#7F1625] dark:text-[#f87171] text-xs font-bold font-sans">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[var(--brand-border)] bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#f87171] text-xs font-bold font-sans">
           <Scissors className="w-4 h-4" />
           <span>{isAr ? 'الوحدة الصناعية رقم 1' : 'Industrial Core Module'}</span>
         </div>
@@ -40,7 +40,7 @@ export const ManufacturingPage: React.FC<FeaturePageProps> = ({ lang, onOpenRegi
       {/* 3 Pillars */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#f87171] flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#f87171] flex items-center justify-center font-bold">
             1
           </div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white font-sans">
@@ -83,7 +83,7 @@ export const ManufacturingPage: React.FC<FeaturePageProps> = ({ lang, onOpenRegi
       </div>
 
       {/* CTA Box */}
-      <div className="p-8 rounded-2xl bg-gradient-to-br from-[#7F1625] via-[#65101c] to-black text-white text-center space-y-4">
+      <div className="p-8 rounded-2xl bg-gradient-to-br from-[var(--brand-primary)] via-[#65101c] to-black text-white text-center space-y-4">
         <h3 className="text-xl font-black font-sans">
           {isAr ? 'وفر حتى 12% من تكلفة القماش عبر ضبط صالة القص' : 'Save up to 12% on raw fabric costs with optimized cutting'}
         </h3>
@@ -94,7 +94,7 @@ export const ManufacturingPage: React.FC<FeaturePageProps> = ({ lang, onOpenRegi
         </p>
         <button
           onClick={() => onOpenRegister?.('professional')}
-          className="px-6 py-2.5 rounded-xl bg-white text-[#7F1625] font-black text-xs hover:bg-slate-100 transition-all cursor-pointer shadow-md"
+          className="px-6 py-2.5 rounded-xl bg-white text-[var(--brand-primary)] font-black text-xs hover:bg-slate-100 transition-all cursor-pointer shadow-md"
         >
           {isAr ? 'بدء التجربة لصالة القص' : 'Start Cutting Trial'}
         </button>
@@ -124,7 +124,7 @@ export const InventoryPage: React.FC<FeaturePageProps> = ({ lang }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
-          <Calculator className="w-8 h-8 text-[#7F1625] dark:text-[#f87171]" />
+          <Calculator className="w-8 h-8 text-[var(--brand-primary)] dark:text-[#f87171]" />
           <h3 className="text-base font-bold text-slate-900 dark:text-white">
             {isAr ? 'حاسبة الـ GSM واستهلاك الأثواب' : 'Fabric GSM & Roll Calculator'}
           </h3>
@@ -176,19 +176,27 @@ export const SubcontractingPage: React.FC<FeaturePageProps> = ({ lang }) => {
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
-            <span className="font-bold text-[#7F1625] dark:text-[#f87171] block mb-1">1. إذن استلام أمانة</span>
+            <span className="font-bold text-[var(--brand-primary)] dark:text-[#f87171] block mb-1">
+              {isAr ? '1. إذن استلام أمانة' : '1. Custody Receipt'}
+            </span>
             {isAr ? 'استلام قماش العميل وإصدار إيصال أمانة معزول عن مخزون المصنع.' : 'Receive customer fabric under isolated custody receipt.'}
           </div>
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
-            <span className="font-bold text-[#7F1625] dark:text-[#f87171] block mb-1">2. أمر تشغيل خارجي</span>
+            <span className="font-bold text-[var(--brand-primary)] dark:text-[#f87171] block mb-1">
+              {isAr ? '2. أمر تشغيل خارجي' : '2. Job Order'}
+            </span>
             {isAr ? 'صرف الحزم للمطبعة أو ورشة التطريز وتتبع التسليم.' : 'Dispatch bundles to embroidery or print shops.'}
           </div>
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
-            <span className="font-bold text-[#7F1625] dark:text-[#f87171] block mb-1">3. إذن تسليم منجز</span>
+            <span className="font-bold text-[var(--brand-primary)] dark:text-[#f87171] block mb-1">
+              {isAr ? '3. إذن تسليم منجز' : '3. Delivery Note'}
+            </span>
             {isAr ? 'فحص القطع وتسليم العميل إنتاجه مع توثيق التوالف.' : 'Deliver finished pieces with scrap reconciliation.'}
           </div>
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
-            <span className="font-bold text-[#7F1625] dark:text-[#f87171] block mb-1">4. فاتورة أجور خدمات</span>
+            <span className="font-bold text-[var(--brand-primary)] dark:text-[#f87171] block mb-1">
+              {isAr ? '4. فاتورة أجور خدمات' : '4. Service Invoice'}
+            </span>
             {isAr ? 'إصدار فاتورة أتعاب قص وتصنيع بدون خلط أسعار القماش.' : 'Issue labor & service fee invoice without fabric cost mixing.'}
           </div>
         </div>
@@ -266,7 +274,7 @@ export const StorefrontPage: React.FC<FeaturePageProps> = ({ lang }) => {
 export const AllFeaturesPage: React.FC<FeaturePageProps> = ({ lang, onNavigate }) => {
   const isAr = lang === 'ar';
   const featuresList = [
-    { id: 'manufacturing', title: isAr ? 'صالة القص والفرش' : 'Cutting & Lays', icon: <Scissors className="w-5 h-5 text-[#7F1625]" />, desc: isAr ? 'حساب التعشيق، أطوال الفرش، والتحكم في الهالك' : 'Marker efficiency and lay waste control' },
+    { id: 'manufacturing', title: isAr ? 'صالة القص والفرش' : 'Cutting & Lays', icon: <Scissors className="w-5 h-5 text-[var(--brand-primary)]" />, desc: isAr ? 'حساب التعشيق، أطوال الفرش، والتحكم في الهالك' : 'Marker efficiency and lay waste control' },
     { id: 'inventory', title: isAr ? 'المخازن وخامات الأقمشة' : 'Fabric Inventory', icon: <Layers className="w-5 h-5 text-blue-600" />, desc: isAr ? 'أثواب القماش، حاسبة الـ GSM، والمطابقة الثلاثية' : 'Roll meters, GSM calculator, and 3-way PO matching' },
     { id: 'subcontracting', title: isAr ? 'التشغيل للغير والـ CMT' : 'Subcontracting & CMT', icon: <Boxes className="w-5 h-5 text-amber-600" />, desc: isAr ? 'عزل أمانات العملاء وتتبع المطابع والتطريز' : 'Customer fabric custody and external operations' },
     { id: 'costing', title: isAr ? 'التكاليف والمالية المزدوجة' : 'Costing & Accounts', icon: <Receipt className="w-5 h-5 text-emerald-600" />, desc: isAr ? 'شجرة الحسابات وتكلفة القطعة الحقيقية' : 'COA and actual cost-per-piece tracking' },
@@ -292,18 +300,18 @@ export const AllFeaturesPage: React.FC<FeaturePageProps> = ({ lang, onNavigate }
           <div
             key={f.id}
             onClick={() => onNavigate?.(f.id)}
-            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/40 dark:hover:border-[#9E2A3B]/40 hover:shadow-md transition-all cursor-pointer space-y-3 group"
+            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[var(--brand-border)] hover:shadow-md transition-all cursor-pointer space-y-3 group"
           >
             <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit group-hover:scale-105 transition-transform">
               {f.icon}
             </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-[#7F1625] dark:group-hover:text-[#f87171] transition-colors">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-[var(--brand-primary)] dark:group-hover:text-[#f87171] transition-colors">
               {f.title}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               {f.desc}
             </p>
-            <div className="text-xs font-bold text-[#7F1625] dark:text-[#f87171] flex items-center gap-1 pt-1">
+            <div className="text-xs font-bold text-[var(--brand-primary)] dark:text-[#f87171] flex items-center gap-1 pt-1">
               <span>{isAr ? 'عرض التفاصيل' : 'Explore Module'}</span>
               <span>←</span>
             </div>

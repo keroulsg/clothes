@@ -408,7 +408,7 @@ class SecurityRegressionDay3Test extends TestCase
                 ]
             ]);
 
-        $response->assertStatus(500); // InvalidArgumentException thrown and unposted
+        $response->assertStatus(422); // Handled cleanly via InvalidArgumentException with HTTP 422
     }
 
     /**

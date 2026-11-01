@@ -10,6 +10,8 @@
  * logout, tokens are revoked from the server and purged immediately from client storage.
  */
 
+import type { Customer, CustomerStatement } from '../types';
+
 export interface ApiUser {
   id: string;
   name: string;
@@ -257,9 +259,6 @@ class ApiClient {
         return res;
       } finally {
         this.clearAuth();
-        if (this.onUnauthorizedCallback) {
-          this.onUnauthorizedCallback();
-        }
       }
     },
 
@@ -386,6 +385,11 @@ class ApiClient {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+    },
+
+    getSupplierStatement: async (id: string, params?: { from_date?: string; to_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/suppliers/${id}/statement${q ? `?${q}` : ''}`);
     },
   };
 
@@ -936,6 +940,36 @@ class ApiClient {
     },
   };
 
+  // --- Customers & Client Master Endpoints ---
+  public customers = {
+    getCustomers: async (params?: { page?: number; search?: string; active_only?: boolean }): Promise<PaginatedResponse<Customer>> => {
+      const q = new URLSearchParams();
+      if (params?.page) q.append('page', params.page.toString());
+      if (params?.search) q.append('search', params.search);
+      if (params?.active_only) q.append('active_only', '1');
+      return this.request(`/customers${q.toString() ? `?${q.toString()}` : ''}`);
+    },
+    getCustomer: async (id: string): Promise<{ customer: Customer }> => {
+      return this.request(`/customers/${id}`);
+    },
+    createCustomer: async (payload: { code: string; name: string; contact_person?: string; phone?: string; email?: string; tax_id?: string; address?: string; notes?: string; credit_limit?: number }): Promise<{ message: string; customer: Customer }> => {
+      return this.request('/customers', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    updateCustomer: async (id: string, payload: Partial<Customer>): Promise<{ message: string; customer: Customer }> => {
+      return this.request(`/customers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    getCustomerStatement: async (id: string, params?: { from_date?: string; to_date?: string }): Promise<CustomerStatement> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/customers/${id}/statement${q ? `?${q}` : ''}`);
+    },
+  };
+
   // --- Accounting & Costing Endpoints ---
   public accounting = {
     getAccounts: async (): Promise<any[]> => {
@@ -968,8 +1002,17 @@ class ApiClient {
     getCostSheets: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/accounting/cost-sheets?page=${page}`);
     },
+    getAccountStatement: async (id: string, params?: { from_date?: string; to_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/accounts/${id}/statement${q ? `?${q}` : ''}`);
+    },
     calculateCost: async (productionOrderId: string): Promise<{ message: string; cost_sheet: any }> => {
       return this.request(`/accounting/cost-sheets/${productionOrderId}/calculate`, {
+        method: 'POST',
+      });
+    },
+    approveCostSheet: async (id: string): Promise<{ message: string; cost_sheet: any }> => {
+      return this.request(`/accounting/cost-sheets/${id}/approve`, {
         method: 'POST',
       });
     },
@@ -1002,13 +1045,74 @@ class ApiClient {
 
   // --- HR & Payroll Endpoints ---
   public hr = {
-    getEmployees: async (page = 1): Promise<PaginatedResponse<any>> => {
-      return this.request(`/hr/employees?page=${page}`);
+    getEmployees: async (page = 1, params: { search?: string; department?: string; pay_type?: string; is_active?: boolean } = {}): Promise<PaginatedResponse<any>> => {
+      const searchParams = new URLSearchParams({ page: page.toString() });
+      if (params.search) searchParams.append('search', params.search);
+      if (params.department && params.department !== 'all') searchParams.append('department', params.department);
+      if (params.pay_type && params.pay_type !== 'all') searchParams.append('pay_type', params.pay_type);
+      if (params.is_active !== undefined) searchParams.append('is_active', params.is_active.toString());
+      return this.request(`/hr/employees?${searchParams.toString()}`);
+    },
+    getEmployee: async (id: string): Promise<any> => {
+      return this.request(`/hr/employees/${id}`);
     },
     createEmployee: async (payload: any): Promise<{ message: string; employee: any }> => {
       return this.request('/hr/employees', {
         method: 'POST',
         body: JSON.stringify(payload),
+      });
+    },
+    updateEmployee: async (id: string, payload: any): Promise<{ message: string; employee: any }> => {
+      return this.request(`/hr/employees/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    // --- Attendances ---
+    getAttendances: async (page = 1, params: { attendance_date?: string; employee_id?: string; status?: string } = {}): Promise<PaginatedResponse<any>> => {
+      const searchParams = new URLSearchParams({ page: page.toString() });
+      if (params.attendance_date) searchParams.append('attendance_date', params.attendance_date);
+      if (params.employee_id) searchParams.append('employee_id', params.employee_id);
+      if (params.status && params.status !== 'all') searchParams.append('status', params.status);
+      return this.request(`/hr/attendances?${searchParams.toString()}`);
+    },
+    recordAttendance: async (payload: any): Promise<{ message: string; attendance: any }> => {
+      return this.request('/hr/attendances', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    updateAttendance: async (id: string, payload: any): Promise<{ message: string; attendance: any }> => {
+      return this.request(`/hr/attendances/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    // --- Adjustments (Advances, Bonuses, Deductions) ---
+    getAdjustments: async (page = 1, params: { employee_id?: string; type?: string; status?: string } = {}): Promise<PaginatedResponse<any>> => {
+      const searchParams = new URLSearchParams({ page: page.toString() });
+      if (params.employee_id) searchParams.append('employee_id', params.employee_id);
+      if (params.type && params.type !== 'all') searchParams.append('type', params.type);
+      if (params.status && params.status !== 'all') searchParams.append('status', params.status);
+      return this.request(`/hr/adjustments?${searchParams.toString()}`);
+    },
+    createAdjustment: async (payload: any): Promise<{ message: string; adjustment: any }> => {
+      return this.request('/hr/adjustments', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    approveAdjustment: async (id: string): Promise<{ message: string; adjustment: any }> => {
+      return this.request(`/hr/adjustments/${id}/approve`, {
+        method: 'POST',
+      });
+    },
+    rejectAdjustment: async (id: string, rejection_reason: string): Promise<{ message: string; adjustment: any }> => {
+      return this.request(`/hr/adjustments/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ rejection_reason }),
       });
     },
     getPieceRates: async (page = 1): Promise<PaginatedResponse<any>> => {
@@ -1032,16 +1136,39 @@ class ApiClient {
     getPayrolls: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/hr/payrolls?page=${page}`);
     },
+    getPayroll: async (id: string): Promise<any> => {
+      return this.request(`/hr/payrolls/${id}`);
+    },
     generatePayroll: async (payload: { payroll_period: string; period_start: string; period_end: string }): Promise<{ message: string; payroll: any }> => {
       return this.request('/hr/payrolls/generate', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
     },
-    markPayrollPaid: async (id: string): Promise<{ message: string; payroll: any }> => {
-      return this.request(`/hr/payrolls/${id}/pay`, {
+    approvePayroll: async (id: string): Promise<{ message: string; payroll: any }> => {
+      return this.request(`/hr/payrolls/${id}/approve`, {
         method: 'POST',
       });
+    },
+    rejectPayroll: async (id: string, rejection_reason: string): Promise<{ message: string; payroll: any }> => {
+      return this.request(`/hr/payrolls/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ rejection_reason }),
+      });
+    },
+    finalizePayroll: async (id: string): Promise<{ message: string; payroll: any }> => {
+      return this.request(`/hr/payrolls/${id}/finalize`, {
+        method: 'POST',
+      });
+    },
+    markPayrollPaid: async (id: string, payload?: { amount?: number; payment_date?: string; payment_method?: string; reference_number?: string; notes?: string; employee_id?: string }): Promise<{ message: string; payroll: any; payment?: any }> => {
+      return this.request(`/hr/payrolls/${id}/pay`, {
+        method: 'POST',
+        body: payload ? JSON.stringify(payload) : undefined,
+      });
+    },
+    getPayrollPayments: async (id: string): Promise<any[]> => {
+      return this.request(`/hr/payrolls/${id}/payments`);
     },
     approvePieceWorkLog: async (id: string): Promise<{ message: string; work_log: any }> => {
       return this.request(`/hr/piece-work-logs/${id}/approve`, {
@@ -1201,6 +1328,83 @@ class ApiClient {
   public public = {
     submitContact: async (payload: { name: string; email: string; phone?: string; company_name?: string; subject?: string; message: string }): Promise<{ success: boolean; message: string }> => {
       return this.request('/public/contact', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+  };
+
+  // --- Commercial SaaS Subscription, Metering & Quotas ---
+  public subscription = {
+    getPlans: async (): Promise<{ plans: any[]; meters_catalog: Record<string, any> }> => {
+      return this.request('/subscription/plans');
+    },
+    getCurrentReport: async (): Promise<any> => {
+      return this.request('/subscription/current');
+    },
+    upgrade: async (payload: { plan_code: string; billing_cycle?: 'monthly' | 'annual' }): Promise<{ message: string; subscription: any }> => {
+      return this.request('/subscription/upgrade', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getAdminSubscriptions: async (page = 1): Promise<any> => {
+      return this.request(`/admin/subscriptions?page=${page}`);
+    },
+    grantAdminOverride: async (payload: { tenant_id: string; meter_key: string; temporary_limit: number; reason: string; days?: number }): Promise<{ message: string; override: any }> => {
+      return this.request('/admin/subscriptions/override', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+  };
+
+  // --- Phase G: Waslat Worsh Integrated B2B Marketplace ---
+  public waslatWorsh = {
+    getWorkshops: async (params: { specialty_type?: string; governorate?: string; search?: string; page?: number } = {}): Promise<any> => {
+      const q = new URLSearchParams();
+      if (params.specialty_type) q.append('specialty_type', params.specialty_type);
+      if (params.governorate) q.append('governorate', params.governorate);
+      if (params.search) q.append('search', params.search);
+      if (params.page) q.append('page', String(params.page));
+      return this.request(`/waslat-worsh/workshops?${q.toString()}`);
+    },
+    createWorkshop: async (payload: any): Promise<{ message: string; workshop: any }> => {
+      return this.request('/waslat-worsh/workshops', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getRfqs: async (params: { status?: string; service_type?: string; search?: string; page?: number } = {}): Promise<any> => {
+      const q = new URLSearchParams();
+      if (params.status) q.append('status', params.status);
+      if (params.service_type) q.append('service_type', params.service_type);
+      if (params.search) q.append('search', params.search);
+      if (params.page) q.append('page', String(params.page));
+      return this.request(`/waslat-worsh/rfqs?${q.toString()}`);
+    },
+    createRfq: async (payload: any): Promise<{ message: string; rfq: any }> => {
+      return this.request('/waslat-worsh/rfqs', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getRfq: async (id: string): Promise<any> => {
+      return this.request(`/waslat-worsh/rfqs/${id}`);
+    },
+    submitBid: async (rfqId: string, payload: { workshop_profile_id: string; unit_rate: number; promised_lead_days: number; notes?: string }): Promise<{ message: string; bid: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${rfqId}/bids`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    acceptBid: async (rfqId: string, bidId: string): Promise<{ message: string; result: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${rfqId}/bids/${bidId}/accept`, {
+        method: 'POST',
+      });
+    },
+    submitReview: async (payload: any): Promise<{ message: string; review: any }> => {
+      return this.request('/waslat-worsh/reviews', {
         method: 'POST',
         body: JSON.stringify(payload),
       });

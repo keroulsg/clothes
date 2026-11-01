@@ -21,6 +21,7 @@ interface ModelDetailsBomModalProps {
   onClose: () => void;
   model: GarmentModel | null;
   inventoryItems?: InventoryItem[];
+  isAr?: boolean;
 }
 
 export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
@@ -28,6 +29,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
   onClose,
   model,
   inventoryItems = [],
+  isAr = true,
 }) => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'bom'>('bom');
   const [boms, setBoms] = useState<any[]>([]);
@@ -61,10 +63,10 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
   // Fetch BOM for this model when opened
   useEffect(() => {
     if (isOpen && model?.id) {
-      setBomName(`شجرة مكونات ${model.name}`);
+      setBomName(isAr ? `شجرة مكونات ${model.name}` : `BOM for ${model.name}`);
       fetchBoms();
     }
-  }, [isOpen, model]);
+  }, [isOpen, model, isAr]);
 
   const fetchBoms = async () => {
     if (!model?.id) return;
@@ -87,11 +89,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
   const handleApproveBom = async (bomId: string) => {
     try {
       await api.production.approveBom(bomId);
-      setSuccessMsg('تم اعتماد شجرة المكونات والـ BOM رسميًا للإنتاج!');
+      setSuccessMsg(isAr ? 'تم اعتماد شجرة المكونات والـ BOM رسميًا للإنتاج!' : 'BOM officially approved for production!');
       setTimeout(() => setSuccessMsg(''), 4000);
       fetchBoms();
     } catch (err: any) {
-      setErrorMsg(err.message || 'فشل اعتماد شجرة المكونات');
+      setErrorMsg(err.message || (isAr ? 'فشل اعتماد شجرة المكونات' : 'Failed to approve BOM'));
     }
   };
 
@@ -115,7 +117,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
     const validItems = bomItems.filter((i) => i.consumption_per_unit > 0);
     if (validItems.length === 0) {
-      setErrorMsg('يجب إضافة مكون واحد على الأقل باستهلاك سليم.');
+      setErrorMsg(isAr ? 'يجب إضافة مكون واحد على الأقل باستهلاك سليم.' : 'At least one component with valid consumption is required.');
       return;
     }
 
@@ -133,12 +135,12 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
         })),
       });
 
-      setSuccessMsg('تم حفظ شجرة المكونات بنجاح!');
+      setSuccessMsg(isAr ? 'تم حفظ شجرة المكونات بنجاح!' : 'BOM created successfully!');
       setIsAddingBom(false);
       setTimeout(() => setSuccessMsg(''), 4000);
       fetchBoms();
     } catch (err: any) {
-      setErrorMsg(err.message || 'فشل حفظ شجرة المكونات');
+      setErrorMsg(err.message || (isAr ? 'فشل حفظ شجرة المكونات' : 'Failed to save BOM'));
     } finally {
       setIsSubmittingBom(false);
     }
@@ -147,14 +149,14 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
   // Mocked variants calculation if model has variants_count
   const generatedVariants = Array.from({ length: Math.max(1, model.variants_count || 4) }).map((_, idx) => {
     const sizes = ['2Y', '4Y', '6Y', '8Y', '10Y'];
-    const colors = ['كحلي', 'أحمر', 'أبيض', 'رمادي'];
+    const colors = isAr ? ['كحلي', 'أحمر', 'أبيض', 'رمادي'] : ['Navy', 'Red', 'White', 'Grey'];
     const size = sizes[idx % sizes.length];
     const color = colors[idx % colors.length];
     return {
       id: `var-${model.id}-${idx + 1}`,
       size,
       color,
-      sku: `${model.code}-${color === 'كحلي' ? 'NVY' : color === 'أحمر' ? 'RED' : 'WHT'}-${size}`,
+      sku: `${model.code}-${color === 'كحلي' || color === 'Navy' ? 'NVY' : color === 'أحمر' || color === 'Red' ? 'RED' : 'WHT'}-${size}`,
       barcode: `6221${Math.floor(100000 + idx * 1111)}`,
       wholesale_price: model.wholesale_price,
       retail_price: model.retail_price,
@@ -165,14 +167,14 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`بطاقة المواصفات الفنية وشجرة المكونات (BOM) — ${model.name}`}
+      title={isAr ? `بطاقة المواصفات الفنية وشجرة المكونات (BOM) — ${model.name}` : `Technical Specs & Bill of Materials (BOM) — ${model.name}`}
       maxWidth="xl"
     >
       <div className="space-y-5">
         {/* Model Snapshot Card */}
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-[#7F1625]/10 text-[#7F1625] border border-[#7F1625]/20 flex items-center justify-center font-bold text-lg font-mono">
+            <div className="w-12 h-12 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] border border-[var(--brand-border)] flex items-center justify-center font-bold text-lg font-mono">
               {model.code.substring(0, 3)}
             </div>
             <div>
@@ -180,7 +182,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                 <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100">
                   {model.code}
                 </span>
-                <Badge variant="success">نشط بالكتالوج</Badge>
+                <Badge variant="success">{isAr ? 'نشط بالكتالوج' : 'Catalog Active'}</Badge>
               </div>
               <h4 className="text-base font-bold text-slate-950 dark:text-slate-50 mt-1">{model.name}</h4>
               <p className="text-xs text-slate-500">
@@ -191,16 +193,16 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
           <div className="flex items-center gap-6 text-xs font-mono">
             <div>
-              <span className="text-[10px] text-slate-500 block">التكلفة المعيارية</span>
-              <strong className="text-slate-950 dark:text-slate-100 text-sm">{model.target_cost} ج.م</strong>
+              <span className="text-[10px] text-slate-500 block">{isAr ? 'التكلفة المعيارية' : 'Standard Cost'}</span>
+              <strong className="text-slate-950 dark:text-slate-100 text-sm">{model.target_cost} {isAr ? 'ج.م' : 'EGP'}</strong>
             </div>
             <div>
-              <span className="text-[10px] text-slate-500 block">سعر الجملة</span>
-              <strong className="text-slate-950 dark:text-slate-100 text-sm">{model.wholesale_price} ج.م</strong>
+              <span className="text-[10px] text-slate-500 block">{isAr ? 'سعر الجملة' : 'Wholesale Price'}</span>
+              <strong className="text-slate-950 dark:text-slate-100 text-sm">{model.wholesale_price} {isAr ? 'ج.م' : 'EGP'}</strong>
             </div>
             <div>
-              <span className="text-[10px] text-slate-500 block">سعر التجزئة</span>
-              <strong className="text-emerald-600 dark:text-emerald-400 text-sm">{model.retail_price} ج.م</strong>
+              <span className="text-[10px] text-slate-500 block">{isAr ? 'سعر التجزئة' : 'Retail Price'}</span>
+              <strong className="text-emerald-600 dark:text-emerald-400 text-sm">{model.retail_price} {isAr ? 'ج.م' : 'EGP'}</strong>
             </div>
           </div>
         </div>
@@ -211,23 +213,23 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             onClick={() => setActiveTab('bom')}
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === 'bom'
-                ? 'bg-[#7F1625] text-white shadow-sm'
+                ? 'bg-[var(--brand-primary)] text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>شجرة المكونات واستهلاك الخامات (BOM)</span>
+            <span>{isAr ? 'شجرة المكونات واستهلاك الخامات (BOM)' : 'Bill of Materials (BOM)'}</span>
           </button>
           <button
             onClick={() => setActiveTab('matrix')}
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === 'matrix'
-                ? 'bg-[#7F1625] text-white shadow-sm'
+                ? 'bg-[var(--brand-primary)] text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Barcode className="w-3.5 h-3.5" />
-            <span>مصفوفة المقاسات والألوان والباركود الدولي</span>
+            <span>{isAr ? 'مصفوفة المقاسات والألوان والباركود الدولي' : 'Variant Matrix & Barcodes'}</span>
           </button>
         </div>
 
@@ -252,10 +254,12 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h5 className="text-sm font-bold text-zinc-950 dark:text-zinc-100">
-                  شجرة المواد المعتمدة لكل قطعة (Bill of Materials)
+                  {isAr ? 'شجرة المواد المعتمدة لكل قطعة (Bill of Materials)' : 'Approved Bill of Materials (BOM) per Piece'}
                 </h5>
                 <p className="text-xs text-zinc-500">
-                  تحدد كمية الأقمشة، الخيوط، السوست، والأزرار اللازمة لإنتاج القطعة الواحدة مع نسبة الهالك
+                  {isAr
+                    ? 'تحدد كمية الأقمشة، الخيوط، السوست، والأزرار اللازمة لإنتاج القطعة الواحدة مع نسبة الهالك'
+                    : 'Defines fabrics, threads, zippers, and trims consumption per garment unit including scrap tolerance'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -265,11 +269,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                   onClick={fetchBoms}
                   icon={<RefreshCw className={`w-3.5 h-3.5 ${isLoadingBom ? 'animate-spin' : ''}`} />}
                 >
-                  تحديث
+                  {isAr ? 'تحديث' : 'Refresh'}
                 </Button>
                 {!isAddingBom && (
                   <Button size="sm" onClick={() => setIsAddingBom(true)} icon={<Plus className="w-3.5 h-3.5" />}>
-                    إضافة إصدار BOM جديد
+                    {isAr ? 'إضافة إصدار BOM جديد' : 'New BOM Version'}
                   </Button>
                 )}
               </div>
@@ -279,33 +283,35 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             {isAddingBom && (
               <form onSubmit={handleSaveBom} className="p-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <h6 className="text-xs font-bold text-slate-950 dark:text-slate-100">تعريف إصدار شجرة مواد جديد</h6>
+                  <h6 className="text-xs font-bold text-slate-950 dark:text-slate-100">
+                    {isAr ? 'تعريف إصدار شجرة مواد جديد' : 'Define New BOM Version'}
+                  </h6>
                   <button
                     type="button"
                     onClick={() => setIsAddingBom(false)}
                     className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-300"
                   >
-                    إلغاء
+                    {isAr ? 'إلغاء' : 'Cancel'}
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      اسم الإصدار / الوصف
+                      {isAr ? 'اسم الإصدار / الوصف' : 'Version Name / Description'}
                     </label>
                     <input
                       type="text"
                       required
                       value={bomName}
                       onChange={(e) => setBomName(e.target.value)}
-                      placeholder="مثال: شجرة خامات صيف 2026 - إنتاج أساسي"
-                      className="w-full text-xs p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700"
+                      placeholder={isAr ? 'مثال: شجرة خامات صيف 2026 - إنتاج أساسي' : 'e.g. Summer 2026 Main BOM'}
+                      className="w-full text-xs p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                      رقم الإصدار (Version)
+                      {isAr ? 'رقم الإصدار (Version)' : 'Version Number'}
                     </label>
                     <input
                       type="text"
@@ -313,21 +319,23 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                       value={bomVersion}
                       onChange={(e) => setBomVersion(e.target.value)}
                       placeholder="v1.0"
-                      className="w-full text-xs p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
+                      className="w-full text-xs p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">بنود ومكونات القطعة:</span>
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      {isAr ? 'بنود ومكونات القطعة:' : 'Components & Consumption:'}
+                    </span>
                     <button
                       type="button"
                       onClick={handleAddBomItemRow}
-                      className="text-xs text-[#7F1625] font-bold hover:underline flex items-center gap-1"
+                      className="text-xs text-[var(--brand-primary)] font-bold hover:underline flex items-center gap-1"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>إضافة خامة / مستلزم</span>
+                      <span>{isAr ? 'إضافة خامة / مستلزم' : 'Add Component'}</span>
                     </button>
                   </div>
 
@@ -335,7 +343,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                     {bomItems.map((item, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60 text-xs items-center">
                         <div className="col-span-4">
-                          <label className="text-[10px] text-zinc-500 block">نوع المكون / الخامة</label>
+                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'نوع المكون / الخامة' : 'Component Type / Item'}</label>
                           <input
                             type="text"
                             value={item.component_type}
@@ -343,13 +351,13 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                               const val = e.target.value;
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, component_type: val } : it)));
                             }}
-                            placeholder="قماش أساسي / أزرار / تكت"
-                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700"
+                            placeholder={isAr ? 'قماش أساسي / أزرار / تكت' : 'Main fabric / Buttons / Label'}
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
                           />
                         </div>
 
                         <div className="col-span-3">
-                          <label className="text-[10px] text-zinc-500 block">الاستهلاك لكل قطعة</label>
+                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'الاستهلاك لكل قطعة' : 'Unit Consumption'}</label>
                           <input
                             type="number"
                             step="0.001"
@@ -359,29 +367,29 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                               const val = parseFloat(e.target.value) || 0;
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, consumption_per_unit: val } : it)));
                             }}
-                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-slate-900 dark:text-slate-100"
                           />
                         </div>
 
                         <div className="col-span-2">
-                          <label className="text-[10px] text-zinc-500 block">الوحدة</label>
+                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'الوحدة' : 'Unit'}</label>
                           <select
                             value={item.unit_of_measure}
                             onChange={(e) => {
                               const val = e.target.value;
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unit_of_measure: val } : it)));
                             }}
-                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700"
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
                           >
-                            <option value="meter">متر (m)</option>
-                            <option value="kg">كيلوجرام (kg)</option>
-                            <option value="piece">قطعة (pcs)</option>
-                            <option value="yard">ياردة (yd)</option>
+                            <option value="meter">{isAr ? 'متر (m)' : 'meter (m)'}</option>
+                            <option value="kg">{isAr ? 'كيلوجرام (kg)' : 'kilogram (kg)'}</option>
+                            <option value="piece">{isAr ? 'قطعة (pcs)' : 'piece (pcs)'}</option>
+                            <option value="yard">{isAr ? 'ياردة (yd)' : 'yard (yd)'}</option>
                           </select>
                         </div>
 
                         <div className="col-span-3">
-                          <label className="text-[10px] text-zinc-500 block">سماحية الهالك %</label>
+                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'سماحية الهالك %' : 'Waste Tolerance %'}</label>
                           <input
                             type="number"
                             step="0.1"
@@ -391,7 +399,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                               const val = parseFloat(e.target.value) || 0;
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, waste_tolerance_percent: val } : it)));
                             }}
-                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono"
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 font-mono text-slate-900 dark:text-slate-100"
                           />
                         </div>
                       </div>
@@ -401,10 +409,10 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setIsAddingBom(false)}>
-                    إلغاء
+                    {isAr ? 'إلغاء' : 'Cancel'}
                   </Button>
                   <Button type="submit" size="sm" isLoading={isSubmittingBom}>
-                    حفظ شجرة المكونات
+                    {isAr ? 'حفظ شجرة المكونات' : 'Save BOM'}
                   </Button>
                 </div>
               </form>
@@ -414,13 +422,15 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             {boms.length === 0 ? (
               <Card className="p-8 text-center text-slate-400 border-dashed">
                 <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-xs">لا توجد شجرة مكونات مسجلة لهذا الموديل بعد.</p>
+                <p className="text-xs">{isAr ? 'لا توجد شجرة مكونات مسجلة لهذا الموديل بعد.' : 'No BOM registered for this model yet.'}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  يمكنك تعريف شجرة المكونات لربط استهلاك الأقمشة بحسابات التكلفة وأوامر التشغيل.
+                  {isAr
+                    ? 'يمكنك تعريف شجرة المكونات لربط استهلاك الأقمشة بحسابات التكلفة وأوامر التشغيل.'
+                    : 'You can define a BOM to connect fabric consumption with costing and production orders.'}
                 </p>
                 {!isAddingBom && (
                   <Button size="sm" className="mt-3" onClick={() => setIsAddingBom(true)}>
-                    تعريف BOM الآن
+                    {isAr ? 'تعريف BOM الآن' : 'Define BOM Now'}
                   </Button>
                 )}
               </Card>
@@ -432,11 +442,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                       <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
                         {bom.version || 'v1.0'}
                       </span>
-                      <h6 className="text-xs font-bold text-slate-950 dark:text-slate-100">{bom.name || 'شجرة المكونات القياسية'}</h6>
+                      <h6 className="text-xs font-bold text-slate-950 dark:text-slate-100">{bom.name || (isAr ? 'شجرة المكونات القياسية' : 'Standard BOM')}</h6>
                       {bom.is_active ? (
-                        <Badge variant="success">معتمد للإنتاج</Badge>
+                        <Badge variant="success">{isAr ? 'معتمد للإنتاج' : 'Production Approved'}</Badge>
                       ) : (
-                        <Badge variant="warning">مسودة قيد المراجعة</Badge>
+                        <Badge variant="warning">{isAr ? 'مسودة قيد المراجعة' : 'Draft Under Review'}</Badge>
                       )}
                     </div>
 
@@ -447,39 +457,39 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                         onClick={() => handleApproveBom(bom.id)}
                         icon={<ShieldCheck className="w-3.5 h-3.5" />}
                       >
-                        اعتماد الـ BOM للإنتاج
+                        {isAr ? 'اعتماد الـ BOM للإنتاج' : 'Approve BOM'}
                       </Button>
                     )}
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-right">
+                    <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
                       <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-700">
                         <tr>
-                          <th className="py-2 px-3">المكون والخامة</th>
-                          <th className="py-2 px-3">نوع المكون</th>
-                          <th className="py-2 px-3">الاستهلاك لكل قطعة</th>
-                          <th className="py-2 px-3">الوحدة</th>
-                          <th className="py-2 px-3">سماحية الهالك</th>
-                          <th className="py-2 px-3">تكلفة الوحدة</th>
+                          <th className="py-2 px-3">{isAr ? 'المكون والخامة' : 'Component / Item'}</th>
+                          <th className="py-2 px-3">{isAr ? 'نوع المكون' : 'Type'}</th>
+                          <th className="py-2 px-3">{isAr ? 'الاستهلاك لكل قطعة' : 'Unit Consumption'}</th>
+                          <th className="py-2 px-3">{isAr ? 'الوحدة' : 'Unit'}</th>
+                          <th className="py-2 px-3">{isAr ? 'سماحية الهالك' : 'Waste Tolerance'}</th>
+                          <th className="py-2 px-3">{isAr ? 'تكلفة الوحدة' : 'Unit Cost'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
                         {(bom.items || []).map((it: any) => (
                           <tr key={it.id}>
                             <td className="py-2 px-3 font-sans font-medium text-slate-900 dark:text-slate-100">
-                              {it.inventory_item?.name || it.component_type || 'خامة أساسية'}
+                              {it.inventory_item?.name || it.component_type || (isAr ? 'خامة أساسية' : 'Main Material')}
                             </td>
                             <td className="py-2 px-3 font-sans text-slate-500">{it.component_type}</td>
                             <td className="py-2 px-3 font-bold text-slate-950 dark:text-slate-50">
                               {Number(it.consumption_per_unit)}
                             </td>
-                            <td className="py-2 px-3 font-sans text-slate-500">{it.unit_of_measure || 'متر'}</td>
+                            <td className="py-2 px-3 font-sans text-slate-500">{it.unit_of_measure || (isAr ? 'متر' : 'm')}</td>
                             <td className="py-2 px-3 text-amber-600 font-semibold">
                               {Number(it.waste_tolerance_percent || 0)}%
                             </td>
                             <td className="py-2 px-3 text-slate-600 dark:text-slate-400">
-                              {Number(it.unit_cost || 0) > 0 ? `${Number(it.unit_cost).toFixed(2)} ج.م` : '—'}
+                              {Number(it.unit_cost || 0) > 0 ? `${Number(it.unit_cost).toFixed(2)} ${isAr ? 'ج.م' : 'EGP'}` : '—'}
                             </td>
                           </tr>
                         ))}
@@ -498,10 +508,12 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h5 className="text-sm font-bold text-slate-950 dark:text-slate-100">
-                  مصفوفة المقاسات والألوان وتوليد الباركود الدولي
+                  {isAr ? 'مصفوفة المقاسات والألوان وتوليد الباركود الدولي' : 'Variant Matrix & International Barcodes'}
                 </h5>
                 <p className="text-xs text-slate-500">
-                  توليد تلقائي للأكواد المعيارية SKU والباركود العالمي EAN-13 لكل متغير للطباعة على تيكيت الملابس
+                  {isAr
+                    ? 'توليد تلقائي للأكواد المعيارية SKU والباركود العالمي EAN-13 لكل متغير للطباعة على تيكيت الملابس'
+                    : 'Automatic generation of SKU standard codes and international EAN-13 barcodes for garment hangtags'}
                 </p>
               </div>
               <Button
@@ -510,20 +522,20 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                 onClick={() => window.print()}
                 icon={<Printer className="w-3.5 h-3.5" />}
               >
-                طباعة بطاقات الباركود
+                {isAr ? 'طباعة بطاقات الباركود' : 'Print Barcode Labels'}
               </Button>
             </div>
 
             <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-              <table className="w-full text-xs text-right">
+              <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
                 <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    <th className="py-3 px-4">المقاس</th>
-                    <th className="py-3 px-4">اللون</th>
-                    <th className="py-3 px-4">كود التخزين (SKU)</th>
-                    <th className="py-3 px-4">الباركود الدولي (EAN-13)</th>
-                    <th className="py-3 px-4">سعر الجملة</th>
-                    <th className="py-3 px-4">سعر التجزئة</th>
+                    <th className="py-3 px-4">{isAr ? 'المقاس' : 'Size'}</th>
+                    <th className="py-3 px-4">{isAr ? 'اللون' : 'Color'}</th>
+                    <th className="py-3 px-4">{isAr ? 'كود التخزين (SKU)' : 'SKU'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الباركود الدولي (EAN-13)' : 'Barcode (EAN-13)'}</th>
+                    <th className="py-3 px-4">{isAr ? 'سعر الجملة' : 'Wholesale Price'}</th>
+                    <th className="py-3 px-4">{isAr ? 'سعر التجزئة' : 'Retail Price'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-medium">
@@ -531,16 +543,16 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                     <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="py-3 px-4 font-mono font-bold text-slate-950 dark:text-slate-100">{v.size}</td>
                       <td className="py-3 px-4">{v.color}</td>
-                      <td className="py-3 px-4 font-mono text-[#7F1625] dark:text-rose-400 font-bold">{v.sku}</td>
+                      <td className="py-3 px-4 font-mono text-[var(--brand-primary)] dark:text-rose-400 font-bold">{v.sku}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2 font-mono font-bold text-slate-900 dark:text-slate-100">
                           <Barcode className="w-4 h-4 text-slate-400" />
                           <span>{v.barcode}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{v.wholesale_price} ج.م</td>
+                      <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{v.wholesale_price} {isAr ? 'ج.م' : 'EGP'}</td>
                       <td className="py-3 px-4 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                        {v.retail_price} ج.م
+                        {v.retail_price} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                     </tr>
                   ))}
@@ -552,7 +564,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
 
         <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
           <Button variant="ghost" onClick={onClose}>
-            إغلاق
+            {isAr ? 'إغلاق' : 'Close'}
           </Button>
         </div>
       </div>

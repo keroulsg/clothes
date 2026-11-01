@@ -7,6 +7,8 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  lang?: 'ar' | 'en';
+  isAr?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,6 +17,8 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   maxWidth = 'md',
+  lang = 'ar',
+  isAr = lang === 'ar',
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -42,16 +46,20 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
       <div
-        className={`w-full ${maxWidthClasses[maxWidth]} bg-white dark:bg-[#1e293b] border border-slate-300 dark:border-slate-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-slate-900 dark:text-white transition-colors`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-dialog-title"
+        className={`w-full ${maxWidthClasses[maxWidth]} bg-white dark:bg-[var(--bg-card)] border border-slate-200 dark:border-[var(--border-strong)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-slate-900 dark:text-[var(--text-primary)] transition-colors`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#182234]">
-          <h3 className="text-base font-extrabold text-slate-900 dark:text-white">{title}</h3>
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-[var(--border-subtle)] bg-slate-50 dark:bg-[var(--bg-elevated)]">
+          <h3 id="modal-dialog-title" className="text-base font-extrabold text-slate-900 dark:text-[var(--text-primary)]">{title}</h3>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+            aria-label={isAr ? 'إغلاق النافذة' : 'Close modal'}
+            className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
         <div className="p-4 sm:p-6 overflow-y-auto">{children}</div>

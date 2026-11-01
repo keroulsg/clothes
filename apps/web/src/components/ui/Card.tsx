@@ -21,7 +21,7 @@ export const Card: React.FC<CardProps> = ({
     glass:
       'bg-[var(--bg-surface)]/90 backdrop-blur-md border border-[var(--border-subtle)] text-[var(--text-primary)] shadow-xs',
     burgundy:
-      'bg-gradient-to-br from-[#7F1625] via-[#500c17] to-[#120306] text-white border border-white/15 shadow-lg shadow-[#7F1625]/20',
+      'bg-gradient-to-br from-[var(--brand-primary)] via-[#500c17] to-[#120306] text-white border border-white/15 shadow-lg shadow-[var(--brand-primary)]/20',
     outline:
       'bg-transparent border border-[var(--border-strong)] text-[var(--text-primary)]',
   };
@@ -31,7 +31,7 @@ export const Card: React.FC<CardProps> = ({
       className={clsx(
         'rounded-2xl transition-all duration-200 min-w-0 max-w-full',
         variantStyles[variant],
-        hover && 'hover:border-[#7F1625]/40 dark:hover:border-[#9E2A3B]/50 hover:shadow-md hover:-translate-y-0.5',
+        hover && 'hover:border-[var(--brand-border)] hover:shadow-md hover:-translate-y-0.5',
         className
       )}
       {...props}

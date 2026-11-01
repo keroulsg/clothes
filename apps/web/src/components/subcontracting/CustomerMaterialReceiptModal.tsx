@@ -12,6 +12,7 @@ interface CustomerMaterialReceiptModalProps {
   customers: Customer[];
   jobOrders: JobOrder[];
   onSuccess: (newReceipt: CustomerMaterialReceipt) => void;
+  isAr?: boolean;
 }
 
 export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModalProps> = ({
@@ -21,12 +22,13 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
   customers,
   jobOrders,
   onSuccess,
+  isAr = true,
 }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [jobOrderId, setJobOrderId] = useState('');
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || '');
-  const [fabricName, setFabricName] = useState('قماش سنغل ليكرا قطن أسود');
+  const [fabricName, setFabricName] = useState(isAr ? 'قماش سنغل ليكرا قطن أسود' : 'Cotton Single Lycra Black');
   const [fabricCode, setFabricCode] = useState('');
   const [receivedMeters, setReceivedMeters] = useState<number>(150);
   const [receivedWeightKg, setReceivedWeightKg] = useState<number>(45);
@@ -34,7 +36,7 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
   const [gsm, setGsm] = useState<number>(185);
   const [rollsCount, setRollsCount] = useState<number>(4);
   const [conditionStatus, setConditionStatus] = useState<'accepted' | 'damaged_rolls' | 'conditional_pass'>('accepted');
-  const [inspectorName, setInspectorName] = useState('م. حسام - فحص الأقمشة');
+  const [inspectorName, setInspectorName] = useState(isAr ? 'م. حسام - فحص الأقمشة' : 'QC Inspector');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -51,11 +53,11 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!warehouseId) {
-      setApiError('يرجى اختيار المستودع لاستلام خامات العميل');
+      setApiError(isAr ? 'يرجى اختيار المستودع لاستلام خامات العميل' : 'Please select a warehouse for customer custody intake');
       return;
     }
     if (!customerName.trim()) {
-      setApiError('يرجى تحديد اسم العميل المودع');
+      setApiError(isAr ? 'يرجى تحديد اسم العميل المودع' : 'Please select or enter the depositing customer');
       return;
     }
 
@@ -106,7 +108,7 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
       onSuccess(formattedReceipt);
       onClose();
     } catch (err: any) {
-      setApiError(err.message || 'حدث خطأ أثناء تسجيل استلام خامات العميل');
+      setApiError(err.message || (isAr ? 'حدث خطأ أثناء تسجيل استلام خامات العميل' : 'An error occurred while recording customer material receipt'));
     } finally {
       setIsSubmitting(false);
     }
@@ -116,7 +118,7 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="محضر استلام أمانات خامات العميل (Customer Material Intake)"
+      title={isAr ? 'محضر استلام أمانات خامات العميل (Customer Material Intake)' : 'Customer Material Custody Intake'}
     >
       {apiError && (
         <div className="mb-4 p-3 bg-red-950/60 border border-red-700/60 text-red-300 rounded-lg text-sm flex items-center gap-2">
@@ -126,28 +128,37 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
       )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-slate-800 dark:text-slate-200 text-xs leading-relaxed">
-          <strong className="text-primary dark:text-[#fca5a5]">قاعدة الأمانات:</strong> خامات العميل المستلمة تُسجل كالتزام أمانة (Custody Liability) ولا تضاف كأصل مخزني مقوم مالياً للشركة، وتفصل عن تقييم المخزون المملوك.
+          <strong className="text-primary dark:text-[#fca5a5]">
+            {isAr ? 'قاعدة الأمانات:' : 'Custody Rule:'}
+          </strong>{' '}
+          {isAr
+            ? 'خامات العميل المستلمة تُسجل كالتزام أمانة (Custody Liability) ولا تضاف كأصل مخزني مقوم مالياً للشركة، وتفصل عن تقييم المخزون المملوك.'
+            : 'Customer fabrics received are recorded as a custody liability and excluded from factory asset valuation.'}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ربط بأمر تشغيل قائم (اختياري)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'ربط بأمر تشغيل قائم (اختياري)' : 'Link to Existing Job Order (Optional)'}
+            </label>
             <select
               value={jobOrderId}
               onChange={(e) => handleJobSelect(e.target.value)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary"
             >
-              <option value="">-- اختياري: اختر أمر التشغيل --</option>
+              <option value="">{isAr ? '-- اختياري: اختر أمر التشغيل --' : '-- Optional: Select Job Order --'}</option>
               {jobOrders.map((j) => (
                 <option key={j.id} value={j.id}>
-                  {j.order_number} ({j.customer_name}) - {j.total_target_quantity} قطعة
+                  {j.order_number} ({j.customer_name}) - {j.total_target_quantity} {isAr ? 'قطعة' : 'pcs'}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">العميل المودع</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'العميل المودع' : 'Depositing Client'}
+            </label>
             {customers && customers.length > 0 ? (
               <select
                 value={customerId}
@@ -159,7 +170,7 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
                 }}
                 className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               >
-                <option value="">-- اختر من العملاء أو أدخل الاسم --</option>
+                <option value="">{isAr ? '-- اختر من العملاء أو أدخل الاسم --' : '-- Select customer or type below --'}</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
                 ))}
@@ -170,7 +181,7 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
                 required
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="مثال: شركة النصر للملابس"
+                placeholder={isAr ? 'مثال: شركة النصر للملابس' : 'e.g. Al-Nasr Apparel'}
                 className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
             )}
@@ -178,19 +189,23 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">كود صنف القماش (اختياري)</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'كود صنف القماش (اختياري)' : 'Fabric Item Code (Optional)'}
+          </label>
           <input
             type="text"
             value={fabricCode}
             onChange={(e) => setFabricCode(e.target.value)}
-            placeholder="مثال: FAB-CUST-901"
+            placeholder="FAB-CUST-901"
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">مخزن استلام الأمانة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'مخزن استلام الأمانة' : 'Custody Warehouse'}
+            </label>
             <select
               value={warehouseId}
               onChange={(e) => setWarehouseId(e.target.value)}
@@ -205,13 +220,15 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">اسم ونوع القماش</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم ونوع القماش' : 'Fabric Name & Type'}
+            </label>
             <input
               type="text"
               required
               value={fabricName}
               onChange={(e) => setFabricName(e.target.value)}
-              placeholder="مثال: ميلتون مبطن، سنغل، بوبلين..."
+              placeholder={isAr ? 'مثال: ميلتون مبطن، سنغل، بوبلين...' : 'e.g. Brushed fleece, single jersey, poplin...'}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -219,7 +236,9 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الأمتار المستلمة (متر)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الأمتار المستلمة (متر)' : 'Received Meters (m)'}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -231,7 +250,9 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الوزن المستلم (كجم)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الوزن المستلم (كجم)' : 'Received Weight (kg)'}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -242,7 +263,9 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">عرض القماش الصالح (متر)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'عرض القماش الصالح (متر)' : 'Usable Width (m)'}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -253,7 +276,9 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">كثافة النسيج (GSM)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'كثافة النسيج (GSM)' : 'Fabric Weight (GSM)'}
+            </label>
             <input
               type="number"
               value={gsm}
@@ -265,7 +290,9 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">عدد الأثواب / الرولات</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'عدد الأثواب / الرولات' : 'Rolls Count'}
+            </label>
             <input
               type="number"
               value={rollsCount}
@@ -275,20 +302,24 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">حالة الفحص الظاهري</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'حالة الفحص الظاهري' : 'Visual QC Condition'}
+            </label>
             <select
               value={conditionStatus}
               onChange={(e) => setConditionStatus(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="accepted">سليم ومقبول بالكامل</option>
-              <option value="damaged_rolls">يوجد أثواب معيبة / بقع</option>
-              <option value="conditional_pass">قبول مشروط بعد أخذ عينة</option>
+              <option value="accepted">{isAr ? 'سليم ومقبول بالكامل' : 'Accepted & Flawless'}</option>
+              <option value="damaged_rolls">{isAr ? 'يوجد أثواب معيبة / بقع' : 'Damaged / Stained Rolls'}</option>
+              <option value="conditional_pass">{isAr ? 'قبول مشروط بعد أخذ عينة' : 'Conditional Pass After Sampling'}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">مسؤول الاستلام والفحص</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'مسؤول الاستلام والفحص' : 'Inspector / QC'}
+            </label>
             <input
               type="text"
               value={inspectorName}
@@ -299,22 +330,24 @@ export const CustomerMaterialReceiptModal: React.FC<CustomerMaterialReceiptModal
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات محضر الاستلام</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'ملاحظات محضر الاستلام' : 'Intake Notes'}
+          </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="ملاحظات أرقام الشحنة، البوالص، أو أرقام اللوت..."
+            placeholder={isAr ? 'ملاحظات أرقام الشحنة، البوالص، أو أرقام اللوت...' : 'Waybill number, batch details, or lot notes...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            تأكيد تسجيل إذن الاستلام
+            {isAr ? 'تأكيد تسجيل إذن الاستلام' : 'Confirm & Record Intake'}
           </Button>
         </div>
       </form>

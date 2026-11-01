@@ -87,18 +87,31 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
   const [confirmedOrder, setConfirmedOrder] = useState<any | null>(null);
 
   const fetchStoreData = async () => {
+    if (!tenantIdentifier) {
+      setIsLoading(false);
+      setErrorMsg(
+        isAr
+          ? 'يرجى تحديد اسم أو كود متجر المصنع في الرابط (مثال: #/store/alnoor أو #/store/delta). كل مصنع مشترك في GarmentOS يمتلك متجره المستقل والمخصص لعلامته ومنتجاته.'
+          : 'Please specify the factory store identifier in the URL (e.g. #/store/alnoor or #/store/delta). Each factory on GarmentOS has its own independent online store.'
+      );
+      return;
+    }
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const activeTenant = tenantIdentifier || 'msnaa-aldlta-llmlabs-algahz-429';
-      const res = await api.storefront.getPublicStore(activeTenant);
+      const res = await api.storefront.getPublicStore(tenantIdentifier);
       if (res) {
         setStoreSettings(res.store_settings);
         setTenantInfo(res.tenant);
         setVariants(res.products || res.catalog?.variants || res.variants || []);
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'تعذر تحميل بيانات المتجر' : 'Failed to load storefront'));
+      setErrorMsg(
+        err?.message ||
+          (isAr
+            ? `تعذر العثور على متجر المصنع المطلوب (${tenantIdentifier}) أو أن المتجر غير مفعل حالياً.`
+            : `Failed to load storefront for (${tenantIdentifier}).`)
+      );
     } finally {
       setIsLoading(false);
     }
@@ -256,9 +269,19 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
         <p className="text-sm text-slate-500 max-w-md mb-6">
           {errorMsg || (isAr ? 'المتجر الإلكتروني المطلوب غير موجود أو غير مفعل.' : 'Store not found.')}
         </p>
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          {isAr ? 'إعادة المحاولة' : 'Try Again'}
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button
+            variant="primary"
+            onClick={() => {
+              window.location.hash = '#/';
+            }}
+          >
+            {isAr ? 'العودة لموقع GarmentOS الرئيسي' : 'Go to GarmentOS Official Home'}
+          </Button>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            {isAr ? 'إعادة المحاولة' : 'Try Again'}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -546,7 +569,7 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
                     <div>
                       <span className="text-[10px] text-slate-400 block">{isAr ? 'السعر' : 'Price'}</span>
                       <span className="font-black text-base text-primary">
-                        {price.toLocaleString()} {tenantInfo?.currency || 'ج.م'}
+                        {price.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
                       </span>
                     </div>
 
@@ -586,7 +609,7 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
                   <div>
                     <h4 className="font-bold text-slate-900 dark:text-white">{item.product_name}</h4>
                     <p className="text-slate-400 mt-0.5">
-                      {item.size} • {item.color} • {item.unit_price.toLocaleString()} {tenantInfo?.currency || 'ج.م'}
+                      {item.size} • {item.color} • {item.unit_price.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
                     </p>
                   </div>
 
@@ -608,7 +631,7 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
                     </div>
 
                     <span className="font-bold text-primary w-20 text-end">
-                      {(item.quantity * item.unit_price).toLocaleString()} {tenantInfo?.currency || 'ج.م'}
+                      {(item.quantity * item.unit_price).toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
                     </span>
 
                     <button
@@ -627,18 +650,18 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
               <div className="flex justify-between text-xs text-slate-500">
                 <span>{isAr ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
-                <span className="font-bold">{cartSubtotal.toLocaleString()} {tenantInfo?.currency || 'ج.م'}</span>
+                <span className="font-bold">{cartSubtotal.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
               </div>
 
               <div className="flex justify-between text-xs text-slate-500">
                 <span>{isAr ? 'الشحن التقديري:' : 'Estimated Shipping:'}</span>
-                <span>{shippingFee === 0 ? (isAr ? 'شحن مجاني' : 'Free') : `${shippingFee} ${tenantInfo?.currency || 'ج.م'}`}</span>
+                <span>{shippingFee === 0 ? (isAr ? 'شحن مجاني' : 'Free') : `${shippingFee} ${tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}`}</span>
               </div>
 
               <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white pt-2 border-t border-slate-100 dark:border-slate-800">
                 <span>{isAr ? 'الإجمالي الكلي:' : 'Total:'}</span>
                 <span className="text-primary font-black">
-                  {cartTotal.toLocaleString()} {tenantInfo?.currency || 'ج.م'}
+                  {cartTotal.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
                 </span>
               </div>
 
@@ -802,15 +825,15 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
           <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-1">
             <div className="flex justify-between text-slate-500">
               <span>{isAr ? 'قيمة المنتجات:' : 'Subtotal:'}</span>
-              <span>{cartSubtotal.toLocaleString()} {tenantInfo?.currency || 'ج.م'}</span>
+              <span>{cartSubtotal.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
             </div>
             <div className="flex justify-between text-slate-500">
               <span>{isAr ? 'تكلفة الشحن والتوصيل:' : 'Shipping:'}</span>
-              <span>{shippingFee === 0 ? (isAr ? 'مجاني' : 'Free') : `${shippingFee} ${tenantInfo?.currency || 'ج.م'}`}</span>
+              <span>{shippingFee === 0 ? (isAr ? 'مجاني' : 'Free') : `${shippingFee} ${tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}`}</span>
             </div>
             <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white pt-1 border-t border-slate-200 dark:border-slate-800">
               <span>{isAr ? 'المبلغ الإجمالي المستحق:' : 'Total Payable:'}</span>
-              <span className="text-primary font-black">{cartTotal.toLocaleString()} {tenantInfo?.currency || 'ج.م'}</span>
+              <span className="text-primary font-black">{cartTotal.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
             </div>
           </div>
 
@@ -850,7 +873,7 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">{isAr ? 'الإجمالي الكلي:' : 'Total Amount:'}</span>
-                <span className="font-bold">{Number(confirmedOrder.total_amount).toLocaleString()} {tenantInfo?.currency || 'ج.م'}</span>
+                <span className="font-bold">{Number(confirmedOrder.total_amount).toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">{isAr ? 'طريقة السداد:' : 'Payment:'}</span>

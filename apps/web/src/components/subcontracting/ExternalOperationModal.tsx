@@ -11,6 +11,7 @@ interface ExternalOperationModalProps {
   jobOrders: JobOrder[];
   existingOperation?: ExternalOperation | null;
   onSuccess: (op: ExternalOperation) => void;
+  isAr?: boolean;
 }
 
 export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
@@ -19,11 +20,14 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
   jobOrders,
   existingOperation,
   onSuccess,
+  isAr = true,
 }) => {
   const isReceiving = !!existingOperation;
 
   const [jobOrderId, setJobOrderId] = useState(existingOperation?.job_order_id || jobOrders[0]?.id || '');
-  const [subcontractorName, setSubcontractorName] = useState(existingOperation?.subcontractor_name || 'مطبعة الأهرام الحديثة');
+  const [subcontractorName, setSubcontractorName] = useState(
+    existingOperation?.subcontractor_name || (isAr ? 'مطبعة الأهرام الحديثة' : 'Al-Ahram Modern Printing')
+  );
   const [operationType, setOperationType] = useState<ExternalOperation['operation_type']>(existingOperation?.operation_type || 'embroidery');
   const [sentQuantity, setSentQuantity] = useState<number>(existingOperation?.sent_quantity || 100);
   const [unitRate, setUnitRate] = useState<number>(existingOperation?.unit_rate || 3.5);
@@ -43,7 +47,11 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
     if (isReceiving) {
       const sum = Number(acceptedQty) + Number(rejectedQty) + Number(scrapQty);
       if (sum > (existingOperation?.sent_quantity || 0)) {
-        setError(`مجموع الكميات المستلمة (${sum}) لا يمكن أن يتجاوز الكمية المرسلة أصلاً (${existingOperation?.sent_quantity})`);
+        setError(
+          isAr
+            ? `مجموع الكميات المستلمة (${sum}) لا يمكن أن يتجاوز الكمية المرسلة أصلاً (${existingOperation?.sent_quantity})`
+            : `Total received quantities (${sum}) cannot exceed sent quantity (${existingOperation?.sent_quantity})`
+        );
         return;
       }
     }
@@ -100,7 +108,7 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
         onClose();
       }
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ أثناء معالجة عملية التشغيل الخارجي');
+      setError(err.message || (isAr ? 'حدث خطأ أثناء معالجة عملية التشغيل الخارجي' : 'An error occurred while processing the external operation'));
     } finally {
       setIsSubmitting(false);
     }
@@ -110,7 +118,11 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isReceiving ? 'استلام وفحص مخرجات التشغيل الخارجي' : 'إرسال تشغيل خارجي لمقاول باطن (Outsourced Operation)'}
+      title={
+        isReceiving
+          ? (isAr ? 'استلام وفحص مخرجات التشغيل الخارجي' : 'Receive & Inspect Outsourced Operation')
+          : (isAr ? 'إرسال تشغيل خارجي لمقاول باطن (Outsourced Operation)' : 'Dispatch Outsourced Operation')
+      }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
@@ -124,7 +136,9 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">أمر التشغيل المرتبط</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'أمر التشغيل المرتبط' : 'Associated Job Order'}
+                </label>
                 <select
                   value={jobOrderId}
                   onChange={(e) => setJobOrderId(e.target.value)}
@@ -139,13 +153,15 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">اسم المقاول / الورشة الخارجية</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'اسم المقاول / الورشة الخارجية' : 'Subcontractor / Workshop Name'}
+                </label>
                 <input
                   type="text"
                   required
                   value={subcontractorName}
                   onChange={(e) => setSubcontractorName(e.target.value)}
-                  placeholder="مثال: ورشة الفيروز للتطريز والطباعة"
+                  placeholder={isAr ? 'مثال: ورشة الفيروز للتطريز والطباعة' : 'e.g. Al-Fayrouz Embroidery'}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -153,23 +169,27 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">نوع العملية</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'نوع العملية' : 'Operation Type'}
+                </label>
                 <select
                   value={operationType}
                   onChange={(e) => setOperationType(e.target.value as any)}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="embroidery">تطريز آلي (Embroidery)</option>
-                  <option value="printing">طباعة سلك سكرين / ترانسفير (Printing)</option>
-                  <option value="washing">غسيل ومعالجة أنزيمات (Washing)</option>
-                  <option value="finishing">تشطيب وتغليف خارجي (Finishing)</option>
-                  <option value="overlocking">أوفر وتثبيت أكمام (Overlocking)</option>
-                  <option value="other">عملية مخصصة أخرى</option>
+                  <option value="embroidery">{isAr ? 'تطريز آلي (Embroidery)' : 'Machine Embroidery'}</option>
+                  <option value="printing">{isAr ? 'طباعة سلك سكرين / ترانسفير (Printing)' : 'Screen / Transfer Printing'}</option>
+                  <option value="washing">{isAr ? 'غسيل ومعالجة أنزيمات (Washing)' : 'Washing & Enzyme Treatment'}</option>
+                  <option value="finishing">{isAr ? 'تشطيب وتغليف خارجي (Finishing)' : 'External Finishing & Packaging'}</option>
+                  <option value="overlocking">{isAr ? 'أوفر وتثبيت أكمام (Overlocking)' : 'Overlocking / Assembly'}</option>
+                  <option value="other">{isAr ? 'عملية مخصصة أخرى' : 'Other Custom Operation'}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الكمية المرسلة (قطعة)</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'الكمية المرسلة (قطعة)' : 'Sent Quantity (pcs)'}
+                </label>
                 <input
                   type="number"
                   required
@@ -180,7 +200,9 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">سعر القطعة للمقاول (ج.م)</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'سعر القطعة للمقاول (ج.م)' : 'Vendor Rate / Piece (EGP)'}
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -196,20 +218,22 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
           <div className="space-y-3">
             <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
               <div>
-                <span className="text-slate-600 dark:text-slate-400">العملية: </span>
+                <span className="text-slate-600 dark:text-slate-400">{isAr ? 'العملية: ' : 'Operation: '}</span>
                 <strong className="text-slate-900 dark:text-slate-100">{existingOperation?.operation_type}</strong>
-                <span className="text-slate-600 dark:text-slate-400 mx-2">• المقاول: </span>
+                <span className="text-slate-600 dark:text-slate-400 mx-2">{isAr ? '• المقاول: ' : '• Vendor: '}</span>
                 <strong className="text-slate-900 dark:text-slate-100">{existingOperation?.subcontractor_name}</strong>
               </div>
               <div>
-                <span className="text-slate-600 dark:text-slate-400">الكمية المرسلة: </span>
+                <span className="text-slate-600 dark:text-slate-400">{isAr ? 'الكمية المرسلة: ' : 'Sent Qty: '}</span>
                 <strong className="text-primary dark:text-[#fca5a5] font-mono text-sm">{existingOperation?.sent_quantity}</strong>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الكمية المقبولة (السليمة)</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'الكمية المقبولة (السليمة)' : 'Accepted Quantity'}
+                </label>
                 <input
                   type="number"
                   required
@@ -220,7 +244,9 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الكمية المرفوضة (Rework)</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'الكمية المرفوضة (Rework)' : 'Rejected (Rework)'}
+                </label>
                 <input
                   type="number"
                   value={rejectedQty}
@@ -230,7 +256,9 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">كمية التالف / الهالك النهائي</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'كمية التالف / الهالك النهائي' : 'Scrap / Waste'}
+                </label>
                 <input
                   type="number"
                   value={scrapQty}
@@ -243,22 +271,26 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات التشغيل الخارجي</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'ملاحظات التشغيل الخارجي' : 'External Operation Notes'}
+          </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="تعليمات أو أسباب العيوب إن وجدت..."
+            placeholder={isAr ? 'تعليمات أو أسباب العيوب إن وجدت...' : 'Instructions or defect causes if any...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            {isReceiving ? 'تأكيد استلام وفحص المخرجات' : 'تأكيد إرسال التشغيل الخارجي'}
+            {isReceiving
+              ? (isAr ? 'تأكيد استلام وفحص المخرجات' : 'Confirm Receipt & Inspection')
+              : (isAr ? 'تأكيد إرسال التشغيل الخارجي' : 'Confirm Dispatch')}
           </Button>
         </div>
       </form>

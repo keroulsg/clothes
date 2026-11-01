@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Scissors,
   Layers,
@@ -34,13 +34,11 @@ import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { Pagination } from './components/ui/Pagination';
 import { FabricCalculatorModal } from './components/inventory/FabricCalculatorModal';
 import { StockTransactionModal } from './components/inventory/StockTransactionModal';
-import { WarehouseManagerTab } from './components/inventory/WarehouseManagerTab';
 import { CreateInventoryItemModal } from './components/inventory/CreateInventoryItemModal';
 import { ItemBarcodeLabelModal } from './components/inventory/ItemBarcodeLabelModal';
 import { LoginModal } from './components/auth/LoginModal';
 import { RegisterModal } from './components/auth/RegisterModal';
 import { PublicWebsite } from './components/public/PublicWebsite';
-import { PlatformAdminDashboard } from './components/admin/PlatformAdminDashboard';
 import { api, type ApiUser, type ApiTenant } from './api/client';
 import { CreateModelModal } from './components/catalog/CreateModelModal';
 import { ModelDetailsBomModal } from './components/catalog/ModelDetailsBomModal';
@@ -48,6 +46,7 @@ import { CreatePurchaseOrderModal } from './components/procurement/CreatePurchas
 import { ReceiveGoodsModal } from './components/procurement/ReceiveGoodsModal';
 import { SupplierInvoiceModal } from './components/procurement/SupplierInvoiceModal';
 import { CreateSupplierModal } from './components/procurement/CreateSupplierModal';
+import { SupplierStatementModal } from './components/procurement/SupplierStatementModal';
 import { CreateProductionOrderModal } from './components/production/CreateProductionOrderModal';
 import { CuttingOrderModal } from './components/production/CuttingOrderModal';
 import { BundleTrackerModal } from './components/production/BundleTrackerModal';
@@ -58,14 +57,34 @@ import { ExternalOperationModal } from './components/subcontracting/ExternalOper
 import { JobDeliveryModal } from './components/subcontracting/JobDeliveryModal';
 import { JobInvoiceModal } from './components/subcontracting/JobInvoiceModal';
 import { JobDetailsModal } from './components/subcontracting/JobDetailsModal';
-import { SubcontractingTab } from './components/subcontracting/SubcontractingTab';
-import { SalesTab } from './components/sales/SalesTab';
-import { AccountingTab } from './components/accounting/AccountingTab';
-import { HrTab } from './components/hr/HrTab';
-import { StorefrontTab } from './components/storefront/StorefrontTab';
-import { PublicStorefrontView } from './components/storefront/PublicStorefrontView';
-import { PublicOrderTracker } from './components/storefront/PublicOrderTracker';
-import { MaintenanceTab } from './components/maintenance/MaintenanceTab';
+
+// Lazy Loaded Business Modules (Phase 2 Performance Code-Splitting)
+const PlatformAdminDashboard = lazy(() => import('./components/admin/PlatformAdminDashboard').then(m => ({ default: m.PlatformAdminDashboard })));
+const WarehouseManagerTab = lazy(() => import('./components/inventory/WarehouseManagerTab').then(m => ({ default: m.WarehouseManagerTab })));
+const SubcontractingTab = lazy(() => import('./components/subcontracting/SubcontractingTab').then(m => ({ default: m.SubcontractingTab })));
+const SalesTab = lazy(() => import('./components/sales/SalesTab').then(m => ({ default: m.SalesTab })));
+const AccountingTab = lazy(() => import('./components/accounting/AccountingTab').then(m => ({ default: m.AccountingTab })));
+const HrTab = lazy(() => import('./components/hr/HrTab').then(m => ({ default: m.HrTab })));
+const StorefrontTab = lazy(() => import('./components/storefront/StorefrontTab').then(m => ({ default: m.StorefrontTab })));
+const PublicStorefrontView = lazy(() => import('./components/storefront/PublicStorefrontView').then(m => ({ default: m.PublicStorefrontView })));
+const PublicOrderTracker = lazy(() => import('./components/storefront/PublicOrderTracker').then(m => ({ default: m.PublicOrderTracker })));
+const MaintenanceTab = lazy(() => import('./components/maintenance/MaintenanceTab').then(m => ({ default: m.MaintenanceTab })));
+const TenantSubscriptionView = lazy(() => import('./components/subscription/TenantSubscriptionView').then(m => ({ default: m.TenantSubscriptionView })));
+const WaslatWorshTab = lazy(() => import('./components/marketplace/WaslatWorshTab').then(m => ({ default: m.WaslatWorshTab })));
+
+const TabLoadingFallback = ({ isAr }: { isAr: boolean }) => (
+  <div className="flex flex-col items-center justify-center p-16 space-y-4 min-h-[360px] bg-white/60 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 backdrop-blur-sm">
+    <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    <div className="text-center space-y-1">
+      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+        {isAr ? 'جاري تحميل وحدة النظام...' : 'Loading system module...'}
+      </p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        {isAr ? 'يتم جلب الواجهات والبيانات السحابية بأمان' : 'Securely fetching cloud interfaces & data'}
+      </p>
+    </div>
+  </div>
+);
 import type {
   Language,
   ProductVariant,
@@ -161,9 +180,11 @@ export function App() {
     if (isDark) {
       document.documentElement.classList.add('dark');
       document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.setAttribute('data-coreui-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.removeAttribute('data-theme');
+      document.documentElement.setAttribute('data-coreui-theme', 'light');
     }
   }, [isDark]);
 
@@ -177,14 +198,9 @@ export function App() {
   const parseCurrentRoute = () => {
     const hashClean = window.location.hash.split('?')[0];
     const raw = hashClean.replace(/^#\/?/, '').toLowerCase().trim();
+    const hostname = window.location.hostname.toLowerCase();
 
-    // 1. Platform Admin Routes
-    if (raw === 'admin' || raw.startsWith('admin/')) {
-      const parts = raw.split('/');
-      return { mode: 'admin' as const, tab: parts[1] || 'overview' };
-    }
-
-    // 2. ERP Routes (prefixed with erp/)
+    // ERP valid tabs definition
     const erpTabs = [
       'dashboard',
       'models',
@@ -200,47 +216,88 @@ export function App() {
       'settings',
     ];
 
-    if (raw.startsWith('erp/')) {
-      const tab = raw.replace('erp/', '');
-      return { mode: 'erp' as const, tab: erpTabs.includes(tab) ? tab : 'dashboard' };
+    const erpAliases: Record<string, string> = {
+      sales: 'sales',
+      pos: 'sales',
+      accounting: 'costing',
+      costing: 'costing',
+      hr: 'piece_rate',
+      piece_rate: 'piece_rate',
+      payroll: 'piece_rate',
+      storefront: 'storefront',
+      boms: 'models',
+      bom: 'models',
+      machines: 'maintenance',
+      assets: 'maintenance',
+      cmt: 'subcontracting',
+      fabric: 'inventory',
+      warehouse: 'inventory',
+      po: 'purchasing',
+      procurement: 'purchasing',
+    };
+
+    // 1. Tenant Subdomain Detection (e.g., alnoorkids.garmentos.local or tenant.localhost)
+    const isSubdomain =
+      hostname.split('.').length > 2 || (hostname.endsWith('.localhost') && hostname !== 'localhost');
+    const isReserved = ['admin', 'api', 'www', 'app'].some((s) => hostname.startsWith(`${s}.`));
+
+    if (isSubdomain && !isReserved) {
+      const tenantSlug = hostname.split('.')[0];
+      if (raw === 'track' || raw.startsWith('track') || raw === 'store/track') {
+        return { mode: 'store_track' as const, tenantSlug };
+      }
+      return { mode: 'store' as const, tenantSlug };
     }
-    if (raw === 'erp') {
+
+    // 2. Dedicated App Subdomain (e.g. app.garmentos.local or app.localhost)
+    const isAppHost = hostname.startsWith('app.') || hostname === 'app.localhost';
+    if (isAppHost) {
+      if (!api.isAuthenticated()) {
+        return { mode: 'public' as const, publicPage: 'home', openLogin: true };
+      }
+      const storedRole = api.auth.getStoredUser()?.role;
+      if (storedRole === 'platform_admin') {
+        return { mode: 'admin' as const, tab: 'overview' };
+      }
+      if (raw.startsWith('erp/')) {
+        const tab = raw.replace('erp/', '');
+        return { mode: 'erp' as const, tab: erpTabs.includes(tab) ? tab : 'dashboard' };
+      }
+      if (erpTabs.includes(raw)) {
+        return { mode: 'erp' as const, tab: raw };
+      }
       return { mode: 'erp' as const, tab: 'dashboard' };
     }
 
-    // 3. Direct ERP Tab Shortcuts (e.g., #models, #cutting, #inventory)
-    if (erpTabs.includes(raw)) {
-      return { mode: 'erp' as const, tab: raw };
+    // 3. Dedicated Admin Subdomain (e.g. admin.garmentos.local or admin.localhost)
+    const isAdminHost = hostname.startsWith('admin.') || hostname === 'admin.localhost';
+    if (isAdminHost) {
+      if (!api.isAuthenticated()) {
+        return { mode: 'public' as const, publicPage: 'home', openLogin: true };
+      }
+      const storedRole = api.auth.getStoredUser()?.role;
+      if (storedRole !== 'platform_admin') {
+        return { mode: 'erp' as const, tab: 'dashboard' };
+      }
+      const parts = raw.split('/');
+      return { mode: 'admin' as const, tab: parts[1] || 'overview' };
     }
 
     // 4. Standalone Public Storefront & Customer Order Tracking Routes
     if (raw === 'store/track' || raw.startsWith('store/track') || raw === 'track' || raw.startsWith('track/')) {
-      return { mode: 'store_track' as const };
+      const parts = raw.split('/');
+      const slug = parts[1] && parts[1] !== 'track' ? parts[1] : undefined;
+      return { mode: 'store_track' as const, tenantSlug: slug };
     }
     if (raw.startsWith('store/') || raw.startsWith('shop/')) {
       const slug = raw.replace(/^(store|shop)\//, '').trim();
       return { mode: 'store' as const, tenantSlug: slug };
     }
     if (raw === 'store' || raw === 'shop') {
-      return { mode: 'store' as const };
+      return { mode: 'store' as const, tenantSlug: undefined };
     }
 
-    // 5. ERP Aliases
-    if (raw === 'sales' || raw === 'pos') return { mode: 'erp' as const, tab: 'sales' };
-    if (raw === 'accounting' || raw === 'costing') return { mode: 'erp' as const, tab: 'costing' };
-    if (raw === 'hr' || raw === 'piece_rate' || raw === 'payroll') return { mode: 'erp' as const, tab: 'piece_rate' };
-    if (raw === 'storefront') return { mode: 'erp' as const, tab: 'storefront' };
-    if (raw === 'boms' || raw === 'bom') return { mode: 'erp' as const, tab: 'models' };
-    if (raw === 'machines' || raw === 'assets') return { mode: 'erp' as const, tab: 'maintenance' };
-    if (raw === 'cmt') return { mode: 'erp' as const, tab: 'subcontracting' };
-    if (raw === 'fabric' || raw === 'warehouse') return { mode: 'erp' as const, tab: 'inventory' };
-    if (raw === 'po' || raw === 'procurement') return { mode: 'erp' as const, tab: 'purchasing' };
-
-    // 6. Auth Action Shortcuts
-    if (raw === 'login') return { mode: 'public' as const, publicPage: 'home', openLogin: true };
-    if (raw === 'register') return { mode: 'public' as const, publicPage: 'home', openRegister: true };
-
-    // 7. Public Independent Pages & Legal Policies
+    // 5. Public Independent Marketing & Solutions Pages (Evaluated BEFORE ERP to prevent false dashboard redirects)
     const publicPages = [
       'features',
       'manufacturing',
@@ -252,6 +309,8 @@ export function App() {
       'pricing',
       'about',
       'contact',
+      'demo',
+      'request-demo',
       'faq',
       'privacy',
       'terms',
@@ -260,12 +319,17 @@ export function App() {
       'ip',
     ];
 
+    if (raw === 'request-demo' || raw === 'demo') {
+      return { mode: 'public' as const, publicPage: 'contact' };
+    }
+
     if (raw.startsWith('features/')) {
       const sub = raw.replace('features/', '');
       if (sub === 'cutting') return { mode: 'public' as const, publicPage: 'manufacturing' };
       if (publicPages.includes(sub)) {
         return { mode: 'public' as const, publicPage: sub };
       }
+      return { mode: 'public' as const, publicPage: 'features' };
     }
 
     if (raw === 'features/cutting' || raw === 'cutting-features') {
@@ -276,14 +340,21 @@ export function App() {
       return { mode: 'public' as const, publicPage: raw };
     }
 
-    // 8. Empty hash / Root path recovery (checks for tenant subdomains)
-    if (raw === '' || raw === '/') {
-      const hostname = window.location.hostname.toLowerCase();
-      const isSubdomain = hostname.split('.').length > 2 || (hostname.endsWith('.localhost') && hostname !== 'localhost');
-      if (isSubdomain && !['admin', 'api', 'www', 'app'].some((s) => hostname.startsWith(`${s}.`))) {
-        return { mode: 'store' as const };
+    // 6. Dedicated Application / Login Entry Hash (#/app, #/app/login, #/login)
+    if (raw === 'app' || raw.startsWith('app/')) {
+      if (!api.isAuthenticated()) {
+        try { sessionStorage.setItem('intended_destination', window.location.hash || '#/erp/dashboard'); } catch {}
+        return { mode: 'public' as const, publicPage: 'home', openLogin: true };
       }
+      const storedRole = api.auth.getStoredUser()?.role;
+      if (storedRole === 'platform_admin') {
+        return { mode: 'admin' as const, tab: 'overview' };
+      }
+      const sub = raw.replace(/^app\/?/, '');
+      return { mode: 'erp' as const, tab: erpTabs.includes(sub) ? sub : 'dashboard' };
+    }
 
+    if (raw === 'login') {
       if (api.isAuthenticated()) {
         const storedRole = api.auth.getStoredUser()?.role;
         if (storedRole === 'platform_admin') {
@@ -291,10 +362,51 @@ export function App() {
         }
         return { mode: 'erp' as const, tab: 'dashboard' };
       }
-      return { mode: 'public' as const, publicPage: 'home' };
+      return { mode: 'public' as const, publicPage: 'home', openLogin: true };
     }
 
-    // 9. Fallback
+    // 7. Platform Admin Routes
+    if (raw === 'admin' || raw.startsWith('admin/')) {
+      if (!api.isAuthenticated()) {
+        try { sessionStorage.setItem('intended_destination', window.location.hash || '#/admin'); } catch {}
+        return { mode: 'public' as const, publicPage: 'home', openLogin: true };
+      }
+      const storedRole = api.auth.getStoredUser()?.role;
+      if (storedRole === 'platform_admin') {
+        const parts = raw.split('/');
+        return { mode: 'admin' as const, tab: parts[1] || 'overview' };
+      }
+      return { mode: 'erp' as const, tab: 'dashboard' };
+    }
+
+    // 8. Protected Factory ERP Routes (Must explicitly start with erp/)
+    if (raw === 'erp' || raw.startsWith('erp/')) {
+      if (!api.isAuthenticated()) {
+        try { sessionStorage.setItem('intended_destination', window.location.hash || '#/erp/dashboard'); } catch {}
+        return { mode: 'public' as const, publicPage: 'home', openLogin: true };
+      }
+      const storedRole = api.auth.getStoredUser()?.role;
+      if (storedRole === 'platform_admin') {
+        return { mode: 'admin' as const, tab: 'overview' };
+      }
+      let tab = raw.replace(/^erp\/?/, '').trim();
+      if (!tab) tab = 'dashboard';
+      if (erpAliases[tab]) tab = erpAliases[tab];
+      return { mode: 'erp' as const, tab: erpTabs.includes(tab) ? tab : 'dashboard' };
+    }
+
+    // 9. Auth Action Shortcuts
+    if (raw === 'register') return { mode: 'public' as const, publicPage: 'home', openRegister: true };
+
+    // 10. Root Path (http://localhost:5173/ or http://garmentos.local:5173/ or #/)
+    // ALWAYS renders the official GarmentOS corporate/marketing public website first!
+    return { mode: 'public' as const, publicPage: 'home' };
+
+    // 9. Auth Action Shortcuts
+    if (raw === 'register') return { mode: 'public' as const, publicPage: 'home', openRegister: true };
+
+    // 10. Root Path (http://localhost:5173/ or http://garmentos.local:5173/ or #/)
+    // ALWAYS renders the official GarmentOS public website first!
     return { mode: 'public' as const, publicPage: 'home' };
   };
 
@@ -370,12 +482,14 @@ export function App() {
 
   // Multi-Tenancy Current State
   const [tenantName, setTenantName] = useState<string>(
-    api.auth.getStoredTenant()?.name || 'مصنع النيل لملابس الأطفال'
+    api.auth.getStoredTenant()?.name || (isAr ? 'مصنع النيل لملابس الأطفال' : 'Nile Garment Factory')
   );
   const [tenantCode, setTenantCode] = useState<string>(
     api.auth.getStoredTenant()?.code || 'MFG-EG901'
   );
-  const [branchName, setBranchName] = useState<string>('المصنع وصالة القص الرئيسية');
+  const [branchName, setBranchName] = useState<string>(
+    isAr ? 'المصنع وصالة القص الرئيسية' : 'Main Factory & Cutting Floor'
+  );
 
   // Modals state
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
@@ -390,6 +504,8 @@ export function App() {
   // Procurement States
   const [isCreatePoModalOpen, setIsCreatePoModalOpen] = useState(false);
   const [isCreateSupplierModalOpen, setIsCreateSupplierModalOpen] = useState(false);
+  const [selectedSupplierForStatement, setSelectedSupplierForStatement] = useState<Supplier | null>(null);
+  const [isSupplierStatementOpen, setIsSupplierStatementOpen] = useState(false);
   const [selectedPoForReceipt, setSelectedPoForReceipt] = useState<PurchaseOrder | null>(null);
   const [selectedPoForInvoice, setSelectedPoForInvoice] = useState<PurchaseOrder | null>(null);
 
@@ -398,6 +514,7 @@ export function App() {
   const [selectedProdOrderForCut, setSelectedProdOrderForCut] = useState<ProductionOrder | null>(null);
   const [selectedBundleForTracker, setSelectedBundleForTracker] = useState<CuttingBundle | null>(null);
   const [selectedProdOrderForQc, setSelectedProdOrderForQc] = useState<ProductionOrder | null>(null);
+  const [selectedBundleForQc, setSelectedBundleForQc] = useState<CuttingBundle | null>(null);
 
   // Subcontracting & CMT States (Phase 6)
   const [isCreateJobModalOpen, setIsCreateJobModalOpen] = useState(false);
@@ -1008,14 +1125,14 @@ export function App() {
       });
       setTenantName(res.tenant.name);
       setTenantCode(res.tenant.code);
-      setCompanySuccessMsg('تم تسجيل الشركة بنجاح وعزل قاعدة بياناتها وسياقها!');
+      setCompanySuccessMsg(isAr ? 'تم تسجيل الشركة بنجاح وعزل قاعدة بياناتها وسياقها!' : 'Company successfully registered with isolated tenant database and scope!');
       setTimeout(() => {
         setIsCompanyModalOpen(false);
         setCompanySuccessMsg('');
         loadBackendData();
       }, 1200);
     } catch (err: any) {
-      alert(err.message || 'فشل تسجيل الشركة الجديدة');
+      alert(err.message || (isAr ? 'فشل تسجيل الشركة الجديدة' : 'Failed to register new company'));
     } finally {
       setIsSubmittingCompany(false);
     }
@@ -1049,7 +1166,7 @@ export function App() {
       setNewBranchName('');
       setNewBranchCode('');
     } catch (err: any) {
-      alert(err.message || 'فشل إضافة الفرع');
+      alert(err.message || (isAr ? 'فشل إضافة الفرع' : 'Failed to add branch'));
     }
   };
 
@@ -1441,7 +1558,7 @@ export function App() {
       }
     } catch (err: any) {
       console.error('Failed to sync backend data:', err);
-      setSyncError(err.message || 'تعذر مزامنة بعض البيانات مع الخادم.');
+      setSyncError(err.message || (isAr ? 'تعذر مزامنة بعض البيانات مع الخادم.' : 'Unable to synchronize some data with the server.'));
     } finally {
       setIsDataLoading(false);
     }
@@ -1475,6 +1592,19 @@ export function App() {
     }
     setIsLoginModalOpen(false);
 
+    // Restore intended destination if the user was intercepted on a protected route
+    try {
+      const intended = sessionStorage.getItem('intended_destination');
+      if (intended) {
+        sessionStorage.removeItem('intended_destination');
+        window.location.hash = intended;
+        if (user.role !== 'platform_admin') {
+          await loadBackendData();
+        }
+        return;
+      }
+    } catch {}
+
     if (user.role === 'platform_admin') {
       navigateToRoute('admin');
     } else {
@@ -1501,7 +1631,18 @@ export function App() {
     } finally {
       setIsAuthenticated(false);
       setCurrentUser(null);
-      navigateToRoute('public');
+      setIsLoginModalOpen(false);
+      setIsRegisterModalOpen(false);
+      setModels([]);
+      setCuttingOrders([]);
+      setInventoryItems([]);
+      setStockLedger([]);
+      setProductionOrders([]);
+      setPurchaseOrders([]);
+      setCuttingBundles([]);
+      setSuppliers([]);
+      setCustomers([]);
+      navigateToRoute('public', undefined, 'home');
     }
   };
 
@@ -1598,11 +1739,30 @@ export function App() {
             setRegisterPlanTier((plan as any) || 'professional');
             setIsRegisterModalOpen(true);
           }}
+          isAuthenticated={isAuthenticated}
+          onGoToDashboard={() => {
+            const role = currentUser?.role || api.auth.getStoredUser()?.role;
+            if (role === 'platform_admin') {
+              navigateToRoute('admin');
+            } else {
+              navigateToRoute('erp', 'dashboard');
+            }
+          }}
         />
         <LoginModal
           isOpen={isLoginModalOpen}
           isClosable={true}
-          onClose={() => setIsLoginModalOpen(false)}
+          onClose={() => {
+            setIsLoginModalOpen(false);
+            if (
+              window.location.hash.startsWith('#/login') ||
+              window.location.hash.startsWith('#login') ||
+              window.location.hash.startsWith('#/app') ||
+              window.location.hash.startsWith('#app')
+            ) {
+              window.location.hash = '#/';
+            }
+          }}
           onSuccess={handleLoginSuccess}
           onSwitchToRegister={() => {
             setIsLoginModalOpen(false);
@@ -1624,38 +1784,42 @@ export function App() {
   }
 
   if (viewMode === 'store') {
-    const activeTenantSlug = storeTenantSlug || (currentUser as any)?.tenant?.subdomain || currentUser?.tenant_id || 'msnaa-aldlta-llmlabs-algahz-429';
+    const activeTenantSlug = storeTenantSlug || (currentUser as any)?.tenant?.subdomain || (currentUser as any)?.tenant?.code;
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <PublicStorefrontView
-          lang={lang}
-          onToggleLang={toggleLang}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
-          tenantIdentifier={activeTenantSlug}
-          onNavigateToTracking={(orderNumber, phone) => {
-            setTrackOrderInitial({ orderNumber, phone });
-            window.location.hash = '#/store/track';
-          }}
-          onNavigateToErp={() => navigateToRoute('erp', 'dashboard')}
-        />
+        <Suspense fallback={<TabLoadingFallback isAr={lang === 'ar'} />}>
+          <PublicStorefrontView
+            lang={lang}
+            onToggleLang={toggleLang}
+            isDark={isDark}
+            onToggleTheme={toggleTheme}
+            tenantIdentifier={activeTenantSlug}
+            onNavigateToTracking={(orderNumber, phone) => {
+              setTrackOrderInitial({ orderNumber, phone });
+              window.location.hash = activeTenantSlug ? `#/store/${activeTenantSlug}/track` : '#/store/track';
+            }}
+            onNavigateToErp={() => navigateToRoute('erp', 'dashboard')}
+          />
+        </Suspense>
       </div>
     );
   }
 
   if (viewMode === 'store_track') {
-    const activeTenantSlug = storeTenantSlug || (currentUser as any)?.tenant?.subdomain || currentUser?.tenant_id || 'msnaa-aldlta-llmlabs-algahz-429';
+    const activeTenantSlug = storeTenantSlug || (currentUser as any)?.tenant?.subdomain || (currentUser as any)?.tenant?.code;
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <PublicOrderTracker
-          lang={lang}
-          tenantIdentifier={activeTenantSlug}
-          initialOrderNumber={trackOrderInitial.orderNumber}
-          initialPhone={trackOrderInitial.phone}
-          onNavigateHome={() => {
-            window.location.hash = storeTenantSlug ? `#/store/${storeTenantSlug}` : '#/store';
-          }}
-        />
+        <Suspense fallback={<TabLoadingFallback isAr={lang === 'ar'} />}>
+          <PublicOrderTracker
+            lang={lang}
+            tenantIdentifier={activeTenantSlug}
+            initialOrderNumber={trackOrderInitial.orderNumber}
+            initialPhone={trackOrderInitial.phone}
+            onNavigateHome={() => {
+              window.location.hash = activeTenantSlug ? `#/store/${activeTenantSlug}` : '#/';
+            }}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -1671,15 +1835,17 @@ export function App() {
 
     return (
       <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <PlatformAdminDashboard
-          currentUser={adminUser}
-          onLogout={handleLogout}
-          lang={lang}
-          onToggleLang={toggleLang}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
-          onSwitchToTenantApp={() => navigateToRoute('erp', 'dashboard')}
-        />
+        <Suspense fallback={<TabLoadingFallback isAr={lang === 'ar'} />}>
+          <PlatformAdminDashboard
+            currentUser={adminUser}
+            onLogout={handleLogout}
+            lang={lang}
+            onToggleLang={toggleLang}
+            isDark={isDark}
+            onToggleTheme={toggleTheme}
+            onSwitchToTenantApp={() => navigateToRoute('erp', 'dashboard')}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -1713,7 +1879,7 @@ export function App() {
             <span>{syncError}</span>
           </div>
           <Button size="sm" variant="ghost" onClick={loadBackendData} icon={<RefreshCw className="w-3.5 h-3.5" />}>
-            إعادة المحاولة
+            {isAr ? 'إعادة المحاولة' : 'Retry'}
           </Button>
         </div>
       )}
@@ -1723,7 +1889,7 @@ export function App() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-semibold">
               <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>جارِ مزامنة بيانات المصنع والمخازن مع الخادم...</span>
+              <span>{isAr ? 'جارِ مزامنة بيانات المصنع والمخازن مع الخادم...' : 'Syncing factory & inventory data with server...'}</span>
             </div>
             <LoadingSkeleton count={4} />
           </div>
@@ -1807,12 +1973,12 @@ export function App() {
               {/* Real Traceable KPI Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Metric 1: Production Orders */}
-                <Card hover className="p-4.5 border-t-[3px] border-t-[#7F1625] dark:border-t-[#9E2A3B]">
+                <Card hover className="p-4.5 border-t-[3px] border-t-[var(--brand-primary)]">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
                       {isAr ? 'أوامر التشغيل الجارية' : 'Active Production Runs'}
                     </span>
-                    <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] flex items-center justify-center border border-[#7F1625]/20">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] flex items-center justify-center border border-[var(--brand-border)]">
                       <Scissors className="w-4 h-4" />
                     </div>
                   </div>
@@ -1899,7 +2065,7 @@ export function App() {
                   <Card className="p-0 overflow-hidden max-w-full">
                     <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-muted)]/60">
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] flex items-center justify-center shrink-0">
                           <Scissors className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
@@ -1915,7 +2081,7 @@ export function App() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleTabChange('cutting')}
-                        className="text-xs font-bold text-[#7F1625] dark:text-[#F87171]"
+                        className="text-xs font-bold text-[var(--brand-primary)] dark:text-[#F87171]"
                       >
                         {isAr ? 'عرض صالة القص كاملة ←' : 'Full Floor View →'}
                       </Button>
@@ -1981,7 +2147,7 @@ export function App() {
                                       </div>
                                       <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                                         <div
-                                          className="h-full bg-gradient-to-r from-[#7F1625] to-[#941b2d] rounded-full"
+                                          className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-primary-light)] rounded-full"
                                           style={{ width: `${sewPercent}%` }}
                                         />
                                       </div>
@@ -2004,7 +2170,7 @@ export function App() {
                                         {
                                           id: 'track-bundle',
                                           label: isAr ? 'الانتقال لصالة القص والفرش' : 'Go to Cutting Floor',
-                                          icon: <Scissors className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                          icon: <Scissors className="w-3.5 h-3.5 text-[var(--brand-primary)]" />,
                                           onClick: () => handleTabChange('cutting'),
                                         },
                                         {
@@ -2045,7 +2211,7 @@ export function App() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleTabChange('inventory')}
-                        className="text-xs font-bold text-[#7F1625] dark:text-[#F87171]"
+                        className="text-xs font-bold text-[var(--brand-primary)] dark:text-[#F87171]"
                       >
                         {isAr ? 'عرض المخزن كامل ←' : 'Full Inventory →'}
                       </Button>
@@ -2102,7 +2268,7 @@ export function App() {
                                     {
                                       id: 'issue-cutting',
                                       label: isAr ? 'تسجيل صرف لصالة القص' : 'Issue to Cutting Lay',
-                                      icon: <ArrowRightLeft className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                      icon: <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--brand-primary)]" />,
                                       onClick: () => setSelectedStockItem(item),
                                     },
                                     {
@@ -2137,7 +2303,7 @@ export function App() {
                         <h4 className="text-xs font-bold uppercase text-slate-900 dark:text-white font-sans">
                           {isAr ? 'سجل أحداث المصنع اللحظي' : 'Live Floor Event Feed'}
                         </h4>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Real-time floor scans</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{isAr ? 'مسح وتحديثات صالة الإنتاج اللحظية' : 'Real-time floor scans'}</span>
                       </div>
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
                     </div>
@@ -2277,7 +2443,7 @@ export function App() {
 
                 <Card hover>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متغيرات المقاسات والألوان (SKUs)' : 'Size-Color SKUs'}</div>
-                  <div className="text-xl font-bold font-mono text-[#7F1625] dark:text-[#F87171]">
+                  <div className="text-xl font-bold font-mono text-[var(--brand-primary)] dark:text-[#F87171]">
                     {models.reduce((acc, m) => acc + (m.variants_count || 0), 0)} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'صنف SKU' : 'SKUs'}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
@@ -2323,7 +2489,7 @@ export function App() {
                     value={modelSearch}
                     onChange={(e) => setModelSearch(e.target.value)}
                     placeholder={isAr ? 'بحث باسم الموديل، الكود، أو الفئة...' : 'Search style name, code, or category...'}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#7F1625] dark:focus:border-[#9E2A3B] transition-all"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] transition-all"
                   />
                 </div>
 
@@ -2333,7 +2499,7 @@ export function App() {
                     <select
                       value={modelCategoryFilter}
                       onChange={(e) => setModelCategoryFilter(e.target.value)}
-                      className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[#7F1625] dark:focus:border-[#9E2A3B]"
+                      className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)]"
                     >
                       <option value="all">{isAr ? 'كل الفئات والتصنيفات' : 'All Categories'}</option>
                       {Array.from(new Set(models.map((m) => m.category).filter(Boolean))).map((cat) => (
@@ -2351,7 +2517,7 @@ export function App() {
                       onClick={() => setModelViewMode('table')}
                       className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
                         modelViewMode === 'table'
-                          ? 'bg-white dark:bg-slate-900 text-[#7F1625] dark:text-[#F87171] shadow-2xs'
+                          ? 'bg-white dark:bg-slate-900 text-[var(--brand-primary)] dark:text-[#F87171] shadow-2xs'
                           : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title={isAr ? 'عرض الجدول التشغيلي' : 'Table View'}
@@ -2364,7 +2530,7 @@ export function App() {
                       onClick={() => setModelViewMode('cards')}
                       className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
                         modelViewMode === 'cards'
-                          ? 'bg-white dark:bg-slate-900 text-[#7F1625] dark:text-[#F87171] shadow-2xs'
+                          ? 'bg-white dark:bg-slate-900 text-[var(--brand-primary)] dark:text-[#F87171] shadow-2xs'
                           : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title={isAr ? 'عرض البطاقات' : 'Cards View'}
@@ -2411,7 +2577,7 @@ export function App() {
                               <tr key={m.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
                                 <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                                   <div className="flex items-center gap-1.5">
-                                    <Tag className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#F87171]" />
+                                    <Tag className="w-3.5 h-3.5 text-[var(--brand-primary)] dark:text-[#F87171]" />
                                     <span>{m.code}</span>
                                   </div>
                                 </td>
@@ -2429,14 +2595,14 @@ export function App() {
                                   {m.variants_count} {isAr ? 'مقاس/لون' : 'variants'}
                                 </td>
                                 <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
-                                  {m.target_cost.toFixed(2)} ج.م
+                                  {m.target_cost.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
                                 </td>
                                 <td className="py-3 px-4 font-mono text-slate-900 dark:text-white font-semibold">
-                                  {m.wholesale_price.toFixed(2)} ج.م
+                                  {m.wholesale_price.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
                                 </td>
                                 <td className="py-3 px-4 font-mono">
                                   <div className="text-emerald-600 dark:text-emerald-400 font-bold">
-                                    {m.retail_price.toFixed(2)} ج.م
+                                    {m.retail_price.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
                                   </div>
                                   <div className="text-[10px] text-slate-400">
                                     {isAr ? `هامش: %${margin}` : `Margin: ${margin}%`}
@@ -2450,7 +2616,7 @@ export function App() {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      className="text-xs h-7 border-slate-300 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625]"
+                                      className="text-xs h-7 border-slate-300 dark:border-slate-700 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
                                       onClick={() => setSelectedModelForBom(m)}
                                     >
                                       {isAr ? 'بطاقة الـ BOM' : 'BOM & Matrix'}
@@ -2542,7 +2708,7 @@ export function App() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-xs h-7 hover:bg-[#7F1625]/10 hover:text-[#7F1625] font-semibold"
+                            className="text-xs h-7 hover:bg-[var(--brand-subtle)] hover:text-[var(--brand-primary)] font-semibold"
                             onClick={() => setSelectedModelForBom(m)}
                           >
                             {isAr ? 'بطاقة الـ BOM' : 'BOM & Matrix'}
@@ -2588,20 +2754,22 @@ export function App() {
 
           {/* TAB 3: INVENTORY & WAREHOUSE MANAGEMENT */}
           {activeTab === 'inventory' && (
-            <WarehouseManagerTab
-              inventoryItems={inventoryItems}
-              warehouses={warehouses}
-              customerMaterials={customerMaterials}
-              stockLedger={stockLedger}
-              onOpenCreateItemModal={() => setIsCreateInventoryItemModalOpen(true)}
-              onOpenStockMovementModal={(item) => setSelectedStockItem(item)}
-              onOpenFabricCalcModal={() => setIsFabricCalcOpen(true)}
-              onOpenReceiveCustomerMatModal={() => setIsReceiveCustomerMatModalOpen(true)}
-              onOpenBarcodeLabelModal={(item) => setSelectedItemForBarcode(item)}
-              onRefreshData={loadBackendData}
-              isLoading={isDataLoading}
-              isAr={isAr}
-            />
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <WarehouseManagerTab
+                inventoryItems={inventoryItems}
+                warehouses={warehouses}
+                customerMaterials={customerMaterials}
+                stockLedger={stockLedger}
+                onOpenCreateItemModal={() => setIsCreateInventoryItemModalOpen(true)}
+                onOpenStockMovementModal={(item) => setSelectedStockItem(item)}
+                onOpenFabricCalcModal={() => setIsFabricCalcOpen(true)}
+                onOpenReceiveCustomerMatModal={() => setIsReceiveCustomerMatModalOpen(true)}
+                onOpenBarcodeLabelModal={(item) => setSelectedItemForBarcode(item)}
+                onRefreshData={loadBackendData}
+                isLoading={isDataLoading}
+                isAr={isAr}
+              />
+            </Suspense>
           )}
 
           {/* TAB 4: CUTTING & PRODUCTION */}
@@ -2642,12 +2810,12 @@ export function App() {
               {/* KPI Performance Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">إجمالي أوامر الإنتاج</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'إجمالي أوامر الإنتاج' : 'Total Production Orders'}</div>
                   <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-                    {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">أوامر</span>
+                    {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'أوامر' : 'orders'}</span>
                   </div>
                   <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
-                    {productionOrders.filter(p => p.status === 'in_progress').length} قيد التشغيل في الورشة
+                    {productionOrders.filter(p => p.status === 'in_progress').length} {isAr ? 'قيد التشغيل في الورشة' : 'in progress in shopfloor'}
                   </div>
                 </Card>
 
@@ -2686,8 +2854,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر الإنتاج وتفصيل المقاسات والألوان</h4>
-                    <p className="text-xs text-slate-400">متابعة الكميات المخططة والمقصوصة والمنجزة ومواعيد التسليم</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أوامر الإنتاج وتفصيل المقاسات والألوان' : 'Production Orders & SKU Planning'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'متابعة الكميات المخططة والمقصوصة والمنجزة ومواعيد التسليم' : 'Track planned, cut, and finished quantities with delivery schedules'}</p>
                   </div>
                 </div>
 
@@ -2696,15 +2864,15 @@ export function App() {
                     <table className="w-full text-right text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
-                          <th className="py-3 px-4">رقم الأمر</th>
-                          <th className="py-3 px-4">الموديل والنوع</th>
-                          <th className="py-3 px-4">المخطط</th>
-                          <th className="py-3 px-4">المقصوص</th>
-                          <th className="py-3 px-4">المنجز التام</th>
-                          <th className="py-3 px-4">موعد التسليم</th>
-                          <th className="py-3 px-4">الأولوية</th>
-                          <th className="py-3 px-4">الحالة</th>
-                          <th className="py-3 px-4">الإجراءات والعمليات</th>
+                          <th className="py-3 px-4">{isAr ? 'رقم الأمر' : 'Order #'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الموديل والنوع' : 'Model & Type'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المخطط' : 'Planned'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المقصوص' : 'Cut'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المنجز التام' : 'Finished'}</th>
+                          <th className="py-3 px-4">{isAr ? 'موعد التسليم' : 'Delivery Date'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الأولوية' : 'Priority'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الإجراءات والعمليات' : 'Actions & Ops'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -2735,7 +2903,7 @@ export function App() {
                                     : 'neutral'
                                 }
                               >
-                                {order.priority === 'urgent' ? 'عاجل جداً' : order.priority === 'high' ? 'مرتفع' : 'عادي'}
+                                {order.priority === 'urgent' ? (isAr ? 'عاجل جداً' : 'Urgent') : order.priority === 'high' ? (isAr ? 'مرتفع' : 'High') : (isAr ? 'عادي' : 'Normal')}
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
@@ -2752,14 +2920,14 @@ export function App() {
                                 dot={order.status === 'in_progress' || order.status === 'approved'}
                               >
                                 {order.status === 'completed'
-                                  ? 'مكتمل'
+                                  ? (isAr ? 'مكتمل' : 'Completed')
                                   : order.status === 'in_progress' || order.status === 'sewing'
-                                  ? 'قيد التشغيل'
+                                  ? (isAr ? 'قيد التشغيل' : 'In Progress')
                                   : order.status === 'approved'
-                                  ? 'معتمد (جاهز للقص)'
+                                  ? (isAr ? 'معتمد (جاهز للقص)' : 'Approved (Ready to Cut)')
                                   : order.status === 'cutting'
-                                  ? 'صالة القص'
-                                  : 'مسودة'}
+                                  ? (isAr ? 'صالة القص' : 'Cutting Floor')
+                                  : (isAr ? 'مسودة' : 'Draft')}
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
@@ -2778,11 +2946,11 @@ export function App() {
                                           prev.map((o) => (o.id === order.id ? { ...o, status: 'approved' } : o))
                                         );
                                       } catch (err: any) {
-                                        alert(err.message || 'فشل اعتماد أمر الإنتاج');
+                                        alert(err.message || (isAr ? 'فشل اعتماد أمر الإنتاج' : 'Failed to approve production order'));
                                       }
                                     }}
                                   >
-                                    اعتماد الأمر
+                                    {isAr ? 'اعتماد الأمر' : 'Approve Order'}
                                   </Button>
                                 ) : (
                                   <Button
@@ -2791,7 +2959,7 @@ export function App() {
                                     onClick={() => setSelectedProdOrderForCut(order)}
                                     icon={<Scissors className="w-3 h-3" />}
                                   >
-                                    أمر قص وفرش
+                                    {isAr ? 'أمر قص وفرش' : 'Create Cut Order'}
                                   </Button>
                                 )}
 
@@ -2800,19 +2968,19 @@ export function App() {
                                   items={[
                                     {
                                       id: 'cut',
-                                      label: 'إصدار خطة قص وفرش',
+                                      label: isAr ? 'إصدار خطة قص وفرش' : 'Issue Cutting Plan',
                                       icon: <Scissors className="w-3.5 h-3.5" />,
                                       onClick: () => setSelectedProdOrderForCut(order),
                                     },
                                     {
                                       id: 'qc',
-                                      label: 'فحص الجودة والمطابقة (QC)',
+                                      label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection (QC)',
                                       icon: <ShieldCheck className="w-3.5 h-3.5" />,
                                       onClick: () => setSelectedProdOrderForQc(order),
                                     },
                                     {
                                       id: 'bundles',
-                                      label: 'تتبع بطاقات الحزم بالباركود',
+                                      label: isAr ? 'تتبع بطاقات الحزم بالباركود' : 'Track QR Bundles',
                                       icon: <QrCode className="w-3.5 h-3.5" />,
                                       onClick: () => {
                                         const b = cuttingBundles.find((cb) => cb.production_order_id === order.id) || cuttingBundles[0];
@@ -2821,14 +2989,14 @@ export function App() {
                                     },
                                     {
                                       id: 'costing',
-                                      label: 'حساب تكاليف أمر التشغيل',
+                                      label: isAr ? 'حساب تكاليف أمر التشغيل' : 'Calculate Job Costing',
                                       icon: <DollarSign className="w-3.5 h-3.5" />,
                                       divider: true,
                                       onClick: () => handleTabChange('costing'),
                                     },
                                     {
                                       id: 'print',
-                                      label: 'طباعة تذكرة أمر التشغيل',
+                                      label: isAr ? 'طباعة تذكرة أمر التشغيل' : 'Print Job Order Ticket',
                                       icon: <Printer className="w-3.5 h-3.5" />,
                                       onClick: () => window.print(),
                                     },
@@ -2860,8 +3028,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر صالة القص وخطط الفرش (Lay & Cut Orders)</h4>
-                    <p className="text-xs text-slate-400">طول الفرشة، عدد الراقات، الأمتار المصروفة من المخزن، وعوادم الأطراف</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أوامر صالة القص وخطط الفرش (Lay & Cut Orders)' : 'Cutting Room & Lay Orders'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'طول الفرشة، عدد الراقات، الأمتار المصروفة من المخزن، وعوادم الأطراف' : 'Lay length, plies count, fabric meters issued, and end scraps'}</p>
                   </div>
                 </div>
 
@@ -2870,17 +3038,17 @@ export function App() {
                     <table className="w-full text-right text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
-                          <th className="py-3 px-4">رقم إذن القص</th>
-                          <th className="py-3 px-4">أمر الإنتاج</th>
-                          <th className="py-3 px-4">الطاولة</th>
-                          <th className="py-3 px-4">الخامة المستخدمة</th>
-                          <th className="py-3 px-4">مصدر القماش</th>
-                          <th className="py-3 px-4">طول الفرشة</th>
-                          <th className="py-3 px-4">الطبقات (الراقات)</th>
-                          <th className="py-3 px-4">الأمتار المصروفة</th>
-                          <th className="py-3 px-4">القطع الناتجة</th>
-                          <th className="py-3 px-4">الحالة</th>
-                          <th className="py-3 px-4 text-center">الإجراءات</th>
+                          <th className="py-3 px-4">{isAr ? 'رقم إذن القص' : 'Cut Order #'}</th>
+                          <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'Production Order'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الطاولة' : 'Table #'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الخامة المستخدمة' : 'Fabric Item'}</th>
+                          <th className="py-3 px-4">{isAr ? 'مصدر القماش' : 'Fabric Source'}</th>
+                          <th className="py-3 px-4">{isAr ? 'طول الفرشة' : 'Lay Length'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الطبقات (الراقات)' : 'Plies (Layers)'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الأمتار المصروفة' : 'Meters Used'}</th>
+                          <th className="py-3 px-4">{isAr ? 'القطع الناتجة' : 'Yield (Pcs)'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
+                          <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
@@ -2892,15 +3060,15 @@ export function App() {
                             <td className="py-3 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{cut.fabric_name}</td>
                             <td className="py-3 px-4">
                               <Badge variant={cut.fabric_source === 'factory_owned' ? 'info' : 'warning'}>
-                                {cut.fabric_source === 'factory_owned' ? 'خامات المصنع' : 'أمانة عميل CMT'}
+                                {cut.fabric_source === 'factory_owned' ? (isAr ? 'خامات المصنع' : 'Factory Owned') : (isAr ? 'أمانة عميل CMT' : 'CMT Customer Custody')}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-slate-300">{cut.lay_length_meters} م</td>
-                            <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{cut.layers_count} راقة</td>
-                            <td className="py-3 px-4 text-amber-400 font-bold">{cut.actual_fabric_meters_used} م</td>
-                            <td className="py-3 px-4 text-emerald-400 font-bold">{cut.total_cut_pieces} قطعة</td>
+                            <td className="py-3 px-4 text-slate-300">{cut.lay_length_meters} {isAr ? 'م' : 'm'}</td>
+                            <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{cut.layers_count} {isAr ? 'راقة' : 'plies'}</td>
+                            <td className="py-3 px-4 text-amber-400 font-bold">{cut.actual_fabric_meters_used} {isAr ? 'م' : 'm'}</td>
+                            <td className="py-3 px-4 text-emerald-400 font-bold">{cut.total_cut_pieces} {isAr ? 'قطعة' : 'pcs'}</td>
                             <td className="py-3 px-4">
-                              <Badge variant="success">تم القص وتوليد الحزم</Badge>
+                              <Badge variant="success">{isAr ? 'تم القص وتوليد الحزم' : 'Cut & Bundles Generated'}</Badge>
                             </td>
                             <td className="py-3 px-4 text-center">
                               <ActionsMenu
@@ -2908,7 +3076,7 @@ export function App() {
                                 items={[
                                   {
                                     id: 'bundles',
-                                    label: 'تتبع حزم أمر القص',
+                                    label: isAr ? 'تتبع حزم أمر القص' : 'Track Cut Bundles',
                                     icon: <QrCode className="w-3.5 h-3.5" />,
                                     onClick: () => {
                                       const b = cuttingBundles.find((cb) => cb.cutting_order_id === cut.id) || cuttingBundles[0];
@@ -2917,7 +3085,7 @@ export function App() {
                                   },
                                   {
                                     id: 'qc',
-                                    label: 'فحص الجودة والمطابقة (QC)',
+                                    label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection (QC)',
                                     icon: <ShieldCheck className="w-3.5 h-3.5" />,
                                     onClick: () => {
                                       const prod = productionOrders.find((p) => p.id === cut.production_order_id);
@@ -2926,7 +3094,7 @@ export function App() {
                                   },
                                   {
                                     id: 'print',
-                                    label: 'طباعة كارت طاولة القص',
+                                    label: isAr ? 'طباعة كارت طاولة القص' : 'Print Cutting Ticket',
                                     icon: <Printer className="w-3.5 h-3.5" />,
                                     onClick: () => window.print(),
                                   },
@@ -2945,8 +3113,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">بطاقات الحزم وتتبع خطوط الإنتاج (Bundle Cards Floor Tracker)</h4>
-                    <p className="text-xs text-slate-400">تتبع مسار الحزم بالباركود بين مراحل القص، التجهيز، الخياطة، والتشطيب</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'بطاقات الحزم وتتبع خطوط الإنتاج (Bundle Cards Floor Tracker)' : 'Bundle Cards & Shopfloor Tracker'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'تتبع مسار الحزم بالباركود بين مراحل القص، التجهيز، الخياطة، والتشطيب' : 'Barcode tracking across cutting, preparation, sewing, and finishing lines'}</p>
                   </div>
                 </div>
 
@@ -2958,61 +3126,89 @@ export function App() {
                           <QrCode className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                           <span>{bnd.bundle_code}</span>
                         </div>
-                        <Badge variant="neutral">حزمة #{bnd.bundle_number}</Badge>
+                        <Badge variant="neutral">{isAr ? `حزمة #${bnd.bundle_number}` : `Bundle #${bnd.bundle_number}`}</Badge>
                       </div>
 
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
-                          <span className="text-slate-500 block text-[10px]">اللون</span>
+                          <span className="text-slate-500 block text-[10px]">{isAr ? 'اللون' : 'Color'}</span>
                           <span className="text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500 block text-[10px]">المقاس</span>
+                          <span className="text-slate-500 block text-[10px]">{isAr ? 'المقاس' : 'Size'}</span>
                           <span className="text-slate-900 dark:text-slate-100 font-bold font-mono">{bnd.size_name}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500 block text-[10px]">الكمية</span>
-                          <span className="text-emerald-400 font-bold font-mono">{bnd.quantity} قطعة</span>
+                          <span className="text-slate-500 block text-[10px]">{isAr ? 'الكمية' : 'Quantity'}</span>
+                          <span className="text-emerald-400 font-bold font-mono">{bnd.quantity} {isAr ? 'قطعة' : 'pcs'}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-xs">
-                        <Badge
-                          variant={
-                            bnd.current_stage_code === 'completed'
-                              ? 'success'
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800/60 text-xs gap-1">
+                        <div className="flex items-center gap-1">
+                          <Badge
+                            variant={
+                              bnd.current_stage_code === 'completed'
+                                ? 'success'
+                                : bnd.current_stage_code === 'sewing'
+                                ? 'info'
+                                : bnd.current_stage_code === 'finishing' || bnd.current_stage_code === 'ironing'
+                                ? 'purple'
+                                : 'warning'
+                            }
+                            dot
+                          >
+                            {bnd.current_stage_code === 'cutting'
+                              ? (isAr ? 'صالة القص' : 'Cutting')
+                              : bnd.current_stage_code === 'assembly'
+                              ? (isAr ? 'التجميع' : 'Assembly')
                               : bnd.current_stage_code === 'sewing'
-                              ? 'info'
-                              : bnd.current_stage_code === 'finishing' || bnd.current_stage_code === 'ironing'
-                              ? 'purple'
-                              : 'warning'
-                          }
-                          dot
-                        >
-                          {bnd.current_stage_code === 'cutting'
-                            ? 'صالة القص'
-                            : bnd.current_stage_code === 'assembly'
-                            ? 'التجهيز والتجميع'
-                            : bnd.current_stage_code === 'sewing'
-                            ? 'خط الخياطة'
-                            : bnd.current_stage_code === 'finishing'
-                            ? 'التشطيب'
-                            : bnd.current_stage_code === 'ironing'
-                            ? 'الكي بالبخار'
-                            : bnd.current_stage_code === 'packing'
-                            ? 'الفحص والتعبئة'
-                            : 'مكتمل'}
-                        </Badge>
+                              ? (isAr ? 'الخياطة' : 'Sewing')
+                              : bnd.current_stage_code === 'finishing'
+                              ? (isAr ? 'التشطيب' : 'Finishing')
+                              : bnd.current_stage_code === 'ironing'
+                              ? (isAr ? 'الكي' : 'Ironing')
+                              : bnd.current_stage_code === 'packing'
+                              ? (isAr ? 'التعبئة' : 'Packing')
+                              : (isAr ? 'مكتمل' : 'Completed')}
+                          </Badge>
+                          {bnd.status === 'rework' && (
+                            <Badge variant="warning">{isAr ? 'إعادة تشغيل' : 'Rework'}</Badge>
+                          )}
+                          {bnd.status === 'held_for_qc' && (
+                            <Badge variant="purple">{isAr ? 'فحص QC' : 'Held QC'}</Badge>
+                          )}
+                          {bnd.status === 'scrapped' && (
+                            <Badge variant="danger">{isAr ? 'مستبعد' : 'Scrapped'}</Badge>
+                          )}
+                        </div>
 
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7"
-                          onClick={() => setSelectedBundleForTracker(bnd)}
-                          icon={<ArrowRightLeft className="w-3 h-3" />}
-                        >
-                          تسليم ونقل المرحلة
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="text-[11px] h-7 px-2"
+                            onClick={() => {
+                              const prod = productionOrders.find((p) => p.id === bnd.production_order_id);
+                              if (prod) {
+                                setSelectedBundleForQc(bnd);
+                                setSelectedProdOrderForQc(prod);
+                              }
+                            }}
+                            icon={<ShieldCheck className="w-3 h-3 text-amber-500" />}
+                          >
+                            {isAr ? 'فحص' : 'QC'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-[11px] h-7 px-2"
+                            onClick={() => setSelectedBundleForTracker(bnd)}
+                            icon={<ArrowRightLeft className="w-3 h-3" />}
+                          >
+                            {isAr ? 'نقل' : 'Transfer'}
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -3023,8 +3219,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">سجل فحص وتدقيق الجودة والعيوب (Quality Control Hub)</h4>
-                    <p className="text-xs text-slate-400">تقارير الفحص المرحلي، العيوب المسجلة، وإذن الترحيل للمنتج النهائي</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'سجل فحص وتدقيق الجودة والعيوب (Quality Control Hub)' : 'Quality Control & Defects Hub'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'تقارير الفحص المرحلي، العيوب المسجلة، وإذن الترحيل للمنتج النهائي' : 'Stage inspection logs, recorded defects, and finished goods transfer approval'}</p>
                   </div>
                 </div>
 
@@ -3033,15 +3229,15 @@ export function App() {
                     <table className="w-full text-right text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
-                          <th className="py-3 px-4">رقم تقرير الفحص</th>
-                          <th className="py-3 px-4">أمر الإنتاج</th>
-                          <th className="py-3 px-4">مفتش الجودة</th>
-                          <th className="py-3 px-4">نوع الفحص</th>
-                          <th className="py-3 px-4">المفحوص</th>
-                          <th className="py-3 px-4">المقبول السليم</th>
-                          <th className="py-3 px-4">إعادة تشغيل (Rework)</th>
-                          <th className="py-3 px-4">المرفوض (Scrap)</th>
-                          <th className="py-3 px-4">القرار والاعتماد</th>
+                          <th className="py-3 px-4">{isAr ? 'رقم تقرير الفحص' : 'QC Report #'}</th>
+                          <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'Production Order'}</th>
+                          <th className="py-3 px-4">{isAr ? 'مفتش الجودة' : 'QC Inspector'}</th>
+                          <th className="py-3 px-4">{isAr ? 'نوع الفحص' : 'Inspection Type'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المفحوص' : 'Inspected'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المقبول السليم' : 'Passed'}</th>
+                          <th className="py-3 px-4">{isAr ? 'إعادة تشغيل (Rework)' : 'Rework'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المرفوض (Scrap)' : 'Scrap'}</th>
+                          <th className="py-3 px-4">{isAr ? 'القرار والاعتماد' : 'Decision'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
@@ -3052,10 +3248,10 @@ export function App() {
                             <td className="py-3 px-4 font-sans text-slate-800 dark:text-slate-200">{qc.inspector_name}</td>
                             <td className="py-3 px-4 font-sans text-slate-300">
                               {qc.inspection_type === 'final_audit'
-                                ? 'فحص نهائي وترحيل للمخزن'
+                                ? (isAr ? 'فحص نهائي وترحيل للمخزن' : 'Final Audit & Stock In')
                                 : qc.inspection_type === 'inline'
-                                ? 'فحص مرحلي بالخط'
-                                : 'فحص نهاية الخط'}
+                                ? (isAr ? 'فحص مرحلي بالخط' : 'Inline Inspection')
+                                : (isAr ? 'فحص نهاية الخط' : 'End of Line Audit')}
                             </td>
                             <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{qc.inspected_quantity}</td>
                             <td className="py-3 px-4 text-emerald-400 font-bold">{qc.passed_quantity}</td>
@@ -3072,10 +3268,10 @@ export function App() {
                                 }
                               >
                                 {qc.decision === 'passed'
-                                  ? 'مطابق ومجاز'
+                                  ? (isAr ? 'مطابق ومجاز' : 'Passed & Approved')
                                   : qc.decision === 'rework_required'
-                                  ? 'إعادة تشغيل'
-                                  : 'مرفوض'}
+                                  ? (isAr ? 'إعادة تشغيل' : 'Rework Required')
+                                  : (isAr ? 'مرفوض' : 'Rejected')}
                               </Badge>
                             </td>
                           </tr>
@@ -3159,19 +3355,19 @@ export function App() {
 
               {/* Purchase Orders Table */}
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">أوامر الشراء ومتابعة التوريد</h4>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أوامر الشراء ومتابعة التوريد' : 'Purchase Orders & Supply Tracking'}</h4>
                 <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
-                          <th className="py-3 px-4">رقم الأمر</th>
-                          <th className="py-3 px-4">المورد المعتمد</th>
-                          <th className="py-3 px-4">المخزن المستهدف</th>
-                          <th className="py-3 px-4">تاريخ الأمر</th>
-                          <th className="py-3 px-4">الإجمالي (شامل الضريبة)</th>
-                          <th className="py-3 px-4">الحالة</th>
-                          <th className="py-3 px-4">الإجراءات والعمليات</th>
+                          <th className="py-3 px-4">{isAr ? 'رقم الأمر' : 'PO #'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المورد المعتمد' : 'Approved Vendor'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المخزن المستهدف' : 'Target Warehouse'}</th>
+                          <th className="py-3 px-4">{isAr ? 'تاريخ الأمر' : 'Order Date'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الإجمالي (شامل الضريبة)' : 'Total (Inc. VAT)'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
+                          <th className="py-3 px-4">{isAr ? 'الإجراءات والعمليات' : 'Actions & Ops'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -3182,7 +3378,7 @@ export function App() {
                             <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{po.warehouse_name}</td>
                             <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{po.order_date}</td>
                             <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                              {po.total_amount.toLocaleString()} ج.م
+                              {po.total_amount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                             </td>
                             <td className="py-3 px-4">
                               <Badge
@@ -3198,12 +3394,12 @@ export function App() {
                                 dot={po.status === 'approved' || po.status === 'partially_received'}
                               >
                                 {po.status === 'received'
-                                  ? 'مستلم بالكامل'
+                                  ? (isAr ? 'مستلم بالكامل' : 'Fully Received')
                                   : po.status === 'approved'
-                                  ? 'معتمد (قيد التوريد)'
+                                  ? (isAr ? 'معتمد (قيد التوريد)' : 'Approved (In Delivery)')
                                   : po.status === 'partially_received'
-                                  ? 'مستلم جزئيًا'
-                                  : 'مسودة'}
+                                  ? (isAr ? 'مستلم جزئيًا' : 'Partially Received')
+                                  : (isAr ? 'مسودة' : 'Draft')}
                               </Badge>
                             </td>
                             <td className="py-3 px-4">
@@ -3222,11 +3418,11 @@ export function App() {
                                           prev.map(p => p.id === po.id ? { ...p, status: 'approved' } : p)
                                         );
                                       } catch (err: any) {
-                                        alert(err.message || 'فشل اعتماد أمر الشراء');
+                                        alert(err.message || (isAr ? 'فشل اعتماد أمر الشراء' : 'Failed to approve purchase order'));
                                       }
                                     }}
                                   >
-                                    اعتماد الأمر
+                                    {isAr ? 'اعتماد الأمر' : 'Approve Order'}
                                   </Button>
                                 ) : (
                                   <Button
@@ -3235,7 +3431,7 @@ export function App() {
                                     onClick={() => setSelectedPoForReceipt(po)}
                                     icon={<Truck className="w-3 h-3" />}
                                   >
-                                    فحص واستلام (GRN)
+                                    {isAr ? 'فحص واستلام (GRN)' : 'Inspect & Receive (GRN)'}
                                   </Button>
                                 )}
 
@@ -3244,19 +3440,19 @@ export function App() {
                                   items={[
                                     {
                                       id: 'grn',
-                                      label: 'فحص واستلام البضاعة (GRN)',
+                                      label: isAr ? 'فحص واستلام البضاعة (GRN)' : 'Inspect Goods Receipt (GRN)',
                                       icon: <Truck className="w-3.5 h-3.5" />,
                                       onClick: () => setSelectedPoForReceipt(po),
                                     },
                                     {
                                       id: 'match',
-                                      label: 'مطابقة الفاتورة الثلاثية (3-Way Match)',
+                                      label: isAr ? 'مطابقة الفاتورة الثلاثية (3-Way Match)' : '3-Way Invoice Match',
                                       icon: <Receipt className="w-3.5 h-3.5" />,
                                       onClick: () => setSelectedPoForInvoice(po),
                                     },
                                     {
                                       id: 'print',
-                                      label: 'طباعة أمر الشراء المعتمد',
+                                      label: isAr ? 'طباعة أمر الشراء المعتمد' : 'Print Purchase Order',
                                       icon: <Printer className="w-3.5 h-3.5" />,
                                       onClick: () => window.print(),
                                     },
@@ -3276,8 +3472,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">أذون فحص واستلام البضاعة (GRN Log)</h4>
-                    <p className="text-xs text-slate-400">سجل فحص الجودة والكميات المقبولة والمرفوضة المحولة للمخزن</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أذون فحص واستلام البضاعة (GRN Log)' : 'Goods Receipt Notes (GRN Log)'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'سجل فحص الجودة والكميات المقبولة والمرفوضة المحولة للمخزن' : 'Quality inspection log of accepted and rejected goods routed to warehouse'}</p>
                   </div>
                 </div>
 
@@ -3286,14 +3482,14 @@ export function App() {
                     <table className="w-full text-right text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
-                          <th className="py-2.5 px-4">رقم إذن الاستلام</th>
-                          <th className="py-2.5 px-4">أمر الشراء</th>
-                          <th className="py-2.5 px-4">المورد</th>
-                          <th className="py-2.5 px-4">مسؤول فحص الجودة</th>
-                          <th className="py-2.5 px-4">نتيجة الفحص</th>
-                          <th className="py-2.5 px-4">المقبول (للمخزن)</th>
-                          <th className="py-2.5 px-4">المرفوض (تالف)</th>
-                          <th className="py-2.5 px-4">ملاحظات الرفض</th>
+                          <th className="py-2.5 px-4">{isAr ? 'رقم إذن الاستلام' : 'GRN #'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'أمر الشراء' : 'PO #'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'المورد' : 'Supplier'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'مسؤول فحص الجودة' : 'QC Inspector'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'نتيجة الفحص' : 'Inspection Result'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'المقبول (للمخزن)' : 'Accepted (Stock)'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'المرفوض (تالف)' : 'Rejected (Scrap)'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'ملاحظات الرفض' : 'Rejection Notes'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
@@ -3305,12 +3501,12 @@ export function App() {
                             <td className="py-2.5 px-4 font-sans text-slate-300">{grn.quality_inspector_name}</td>
                             <td className="py-2.5 px-4">
                               <Badge variant={grn.inspection_status === 'passed' ? 'success' : 'warning'}>
-                                {grn.inspection_status === 'passed' ? 'مطابق واجتاز الفحص' : 'اجتياز جزئي'}
+                                {grn.inspection_status === 'passed' ? (isAr ? 'مطابق واجتاز الفحص' : 'Passed Inspection') : (isAr ? 'اجتياز جزئي' : 'Partial Pass')}
                               </Badge>
                             </td>
-                            <td className="py-2.5 px-4 font-bold text-emerald-400">+{grn.accepted_quantity.toLocaleString()} م</td>
+                            <td className="py-2.5 px-4 font-bold text-emerald-400">+{grn.accepted_quantity.toLocaleString()} {isAr ? 'م' : 'm'}</td>
                             <td className="py-2.5 px-4 font-bold text-rose-400">
-                              {grn.rejected_quantity > 0 ? `-${grn.rejected_quantity.toLocaleString()} م` : '0'}
+                              {grn.rejected_quantity > 0 ? `-${grn.rejected_quantity.toLocaleString()} ${isAr ? 'م' : 'm'}` : '0'}
                             </td>
                             <td className="py-2.5 px-4 font-sans text-slate-400">
                               {grn.rejection_reason || '—'}
@@ -3327,8 +3523,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">سجل فواتير الموردين والمطابقة الثلاثية</h4>
-                    <p className="text-xs text-slate-400">فواتير معتمدة ومطابقة مع أوامر الشراء وأذون استلام المخزن</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'سجل فواتير الموردين والمطابقة الثلاثية' : 'Supplier Invoices & 3-Way Match Log'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'فواتير معتمدة ومطابقة مع أوامر الشراء وأذون استلام المخزن' : 'Invoices verified and 3-way matched with POs and GRNs'}</p>
                   </div>
                 </div>
 
@@ -3337,14 +3533,14 @@ export function App() {
                     <table className="w-full text-right text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                         <tr>
-                          <th className="py-2.5 px-4">رقم الفاتورة الضريبية</th>
-                          <th className="py-2.5 px-4">المرجع الداخلي</th>
-                          <th className="py-2.5 px-4">المورد</th>
-                          <th className="py-2.5 px-4">أمر الشراء المرجعي</th>
-                          <th className="py-2.5 px-4">تاريخ الاستحقاق</th>
-                          <th className="py-2.5 px-4">القيمة الإجمالية</th>
-                          <th className="py-2.5 px-4">نتيجة المطابقة الثلاثية</th>
-                          <th className="py-2.5 px-4">حالة السداد</th>
+                          <th className="py-2.5 px-4">{isAr ? 'رقم الفاتورة الضريبية' : 'Tax Invoice #'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'المرجع الداخلي' : 'Internal Ref'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'المورد' : 'Supplier'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'أمر الشراء المرجعي' : 'Ref PO #'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'القيمة الإجمالية' : 'Total Amount'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'نتيجة المطابقة الثلاثية' : '3-Way Match Result'}</th>
+                          <th className="py-2.5 px-4">{isAr ? 'حالة السداد' : 'Payment Status'}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
@@ -3355,15 +3551,15 @@ export function App() {
                             <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
                             <td className="py-2.5 px-4 font-mono text-slate-700 dark:text-slate-300">{inv.po_number}</td>
                             <td className="py-2.5 px-4 text-slate-300">{inv.due_date}</td>
-                            <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} ج.م</td>
+                            <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
                             <td className="py-2.5 px-4">
                               <Badge variant={inv.matching_status === 'matched' ? 'success' : 'warning'}>
-                                {inv.matching_status === 'matched' ? 'مطابقة تامة 100%' : 'فرق في السعر'}
+                                {inv.matching_status === 'matched' ? (isAr ? 'مطابقة تامة 100%' : '100% Matched') : (isAr ? 'فرق في السعر' : 'Price Discrepancy')}
                               </Badge>
                             </td>
                             <td className="py-2.5 px-4">
                               <Badge variant={inv.payment_status === 'paid' ? 'success' : 'neutral'}>
-                                {inv.payment_status === 'paid' ? 'مدفوعة' : 'غير مسددة'}
+                                {inv.payment_status === 'paid' ? (isAr ? 'مدفوعة' : 'Paid') : (isAr ? 'غير مسددة' : 'Unpaid')}
                               </Badge>
                             </td>
                           </tr>
@@ -3378,8 +3574,8 @@ export function App() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">سجل الموردين المعتمدين</h4>
-                    <p className="text-xs text-slate-400">بيانات الاتصال، السجل الضريبي، وشروط الدفع</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'سجل الموردين المعتمدين' : 'Approved Suppliers Directory'}</h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'بيانات الاتصال، السجل الضريبي، وشروط الدفع' : 'Contact info, tax ID, and credit payment terms'}</p>
                   </div>
                 </div>
 
@@ -3391,16 +3587,29 @@ export function App() {
                         <span className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold">{s.code}</span>
                       </div>
                       <div className="text-xs text-slate-400 flex items-center justify-between">
-                        <span>مسؤول الاتصال: <strong className="text-slate-300">{s.contact_person || '—'}</strong></span>
-                        <span>الهاتف: <strong className="text-slate-300 font-mono">{s.phone || '—'}</strong></span>
+                        <span>{isAr ? 'مسؤول الاتصال:' : 'Contact:'} <strong className="text-slate-300">{s.contact_person || '—'}</strong></span>
+                        <span>{isAr ? 'الهاتف:' : 'Phone:'} <strong className="text-slate-300 font-mono">{s.phone || '—'}</strong></span>
                       </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                        <span className="text-slate-400">
-                          شروط الدفع: <Badge variant="neutral">{s.payment_terms}</Badge>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
+                        <span className="text-slate-500 dark:text-slate-400">
+                          {isAr ? 'شروط الدفع:' : 'Payment Terms:'} <Badge variant="neutral">{s.payment_terms}</Badge>
                         </span>
-                        <span>
-                          الرصيد المستحق: <strong className="text-amber-400 font-mono">{s.current_balance.toLocaleString()} ج.م</strong>
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {isAr ? 'الرصيد المستحق:' : 'Balance:'} <strong className="text-amber-600 dark:text-amber-400 font-mono">{s.current_balance.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</strong>
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => {
+                              setSelectedSupplierForStatement(s);
+                              setIsSupplierStatementOpen(true);
+                            }}
+                          >
+                            {isAr ? 'كشف الحساب' : 'Statement'}
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -3411,80 +3620,106 @@ export function App() {
 
           {/* TAB: Subcontracting & CMT Services (Phase 6) */}
           {activeTab === 'subcontracting' && (
-            <SubcontractingTab
-              customers={customers}
-              jobOrders={jobOrders}
-              customerMaterialReceipts={customerMaterialReceipts}
-              externalOperations={externalOperations}
-              jobDeliveryNotes={jobDeliveryNotes}
-              jobInvoices={jobInvoices}
-              onOpenCreateJob={() => setIsCreateJobModalOpen(true)}
-              onOpenReceiveMaterial={() => setIsReceiveCustomerMatModalOpen(true)}
-              onOpenExternalOp={() => {
-                setSelectedOpForReceive(null);
-                setIsExternalOpModalOpen(true);
-              }}
-              onSelectOpForReceive={(op) => {
-                setSelectedOpForReceive(op);
-                setIsExternalOpModalOpen(true);
-              }}
-              onSelectJobForDelivery={(job) => setSelectedJobForDelivery(job)}
-              onSelectJobForInvoice={(job) => setSelectedJobForInvoice(job)}
-              onSelectJobForDetails={(job) => setSelectedJobForDetails(job)}
-              onConfirmJob={async (jobId) => {
-                try {
-                  if (jobId.length > 20 && !jobId.startsWith('job-')) {
-                    await api.subcontracting.confirmJob(jobId);
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <SubcontractingTab
+                customers={customers}
+                jobOrders={jobOrders}
+                customerMaterialReceipts={customerMaterialReceipts}
+                externalOperations={externalOperations}
+                jobDeliveryNotes={jobDeliveryNotes}
+                jobInvoices={jobInvoices}
+                onOpenCreateJob={() => setIsCreateJobModalOpen(true)}
+                onOpenReceiveMaterial={() => setIsReceiveCustomerMatModalOpen(true)}
+                onOpenExternalOp={() => {
+                  setSelectedOpForReceive(null);
+                  setIsExternalOpModalOpen(true);
+                }}
+                onSelectOpForReceive={(op) => {
+                  setSelectedOpForReceive(op);
+                  setIsExternalOpModalOpen(true);
+                }}
+                onSelectJobForDelivery={(job) => setSelectedJobForDelivery(job)}
+                onSelectJobForInvoice={(job) => setSelectedJobForInvoice(job)}
+                onSelectJobForDetails={(job) => setSelectedJobForDetails(job)}
+                onConfirmJob={async (jobId) => {
+                  try {
+                    if (jobId.length > 20 && !jobId.startsWith('job-')) {
+                      await api.subcontracting.confirmJob(jobId);
+                    }
+                    setJobOrders((prev) =>
+                      prev.map((j) => (j.id === jobId ? { ...j, status: 'confirmed' } : j))
+                    );
+                  } catch (err: any) {
+                    alert(err.message || (isAr ? 'فشل تأكيد أمر التشغيل' : 'Failed to confirm job order'));
                   }
-                  setJobOrders((prev) =>
-                    prev.map((j) => (j.id === jobId ? { ...j, status: 'confirmed' } : j))
-                  );
-                } catch (err: any) {
-                  alert(err.message || 'فشل تأكيد أمر التشغيل');
-                }
-              }}
-              onPayInvoice={async (invId) => {
-                try {
-                  if (invId.length > 20 && !invId.startsWith('jinv-')) {
-                    const inv = jobInvoices.find(i => i.id === invId);
-                    await api.subcontracting.recordPayment(invId, {
-                      amount: inv ? inv.total_amount : 100,
-                      payment_method: 'bank_transfer',
-                    });
+                }}
+                onPayInvoice={async (invId) => {
+                  try {
+                    if (invId.length > 20 && !invId.startsWith('jinv-')) {
+                      const inv = jobInvoices.find(i => i.id === invId);
+                      await api.subcontracting.recordPayment(invId, {
+                        amount: inv ? inv.total_amount : 100,
+                        payment_method: 'bank_transfer',
+                      });
+                    }
+                    setJobInvoices((prev) =>
+                      prev.map((inv) => (inv.id === invId ? { ...inv, status: 'paid', paid_amount: inv.total_amount } : inv))
+                    );
+                  } catch (err: any) {
+                    alert(err.message || (isAr ? 'فشل تسجيل السداد' : 'Failed to record payment'));
                   }
-                  setJobInvoices((prev) =>
-                    prev.map((inv) => (inv.id === invId ? { ...inv, status: 'paid', paid_amount: inv.total_amount } : inv))
-                  );
-                } catch (err: any) {
-                  alert(err.message || 'فشل تسجيل السداد');
-                }
-              }}
-            />
+                }}
+              />
+            </Suspense>
           )}
 
           {/* Phase 7: Sales & POS */}
           {activeTab === 'sales' && (
-            <SalesTab lang={lang} variants={productVariants} />
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <SalesTab lang={lang} variants={productVariants} />
+            </Suspense>
           )}
 
           {/* Phase 8: Financials, Accounting & Costing */}
           {activeTab === 'costing' && (
-            <AccountingTab lang={lang} />
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <AccountingTab lang={lang} />
+            </Suspense>
           )}
 
           {/* Phase 9: HR, Employees & Piece-Rate */}
           {activeTab === 'piece_rate' && (
-            <HrTab lang={lang} />
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <HrTab lang={lang} />
+            </Suspense>
           )}
 
           {/* Phase 10: Multi-Tenant E-Commerce Storefront */}
           {activeTab === 'storefront' && (
-            <StorefrontTab lang={lang} variants={productVariants} />
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <StorefrontTab lang={lang} variants={productVariants} />
+            </Suspense>
           )}
 
           {/* Phase 12: Machine & Asset Maintenance */}
           {activeTab === 'maintenance' && (
-            <MaintenanceTab lang={lang} />
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <MaintenanceTab lang={lang} />
+            </Suspense>
+          )}
+
+          {/* Phase G: Waslat Worsh Integrated B2B Marketplace */}
+          {activeTab === 'waslat_worsh' && (
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <WaslatWorshTab isAr={lang === 'ar'} />
+            </Suspense>
+          )}
+
+          {/* Subscription & Cloud Quota Meters Tab */}
+          {activeTab === 'subscription' && (
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <TenantSubscriptionView isAr={lang === 'ar'} />
+            </Suspense>
           )}
 
           {/* Settings Tab */}
@@ -3515,12 +3750,12 @@ export function App() {
                 {/* 1. Tenant & Factory Profile */}
                 <Card className="lg:col-span-1 p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">
                   <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                    <div className="w-10 h-10 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/20 flex items-center justify-center text-[#7F1625] dark:text-[#F87171] font-bold">
+                    <div className="w-10 h-10 rounded-xl bg-[var(--brand-subtle)] flex items-center justify-center text-[var(--brand-primary)] dark:text-[#F87171] font-bold">
                       <Building2 className="w-5 h-5" />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">{tenantName}</h4>
-                      <p className="text-[11px] font-mono text-[#7F1625] dark:text-[#F87171]">{tenantCode}</p>
+                      <p className="text-[11px] font-mono text-[var(--brand-primary)] dark:text-[#F87171]">{tenantCode}</p>
                     </div>
                   </div>
 
@@ -3553,7 +3788,7 @@ export function App() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full text-xs border-slate-300 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625]"
+                      className="w-full text-xs border-slate-300 dark:border-slate-700 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
                       onClick={() => setIsBranchModalOpen(true)}
                     >
                       {lang === 'ar' ? 'إضافة فرع / خط إنتاج جديد' : 'Add Production Branch'}
@@ -3645,7 +3880,7 @@ export function App() {
                           <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.proc}</td>
                           <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.qc}</td>
                           <td className="py-3 px-4">
-                            <span className="font-mono font-medium text-[#7F1625] dark:text-[#F87171]">{r.admin}</span>
+                            <span className="font-mono font-medium text-[var(--brand-primary)] dark:text-[#F87171]">{r.admin}</span>
                           </td>
                         </tr>
                       ))}
@@ -3672,31 +3907,37 @@ export function App() {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">اسم المصنع / الشركة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم المصنع / الشركة' : 'Company / Factory Name'}
+            </label>
             <input
               type="text"
               required
               value={newCompanyForm.companyName}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, companyName: e.target.value })}
-              placeholder="مثال: مصنع الفيروز لملابس الأطفال"
+              placeholder={isAr ? 'مثال: مصنع الفيروز لملابس الأطفال' : 'e.g. Al-Fayrouz Apparel Factory'}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">اسم المالك / المدير المسؤول</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم المالك / المدير المسؤول' : 'Owner / Managing Director Name'}
+            </label>
             <input
               type="text"
               required
               value={newCompanyForm.ownerName}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, ownerName: e.target.value })}
-              placeholder="مثال: م. حسام الدين"
+              placeholder={isAr ? 'مثال: م. حسام الدين' : 'e.g. Eng. Hossam'}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">البريد الإلكتروني للشركة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'البريد الإلكتروني للشركة' : 'Company Official Email'}
+            </label>
             <input
               type="email"
               required
@@ -3708,24 +3949,26 @@ export function App() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">باقة الاشتراك</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'باقة الاشتراك' : 'Subscription Tier'}
+            </label>
             <select
               value={newCompanyForm.plan}
               onChange={(e) => setNewCompanyForm({ ...newCompanyForm, plan: e.target.value })}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             >
-              <option value="starter">باقة الورش الصغيرة (Starter) — 3 مستخدمين</option>
-              <option value="professional">باقة المصانع المتكاملة (Professional) — إنتاج وقص ومخازن</option>
-              <option value="enterprise">باقة الشركات الكبرى (Enterprise) — فروع ومخازن غير محدودة</option>
+              <option value="starter">{isAr ? 'باقة الورش الصغيرة (Starter) — 3 مستخدمين' : 'Starter Workshop — 3 Users'}</option>
+              <option value="professional">{isAr ? 'باقة المصانع المتكاملة (Professional) — إنتاج وقص ومخازن' : 'Professional Factory — Full Production & Inventory'}</option>
+              <option value="enterprise">{isAr ? 'باقة الشركات الكبرى (Enterprise) — فروع ومخازن غير محدودة' : 'Enterprise — Unlimited Branches & Stores'}</option>
             </select>
           </div>
 
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setIsCompanyModalOpen(false)}>
-              إلغاء
+              {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button type="submit" isLoading={isSubmittingCompany}>
-              تأكيد وإنشاء حساب المصنع
+              {isAr ? 'تأكيد وإنشاء حساب المصنع' : 'Create Factory Account'}
             </Button>
           </div>
         </form>
@@ -3735,23 +3978,27 @@ export function App() {
       <Modal
         isOpen={isBranchModalOpen}
         onClose={() => setIsBranchModalOpen(false)}
-        title="إضافة فرع أو مخزن جديد للشركة"
+        title={isAr ? 'إضافة فرع أو مخزن جديد للشركة' : 'Add New Branch / Warehouse Location'}
       >
         <form onSubmit={handleCreateBranch} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">اسم الفرع</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم الفرع' : 'Branch / Location Name'}
+            </label>
             <input
               type="text"
               required
               value={newBranchName}
               onChange={(e) => setNewBranchName(e.target.value)}
-              placeholder="مثال: مخزن صالة القص رقم 2"
+              placeholder={isAr ? 'مثال: مخزن صالة القص رقم 2' : 'e.g. Cutting Floor Warehouse 2'}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">كود الفرع</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'كود الفرع' : 'Branch Code'}
+            </label>
             <input
               type="text"
               required
@@ -3763,26 +4010,30 @@ export function App() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">نوع الموقع</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'نوع الموقع' : 'Location Type'}
+            </label>
             <select
               value={newBranchType}
               onChange={(e) => setNewBranchType(e.target.value as any)}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] focus:ring-1 focus:ring-[var(--brand-primary)]"
             >
-              <option value="factory">مصنع / صالة إنتاج</option>
-              <option value="warehouse">مخزن أقمشة ومستلزمات</option>
-              <option value="outlet">منفذ بيع أو معرض توزيع</option>
+              <option value="factory">{isAr ? 'مصنع / صالة إنتاج' : 'Factory / Production Hall'}</option>
+              <option value="warehouse">{isAr ? 'مخزن أقمشة ومستلزمات' : 'Fabric & Supplies Warehouse'}</option>
+              <option value="outlet">{isAr ? 'منفذ بيع أو معرض توزيع' : 'Sales Outlet / Showroom'}</option>
             </select>
           </div>
 
           {branches.length > 0 && (
-            <div className="pt-2 border-t border-slate-700/60">
-              <span className="block text-xs font-semibold text-slate-400 mb-1.5">الفروع والمواقع المسجلة حالياً:</span>
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60">
+              <span className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                {isAr ? 'الفروع والمواقع المسجلة حالياً:' : 'Currently Registered Branches:'}
+              </span>
               <div className="space-y-1 max-h-28 overflow-y-auto">
                 {branches.map(b => (
-                  <div key={b.id} className="flex justify-between items-center text-xs bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                  <div key={b.id} className="flex justify-between items-center text-xs bg-slate-100 dark:bg-slate-900/60 p-1.5 rounded border border-slate-200 dark:border-slate-800">
                     <span className="text-slate-800 dark:text-slate-200">{b.name}</span>
-                    <span className="font-mono text-slate-400 text-[11px]">{b.code}</span>
+                    <span className="font-mono text-slate-500 dark:text-slate-400 text-[11px]">{b.code}</span>
                   </div>
                 ))}
               </div>
@@ -3791,10 +4042,10 @@ export function App() {
 
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setIsBranchModalOpen(false)}>
-              إلغاء
+              {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button type="submit">
-              حفظ الفرع
+              {isAr ? 'حفظ الفرع' : 'Save Branch'}
             </Button>
           </div>
         </form>
@@ -3804,6 +4055,7 @@ export function App() {
       <FabricCalculatorModal
         isOpen={isFabricCalcOpen}
         onClose={() => setIsFabricCalcOpen(false)}
+        isAr={isAr}
       />
 
       {/* MODAL 4: Stock Transaction Modal */}
@@ -3812,6 +4064,7 @@ export function App() {
         onClose={() => setSelectedStockItem(null)}
         item={selectedStockItem}
         onSuccess={handleStockTransactionSuccess}
+        lang={lang}
       />
 
       {/* MODAL 4.1: Create Inventory Item Modal */}
@@ -3864,6 +4117,7 @@ export function App() {
         isOpen={isCreateModelOpen}
         onClose={() => setIsCreateModelOpen(false)}
         onSuccess={handleModelCreated}
+        isAr={isAr}
       />
 
       {/* MODAL 5.5: Garment Model BOM & Details Modal */}
@@ -3872,6 +4126,7 @@ export function App() {
         onClose={() => setSelectedModelForBom(null)}
         model={selectedModelForBom}
         inventoryItems={inventoryItems}
+        isAr={isAr}
       />
 
       {/* MODAL 6: Create Purchase Order Modal */}
@@ -3881,6 +4136,7 @@ export function App() {
         suppliers={suppliers}
         warehouses={warehouses}
         items={inventoryItems}
+        isAr={isAr}
         onSuccess={(newPo) => {
           setPurchaseOrders((prev) => [newPo, ...prev]);
           setIsCreatePoModalOpen(false);
@@ -3892,6 +4148,7 @@ export function App() {
         isOpen={selectedPoForReceipt !== null}
         onClose={() => setSelectedPoForReceipt(null)}
         purchaseOrder={selectedPoForReceipt}
+        isAr={isAr}
         onSuccess={(updatedPo, newGrn) => {
           setPurchaseOrders((prev) =>
             prev.map((p) => (p.id === updatedPo.id ? updatedPo : p))
@@ -3909,6 +4166,7 @@ export function App() {
         goodsReceiptNote={
           goodsReceiptNotes.find((g) => g.po_number === selectedPoForInvoice?.po_number) || null
         }
+        isAr={isAr}
         onSuccess={(newInvoice) => {
           setSupplierInvoices((prev) => [newInvoice, ...prev]);
           setSelectedPoForInvoice(null);
@@ -3919,10 +4177,23 @@ export function App() {
       <CreateSupplierModal
         isOpen={isCreateSupplierModalOpen}
         onClose={() => setIsCreateSupplierModalOpen(false)}
+        isAr={isAr}
         onSuccess={(newSupplier) => {
           setSuppliers((prev) => [...prev, newSupplier]);
           setIsCreateSupplierModalOpen(false);
         }}
+      />
+
+      {/* MODAL 9B: Supplier Statement & Ledger Modal */}
+      <SupplierStatementModal
+        isOpen={isSupplierStatementOpen}
+        onClose={() => {
+          setIsSupplierStatementOpen(false);
+          setSelectedSupplierForStatement(null);
+        }}
+        supplierId={selectedSupplierForStatement?.id || null}
+        supplier={selectedSupplierForStatement}
+        isAr={isAr}
       />
 
       {/* MODAL 10: Create Production Order Modal */}
@@ -3930,6 +4201,7 @@ export function App() {
         isOpen={isCreateProdOrderModalOpen}
         onClose={() => setIsCreateProdOrderModalOpen(false)}
         models={models}
+        isAr={isAr}
         onSuccess={(newOrder) => {
           setProductionOrders((prev) => [newOrder, ...prev]);
           setIsCreateProdOrderModalOpen(false);
@@ -3942,8 +4214,9 @@ export function App() {
         onClose={() => setSelectedProdOrderForCut(null)}
         productionOrder={selectedProdOrderForCut}
         warehouses={warehouses}
-        fabricItems={inventoryItems.filter((i) => i.unit_of_measure === 'meter' || i.unit_of_measure === 'm' || i.name.includes('قماش'))}
+        fabricItems={inventoryItems.filter((i) => i.unit_of_measure === 'meter' || i.unit_of_measure === 'm' || (isAr ? i.name.includes('قماش') : i.name.toLowerCase().includes('fabric')) || i.name.includes('قماش'))}
         customerMaterials={customerMaterials}
+        isAr={isAr}
         onSuccess={(newCut, newBundles) => {
           setCuttingOrders((prev) => [newCut, ...prev]);
           setCuttingBundles((prev) => [...newBundles, ...prev]);
@@ -3967,6 +4240,7 @@ export function App() {
         isOpen={selectedBundleForTracker !== null}
         onClose={() => setSelectedBundleForTracker(null)}
         bundle={selectedBundleForTracker}
+        isAr={isAr}
         onTransferSuccess={(updated) => {
           setCuttingBundles((prev) =>
             prev.map((b) => (b.id === updated.id ? updated : b))
@@ -3978,10 +4252,39 @@ export function App() {
       {/* MODAL 13: Quality Inspection & QC Defects Modal */}
       <QualityInspectionModal
         isOpen={selectedProdOrderForQc !== null}
-        onClose={() => setSelectedProdOrderForQc(null)}
+        onClose={() => {
+          setSelectedProdOrderForQc(null);
+          setSelectedBundleForQc(null);
+        }}
         productionOrder={selectedProdOrderForQc}
+        bundle={selectedBundleForQc}
+        isAr={isAr}
         onSuccess={(newQc) => {
           setQualityInspections((prev) => [newQc, ...prev]);
+          if (selectedBundleForQc) {
+            setCuttingBundles((prev) =>
+              prev.map((b) => {
+                if (b.id !== selectedBundleForQc.id) return b;
+                const newStatus =
+                  newQc.decision === 'rejected'
+                    ? 'scrapped'
+                    : newQc.decision === 'rework_required'
+                    ? 'rework'
+                    : newQc.decision === 'passed' && newQc.inspection_type === 'final_audit'
+                    ? 'completed'
+                    : 'active';
+                return {
+                  ...b,
+                  status: newStatus,
+                  quantity: Math.max(0, b.quantity - (newQc.rejected_quantity || 0)),
+                  current_stage_code:
+                    newQc.decision === 'passed' && newQc.inspection_type === 'final_audit'
+                      ? 'completed'
+                      : b.current_stage_code,
+                };
+              })
+            );
+          }
           setProductionOrders((prev) =>
             prev.map((p) => {
               if (p.id !== newQc.production_order_id) return p;
@@ -3998,6 +4301,7 @@ export function App() {
             })
           );
           setSelectedProdOrderForQc(null);
+          setSelectedBundleForQc(null);
         }}
       />
 
@@ -4007,6 +4311,7 @@ export function App() {
         onClose={() => setIsCreateJobModalOpen(false)}
         customers={customers}
         models={models}
+        isAr={isAr}
         onSuccess={(newJob) => {
           setJobOrders((prev) => [newJob, ...prev]);
           setIsCreateJobModalOpen(false);
@@ -4020,6 +4325,7 @@ export function App() {
         warehouses={warehouses}
         customers={customers}
         jobOrders={jobOrders}
+        isAr={isAr}
         onSuccess={(newReceipt) => {
           setCustomerMaterialReceipts((prev) => [newReceipt, ...prev]);
           // Update linked job order received meters if linked
@@ -4049,6 +4355,7 @@ export function App() {
         }}
         jobOrders={jobOrders}
         existingOperation={selectedOpForReceive}
+        isAr={isAr}
         onSuccess={(op) => {
           if (selectedOpForReceive) {
             setExternalOperations((prev) =>
@@ -4067,6 +4374,7 @@ export function App() {
         isOpen={selectedJobForDelivery !== null}
         onClose={() => setSelectedJobForDelivery(null)}
         jobOrder={selectedJobForDelivery}
+        isAr={isAr}
         onSuccess={(newDelivery) => {
           setJobDeliveryNotes((prev) => [newDelivery, ...prev]);
           setJobOrders((prev) =>
@@ -4089,6 +4397,7 @@ export function App() {
         isOpen={selectedJobForInvoice !== null}
         onClose={() => setSelectedJobForInvoice(null)}
         jobOrder={selectedJobForInvoice}
+        isAr={isAr}
         onSuccess={(newInvoice) => {
           setJobInvoices((prev) => [newInvoice, ...prev]);
           setSelectedJobForInvoice(null);
@@ -4100,6 +4409,7 @@ export function App() {
         isOpen={selectedJobForDetails !== null}
         onClose={() => setSelectedJobForDetails(null)}
         jobOrder={selectedJobForDetails}
+        isAr={isAr}
         profitability={
           selectedJobForDetails
             ? {

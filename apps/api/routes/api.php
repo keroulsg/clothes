@@ -25,8 +25,8 @@ Route::prefix('v1')->group(function () {
     });
 
     // المصادقة والتسجيل مع الحماية من الهجمات بالتخمين (Rate Limiting)
-    Route::post('/auth/register-company', [TenantController::class, 'register'])->middleware('throttle:10,1');
-    Route::post('/auth/login', [TenantController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/auth/register-company', [TenantController::class, 'register'])->middleware('throttle:auth');
+    Route::post('/auth/login', [TenantController::class, 'login'])->middleware('throttle:auth');
     Route::post('/auth/logout', [TenantController::class, 'logout'])->middleware('auth:sanctum');
 
     // التواصل والاستفسارات العامة من الموقع التسويقي (Public Contact Inquiry)
@@ -53,14 +53,16 @@ Route::prefix('v1')->group(function () {
         ], 200);
     })->middleware('throttle:5,1');
 
-    // استلام إشعارات الدفع الموقعة من بوابات الدفع الإلكتروني (Verified Webhook)
-    Route::post('/subscriptions/webhook/stripe', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook'])->defaults('provider', 'stripe');
-    Route::post('/subscriptions/webhook/paymob', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook'])->defaults('provider', 'paymob');
-    Route::post('/webhooks/subscription-payment', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
-    Route::post('/subscriptions/webhook', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
+    // استلام إشعارات الدفع الموقعة من بوابات الدفع الإلكتروني (Verified Webhook with throttle)
+    Route::middleware('throttle:webhooks')->group(function () {
+        Route::post('/subscriptions/webhook/stripe', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook'])->defaults('provider', 'stripe');
+        Route::post('/subscriptions/webhook/paymob', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook'])->defaults('provider', 'paymob');
+        Route::post('/webhooks/subscription-payment', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
+        Route::post('/subscriptions/webhook', [\App\Http\Controllers\Api\SubscriptionWebhookController::class, 'handleWebhook']);
+    });
 
     // مسارات إدارة المنصة العليا (Platform Administration) - مسار تفويض مخصص بدون سياق شركة مستأجرة
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsurePlatformAdmin::class])->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsurePlatformAdmin::class, 'throttle:admin'])->group(function () {
         Route::get('/platform-admin/overview', [\App\Http\Controllers\Api\PlatformAdminController::class, 'overview']);
         Route::get('/platform-admin/tenants', [\App\Http\Controllers\Api\PlatformAdminController::class, 'tenants']);
         Route::get('/platform-admin/tenants/{id}', [\App\Http\Controllers\Api\PlatformAdminController::class, 'showTenant']);
@@ -120,6 +122,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/suppliers', [\App\Http\Controllers\Api\SupplierController::class, 'index']);
         Route::post('/suppliers', [\App\Http\Controllers\Api\SupplierController::class, 'store']);
         Route::get('/suppliers/{id}', [\App\Http\Controllers\Api\SupplierController::class, 'show']);
+        Route::get('/suppliers/{id}/statement', [\App\Http\Controllers\Api\SupplierController::class, 'statement']);
 
         Route::get('/purchase-orders', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'index']);
         Route::post('/purchase-orders', [\App\Http\Controllers\Api\PurchaseOrderController::class, 'store'])->middleware('role:accountant,production_manager');
@@ -159,9 +162,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeCustomer']);
 
         Route::get('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'jobs']);
-        Route::post('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeJob'])->middleware('role:production_manager,accountant');
+        Route::post('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeJob'])->middleware('role:company_owner,production_manager,accountant');
         Route::get('/subcontracting/jobs/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'showJob']);
-        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob'])->middleware('role:production_manager,accountant');
+        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob'])->middleware('role:company_owner,production_manager,accountant');
         Route::get('/subcontracting/jobs/{id}/profitability', [\App\Http\Controllers\Api\SubcontractingController::class, 'profitability']);
 
         Route::get('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'materialReceipts']);
@@ -175,8 +178,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/subcontracting/delivery-notes', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeDeliveryNote']);
 
         Route::get('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'invoices']);
-        Route::post('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeInvoice'])->middleware('role:accountant');
-        Route::post('/subcontracting/invoices/{id}/pay', [\App\Http\Controllers\Api\SubcontractingController::class, 'recordPayment'])->middleware('role:accountant');
+        Route::post('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeInvoice'])->middleware('role:company_owner,accountant');
+        Route::post('/subcontracting/invoices/{id}/pay', [\App\Http\Controllers\Api\SubcontractingController::class, 'recordPayment'])->middleware('role:company_owner,accountant');
 
         // المبيعات ونقاط البيع وحجز المخزون (Phase 7: Sales & POS)
         Route::get('/sales/quotations', [\App\Http\Controllers\Api\SalesController::class, 'quotations']);
@@ -198,15 +201,24 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep');
         Route::post('/sales/returns/{id}/refund', [\App\Http\Controllers\Api\SalesController::class, 'refundSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant');
 
+        // إدارة العملاء وكشوف الحسابات (Customers Master & Account Statements)
+        Route::get('/customers', [\App\Http\Controllers\Api\CustomerController::class, 'index']);
+        Route::post('/customers', [\App\Http\Controllers\Api\CustomerController::class, 'store'])->middleware('role:company_owner,accountant,sales_rep');
+        Route::get('/customers/{id}', [\App\Http\Controllers\Api\CustomerController::class, 'show']);
+        Route::put('/customers/{id}', [\App\Http\Controllers\Api\CustomerController::class, 'update'])->middleware('role:company_owner,accountant,sales_rep');
+        Route::get('/customers/{id}/statement', [\App\Http\Controllers\Api\CustomerController::class, 'statement']);
+
         // الحسابات العامة وقيود اليومية والتكاليف (Phase 8: Accounting & Costing)
         Route::get('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'accounts']);
         Route::post('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'storeAccount'])->middleware('role:accountant');
+        Route::get('/accounting/accounts/{id}/statement', [\App\Http\Controllers\Api\AccountingController::class, 'accountStatement'])->middleware('role:accountant,financial_accountant,company_owner');
         Route::get('/accounting/journal-entries', [\App\Http\Controllers\Api\AccountingController::class, 'journalEntries']);
         Route::post('/accounting/journal-entries', [\App\Http\Controllers\Api\AccountingController::class, 'storeJournalEntry'])->middleware('role:accountant');
         Route::get('/accounting/payment-vouchers', [\App\Http\Controllers\Api\AccountingController::class, 'paymentVouchers']);
         Route::post('/accounting/payment-vouchers', [\App\Http\Controllers\Api\AccountingController::class, 'storePaymentVoucher'])->middleware('role:accountant');
         Route::get('/accounting/cost-sheets', [\App\Http\Controllers\Api\AccountingController::class, 'costSheets']);
         Route::post('/accounting/cost-sheets/{productionOrderId}/calculate', [\App\Http\Controllers\Api\AccountingController::class, 'calculateCost'])->middleware('role:accountant,production_manager');
+        Route::post('/accounting/cost-sheets/{id}/approve', [\App\Http\Controllers\Api\AccountingController::class, 'approveCostSheet'])->middleware('role:accountant,production_manager');
 
         // التقارير المالية والقوائم الختامية المتقدمة (Phase 08B: Advanced Financial Reporting & Industrial Costing)
         Route::get('/accounting/reports/trial-balance', [\App\Http\Controllers\Api\AccountingController::class, 'trialBalance'])->middleware('role:accountant,financial_accountant,company_owner');
@@ -215,9 +227,24 @@ Route::prefix('v1')->group(function () {
         Route::get('/accounting/reports/vat-summary', [\App\Http\Controllers\Api\AccountingController::class, 'vatSummary'])->middleware('role:accountant,financial_accountant,company_owner');
         Route::get('/accounting/reports/cost-variance', [\App\Http\Controllers\Api\AccountingController::class, 'costVariance'])->middleware('role:accountant,financial_accountant,company_owner,production_manager');
 
-        // الموارد البشرية وأجور القطعة ومسيرات الرواتب (Phase 9: HR & Piece-Rate Payroll)
+        // الموارد البشرية وإدارة القوى العاملة ومسيرات الرواتب (Phase C: Workforce & Payroll)
         Route::get('/hr/employees', [\App\Http\Controllers\Api\HrController::class, 'employees']);
-        Route::post('/hr/employees', [\App\Http\Controllers\Api\HrController::class, 'storeEmployee'])->middleware('role:accountant,production_manager');
+        Route::post('/hr/employees', [\App\Http\Controllers\Api\HrController::class, 'storeEmployee'])->middleware('role:accountant,production_manager,company_owner');
+        Route::get('/hr/employees/{id}', [\App\Http\Controllers\Api\HrController::class, 'showEmployee']);
+        Route::put('/hr/employees/{id}', [\App\Http\Controllers\Api\HrController::class, 'updateEmployee'])->middleware('role:accountant,production_manager,company_owner');
+
+        // الحضور والانصراف وساعات العمل والورديات
+        Route::get('/hr/attendances', [\App\Http\Controllers\Api\HrController::class, 'attendances']);
+        Route::post('/hr/attendances', [\App\Http\Controllers\Api\HrController::class, 'storeAttendance'])->middleware('role:accountant,production_manager,company_owner');
+        Route::put('/hr/attendances/{id}', [\App\Http\Controllers\Api\HrController::class, 'updateAttendance'])->middleware('role:accountant,production_manager,company_owner');
+
+        // السلف والمكافآت والبدلات والخصومات
+        Route::get('/hr/adjustments', [\App\Http\Controllers\Api\HrController::class, 'adjustments']);
+        Route::post('/hr/adjustments', [\App\Http\Controllers\Api\HrController::class, 'storeAdjustment'])->middleware('role:accountant,production_manager,company_owner');
+        Route::post('/hr/adjustments/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approveAdjustment'])->middleware('role:accountant,company_owner');
+        Route::post('/hr/adjustments/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectAdjustment'])->middleware('role:accountant,company_owner');
+
+        // أجور القطعة وسجلات الإنتاج
         Route::get('/hr/piece-rates', [\App\Http\Controllers\Api\HrController::class, 'pieceRates']);
         Route::post('/hr/piece-rates', [\App\Http\Controllers\Api\HrController::class, 'storePieceRate'])->middleware('role:accountant,production_manager');
         Route::get('/hr/piece-work-logs', [\App\Http\Controllers\Api\HrController::class, 'pieceWorkLogs']);
@@ -233,9 +260,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/hr/defect-adjustments/{id}/object', [\App\Http\Controllers\Api\HrController::class, 'recordWorkerObjection']);
         Route::post('/hr/defect-adjustments/{id}/reverse', [\App\Http\Controllers\Api\HrController::class, 'reverseDefectAdjustment'])->middleware('role:production_manager,company_owner');
 
+        // مسيرات الرواتب ودورة الاعتماد والمدفوعات
         Route::get('/hr/payrolls', [\App\Http\Controllers\Api\HrController::class, 'payrolls']);
-        Route::post('/hr/payrolls/generate', [\App\Http\Controllers\Api\HrController::class, 'generatePayroll'])->middleware('role:accountant');
+        Route::get('/hr/payrolls/{id}', [\App\Http\Controllers\Api\HrController::class, 'showPayroll']);
+        Route::post('/hr/payrolls/generate', [\App\Http\Controllers\Api\HrController::class, 'generatePayroll'])->middleware('role:accountant,company_owner');
+        Route::post('/hr/payrolls/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approvePayroll'])->middleware('role:company_owner,accountant');
+        Route::post('/hr/payrolls/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectPayroll'])->middleware('role:company_owner,accountant');
+        Route::post('/hr/payrolls/{id}/finalize', [\App\Http\Controllers\Api\HrController::class, 'finalizePayroll'])->middleware('role:company_owner,accountant');
         Route::post('/hr/payrolls/{id}/pay', [\App\Http\Controllers\Api\HrController::class, 'markPayrollPaid'])->middleware('role:accountant,company_owner');
+        Route::get('/hr/payrolls/{id}/payments', [\App\Http\Controllers\Api\HrController::class, 'payrollPayments']);
 
         // إدارة المتجر الإلكتروني داخل الـ ERP (Phase 10: Storefront ERP & Themes)
         Route::get('/storefront/settings', [\App\Http\Controllers\Api\StorefrontController::class, 'settings']);
@@ -253,12 +286,36 @@ Route::prefix('v1')->group(function () {
         Route::post('/maintenance/work-orders/{id}/spare-parts', [\App\Http\Controllers\Api\MaintenanceController::class, 'addSparePart'])->middleware('role:production_manager,accountant');
         Route::post('/maintenance/work-orders/{id}/complete', [\App\Http\Controllers\Api\MaintenanceController::class, 'completeWorkOrder'])->middleware('role:production_manager,accountant');
         Route::get('/maintenance/downtime-summary', [\App\Http\Controllers\Api\MaintenanceController::class, 'downtimeSummary']);
+
+        // إدارة الاشتراكات والحصص والفوترة (Commercial SaaS Subscription Plans & Usage Metering)
+        Route::get('/subscription/current', [\App\Http\Controllers\Api\SubscriptionController::class, 'current']);
+        Route::post('/subscription/upgrade', [\App\Http\Controllers\Api\SubscriptionController::class, 'upgrade'])->middleware('role:company_owner');
+        Route::get('/admin/subscriptions', [\App\Http\Controllers\Api\SubscriptionController::class, 'adminList'])->middleware('role:platform_admin,company_owner');
+        Route::post('/admin/subscriptions/override', [\App\Http\Controllers\Api\SubscriptionController::class, 'grantOverride'])->middleware('role:platform_admin,company_owner');
+
+        // منصة وصلة ورش الصناعية للتشغيل وسوق المشاغل (Phase G: Waslat Worsh B2B Marketplace)
+        Route::get('/waslat-worsh/workshops', [\App\Http\Controllers\Api\WaslatWorshController::class, 'workshops']);
+        Route::post('/waslat-worsh/workshops', [\App\Http\Controllers\Api\WaslatWorshController::class, 'storeWorkshop']);
+        Route::get('/waslat-worsh/rfqs', [\App\Http\Controllers\Api\WaslatWorshController::class, 'rfqs']);
+        Route::post('/waslat-worsh/rfqs', [\App\Http\Controllers\Api\WaslatWorshController::class, 'storeRfq'])->middleware('throttle:marketplace-rfq');
+        Route::get('/waslat-worsh/rfqs/{id}', [\App\Http\Controllers\Api\WaslatWorshController::class, 'showRfq']);
+        Route::post('/waslat-worsh/rfqs/{id}/bids', [\App\Http\Controllers\Api\WaslatWorshController::class, 'submitBid'])->middleware('throttle:marketplace-rfq');
+        Route::post('/waslat-worsh/rfqs/{id}/bids/{bidId}/accept', [\App\Http\Controllers\Api\WaslatWorshController::class, 'acceptBid']);
+        Route::post('/waslat-worsh/reviews', [\App\Http\Controllers\Api\WaslatWorshController::class, 'storeReview']);
     });
 
+    // قائمة باقات الاشتراك العامة
+    Route::get('/subscription/plans', [\App\Http\Controllers\Api\SubscriptionController::class, 'plans']);
+
     // واجهة المتجر الإلكتروني العامة وتتبع الطلبات (Phase 10 & Phase A: Public Storefront & Tracking)
-    Route::get('/storefront/public/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'publicStore']);
-    Route::post('/storefront/order/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'placeOrder']);
-    Route::get('/storefront/track/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'trackOrder']);
-    Route::post('/storefront/receipt/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'submitReceipt']);
+    Route::middleware('throttle:public-storefront')->group(function () {
+        Route::get('/storefront/public/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'publicStore']);
+        Route::post('/storefront/order/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'placeOrder']);
+        Route::get('/storefront/track/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'trackOrder']);
+        Route::post('/storefront/receipt/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'submitReceipt']);
+    });
+
+    // فحص الصحة والسلامة التشغيلية (Production Health Check Probe)
+    Route::get('/health', \App\Http\Controllers\Api\HealthCheckController::class);
 });
 

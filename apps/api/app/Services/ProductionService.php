@@ -712,14 +712,46 @@ class ProductionService
                         $bundle->status = 'rework';
                         $prodOrder->increment('total_rework_quantity', $reworkQty);
                     } elseif ($decision === 'rejected') {
-                        $bundle->status = 'scrapped';
+                        $bundle->quantity = max(0, $bundle->quantity - $rejectedQty);
+                        $bundle->status = $bundle->quantity <= 0 ? 'scrapped' : 'held_for_qc';
                         $prodOrder->increment('total_scrapped_quantity', $rejectedQty);
                     } elseif ($decision === 'passed' && ($data['inspection_type'] ?? '') === 'final_audit') {
                         $bundle->status = 'completed';
                         $bundle->current_stage_code = 'completed';
+                    } elseif ($decision === 'passed') {
+                        $bundle->status = 'active';
                     }
+
+                    if ($rejectedQty > 0 && $decision !== 'rejected') {
+                        $bundle->quantity = max(0, $bundle->quantity - $rejectedQty);
+                        $bundle->status = $bundle->quantity <= 0 ? 'scrapped' : 'held_for_qc';
+                        $prodOrder->increment('total_scrapped_quantity', $rejectedQty);
+                    }
+
                     $bundle->save();
                 }
+            }
+
+            // تسجيل إدخال الهالك / الخردة في مخزن الهالك إذا تم تمرير scrap_inventory_item_id
+            if (!empty($data['scrap_inventory_item_id']) && $rejectedQty > 0) {
+                $scrapItem = InventoryItem::where('tenant_id', $tenantId)
+                    ->where('id', $data['scrap_inventory_item_id'])
+                    ->first();
+                if (!$scrapItem) {
+                    throw new InvalidArgumentException('أمان: صنف مخزن الهالك غير تابع للشركة الحالية.');
+                }
+
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $tenantId,
+                    'inventory_item_id' => $data['scrap_inventory_item_id'],
+                    'quantity' => $rejectedQty,
+                    'direction' => 'IN',
+                    'transaction_type' => 'scrap',
+                    'reference_type' => 'quality_inspection',
+                    'reference_id' => $inspection->id,
+                    'reference_number' => $inspection->inspection_number,
+                    'notes' => "إثبات خردة وهالك فحص الجودة لمحضر [{$inspection->inspection_number}] لأمر الإنتاج [{$prodOrder->order_number}]",
+                ]);
             }
 
             // إذا كان هذا فحصاً نهائياً معتمداً (Final Audit): إدخال المنتجات السليمة لمخزن المنتج التام

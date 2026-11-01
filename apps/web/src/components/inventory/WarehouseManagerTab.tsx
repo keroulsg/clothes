@@ -394,14 +394,14 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
                 <tr>
-                  <th className="py-3 px-4">كود الخامة</th>
-                  <th className="py-3 px-4">اسم الخامة ومواصفات النسيج</th>
-                  <th className="py-3 px-4">المستودع وموضع الرف (Location)</th>
-                  <th className="py-3 px-4">الرصيد المتاح</th>
-                  <th className="py-3 px-4">متوسط التكلفة</th>
-                  <th className="py-3 px-4">إجمالي القيمة</th>
-                  <th className="py-3 px-4">حالة الرصيد</th>
-                  <th className="py-3 px-4 text-left">الإجراءات</th>
+                  <th className="py-3 px-4">{isAr ? 'كود الخامة' : 'Item Code'}</th>
+                  <th className="py-3 px-4">{isAr ? 'اسم الخامة ومواصفات النسيج' : 'Material Name & Specs'}</th>
+                  <th className="py-3 px-4">{isAr ? 'المستودع وموضع الرف (Location)' : 'Warehouse & Bin Location'}</th>
+                  <th className="py-3 px-4">{isAr ? 'الرصيد المتاح' : 'Available Balance'}</th>
+                  <th className="py-3 px-4">{isAr ? 'متوسط التكلفة' : 'Avg Cost'}</th>
+                  <th className="py-3 px-4">{isAr ? 'إجمالي القيمة' : 'Total Valuation'}</th>
+                  <th className="py-3 px-4">{isAr ? 'حالة الرصيد' : 'Status'}</th>
+                  <th className="py-3 px-4 text-left">{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
@@ -434,7 +434,7 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
                           <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
                           {item.technical_specs?.gsm && (
                             <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              GSM: {item.technical_specs.gsm} جم/م² • عرض: {item.technical_specs.usable_width_meters} م {item.technical_specs.roll_count ? `• ${item.technical_specs.roll_count} ثوب` : ''}
+                              GSM: {item.technical_specs.gsm} {isAr ? 'جم/م²' : 'g/m²'} • {isAr ? 'عرض:' : 'Width:'} {item.technical_specs.usable_width_meters} {isAr ? 'م' : 'm'} {item.technical_specs.roll_count ? `• ${item.technical_specs.roll_count} ${isAr ? 'ثوب' : 'rolls'}` : ''}
                             </div>
                           )}
                         </td>
@@ -444,17 +444,17 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
                             <span className="font-mono font-semibold">{rack} / {bin}</span>
                           </div>
                           <div className="text-[10px] text-slate-400 mt-0.5">
-                            {item.warehouse_name || 'المستودع الرئيسي'} {zone ? `(${zone})` : ''}
+                            {item.warehouse_name || (isAr ? 'المستودع الرئيسي' : 'Main Warehouse')} {zone ? `(${zone})` : ''}
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                           {item.current_balance.toLocaleString()} {item.unit_of_measure}
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
-                          {item.average_cost.toFixed(2)} ج.م
+                          {item.average_cost.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
-                          {totalVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+                          {totalVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
                         </td>
                         <td className="py-3 px-4">
                           {isLow ? (
@@ -528,14 +528,14 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
                 <tr>
-                  <th className="py-3 px-4">كود الصنف / SKU</th>
-                  <th className="py-3 px-4">اسم الموديل والمتغير (Color/Size)</th>
-                  <th className="py-3 px-4">موضع الرف (Rack/Bin)</th>
-                  <th className="py-3 px-4">الرصيد الفعلي</th>
-                  <th className="py-3 px-4">المحجوز للطلبات</th>
-                  <th className="py-3 px-4">المتاح للبيع (POS & Web)</th>
-                  <th className="py-3 px-4">سعر التكلفة</th>
-                  <th className="py-3 px-4 text-left">الإجراءات</th>
+                  <th className="py-3 px-4">{isAr ? 'كود الصنف / SKU' : 'SKU / Code'}</th>
+                  <th className="py-3 px-4">{isAr ? 'اسم الموديل والمتغير (Color/Size)' : 'Model & Variant (Color/Size)'}</th>
+                  <th className="py-3 px-4">{isAr ? 'موضع الرف (Rack/Bin)' : 'Bin Location (Rack/Bin)'}</th>
+                  <th className="py-3 px-4">{isAr ? 'الرصيد الفعلي' : 'Physical Balance'}</th>
+                  <th className="py-3 px-4">{isAr ? 'المحجوز للطلبات' : 'Reserved'}</th>
+                  <th className="py-3 px-4">{isAr ? 'المتاح للبيع (POS & Web)' : 'Available to Sell'}</th>
+                  <th className="py-3 px-4">{isAr ? 'سعر التكلفة' : 'Cost Price'}</th>
+                  <th className="py-3 px-4 text-left">{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
@@ -567,7 +567,7 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
                           <div className="font-medium text-slate-800 dark:text-slate-200">{item.name}</div>
                           {item.variant && (
                             <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              {item.variant.color_name || 'عام'} • {item.variant.size_name || 'عام'} • SKU: {item.variant.sku}
+                              {(item.variant.color_name || (isAr ? 'عام' : 'General'))} • {(item.variant.size_name || (isAr ? 'عام' : 'General'))} • SKU: {item.variant.sku}
                             </div>
                           )}
                         </td>
@@ -577,7 +577,7 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
                             <span className="font-mono font-semibold">{rack} / {bin}</span>
                           </div>
                           <div className="text-[10px] text-slate-400 mt-0.5">
-                            {item.warehouse_name || 'مستودع المعرض والبيع'}
+                            {item.warehouse_name || (isAr ? 'مستودع المعرض والبيع' : 'Showroom & Sales Warehouse')}
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
@@ -590,7 +590,7 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
                           {available.toLocaleString()} {item.unit_of_measure}
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-700 dark:text-slate-300">
-                          {item.average_cost.toFixed(2)} ج.م
+                          {item.average_cost.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
                         </td>
                         <td className="py-3 px-4 text-left">
                           <div className="flex items-center gap-1.5 justify-end">
@@ -650,8 +650,12 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">أرصدة خامات العملاء (أمانات تشغيل للغير)</h4>
-              <p className="text-xs text-slate-400">خامات لا تسجل كأصول للمصنع ولا تدخل ضمن حسابات تكلفة البضاعة المباعة</p>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                {isAr ? 'أرصدة خامات العملاء (أمانات تشغيل للغير)' : 'Customer CMT Fabric Balances'}
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                {isAr ? 'خامات لا تسجل كأصول للمصنع ولا تدخل ضمن حسابات تكلفة البضاعة المباعة' : 'Customer-supplied fabrics held in trust; excluded from factory inventory valuation.'}
+              </p>
             </div>
             <Button
               size="sm"
@@ -666,8 +670,12 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
           {customerMaterials.length === 0 ? (
             <Card className="p-12 text-center text-slate-400">
               <Boxes className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
-              <div className="font-semibold text-slate-700 dark:text-slate-300">لا توجد أمانات خامات عملاء مسجلة حالياً.</div>
-              <div className="text-xs text-slate-400 mt-1">عند استلام أقمشة لقصها أو تشغيلها للغير، ستظهر هنا كأمانة منفصلة.</div>
+              <div className="font-semibold text-slate-700 dark:text-slate-300">
+                {isAr ? 'لا توجد أمانات خامات عملاء مسجلة حالياً.' : 'No customer-supplied materials recorded.'}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {isAr ? 'عند استلام أقمشة لقصها أو تشغيلها للغير، ستظهر هنا كأمانة منفصلة.' : 'Received CMT fabrics for subcontracting will be tracked here.'}
+              </div>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -678,26 +686,26 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
                     <span className="font-mono text-[11px] text-slate-400">{cm.fabric_code}</span>
                   </div>
                   <h5 className="text-xs font-semibold text-slate-900 dark:text-white">{cm.fabric_name}</h5>
-                  <div className="text-[11px] text-slate-400">
-                    كثافة النسيج: <strong className="text-slate-300 font-mono">{cm.gsm} GSM</strong> • العرض الصالح: <strong className="text-slate-300 font-mono">{cm.usable_width_meters} م</strong>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                    {isAr ? 'كثافة النسيج:' : 'GSM:'} <strong className="text-slate-800 dark:text-slate-300 font-mono">{cm.gsm} GSM</strong> • {isAr ? 'العرض الصالح:' : 'Usable Width:'} <strong className="text-slate-800 dark:text-slate-300 font-mono">{cm.usable_width_meters} {isAr ? 'م' : 'm'}</strong>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-1.5 p-2 rounded-lg bg-slate-900 border border-slate-800 text-center text-[10px]">
+                  <div className="grid grid-cols-4 gap-1.5 p-2 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center text-[10px]">
                     <div>
-                      <span className="text-slate-400 block">المستلم</span>
-                      <strong className="font-mono text-slate-200">{cm.received_meters} م</strong>
+                      <span className="text-slate-500 dark:text-slate-400 block">{isAr ? 'المستلم' : 'Received'}</span>
+                      <strong className="font-mono text-slate-800 dark:text-slate-200">{cm.received_meters} {isAr ? 'م' : 'm'}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block">المستهلك</span>
-                      <strong className="font-mono text-sky-400">{cm.consumed_meters} م</strong>
+                      <span className="text-slate-500 dark:text-slate-400 block">{isAr ? 'المستهلك' : 'Consumed'}</span>
+                      <strong className="font-mono text-sky-600 dark:text-sky-400">{cm.consumed_meters} {isAr ? 'م' : 'm'}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block">الهالك</span>
-                      <strong className="font-mono text-rose-400">{cm.waste_meters} م</strong>
+                      <span className="text-slate-500 dark:text-slate-400 block">{isAr ? 'الهالك' : 'Scrap'}</span>
+                      <strong className="font-mono text-rose-600 dark:text-rose-400">{cm.waste_meters} {isAr ? 'م' : 'm'}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block">المتبقي</span>
-                      <strong className="font-mono text-emerald-400 font-bold">{cm.remaining_meters} م</strong>
+                      <span className="text-slate-500 dark:text-slate-400 block">{isAr ? 'المتبقي' : 'Remaining'}</span>
+                      <strong className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{cm.remaining_meters} {isAr ? 'م' : 'm'}</strong>
                     </div>
                   </div>
                 </Card>
@@ -714,21 +722,21 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
                 <tr>
-                  <th className="py-2.5 px-4">الوقت والتاريخ</th>
-                  <th className="py-2.5 px-4">الصنف المخزني</th>
-                  <th className="py-2.5 px-4">نوع الحركة</th>
-                  <th className="py-2.5 px-4">الاتجاه</th>
-                  <th className="py-2.5 px-4">الكمية</th>
-                  <th className="py-2.5 px-4">قبل الحركة</th>
-                  <th className="py-2.5 px-4">بعد الحركة</th>
-                  <th className="py-2.5 px-4">المستند المرجعي</th>
+                  <th className="py-2.5 px-4">{isAr ? 'الوقت والتاريخ' : 'Timestamp'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'الصنف المخزني' : 'Item'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'نوع الحركة' : 'Tx Type'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'الاتجاه' : 'Direction'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'الكمية' : 'Quantity'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'قبل الحركة' : 'Before'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'بعد الحركة' : 'After'}</th>
+                  <th className="py-2.5 px-4">{isAr ? 'المستند المرجعي' : 'Ref Document'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
                 {filteredLedger.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-10 text-center font-sans text-slate-400">
-                      لا توجد حركات مسجلة في دفتر الأستاذ المخزني بعد.
+                      {isAr ? 'لا توجد حركات مسجلة في دفتر الأستاذ المخزني بعد.' : 'No movements recorded in the stock ledger yet.'}
                     </td>
                   </tr>
                 ) : (

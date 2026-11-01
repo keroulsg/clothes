@@ -20,17 +20,17 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseStyles =
-    'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7F1625] focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none active:scale-[0.98]';
+    'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none active:scale-[0.98]';
 
   const variants = {
     primary:
-      'bg-gradient-to-r from-[#7F1625] to-[#941b2d] hover:from-[#6a121e] hover:to-[#7F1625] text-white shadow-xs border border-[#7F1625] font-bold hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 dark:from-[#9E2A3B] dark:to-[#7F1625]',
+      'bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-primary-light)] hover:opacity-95 text-white shadow-xs border border-[var(--brand-border)] font-bold hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0',
     secondary:
       'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700',
     outline:
-      'bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:border-[#7F1625] hover:text-[#7F1625] font-semibold dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:border-[#9E2A3B] dark:hover:text-[#F87171]',
+      'bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] font-semibold dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:border-[var(--brand-primary)] dark:hover:text-[#F87171]',
     accent:
-      'bg-[#7F1625]/10 border border-[#7F1625]/25 text-[#7F1625] hover:bg-[#7F1625]/15 font-bold dark:bg-[#9E2A3B]/20 dark:text-[#F87171] dark:border-[#9E2A3B]/40',
+      'bg-[var(--brand-subtle)] border border-[var(--brand-border)] text-[var(--brand-primary)] hover:opacity-90 font-bold dark:text-[#F87171]',
     success:
       'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-bold border border-emerald-600 dark:bg-emerald-700 dark:hover:bg-emerald-600',
     danger:
@@ -50,12 +50,13 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       className={clsx(baseStyles, variants[variant], sizes[size], className)}
       disabled={disabled || isLoading}
+      aria-busy={isLoading ? 'true' : undefined}
       {...props}
     >
       {isLoading ? (
-        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+        <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
       ) : icon ? (
-        <span className="shrink-0 flex items-center justify-center">{icon}</span>
+        <span className="shrink-0 flex items-center justify-center" aria-hidden="true">{icon}</span>
       ) : null}
       {children && <span>{children}</span>}
     </button>

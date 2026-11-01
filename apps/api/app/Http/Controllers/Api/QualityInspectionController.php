@@ -50,6 +50,7 @@ class QualityInspectionController extends Controller
             'decision' => 'nullable|string',
             'notes' => 'nullable|string',
             'finished_goods_inventory_item_id' => 'nullable|uuid',
+            'scrap_inventory_item_id' => 'nullable|uuid',
             'defects' => 'nullable|array',
             'defects.*.defect_type' => 'required|string',
             'defects.*.severity' => 'nullable|string',
@@ -84,6 +85,17 @@ class QualityInspectionController extends Controller
                     'success' => false,
                     'error' => 'CrossTenantAccessDenied',
                     'message' => 'أمان: صنف المنتج التام غير تابع لشركتك.',
+                ], 403);
+            }
+        }
+
+        if (!empty($validated['scrap_inventory_item_id'])) {
+            $scrapItem = InventoryItem::withoutGlobalScopes()->find($validated['scrap_inventory_item_id']);
+            if (!$scrapItem || $scrapItem->tenant_id !== $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'أمان: صنف مخزن الهالك/الخردة غير تابع لشركتك.',
                 ], 403);
             }
         }

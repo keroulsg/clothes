@@ -450,11 +450,11 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
                         <span>•</span>
                         <span>{item.color || 'Navy'}</span>
                         <span>•</span>
-                        <span>{item.quantity} {isAr ? 'قطع' : 'pcs'} × {Number(item.unit_price).toLocaleString()} {storeInfo?.currency || 'ج.م'}</span>
+                        <span>{item.quantity} {isAr ? 'قطع' : 'pcs'} × {Number(item.unit_price).toLocaleString()} {storeInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
                       </div>
                     </div>
                     <span className="font-bold text-slate-900 dark:text-white">
-                      {Number(item.total_price).toLocaleString()} {storeInfo?.currency || 'ج.م'}
+                      {Number(item.total_price).toLocaleString()} {storeInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
                     </span>
                   </div>
                 ))}
@@ -463,15 +463,15 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
                 <div className="flex justify-between text-slate-500">
                   <span>{isAr ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
-                  <span>{Number(orderData.subtotal).toLocaleString()} {storeInfo?.currency || 'ج.م'}</span>
+                  <span>{Number(orderData.subtotal).toLocaleString()} {storeInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>{isAr ? 'رسوم الشحن والتوصيل:' : 'Shipping Fee:'}</span>
-                  <span>{Number(orderData.shipping_fee).toLocaleString()} {storeInfo?.currency || 'ج.م'}</span>
+                  <span>{Number(orderData.shipping_fee).toLocaleString()} {storeInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
                 </div>
                 <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white pt-2 border-t border-slate-200 dark:border-slate-800">
                   <span>{isAr ? 'الإجمالي الكلي:' : 'Total Amount:'}</span>
-                  <span className="text-primary">{Number(orderData.total_amount).toLocaleString()} {storeInfo?.currency || 'ج.م'}</span>
+                  <span className="text-primary">{Number(orderData.total_amount).toLocaleString()} {storeInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</span>
                 </div>
               </div>
 

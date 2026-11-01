@@ -48,7 +48,8 @@ import type { Language } from '../../types';
 interface PlatformAdminDashboardProps {
   currentUser: ApiUser;
   onLogout: () => void;
-  lang: Language;
+  lang?: Language;
+  isAr?: boolean;
   onToggleLang: () => void;
   isDark?: boolean;
   onToggleTheme?: () => void;
@@ -58,15 +59,17 @@ interface PlatformAdminDashboardProps {
 export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   currentUser,
   onLogout,
-  lang,
+  lang = 'ar',
+  isAr: propIsAr,
   onToggleLang,
   isDark = true,
   onSwitchToTenantApp,
 }) => {
-  const isAr = lang === 'ar';
+  const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'domains' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'domains' | 'audit' | 'subscriptions'>('overview');
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   // Metrics State
   const [metrics, setMetrics] = useState<any>(null);
@@ -97,8 +100,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   const [selectedTenantForActivation, setSelectedTenantForActivation] = useState<any | null>(null);
   const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
   const [authCode, setAuthCode] = useState('');
-  const [authorizedBy, setAuthorizedBy] = useState(currentUser.name || 'مدير المنصة العام');
-  const [activationReason, setActivationReason] = useState('سداد يدوي معتمد أو اتفاقية تعاقد مباشر');
+  const [authorizedBy, setAuthorizedBy] = useState(currentUser.name || (isAr ? 'مدير المنصة العام' : 'Platform Superadmin'));
+  const [activationReason, setActivationReason] = useState(isAr ? 'سداد يدوي معتمد أو اتفاقية تعاقد مباشر' : 'Approved manual payment / direct contract');
   const [activationPlanTier, setActivationPlanTier] = useState('professional');
   const [isSubmittingActivation, setIsSubmittingActivation] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
@@ -107,7 +110,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
   // Suspend Tenant Modal
   const [selectedTenantForSuspend, setSelectedTenantForSuspend] = useState<any | null>(null);
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
-  const [suspendReason, setSuspendReason] = useState('انتهاء الفترة التجريبية وتأخر سداد الاشتراك');
+  const [suspendReason, setSuspendReason] = useState(isAr ? 'انتهاء الفترة التجريبية وتأخر سداد الاشتراك' : 'Trial period expired / delayed subscription payment');
   const [isSubmittingSuspend, setIsSubmittingSuspend] = useState(false);
   const [suspendError, setSuspendError] = useState<string | null>(null);
 
@@ -139,6 +142,52 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
 
   // General Notification
   const [globalMessage, setGlobalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Subscriptions & Usage Quotas State
+  const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
+  const [isAdminSubsLoading, setIsAdminSubsLoading] = useState(false);
+  const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
+  const [overrideTenant, setOverrideTenant] = useState<any | null>(null);
+  const [overrideMeterKey, setOverrideMeterKey] = useState('cutting_lays');
+  const [overrideLimit, setOverrideLimit] = useState(500);
+  const [overrideReason, setOverrideReason] = useState(isAr ? 'استثناء تشغيلي طارئ لخطوط القص بمناسبة ضغط التصدير' : 'Emergency export season lay override');
+  const [overrideDays, setOverrideDays] = useState(7);
+  const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
+
+  // Load Admin Subscriptions
+  const loadAdminSubscriptions = async (page = 1) => {
+    setIsAdminSubsLoading(true);
+    try {
+      const res = await api.subscription.getAdminSubscriptions(page);
+      setAdminSubscriptions(res.data || []);
+    } catch (_err) {
+      setAdminSubscriptions([]);
+    } finally {
+      setIsAdminSubsLoading(false);
+    }
+  };
+
+  const handleGrantOverride = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!overrideTenant) return;
+    setIsSubmittingOverride(true);
+    try {
+      const res = await api.subscription.grantAdminOverride({
+        tenant_id: overrideTenant.id,
+        meter_key: overrideMeterKey,
+        temporary_limit: Number(overrideLimit),
+        reason: overrideReason,
+        days: Number(overrideDays),
+      });
+      setGlobalMessage({ type: 'success', text: res.message || (isAr ? 'تم منح الاستثناء بنجاح' : 'Override granted successfully') });
+      setIsOverrideModalOpen(false);
+      loadAdminSubscriptions();
+    } catch (err: any) {
+      setGlobalMessage({ type: 'error', text: err.message || (isAr ? 'فشل منح الاستثناء' : 'Failed to grant override') });
+    } finally {
+      setIsSubmittingOverride(false);
+    }
+  };
 
   // Load Overview Metrics
   const loadOverview = async () => {
@@ -272,6 +321,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
       loadDomains(1);
     } else if (activeTab === 'audit') {
       loadAuditLogs(1);
+    } else if (activeTab === 'subscriptions') {
+      loadAdminSubscriptions(1);
     }
   }, [activeTab, tenantStatusFilter, tenantPlanFilter]);
 
@@ -290,11 +341,11 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
     setSubdomainError(null);
     try {
       const res = await api.platformAdmin.updateSubdomain(selectedTenantForSubdomain.id, subdomainInput);
-      setGlobalMessage({ type: 'success', text: res.message || 'تم تحديث النطاق الفرعي بنجاح.' });
+      setGlobalMessage({ type: 'success', text: res.message || (isAr ? 'تم تحديث النطاق الفرعي بنجاح.' : 'Subdomain updated successfully.') });
       setIsSubdomainModalOpen(false);
       loadDomains(domainPage);
     } catch (err: any) {
-      setSubdomainError(err.message || 'فشل تحديث النطاق الفرعي.');
+      setSubdomainError(err.message || (isAr ? 'فشل تحديث النطاق الفرعي.' : 'Failed to update subdomain.'));
     } finally {
       setIsSubmittingSubdomain(false);
     }
@@ -314,11 +365,11 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
     setCustomDomainError(null);
     try {
       const res = await api.platformAdmin.updateCustomDomain(selectedTenantForCustomDomain.id, customDomainInput.trim() || null);
-      setGlobalMessage({ type: 'success', text: res.message || 'تم تحديث النطاق المخصص.' });
+      setGlobalMessage({ type: 'success', text: res.message || (isAr ? 'تم تحديث النطاق المخصص.' : 'Custom domain updated.') });
       setIsCustomDomainModalOpen(false);
       loadDomains(domainPage);
     } catch (err: any) {
-      setCustomDomainError(err.message || 'فشل تحديث النطاق المخصص.');
+      setCustomDomainError(err.message || (isAr ? 'فشل تحديث النطاق المخصص.' : 'Failed to update custom domain.'));
     } finally {
       setIsSubmittingCustomDomain(false);
     }
@@ -395,7 +446,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
         if (activeTab === 'tenants') loadTenants(tenantPage);
       }, 1500);
     } catch (err: any) {
-      setActivationError(err.message || 'فشل تفعيل الاشتراك. تحقق من كود التفويض الأمني.');
+      setActivationError(err.message || (isAr ? 'فشل تفعيل الاشتراك. تحقق من كود التفويض الأمني.' : 'Failed to activate subscription. Check security auth code.'));
     } finally {
       setIsSubmittingActivation(false);
     }
@@ -415,7 +466,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
       loadOverview();
       if (activeTab === 'tenants') loadTenants(tenantPage);
     } catch (err: any) {
-      setSuspendError(err.message || 'فشل تعليق الحساب.');
+      setSuspendError(err.message || (isAr ? 'فشل تعليق الحساب.' : 'Failed to suspend account.'));
     } finally {
       setIsSubmittingSuspend(false);
     }
@@ -439,9 +490,9 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 <span
                   className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border"
                   style={{
-                    backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                    color: isDark ? '#fca5a5' : '#7F1625',
-                    borderColor: isDark ? '#871b29' : 'rgba(70, 8, 9, 0.3)',
+                    backgroundColor: isDark ? 'rgba(158, 42, 59, 0.25)' : 'rgba(127, 22, 37, 0.08)',
+                    color: isDark ? '#fca5a5' : 'var(--brand-primary)',
+                    borderColor: isDark ? '#871b29' : 'rgba(127, 22, 37, 0.3)',
                   }}
                 >
                   Platform Super Admin
@@ -482,8 +533,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               color="danger"
               variant="outline"
               size="sm"
-              className="text-xs text-rose-400 border-rose-500/40 hover:bg-rose-950/40"
-              onClick={onLogout}
+              className="text-xs text-rose-400 border-rose-500/40 hover:bg-rose-950/40 cursor-pointer"
+              onClick={() => setIsLogoutModalOpen(true)}
             >
               <LogOut className="w-3.5 h-3.5 inline-block mr-1 rtl:ml-1" />
               <span>{isAr ? 'خروج' : 'Logout'}</span>
@@ -573,6 +624,26 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
           >
             {isAr ? 'سجل الرقابة والتدقيق العام (Audit Logs)' : 'Platform Audit Logs'}
           </button>
+
+          <button
+            onClick={() => setActiveTab('subscriptions')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'subscriptions'
+                ? 'text-white border shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+            style={
+              activeTab === 'subscriptions'
+                ? {
+                    backgroundColor: 'var(--brand-primary)',
+                    borderColor: 'var(--brand-primary-light)',
+                    boxShadow: '0 4px 14px 0 rgba(70, 8, 9, 0.35)',
+                  }
+                : {}
+            }
+          >
+            {isAr ? 'الاشتراكات والحصص (SaaS Quotas)' : 'Subscriptions & Meters'}
+          </button>
         </div>
       </header>
 
@@ -632,8 +703,8 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                           <div
                             className="w-8 h-8 rounded-lg flex items-center justify-center"
                             style={{
-                              backgroundColor: isDark ? 'rgba(70, 8, 9, 0.25)' : 'rgba(70, 8, 9, 0.08)',
-                              color: isDark ? '#fca5a5' : '#7F1625',
+                              backgroundColor: isDark ? 'rgba(158, 42, 59, 0.25)' : 'rgba(127, 22, 37, 0.08)',
+                              color: isDark ? '#fca5a5' : 'var(--brand-primary)',
                             }}
                           >
                             <Building2 className="w-4 h-4" />
@@ -710,32 +781,32 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-slate-500" />
-                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>باقة الورش الصغيرة (Starter)</span>
+                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{isAr ? 'باقة الورش الصغيرة (Starter)' : 'Small Workshops (Starter)'}</span>
                           </div>
-                          <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{metrics.tier_counts?.starter || 0} مصانع</span>
+                          <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{metrics.tier_counts?.starter || 0} {isAr ? 'مصانع' : 'factories'}</span>
                         </div>
 
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--brand-primary)' }} />
-                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>باقة المصانع المتكاملة (Professional)</span>
+                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{isAr ? 'باقة المصانع المتكاملة (Professional)' : 'Full Factories (Professional)'}</span>
                           </div>
-                          <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{metrics.tier_counts?.professional || 0} مصانع</span>
+                          <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{metrics.tier_counts?.professional || 0} {isAr ? 'مصانع' : 'factories'}</span>
                         </div>
 
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>باقة الشركات الكبرى (Enterprise)</span>
+                            <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{isAr ? 'باقة الشركات الكبرى (Enterprise)' : 'Enterprise Scale'}</span>
                           </div>
-                          <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{metrics.tier_counts?.enterprise || 0} مصانع</span>
+                          <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{metrics.tier_counts?.enterprise || 0} {isAr ? 'مصانع' : 'factories'}</span>
                         </div>
 
                         {metrics.suspended_tenants > 0 && (
                           <div className="pt-3 border-t border-slate-700 dark:border-slate-800 flex items-center justify-between text-xs text-rose-600 dark:text-rose-400">
                             <div className="flex items-center gap-2">
                               <XCircle className="w-3.5 h-3.5" />
-                              <span>حسابات معلقة (Suspended)</span>
+                              <span>{isAr ? 'حسابات معلقة (Suspended)' : 'Suspended Tenants'}</span>
                             </div>
                             <span className="font-bold">{metrics.suspended_tenants}</span>
                           </div>
@@ -907,15 +978,15 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                           </CTableDataCell>
                           <CTableDataCell>
                             {t.status === 'active' ? (
-                              <CBadge color="success" className="text-[10px] px-2 py-0.5">نشط (Active)</CBadge>
+                              <CBadge color="success" className="text-[10px] px-2 py-0.5">{isAr ? 'نشط (Active)' : 'Active'}</CBadge>
                             ) : t.status === 'trial' ? (
-                              <CBadge color="warning" className="text-[10px] px-2 py-0.5">تجريبي (Trial)</CBadge>
+                              <CBadge color="warning" className="text-[10px] px-2 py-0.5">{isAr ? 'تجريبي (Trial)' : 'Trial'}</CBadge>
                             ) : (
-                              <CBadge color="danger" className="text-[10px] px-2 py-0.5">معلق (Suspended)</CBadge>
+                              <CBadge color="danger" className="text-[10px] px-2 py-0.5">{isAr ? 'معلق (Suspended)' : 'Suspended'}</CBadge>
                             )}
                           </CTableDataCell>
                           <CTableDataCell className="text-slate-400">
-                            {t.users_count || 1} مستخدم • {t.branches_count || 1} فروع
+                            {t.users_count || 1} {isAr ? 'مستخدم' : 'users'} • {t.branches_count || 1} {isAr ? 'فروع' : 'branches'}
                           </CTableDataCell>
                           <CTableDataCell className="text-[11px] text-slate-400">
                             {t.created_at ? t.created_at.split('T')[0] : ''}
@@ -936,7 +1007,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                                 color="primary"
                                 size="sm"
                                 className="text-[11px] py-1 px-2.5 text-white font-bold"
-                                style={{ backgroundColor: 'var(--brand-primary, #7F1625)', borderColor: 'var(--brand-primary, #7F1625)' }}
+                                style={{ backgroundColor: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' }}
                                 onClick={() => {
                                   setSelectedTenantForActivation(t);
                                   setIsActivationModalOpen(true);
@@ -974,7 +1045,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             {tenantTotalPages > 1 && (
               <div className="flex items-center justify-between text-xs text-slate-400 pt-2">
                 <div>
-                  صفحة {tenantPage} من {tenantTotalPages}
+                  {isAr ? `صفحة ${tenantPage} من ${tenantTotalPages}` : `Page ${tenantPage} of ${tenantTotalPages}`}
                 </div>
                 <div className="flex items-center gap-2">
                   <CButton
@@ -985,7 +1056,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     onClick={() => loadTenants(tenantPage - 1)}
                     className="text-xs text-slate-300 border-slate-700"
                   >
-                    السابق
+                    {isAr ? 'السابق' : 'Previous'}
                   </CButton>
                   <CButton
                     color="secondary"
@@ -995,7 +1066,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     onClick={() => loadTenants(tenantPage + 1)}
                     className="text-xs text-slate-300 border-slate-700"
                   >
-                    التالي
+                    {isAr ? 'التالي' : 'Next'}
                   </CButton>
                 </div>
               </div>
@@ -1009,7 +1080,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h1 className={`text-xl font-extrabold flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                  <Globe className="w-5 h-5" style={{ color: 'var(--brand-primary, #7F1625)' }} />
+                  <Globe className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} />
                   <span>{isAr ? 'إدارة النطاقات والمتاجر الإلكترونية' : 'Domain & Storefront Routing Management'}</span>
                 </h1>
                 <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1028,7 +1099,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     onChange={(e) => setDomainSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && loadDomains(1)}
                     placeholder={isAr ? 'بحث بالنطاق أو اسم المصنع...' : 'Search domain or company...'}
-                    className={`pl-8 rtl:pr-8 rtl:pl-3 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:border-[#7F1625] ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                    className={`pl-8 rtl:pr-8 rtl:pl-3 pr-3 py-1.5 border rounded-xl text-xs focus:outline-none focus:border-[var(--brand-primary)] ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
                   />
                 </div>
 
@@ -1202,7 +1273,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             {domainTotalPages > 1 && (
               <div className="flex items-center justify-between text-xs text-slate-400 pt-2">
                 <div>
-                  صفحة {domainPage} من {domainTotalPages}
+                  {isAr ? `صفحة ${domainPage} من ${domainTotalPages}` : `Page ${domainPage} of ${domainTotalPages}`}
                 </div>
                 <div className="flex items-center gap-2">
                   <CButton
@@ -1213,7 +1284,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     onClick={() => loadDomains(domainPage - 1)}
                     className="text-xs text-slate-300 border-slate-700"
                   >
-                    السابق
+                    {isAr ? 'السابق' : 'Previous'}
                   </CButton>
                   <CButton
                     color="secondary"
@@ -1223,7 +1294,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                     onClick={() => loadDomains(domainPage + 1)}
                     className="text-xs text-slate-300 border-slate-700"
                   >
-                    التالي
+                    {isAr ? 'التالي' : 'Next'}
                   </CButton>
                 </div>
               </div>
@@ -1287,19 +1358,19 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                             {log.action === 'admin_manual_activation' ? (
                               <span className="text-emerald-400 flex items-center gap-1.5">
                                 <Key className="w-3.5 h-3.5" />
-                                <span>تفعيل اشتراك يدوي</span>
+                                <span>{isAr ? 'تفعيل اشتراك يدوي' : 'Manual Activation'}</span>
                               </span>
                             ) : log.action === 'admin_suspend_tenant' ? (
                               <span className="text-rose-400 flex items-center gap-1.5">
                                 <XCircle className="w-3.5 h-3.5" />
-                                <span>تعليق حساب مصنع</span>
+                                <span>{isAr ? 'تعليق حساب مصنع' : 'Suspend Tenant'}</span>
                               </span>
                             ) : (
                               <span>{log.action}</span>
                             )}
                           </CTableDataCell>
                           <CTableDataCell>
-                            <div className="font-medium">{log.user?.name || 'مشرف المنصة'}</div>
+                            <div className="font-medium">{log.user?.name || (isAr ? 'مشرف المنصة' : 'Platform Admin')}</div>
                             <div className="text-[10px] text-slate-500 font-mono">{log.user?.email}</div>
                           </CTableDataCell>
                           <CTableDataCell className="font-mono text-slate-600 dark:text-slate-300 text-[11px]">
@@ -1353,6 +1424,105 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             </CCard>
           </div>
         )}
+
+        {/* TAB 4: PLATFORM SUBSCRIPTIONS & USAGE OVERRIDE */}
+        {activeTab === 'subscriptions' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-extrabold text-slate-100">
+                  {isAr ? 'إدارة اشتراكات المصانع واستثناءات الحصص (SaaS Meters)' : 'Subscriptions & Quota Overrides'}
+                </h1>
+                <p className="text-xs text-slate-400 mt-1">
+                  {isAr
+                    ? 'استعراض باقات المصانع، متابعة خطط الفوترة، ومنح استثناءات تشغيلية مؤقتة لخطوط القص والإنتاج.'
+                    : 'Manage factory plans, billing cycles, and grant emergency production floor quota overrides.'}
+                </p>
+              </div>
+
+              <CButton
+                color="secondary"
+                size="sm"
+                variant="outline"
+                onClick={() => loadAdminSubscriptions(1)}
+                disabled={isAdminSubsLoading}
+                className="text-xs text-slate-300 border-slate-700 hover:bg-slate-800"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 inline-block mr-1.5 rtl:ml-1.5 ${isAdminSubsLoading ? 'animate-spin' : ''}`} />
+                <span>{isAr ? 'تحديث' : 'Refresh'}</span>
+              </CButton>
+            </div>
+
+            <CCard className="bg-slate-900/80 border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+              <CCardBody className="p-0">
+                {isAdminSubsLoading ? (
+                  <div className="py-20 text-center">
+                    <CSpinner color="primary" />
+                    <div className="text-xs text-slate-400 mt-3">{isAr ? 'جارِ جلب الاشتراكات...' : 'Loading subscriptions...'}</div>
+                  </div>
+                ) : adminSubscriptions.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-xs">
+                    {isAr ? 'لا توجد اشتراكات مسجلة حالياً.' : 'No active subscriptions recorded.'}
+                  </div>
+                ) : (
+                  <CTable responsive align="middle" className="text-xs mb-0 text-slate-200">
+                    <CTableHead className="bg-slate-950/60 text-slate-400 border-b border-slate-800">
+                      <CTableRow>
+                        <CTableHeaderCell>{isAr ? 'المصنع المستأجر' : 'Factory / Tenant'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'الباقة المفعلة' : 'Plan'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'دورة الفوترة' : 'Cycle'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'الحالة' : 'Status'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'تاريخ التجديد' : 'Renews On'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'الإجراءات' : 'Actions'}</CTableHeaderCell>
+                      </CTableRow>
+                    </CTableHead>
+                    <CTableBody className="divide-y divide-slate-800">
+                      {adminSubscriptions.map((sub: any) => (
+                        <CTableRow key={sub.id} className="hover:bg-slate-800/40 transition-colors">
+                          <CTableDataCell>
+                            <div className="font-bold text-slate-100">{sub.tenant?.name || 'مصنع ملابس'}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{sub.tenant?.code}</div>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <CBadge color={sub.plan?.code === 'enterprise' ? 'warning' : sub.plan?.code === 'pro' ? 'primary' : 'secondary'} className="text-[10px]">
+                              {sub.plan?.name_ar || sub.plan?.name_en || sub.plan?.code}
+                            </CBadge>
+                          </CTableDataCell>
+                          <CTableDataCell className="capitalize font-mono">
+                            {sub.billing_cycle === 'annual' ? (isAr ? 'سنوي' : 'Annual') : (isAr ? 'شهري' : 'Monthly')}
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <CBadge color={sub.status === 'active' ? 'success' : 'danger'} className="text-[10px]">
+                              {sub.status}
+                            </CBadge>
+                          </CTableDataCell>
+                          <CTableDataCell className="text-slate-400 font-mono">
+                            {sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString(isAr ? 'ar-EG' : 'en-US') : '-'}
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <CButton
+                              color="primary"
+                              variant="outline"
+                              size="sm"
+                              className="text-[11px] py-1 px-2.5"
+                              onClick={() => {
+                                setOverrideTenant(sub.tenant);
+                                setIsOverrideModalOpen(true);
+                              }}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 inline-block mr-1 rtl:ml-1" />
+                              <span>{isAr ? 'استثناء طارئ' : 'Grant Override'}</span>
+                            </CButton>
+                          </CTableDataCell>
+                        </CTableRow>
+                      ))}
+                    </CTableBody>
+                  </CTable>
+                )}
+              </CCardBody>
+            </CCard>
+          </div>
+        )}
       </CContainer>
 
       {/* MODAL 1: TENANT DETAILS */}
@@ -1366,7 +1536,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
         <CModalHeader className="bg-slate-900 border-b border-slate-800 text-slate-100">
           <CModalTitle className="text-sm font-bold flex items-center gap-2">
             <Building2 className="w-4 h-4 text-slate-400" />
-            <span>بيانات وتفاصيل المصنع</span>
+            <span>{isAr ? 'بيانات وتفاصيل المصنع' : 'Factory Details & Info'}</span>
           </CModalTitle>
         </CModalHeader>
         <CModalBody className="bg-slate-950 p-6 text-xs text-slate-300 space-y-5">
@@ -1380,15 +1550,15 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 <div className="text-base font-bold text-slate-100">{selectedTenantForDetails.tenant.name}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-slate-400 pt-2 border-t border-slate-800/80">
                   <div>
-                    <span className="block text-[10px] text-slate-500">كود المستأجر</span>
+                    <span className="block text-[10px] text-slate-500">{isAr ? 'كود المستأجر' : 'Tenant Code'}</span>
                     <span className="font-mono text-slate-800 dark:text-slate-200 font-bold">{selectedTenantForDetails.tenant.code}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-500">الدومين الفرعي</span>
+                    <span className="block text-[10px] text-slate-500">{isAr ? 'الدومين الفرعي' : 'Subdomain'}</span>
                     <span>{selectedTenantForDetails.tenant.subdomain}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-500">الباقة الحالية</span>
+                    <span className="block text-[10px] text-slate-500">{isAr ? 'الباقة الحالية' : 'Current Plan'}</span>
                     <span className="capitalize font-semibold text-slate-200">{selectedTenantForDetails.tenant.plan_tier}</span>
                   </div>
                 </div>
@@ -1396,14 +1566,14 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
 
               {/* Users list */}
               <div>
-                <h4 className="font-bold text-xs text-slate-200 mb-2">المستخدمين المسجلين في المصنع</h4>
+                <h4 className="font-bold text-xs text-slate-200 mb-2">{isAr ? 'المستخدمين المسجلين في المصنع' : 'Registered Users in Factory'}</h4>
                 <div className="rounded-xl border border-slate-800 overflow-hidden">
                   <CTable responsive className="text-xs mb-0 text-slate-300">
                     <CTableHead className="bg-slate-900 text-slate-400">
                       <CTableRow>
-                        <CTableHeaderCell>الاسم</CTableHeaderCell>
-                        <CTableHeaderCell>البريد الإلكتروني</CTableHeaderCell>
-                        <CTableHeaderCell>الدور والصلاحية</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'الاسم' : 'Name'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'البريد الإلكتروني' : 'Email'}</CTableHeaderCell>
+                        <CTableHeaderCell>{isAr ? 'الدور والصلاحية' : 'Role & Permissions'}</CTableHeaderCell>
                       </CTableRow>
                     </CTableHead>
                     <CTableBody className="divide-y divide-slate-800">
@@ -1425,7 +1595,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
         </CModalBody>
         <CModalFooter className="bg-slate-900 border-t border-slate-800">
           <CButton color="secondary" size="sm" onClick={() => setIsDetailsModalOpen(false)}>
-            إغلاق
+            {isAr ? 'إغلاق' : 'Close'}
           </CButton>
         </CModalFooter>
       </CModal>
@@ -1440,7 +1610,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
         <CModalHeader className="bg-slate-900 border-b border-slate-800 text-slate-100">
           <CModalTitle className="text-sm font-bold flex items-center gap-2">
             <Key className="w-4 h-4 text-emerald-400" />
-            <span>تفعيل اشتراك مصنع يدوياً (Manual Subscription Activation)</span>
+            <span>{isAr ? 'تفعيل اشتراك مصنع يدوياً (Manual Subscription Activation)' : 'Manual Subscription Activation'}</span>
           </CModalTitle>
         </CModalHeader>
         <CForm onSubmit={handleActivateSubmit}>
@@ -1448,7 +1618,9 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/20 text-amber-300 text-[11px] leading-relaxed flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <span>
-                تنبيه أمني: يتطلب هذا الإجراء إدخال كود التفويض الأمني للمنصة المعتمد في متغيرات البيئة. يتم توثيق كافة التفاصيل في سجل الرقابة والتدقيق الدائم.
+                {isAr
+                  ? 'تنبيه أمني: يتطلب هذا الإجراء إدخال كود التفويض الأمني للمنصة المعتمد في متغيرات البيئة. يتم توثيق كافة التفاصيل في سجل الرقابة والتدقيق الدائم.'
+                  : 'Security Notice: This action requires the platform master authorization key. All operations are logged in the permanent audit trail.'}
               </span>
             </div>
 
@@ -1465,39 +1637,39 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">المصنع المستهدف</label>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">{isAr ? 'المصنع المستهدف' : 'Target Factory'}</label>
               <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 font-bold text-slate-100">
                 {selectedTenantForActivation?.name} ({selectedTenantForActivation?.code})
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">باقة التفعيل المطلوبة *</label>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">{isAr ? 'باقة التفعيل المطلوبة *' : 'Requested Plan Tier *'}</label>
               <CFormSelect
                 value={activationPlanTier}
                 onChange={(e) => setActivationPlanTier(e.target.value)}
                 className="bg-slate-800 border-slate-700 text-xs text-slate-100"
               >
-                <option value="starter">باقة الورش الصغيرة (Starter) — 3 مستخدمين</option>
-                <option value="professional">باقة المصانع المتكاملة (Professional) — حتى 10 مستخدمين</option>
-                <option value="enterprise">باقة الشركات الكبرى (Enterprise) — مستخدمين وفروع غير محدودة</option>
+                <option value="starter">{isAr ? 'باقة الورش الصغيرة (Starter) — 3 مستخدمين' : 'Starter Workshop (Starter) — 3 Users'}</option>
+                <option value="professional">{isAr ? 'باقة المصانع المتكاملة (Professional) — حتى 10 مستخدمين' : 'Integrated Factory (Professional) — Up to 10 Users'}</option>
+                <option value="enterprise">{isAr ? 'باقة الشركات الكبرى (Enterprise) — مستخدمين وفروع غير محدودة' : 'Enterprise Scale — Unlimited Users & Branches'}</option>
               </CFormSelect>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">كود التفويض الأمني للمنصة (Platform Key) *</label>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">{isAr ? 'كود التفويض الأمني للمنصة (Platform Key) *' : 'Platform Security Authorization Key *'}</label>
               <CFormInput
                 type="password"
                 required
                 value={authCode}
                 onChange={(e) => setAuthCode(e.target.value)}
-                placeholder="أدخل كود التفويض الأمني للمشرف العام"
+                placeholder={isAr ? 'أدخل كود التفويض الأمني للمشرف العام' : 'Enter master platform security key'}
                 className="bg-slate-800 border-slate-700 text-xs text-slate-100"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">اسم المسؤول المعتمد للتفعيل *</label>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">{isAr ? 'اسم المسؤول المعتمد للتفعيل *' : 'Authorized Officer Name *'}</label>
               <CFormInput
                 type="text"
                 required
@@ -1508,20 +1680,20 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">سبب ومسوغ التفعيل الإداري *</label>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">{isAr ? 'سبب ومسوغ التفعيل الإداري *' : 'Activation Justification & Reason *'}</label>
               <CFormTextarea
                 rows={2}
                 required
                 value={activationReason}
                 onChange={(e) => setActivationReason(e.target.value)}
-                placeholder="أدخل سبب التفعيل وسند السداد المعتمد..."
+                placeholder={isAr ? 'أدخل سبب التفعيل وسند السداد المعتمد...' : 'Enter justification and approved payment reference...'}
                 className="bg-slate-800 border-slate-700 text-xs text-slate-100"
               />
             </div>
           </CModalBody>
           <CModalFooter className="bg-slate-900 border-t border-slate-800">
             <CButton color="secondary" size="sm" onClick={() => setIsActivationModalOpen(false)}>
-              إلغاء
+              {isAr ? 'إلغاء' : 'Cancel'}
             </CButton>
             <CButton
               type="submit"
@@ -1529,9 +1701,9 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingActivation || !authCode.trim()}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #7F1625)' }}
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
-              {isSubmittingActivation ? 'جارِ التحقق والتفعيل...' : 'تأكيد تفعيل الاشتراك'}
+              {isSubmittingActivation ? (isAr ? 'جارِ التحقق والتفعيل...' : 'Verifying & Activating...') : (isAr ? 'تأكيد تفعيل الاشتراك' : 'Confirm Subscription Activation')}
             </CButton>
           </CModalFooter>
         </CForm>
@@ -1547,13 +1719,17 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
         <CModalHeader className="bg-slate-900 border-b border-slate-800 text-slate-100">
           <CModalTitle className="text-sm font-bold flex items-center gap-2 text-rose-400">
             <XCircle className="w-4 h-4" />
-            <span>تعليق حساب المصنع</span>
+            <span>{isAr ? 'تعليق حساب المصنع' : 'Suspend Factory Account'}</span>
           </CModalTitle>
         </CModalHeader>
         <CForm onSubmit={handleSuspendSubmit}>
           <CModalBody className="bg-slate-950 p-6 space-y-4 text-xs text-slate-200">
             <p>
-              هل أنت متأكد من تعليق حساب المصنع <strong className="text-slate-100">"{selectedTenantForSuspend?.name}"</strong>؟ سيتم منع مستخدمي المصنع من الوصول لحين إعادة التفعيل.
+              {isAr ? (
+                <>هل أنت متأكد من تعليق حساب المصنع <strong className="text-slate-100">"{selectedTenantForSuspend?.name}"</strong>؟ سيتم منع مستخدمي المصنع من الوصول لحين إعادة التفعيل.</>
+              ) : (
+                <>Are you sure you want to suspend factory account <strong className="text-slate-100">"{selectedTenantForSuspend?.name}"</strong>? All tenant users will be blocked until reactivated.</>
+              )}
             </p>
 
             {suspendError && (
@@ -1563,23 +1739,23 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">سبب التعليق وتوثيق القرار *</label>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">{isAr ? 'سبب التعليق وتوثيق القرار *' : 'Suspension Reason & Documentation *'}</label>
               <CFormTextarea
                 rows={3}
                 required
                 value={suspendReason}
                 onChange={(e) => setSuspendReason(e.target.value)}
-                placeholder="اذكر سبب التعليق بوضوح..."
+                placeholder={isAr ? 'اذكر سبب التعليق بوضوح...' : 'State suspension reason clearly...'}
                 className="bg-slate-800 border-slate-700 text-xs text-slate-100"
               />
             </div>
           </CModalBody>
           <CModalFooter className="bg-slate-900 border-t border-slate-800">
             <CButton color="secondary" size="sm" onClick={() => setIsSuspendModalOpen(false)}>
-              إلغاء
+              {isAr ? 'إلغاء' : 'Cancel'}
             </CButton>
             <CButton type="submit" color="danger" size="sm" disabled={isSubmittingSuspend} className="text-white font-bold">
-              {isSubmittingSuspend ? 'جارِ التعليق...' : 'تأكيد تعليق الحساب'}
+              {isSubmittingSuspend ? (isAr ? 'جارِ التعليق...' : 'Suspending...') : (isAr ? 'تأكيد تعليق الحساب' : 'Confirm Account Suspension')}
             </CButton>
           </CModalFooter>
         </CForm>
@@ -1652,7 +1828,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingSubdomain || !subdomainInput.trim()}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #7F1625)' }}
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {isSubmittingSubdomain ? (isAr ? 'جارِ التعيين...' : 'Saving...') : (isAr ? 'حفظ وتعيين النطاق' : 'Save Subdomain')}
             </CButton>
@@ -1734,7 +1910,7 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                   <div className="bg-slate-950 p-2 rounded border border-slate-800">
                     <span className="text-slate-500 block">Host / Name:</span>
-                    <span className="font-mono text-slate-200 select-all">@ أو {customDomainInput || 'domain'}</span>
+                    <span className="font-mono text-slate-200 select-all">{isAr ? '@ أو' : '@ or'} {customDomainInput || 'domain'}</span>
                   </div>
                   <div className="bg-slate-950 p-2 rounded border border-slate-800">
                     <span className="text-slate-500 block">TXT Value:</span>
@@ -1756,12 +1932,138 @@ export const PlatformAdminDashboard: React.FC<PlatformAdminDashboardProps> = ({
               size="sm"
               disabled={isSubmittingCustomDomain}
               className="text-white font-bold"
-              style={{ backgroundColor: 'var(--brand-primary, #7F1625)' }}
+              style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {isSubmittingCustomDomain ? (isAr ? 'جارِ الحفظ...' : 'Saving...') : (isAr ? 'حفظ وتحديث النطاق' : 'Save Domain')}
             </CButton>
           </CModalFooter>
         </CForm>
+      </CModal>
+
+      {/* MODAL: EMERGENCY QUOTA OVERRIDE */}
+      <CModal
+        visible={isOverrideModalOpen}
+        onClose={() => setIsOverrideModalOpen(false)}
+        alignment="center"
+        className="cui-card-dark"
+      >
+        <CModalHeader className="border-slate-800">
+          <CModalTitle className="text-sm font-bold text-slate-100">
+            {isAr ? `منح استثناء حصة تشغيلية: ${overrideTenant?.name || ''}` : `Grant Emergency Quota Override: ${overrideTenant?.name || ''}`}
+          </CModalTitle>
+        </CModalHeader>
+        <CForm onSubmit={handleGrantOverride}>
+          <CModalBody className="space-y-4 text-xs text-slate-300">
+            <div>
+              <label className="block text-slate-400 mb-1">{isAr ? 'العداد المستثنى' : 'Target Meter'}</label>
+              <CFormSelect
+                value={overrideMeterKey}
+                onChange={(e) => setOverrideMeterKey(e.target.value)}
+                className="bg-slate-900 border-slate-700 text-slate-200 text-xs"
+              >
+                <option value="cutting_lays">{isAr ? 'فرشات صالة القص (cutting_lays)' : 'Cutting Lays'}</option>
+                <option value="active_users">{isAr ? 'المستخدمين النشطين (active_users)' : 'Active Users'}</option>
+                <option value="active_employees">{isAr ? 'العمال والموظفين (active_employees)' : 'Active Employees'}</option>
+                <option value="production_orders">{isAr ? 'أوامر التشغيل (production_orders)' : 'Production Orders'}</option>
+                <option value="purchase_orders">{isAr ? 'أوامر الشراء (purchase_orders)' : 'Purchase Orders'}</option>
+                <option value="subcontract_jobs">{isAr ? 'عقود التشغيل للغير (subcontract_jobs)' : 'Subcontract Jobs'}</option>
+              </CFormSelect>
+            </div>
+
+            <div>
+              <label className="block text-slate-400 mb-1">{isAr ? 'السعة الاستثنائية المؤقتة' : 'Temporary Quota Limit'}</label>
+              <CFormInput
+                type="number"
+                min="1"
+                value={overrideLimit}
+                onChange={(e) => setOverrideLimit(Number(e.target.value))}
+                className="bg-slate-900 border-slate-700 text-slate-200 text-xs font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-400 mb-1">{isAr ? 'مدة سريان الاستثناء (أيام)' : 'Duration (Days)'}</label>
+              <CFormInput
+                type="number"
+                min="1"
+                max="30"
+                value={overrideDays}
+                onChange={(e) => setOverrideDays(Number(e.target.value))}
+                className="bg-slate-900 border-slate-700 text-slate-200 text-xs font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-400 mb-1">{isAr ? 'سبب الاستثناء وتوثيق الاعتماد' : 'Reason / Justification'}</label>
+              <CFormTextarea
+                rows={3}
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                className="bg-slate-900 border-slate-700 text-slate-200 text-xs"
+                placeholder={isAr ? 'اكتب سبب الاستثناء لتسجيله في دفاتر التدقيق...' : 'Reason for audit trail...'}
+                required
+              />
+            </div>
+          </CModalBody>
+          <CModalFooter className="border-slate-800">
+            <CButton
+              color="secondary"
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsOverrideModalOpen(false)}
+            >
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </CButton>
+            <CButton
+              color="primary"
+              size="sm"
+              type="submit"
+              disabled={isSubmittingOverride}
+            >
+              {isSubmittingOverride ? (isAr ? 'جارِ الاعتماد...' : 'Granting...') : (isAr ? 'اعتماد الاستثناء' : 'Grant Override')}
+            </CButton>
+          </CModalFooter>
+        </CForm>
+      </CModal>
+      {/* Logout Confirmation Modal */}
+      <CModal
+        visible={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        alignment="center"
+        size="sm"
+        backdrop="static"
+      >
+        <CModalHeader closeButton>
+          <CModalTitle className="text-sm font-bold flex items-center gap-2 text-rose-400">
+            <LogOut className="w-4 h-4" />
+            <span>{isAr ? 'تأكيد تسجيل خروج المنظومة' : 'Confirm Admin Logout'}</span>
+          </CModalTitle>
+        </CModalHeader>
+        <CModalBody className="text-xs text-slate-300 py-3">
+          {isAr
+            ? 'هل أنت متأكد من تسجيل الخروج من لوحة تحكم المنظومة المركزية؟ سيتم إنهاء جلسة الإدارة وتأمين البيئة.'
+            : 'Are you sure you want to sign out of the Platform Administration? Your administrative session will be terminated.'}
+        </CModalBody>
+        <CModalFooter>
+          <CButton
+            color="secondary"
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsLogoutModalOpen(false)}
+          >
+            {isAr ? 'إلغاء' : 'Cancel'}
+          </CButton>
+          <CButton
+            color="danger"
+            size="sm"
+            onClick={() => {
+              setIsLogoutModalOpen(false);
+              onLogout();
+            }}
+          >
+            {isAr ? 'تأكيد الخروج' : 'Sign Out'}
+          </CButton>
+        </CModalFooter>
       </CModal>
     </div>
   );

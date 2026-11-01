@@ -65,14 +65,16 @@ class TenantController extends Controller
                 'phone' => $validated['phone'] ?? null,
             ]);
 
-            // إنشاء المخزن الرئيسي للمصنع
-            \App\Models\Warehouse::withoutGlobalScopes()->create([
-                'tenant_id' => $tenant->id,
-                'name' => 'مخزن الأقمشة الرئيسي',
-                'code' => 'WH-FAB-01',
-                'type' => 'fabric',
-                'allow_negative_stock' => false,
-            ]);
+            // إنشاء المخزن الرئيسي للمصنع بشكل حتمي غير مكرر (Idempotent Default Warehouse Provisioning)
+            \App\Models\Warehouse::withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $tenant->id, 'code' => 'WH-FAB-01'],
+                [
+                    'name' => 'مخزن الأقمشة الرئيسي',
+                    'type' => 'fabric',
+                    'allow_negative_stock' => false,
+                    'is_active' => true,
+                ]
+            );
 
             // إنشاء المقاسات المعيارية للشركة
             $defaultSizes = [

@@ -244,7 +244,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         subtitle={isAr
           ? 'سجل ماكينات الخياطة والقص، أوامر الصيانة الدورية والطارئة، وتتبع ساعات التوقف وقطع الغيار.'
           : 'Machine asset registry, emergency & preventative work orders, downtime logs, and spare parts.'}
-        icon={<Wrench className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        icon={<Wrench className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
         breadcrumbs={[
           { label: isAr ? 'الرئيسية' : 'Home' },
           { label: isAr ? 'صيانة الماكينات' : 'Machine Assets' },

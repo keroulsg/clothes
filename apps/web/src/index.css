@@ -47,10 +47,10 @@
   /* Borders & Dividers */
   --border-subtle: #E2E8F0;
   --border-strong: #CBD5E1;
-  --border-color: #E2E8F0;
+  --border-color: #CBD5E1;
 
   /* Typography - Pure High Contrast (Near-black main, dark readable neutral gray secondary) */
-  --text-primary: #090D16;
+  --text-primary: #0F172A;
   --text-secondary: #334155;
   --text-muted: #475569;
   --text-inverse: #ffffff;
@@ -60,10 +60,27 @@
   --color-warning: #D97706;
   --color-danger: #DC2626;
   --color-info: #2563EB;
+
+  /* CoreUI CSS Variable Mappings */
+  --cui-body-bg: var(--bg-app);
+  --cui-body-color: var(--text-primary);
+  --cui-card-bg: var(--bg-card);
+  --cui-card-color: var(--text-primary);
+  --cui-card-border-color: var(--border-subtle);
+  --cui-border-color: var(--border-subtle);
+  --cui-table-bg: transparent;
+  --cui-table-color: var(--text-primary);
+  --cui-table-border-color: var(--border-subtle);
+  --cui-table-hover-bg: var(--bg-hover);
+  --cui-table-hover-color: var(--text-primary);
+  --cui-tertiary-bg: var(--bg-muted);
+  --cui-secondary-color: var(--text-secondary);
+  color-scheme: light;
 }
 
 /* ───── Dark Theme Tokens: Restrained Burgundy Card Surfaces on Neutral Charcoal ───── */
-.dark, [data-theme="dark"] {
+.dark, [data-theme="dark"], [data-coreui-theme="dark"] {
+  color-scheme: dark;
   --brand-primary: #9E2A3B;
   --brand-primary-hover: #B8354A;
   --brand-primary-light: #C44358;
@@ -86,7 +103,7 @@
   /* Burgundy-Charcoal Borders */
   --border-subtle: #2C1820;
   --border-strong: #452430;
-  --border-color: #2C1820;
+  --border-color: #381E27;
 
   /* Typography - Crisp White & Light Gray (WCAG AAA compliant) */
   --text-primary: #F8FAFC;
@@ -98,6 +115,21 @@
   --color-warning: #FBBF24;
   --color-danger: #F87171;
   --color-info: #60A5FA;
+
+  /* CoreUI CSS Variable Mappings in Dark Mode */
+  --cui-body-bg: var(--bg-app);
+  --cui-body-color: var(--text-primary);
+  --cui-card-bg: var(--bg-card);
+  --cui-card-color: var(--text-primary);
+  --cui-card-border-color: var(--border-subtle);
+  --cui-border-color: var(--border-subtle);
+  --cui-table-bg: transparent;
+  --cui-table-color: var(--text-primary);
+  --cui-table-border-color: var(--border-subtle);
+  --cui-table-hover-bg: var(--bg-hover);
+  --cui-table-hover-color: var(--text-primary);
+  --cui-tertiary-bg: var(--bg-muted);
+  --cui-secondary-color: var(--text-secondary);
 }
 
 @layer base {
@@ -172,7 +204,7 @@
 ::-webkit-scrollbar-thumb:hover { background: #64748B; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #7F1625; }
 
-/* ───── Form Controls ───── */
+/* ───── Form Controls, Labels & Inputs ───── */
 input:not([type="checkbox"]):not([type="radio"]),
 select, textarea {
   border-color: var(--border-color);
@@ -180,8 +212,52 @@ select, textarea {
   color: var(--text-primary);
   transition: all 0.15s ease-in-out;
 }
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #1A1D24;
+  border-color: #333B4A;
+  color: #F8FAFC;
+}
+
+option {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark option,
+[data-theme="dark"] option,
+[data-coreui-theme="dark"] option {
+  background-color: #1A1D24 !important;
+  color: #F8FAFC !important;
+}
+
+/* Ensure all form labels have high WCAG AAA contrast in both themes */
+label, .form-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* High contrast table headers and borders */
+table th {
+  color: var(--text-secondary) !important;
+  font-weight: 700 !important;
+}
+
+table td {
+  color: var(--text-primary);
+}
+
+/* Disabled state */
+input:disabled, select:disabled, textarea:disabled, button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 input::placeholder, textarea::placeholder {
-  color: var(--text-muted);
+  color: var(--text-muted) !important;
+  opacity: 0.85;
 }
 
 .form-control:focus, .form-select:focus,

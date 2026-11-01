@@ -42,6 +42,8 @@ export interface PublicWebsiteProps {
   onNavigatePage?: (page: string) => void;
   onOpenLogin: () => void;
   onOpenRegister: (planTier?: 'starter' | 'professional' | 'enterprise') => void;
+  isAuthenticated?: boolean;
+  onGoToDashboard?: () => void;
 }
 
 export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
@@ -53,6 +55,8 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   onNavigatePage,
   onOpenLogin,
   onOpenRegister,
+  isAuthenticated = false,
+  onGoToDashboard,
 }) => {
   const isAr = lang === 'ar';
   const ArrowIcon = isAr ? ArrowLeft : ArrowRight;
@@ -78,7 +82,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
   const renderHomeContent = () => (
     <div className="space-y-16 lg:space-y-24">
       {/* 1. Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#7F1625] via-[#5c0f1b] to-black px-4 sm:px-6 lg:px-8 pt-20 pb-28 text-center text-white">
+      <section className="relative overflow-hidden bg-gradient-to-br from-[var(--brand-primary)] via-[#5c0f1b] to-black px-4 sm:px-6 lg:px-8 pt-20 pb-28 text-center text-white">
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none" />
 
         <div className="max-w-4xl mx-auto space-y-6 relative z-10">
@@ -88,15 +92,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight font-sans">
-            {isAr ? (
-              <>
-                تحكم كامل في <span className="text-rose-300">صالة القص</span>، مخازن الأقمشة، وعقود الـ CMT
-              </>
-            ) : (
-              <>
-                Engineered Command for <span className="text-rose-300">Cutting Floors</span>, Fabric Stock & CMT
-              </>
-            )}
+            {isAr ? <span>تحكم كامل في <span className="text-rose-300">صالة القص</span>، مخازن الأقمشة، وعقود الـ CMT</span> : <span>Engineered Command for <span className="text-rose-300">Cutting Floors</span>, Fabric Stock & CMT</span>}
           </h1>
 
           <p className="text-sm sm:text-base text-rose-100/90 max-w-2xl mx-auto leading-relaxed">
@@ -108,7 +104,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
           <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
             <button
               onClick={() => onOpenRegister('professional')}
-              className="px-6 py-3 rounded-xl bg-white text-[#7F1625] font-black text-xs sm:text-sm hover:bg-rose-50 transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-black/30"
+              className="px-6 py-3 rounded-xl bg-white text-[var(--brand-primary)] font-black text-xs sm:text-sm hover:bg-rose-50 transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-black/30"
             >
               <span>{isAr ? 'بدء التجربة المجانية (14 يوماً)' : 'Start 14-Day Free Trial'}</span>
               <ArrowIcon className="w-4 h-4" />
@@ -137,7 +133,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-20">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xl text-center">
           <div className="space-y-1 p-2">
-            <div className="text-2xl sm:text-3xl font-black text-[#7F1625] dark:text-[#f87171] font-mono">15% - 22%</div>
+            <div className="text-2xl sm:text-3xl font-black text-[var(--brand-primary)] dark:text-[#f87171] font-mono">15% - 22%</div>
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{isAr ? 'وفر في هدر الأقمشة' : 'Fabric Waste Reduction'}</div>
             <div className="text-[11px] text-slate-500">{isAr ? 'عبر ضبط التعشيق وطول الفرشة' : 'Via marker & ply optimization'}</div>
           </div>
@@ -147,12 +143,12 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
             <div className="text-[11px] text-slate-500">{isAr ? 'باركود ذكي لكل مقاس ولون' : 'Serialized QR tickets'}</div>
           </div>
           <div className="space-y-1 p-2 border-s border-slate-100 dark:border-slate-800">
-            <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 font-mono">0 خلط</div>
+            <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 font-mono">{isAr ? '0 خلط' : '0 Mix'}</div>
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{isAr ? 'أمانات أقمشة العملاء' : 'Zero Custody Mixups'}</div>
             <div className="text-[11px] text-slate-500">{isAr ? 'عزل كامل لعقود الـ CMT' : 'Strict CMT custody isolation'}</div>
           </div>
           <div className="space-y-1 p-2 border-s border-slate-100 dark:border-slate-800">
-            <div className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400 font-mono">100% آلي</div>
+            <div className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400 font-mono">{isAr ? '100% آلي' : '100% Auto'}</div>
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{isAr ? 'حساب أجور القطعة' : 'Automated Piece Wages'}</div>
             <div className="text-[11px] text-slate-500">{isAr ? 'صرف مستحقات العمال بدون نزاع' : 'Direct bundle scan payroll'}</div>
           </div>
@@ -175,9 +171,9 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div
             onClick={() => handleNavigate('manufacturing')}
-            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#7F1625] dark:hover:border-[#9E2A3B] transition-all cursor-pointer space-y-4 shadow-xs group"
+            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[var(--brand-border)] transition-all cursor-pointer space-y-4 shadow-xs group"
           >
-            <div className="p-3 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#f87171] w-fit group-hover:scale-105 transition-transform">
+            <div className="p-3 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#f87171] w-fit group-hover:scale-105 transition-transform">
               <Scissors className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -188,7 +184,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
                 ? 'حساب كفاءة التعشيق، عدد طبقات الفرشة، والتحكم في نسب الهالك المسموح بها مع توليد أوامر القص الذكية.'
                 : 'Marker yield calculation, ply count optimization, and waste threshold management.'}
             </p>
-            <div className="text-xs font-bold text-[#7F1625] dark:text-[#f87171] flex items-center gap-1">
+            <div className="text-xs font-bold text-[var(--brand-primary)] dark:text-[#f87171] flex items-center gap-1">
               <span>{isAr ? 'التفاصيل الكاملة' : 'Read more'}</span>
               <ArrowIcon className="w-3.5 h-3.5" />
             </div>
@@ -196,7 +192,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
 
           <div
             onClick={() => handleNavigate('subcontracting')}
-            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#7F1625] dark:hover:border-[#9E2A3B] transition-all cursor-pointer space-y-4 shadow-xs group"
+            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[var(--brand-border)] transition-all cursor-pointer space-y-4 shadow-xs group"
           >
             <div className="p-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 w-fit group-hover:scale-105 transition-transform">
               <Boxes className="w-6 h-6" />
@@ -217,7 +213,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
 
           <div
             onClick={() => handleNavigate('inventory')}
-            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#7F1625] dark:hover:border-[#9E2A3B] transition-all cursor-pointer space-y-4 shadow-xs group"
+            className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[var(--brand-border)] transition-all cursor-pointer space-y-4 shadow-xs group"
           >
             <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 w-fit group-hover:scale-105 transition-transform">
               <Layers className="w-6 h-6" />
@@ -272,7 +268,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
 
   return (
     <div
-      className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-[#7F1625] selection:text-white transition-colors duration-200"
+      className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-[var(--brand-primary)] selection:text-white transition-colors duration-200"
       dir={isAr ? 'rtl' : 'ltr'}
     >
       {/* Shared Enterprise Public Header */}
@@ -285,6 +281,8 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         onNavigate={handleNavigate}
         onOpenLogin={onOpenLogin}
         onOpenRegister={onOpenRegister}
+        isAuthenticated={isAuthenticated}
+        onGoToDashboard={onGoToDashboard}
       />
 
       {/* Main Page Content Body */}

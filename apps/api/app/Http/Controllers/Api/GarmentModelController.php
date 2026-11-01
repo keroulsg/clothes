@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Database\QueryException;
 
 class GarmentModelController extends Controller
 {
@@ -43,8 +45,19 @@ class GarmentModelController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+
+        if ($request->has('code')) {
+            $request->merge(['code' => strtoupper(trim((string) $request->input('code')))]);
+        }
+
         $validated = $request->validate([
-            'code' => 'required|string|max:50',
+            'code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('garment_models', 'code')->where('tenant_id', $tenantId),
+            ],
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:100',
             'season' => 'nullable|string|max:50',
@@ -59,8 +72,8 @@ class GarmentModelController extends Controller
             'color_ids.*' => 'exists:colors,id',
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            $tenantId = app('current_tenant_id');
+        try {
+            return DB::transaction(function () use ($validated, $tenantId) {
 
             $model = GarmentModel::create([
                 'tenant_id' => $tenantId,
@@ -119,6 +132,46 @@ class GarmentModelController extends Controller
                 'generated_variants_count' => count($variants),
             ], 201);
         });
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($this->isUniqueConstraintViolation($e)) {
+                return response()->json([
+                    'message' => 'كود الموديل مستخدم مسبقاً في شركتك. يرجى اختيار كود فريد.',
+                    'errors' => [
+                        'code' => ['The code has already been taken.'],
+                    ],
+                ], 422);
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * فحص وتصنيف دقيق لخرق قيد التفرد (Unique Constraint Violation) بحسب محرك قاعدة البيانات
+     * لضمان عدم ترجمة أخطاء القيود الأخرى (مثل NOT NULL أو Foreign Key) إلى خطأ تكرار الكود
+     */
+    protected function isUniqueConstraintViolation(\Illuminate\Database\QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+        $driverCode = $e->errorInfo[1] ?? null;
+        $message = $e->getMessage();
+
+        // 1. PostgreSQL: SQLSTATE 23505 (unique_violation)
+        if ($sqlState === '23505' || str_contains($message, 'duplicate key value violates unique constraint')) {
+            return true;
+        }
+
+        // 2. SQLite: SQLSTATE 23000 مع التحقق الصارم من توقيع "UNIQUE constraint failed"
+        // يستبعد أخطاء NOT NULL (19 NOT NULL constraint failed) و Foreign Key
+        if (($sqlState === '23000' || $driverCode === 19 || $driverCode === 2067) && str_contains($message, 'UNIQUE constraint failed')) {
+            return true;
+        }
+
+        // 3. MySQL / MariaDB: SQLSTATE 23000 مع كود الخطأ 1062 (ER_DUP_ENTRY)
+        if ($sqlState === '23000' && ($driverCode === 1062 || str_contains($message, 'Duplicate entry'))) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

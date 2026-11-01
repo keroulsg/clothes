@@ -324,21 +324,21 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي حركات الفترة (مدين)' : 'Period Debits'}</p>
                   <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                    {Number(reportData.totals?.period_debit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.totals?.period_debit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي حركات الفترة (دائن)' : 'Period Credits'}</p>
                   <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                    {Number(reportData.totals?.period_credit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.totals?.period_credit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي الأرصدة الختامية' : 'Total Closing Balance'}</p>
                   <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                    {Number(reportData.totals?.closing_debit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.totals?.closing_debit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
               </div>
@@ -405,7 +405,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي إيرادات المبيعات' : 'Net Sales Revenue'}</p>
                   <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                    {Number(reportData.revenue?.total_net_revenue || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.revenue?.total_net_revenue || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className="text-[11px] text-slate-400">
                     {isAr ? `إجمالي: ${Number(reportData.revenue?.total_gross_revenue || 0).toLocaleString()} - مردودات: ${Number(reportData.revenue?.total_returns_discounts || 0).toLocaleString()}` : ''}
@@ -415,14 +415,14 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'تكلفة المبيعات والتصنيع (COGS)' : 'Cost of Goods Sold'}</p>
                   <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                    {Number(reportData.cost_of_goods_sold?.total_cogs || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.cost_of_goods_sold?.total_cogs || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'مجمل الربح (Gross Profit)' : 'Gross Profit'}</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {Number(reportData.gross_profit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.gross_profit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className="text-[11px] text-emerald-600 font-medium">
                     {reportData.gross_margin_percent}% {isAr ? 'هامش مجمل الربح' : 'Margin'}
@@ -432,7 +432,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي الربح النهائي (Net Profit)' : 'Net Profit'}</p>
                   <p className={`text-xl font-bold mt-1 ${reportData.is_profitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                    {Number(reportData.net_profit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.net_profit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className={`text-[11px] font-medium ${reportData.is_profitable ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {reportData.net_margin_percent}% {isAr ? 'هامش صافي الربح' : 'Net Margin'}
@@ -446,18 +446,18 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <div className="py-2.5">
                   <div className="flex items-center justify-between font-bold text-sm text-slate-900 dark:text-white mb-2">
                     <span>{isAr ? '1. إيرادات النشاط والمبيعات' : '1. Revenues'}</span>
-                    <span className="font-mono text-emerald-600">{Number(reportData.revenue?.total_net_revenue || 0).toLocaleString()} ج.م</span>
+                    <span className="font-mono text-emerald-600">{Number(reportData.revenue?.total_net_revenue || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                   </div>
                   {reportData.revenue?.items?.map((item: any) => (
                     <div key={item.account_id} className="flex items-center justify-between py-1 text-slate-600 dark:text-slate-300">
                       <span>{item.code} - {item.name}</span>
-                      <span className="font-mono">{Number(item.net_revenue || 0).toLocaleString()} ج.م</span>
+                      <span className="font-mono">{Number(item.net_revenue || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                   ))}
                   {Number(reportData.revenue?.total_returns_discounts || 0) > 0 && (
                     <div className="flex items-center justify-between py-1 text-rose-500">
                       <span>{isAr ? '(-) مردودات ومسموحات المبيعات (Contra-Revenue)' : '(-) Sales Returns & Discounts'}</span>
-                      <span className="font-mono">({Number(reportData.revenue?.total_returns_discounts || 0).toLocaleString()}) ج.م</span>
+                      <span className="font-mono">({Number(reportData.revenue?.total_returns_discounts || 0).toLocaleString()}) {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                   )}
                 </div>
@@ -466,12 +466,12 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <div className="py-2.5">
                   <div className="flex items-center justify-between font-bold text-sm text-slate-900 dark:text-white mb-2">
                     <span>{isAr ? '2. تكلفة البضاعة المباعة والتكاليف الصناعية المباشرة' : '2. Cost of Goods Sold'}</span>
-                    <span className="font-mono text-amber-600">({Number(reportData.cost_of_goods_sold?.total_cogs || 0).toLocaleString()}) ج.م</span>
+                    <span className="font-mono text-amber-600">({Number(reportData.cost_of_goods_sold?.total_cogs || 0).toLocaleString()}) {isAr ? 'ج.م' : 'EGP'}</span>
                   </div>
                   {reportData.cost_of_goods_sold?.items?.map((item: any) => (
                     <div key={item.account_id} className="flex items-center justify-between py-1 text-slate-600 dark:text-slate-300">
                       <span>{item.code} - {item.name}</span>
-                      <span className="font-mono">{Number(item.amount || 0).toLocaleString()} ج.م</span>
+                      <span className="font-mono">{Number(item.amount || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                   ))}
                 </div>
@@ -480,12 +480,12 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <div className="py-2.5">
                   <div className="flex items-center justify-between font-bold text-sm text-slate-900 dark:text-white mb-2">
                     <span>{isAr ? '3. المصروفات التشغيلية والصناعية غير المباشرة' : '3. Operating & Indirect Expenses'}</span>
-                    <span className="font-mono text-rose-600">({Number(reportData.operating_expenses?.total_operating_expenses || 0).toLocaleString()}) ج.م</span>
+                    <span className="font-mono text-rose-600">({Number(reportData.operating_expenses?.total_operating_expenses || 0).toLocaleString()}) {isAr ? 'ج.م' : 'EGP'}</span>
                   </div>
                   {reportData.operating_expenses?.items?.map((item: any) => (
                     <div key={item.account_id} className="flex items-center justify-between py-1 text-slate-600 dark:text-slate-300">
                       <span>{item.code} - {item.name}</span>
-                      <span className="font-mono">{Number(item.amount || 0).toLocaleString()} ج.م</span>
+                      <span className="font-mono">{Number(item.amount || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                   ))}
                 </div>
@@ -494,7 +494,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <div className="pt-3 flex items-center justify-between font-bold text-base text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg">
                   <span>{isAr ? 'صافي أرباح / (خسائر) الفترة المحاسبية:' : 'Net Income / (Loss) for the Period:'}</span>
                   <span className={`font-mono ${reportData.is_profitable ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {Number(reportData.net_profit || 0).toLocaleString()} ج.م
+                    {Number(reportData.net_profit || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                   </span>
                 </div>
               </Card>
@@ -508,21 +508,21 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي الأصول' : 'Total Assets'}</p>
                   <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">
-                    {Number(reportData.assets?.total_assets || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.assets?.total_assets || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي الخصوم والالتزامات' : 'Total Liabilities'}</p>
                   <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                    {Number(reportData.liabilities?.total_liabilities || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.liabilities?.total_liabilities || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي حقوق الملكية والأرباح' : 'Total Equity & Profit'}</p>
                   <p className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">
-                    {Number(reportData.equity?.total_equity || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.equity?.total_equity || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
@@ -537,7 +537,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                     ) : (
                       <Badge variant="danger" className="text-xs">
                         <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-                        {isAr ? `فرق: ${reportData.discrepancy} ج.م` : `Discrepancy: ${reportData.discrepancy}`}
+                        {isAr ? `فرق: ${reportData.discrepancy} ج.م` : `Discrepancy: ${reportData.discrepancy} EGP`}
                       </Badge>
                     )}
                   </div>
@@ -549,7 +549,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 text-xs">
                   <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3 pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span>{isAr ? 'الأصول (Assets)' : 'Assets'}</span>
-                    <span className="font-mono text-blue-600">{Number(reportData.assets?.total_assets || 0).toLocaleString()} ج.م</span>
+                    <span className="font-mono text-blue-600">{Number(reportData.assets?.total_assets || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                   </h4>
                   <div className="space-y-3">
                     <div>
@@ -558,7 +558,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                         {reportData.assets?.current_assets?.map((a: any) => (
                           <div key={a.account_id} className="flex justify-between text-slate-700 dark:text-slate-300 py-0.5">
                             <span>{a.code} - {a.name}</span>
-                            <span className="font-mono font-medium">{Number(a.balance || 0).toLocaleString()} ج.م</span>
+                            <span className="font-mono font-medium">{Number(a.balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                           </div>
                         ))}
                       </div>
@@ -570,7 +570,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 text-xs">
                   <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3 pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span>{isAr ? 'الخصوم وحقوق الملكية' : 'Liabilities & Equity'}</span>
-                    <span className="font-mono text-purple-600">{Number(reportData.total_liabilities_and_equity || 0).toLocaleString()} ج.م</span>
+                    <span className="font-mono text-purple-600">{Number(reportData.total_liabilities_and_equity || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                   </h4>
                   <div className="space-y-3">
                     <div>
@@ -579,7 +579,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                         {reportData.liabilities?.current_liabilities?.map((l: any) => (
                           <div key={l.account_id} className="flex justify-between text-slate-700 dark:text-slate-300 py-0.5">
                             <span>{l.code} - {l.name}</span>
-                            <span className="font-mono font-medium">{Number(l.balance || 0).toLocaleString()} ج.م</span>
+                            <span className="font-mono font-medium">{Number(l.balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                           </div>
                         ))}
                       </div>
@@ -591,12 +591,12 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                         {reportData.equity?.items?.map((e: any) => (
                           <div key={e.account_id} className="flex justify-between text-slate-700 dark:text-slate-300 py-0.5">
                             <span>{e.code} - {e.name}</span>
-                            <span className="font-mono font-medium">{Number(e.balance || 0).toLocaleString()} ج.م</span>
+                            <span className="font-mono font-medium">{Number(e.balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                           </div>
                         ))}
                         <div className="flex justify-between text-emerald-600 font-semibold py-0.5 bg-emerald-500/5 px-2 rounded">
                           <span>{isAr ? 'الأرباح المحتجزة / أرباح الفترة المتراكمة' : 'Retained Earnings / Period Net Income'}</span>
-                          <span className="font-mono">{Number(reportData.equity?.retained_earnings || 0).toLocaleString()} ج.م</span>
+                          <span className="font-mono">{Number(reportData.equity?.retained_earnings || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                         </div>
                       </div>
                     </div>
@@ -613,7 +613,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي ضريبة المخرجات (مبيعات)' : 'Output VAT (Sales)'}</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {Number(reportData.output_vat?.net_output_vat || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.output_vat?.net_output_vat || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className="text-[11px] text-slate-400">
                     {reportData.output_vat?.invoices_count} {isAr ? 'فواتير بيع معتمدة' : 'invoices'}
@@ -623,7 +623,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي ضريبة المدخلات (مشتريات)' : 'Input VAT (Purchases)'}</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {Number(reportData.input_vat?.net_input_vat || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.input_vat?.net_input_vat || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className="text-[11px] text-slate-400">
                     {reportData.input_vat?.invoices_count} {isAr ? 'فواتير موردين مرحلة' : 'invoices'}
@@ -633,7 +633,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي الضريبة المستحقة للسداد' : 'Net Tax Due'}</p>
                   <p className="text-xl font-bold text-primary mt-1">
-                    {Number(reportData.summary?.net_vat_payable || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.summary?.net_vat_payable || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className="text-[11px] text-emerald-600 font-semibold">
                     {reportData.summary?.vat_status === 'payable' ? (isAr ? 'مستحقة السداد للمصلحة' : 'Payable') : (isAr ? 'رصيد دائن مرحل' : 'Credit')}
@@ -663,21 +663,21 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي التكلفة المعيارية (BOM)' : 'Total Standard Cost'}</p>
                   <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {Number(reportData.totals?.total_standard_cost || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.totals?.total_standard_cost || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي التكلفة الفعلية الصناعية' : 'Total Actual Cost'}</p>
                   <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                    {Number(reportData.totals?.total_actual_cost || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.totals?.total_actual_cost || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                 </Card>
 
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي الانحراف المالي الكلي' : 'Total Net Variance'}</p>
                   <p className={`text-xl font-bold mt-1 ${reportData.totals?.total_variance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {Number(reportData.totals?.total_variance || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ج.م</span>
+                    {Number(reportData.totals?.total_variance || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                   </p>
                   <span className={`text-[11px] font-semibold ${reportData.totals?.total_variance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {reportData.totals?.total_variance >= 0 ? (isAr ? 'وفر إيجابي في التكلفة' : 'Favorable') : (isAr ? 'تجاوز في التكلفة' : 'Unfavorable')}
@@ -779,14 +779,14 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
                           {ord.garment_model?.name || ord.garment_model?.code || '-'}
                         </td>
                         <td className="py-2 px-3 text-center font-mono">{ord.completed_pieces}</td>
-                        <td className="py-2 px-3 text-end font-mono">{Number(ord.standard_cost_per_piece || 0).toLocaleString()} ج.م</td>
-                        <td className="py-2 px-3 text-end font-mono">{Number(ord.standard_total_cost || 0).toLocaleString()} ج.م</td>
-                        <td className="py-2 px-3 text-end font-mono font-medium">{Number(ord.actual_total_cost || 0).toLocaleString()} ج.م</td>
+                        <td className="py-2 px-3 text-end font-mono">{Number(ord.standard_cost_per_piece || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                        <td className="py-2 px-3 text-end font-mono">{Number(ord.standard_total_cost || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                        <td className="py-2 px-3 text-end font-mono font-medium">{Number(ord.actual_total_cost || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
                         <td className="py-2 px-3 text-end font-mono text-slate-500">
                           {Number(((ord.actual_cost_breakdown?.applied_overhead_rate ?? 0.15) * 100)).toFixed(1)}%
                         </td>
                         <td className={`py-2 px-3 text-end font-mono font-bold ${ord.variance_amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {ord.variance_amount >= 0 ? `+${Number(ord.variance_amount).toLocaleString()}` : Number(ord.variance_amount).toLocaleString()} ج.م
+                          {ord.variance_amount >= 0 ? `+${Number(ord.variance_amount).toLocaleString()}` : Number(ord.variance_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {ord.labor_dependency?.status === 'verified' && (

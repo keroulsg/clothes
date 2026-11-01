@@ -33,7 +33,7 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
   const [reorderLevel, setReorderLevel] = useState<number>(10);
   
   // Storage location
-  const [storageZone, setStorageZone] = useState<string>('منطقة أ');
+  const [storageZone, setStorageZone] = useState<string>(isAr ? 'منطقة أ' : 'Zone A');
   const [rackLocation, setRackLocation] = useState<string>('R-01');
   const [shelfBinLocation, setShelfBinLocation] = useState<string>('BIN-01');
 
@@ -258,7 +258,7 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="text"
                 value={storageZone}
                 onChange={(e) => setStorageZone(e.target.value)}
-                placeholder="Zone A"
+                placeholder={isAr ? 'منطقة أ' : 'Zone A'}
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100"
               />
             </div>

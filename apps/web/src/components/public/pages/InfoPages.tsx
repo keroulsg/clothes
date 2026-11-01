@@ -20,7 +20,7 @@ export const AboutPage: React.FC<InfoPageProps> = ({ lang }) => {
   return (
     <div className="py-12 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-10">
       <div className="text-center space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#f87171] flex items-center justify-center mx-auto">
+        <div className="w-12 h-12 rounded-2xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#f87171] flex items-center justify-center mx-auto">
           <Building2 className="w-6 h-6" />
         </div>
         <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white font-sans">
@@ -50,9 +50,24 @@ export const AboutPage: React.FC<InfoPageProps> = ({ lang }) => {
             {isAr ? 'أركان البنية الهندسية للمنظومة' : 'Architectural Pillars'}
           </h2>
           <ul className="list-disc pr-5 rtl:pr-5 ltr:pl-5 space-y-2">
-            <li><strong>عزل أمني تام (Tenant Isolation):</strong> كل مصنع يمتلك بيئته المعزولة تماماً مع حماية سرية الموديلات وقوائم التكاليف.</li>
-            <li><strong>سحابة بالكامل (100% Cloud Native):</strong> تعمل من أي متصفح أو تابلت في صالة القص دون حاجة لخوادم داخلية مكلفة.</li>
-            <li><strong>دفاتر تدقيق غير قابلة للتعديل (Immutable Ledgers):</strong> توثيق دقيق لكل متر قماش وكل حزمة منتجة لمنع التلاعب والتوالف غير المبررة.</li>
+            <li>
+              <strong>{isAr ? 'عزل أمني تام (Tenant Isolation):' : 'Tenant Isolation:'}</strong>{' '}
+              {isAr
+                ? 'كل مصنع يمتلك بيئته المعزولة تماماً مع حماية سرية الموديلات وقوائم التكاليف.'
+                : 'Complete cryptographic and tenant-scoped data isolation ensuring design and costing confidentiality.'}
+            </li>
+            <li>
+              <strong>{isAr ? 'سحابة بالكامل (100% Cloud Native):' : '100% Cloud Native:'}</strong>{' '}
+              {isAr
+                ? 'تعمل من أي متصفح أو تابلت في صالة القص دون حاجة لخوادم داخلية مكلفة.'
+                : 'Runs smoothly in any modern browser or cutting-floor tablet without costly on-premise infrastructure.'}
+            </li>
+            <li>
+              <strong>{isAr ? 'دفاتر تدقيق غير قابلة للتعديل (Immutable Ledgers):' : 'Immutable Audit Ledgers:'}</strong>{' '}
+              {isAr
+                ? 'توثيق دقيق لكل متر قماش وكل حزمة منتجة لمنع التلاعب والتوالف غير المبررة.'
+                : 'Strict audit trails for every fabric metre and bundle scan to prevent unauthorized scrap or wage discrepancies.'}
+            </li>
           </ul>
         </section>
       </div>
@@ -128,13 +143,13 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
             key={p.id}
             className={`p-6 rounded-2xl bg-white dark:bg-slate-900 border transition-all flex flex-col justify-between ${
               p.popular
-                ? 'border-[#7F1625] dark:border-[#9E2A3B] shadow-xl ring-2 ring-[#7F1625]/20'
+                ? 'border-[var(--brand-primary)] shadow-xl ring-2 ring-[var(--brand-border)]'
                 : 'border-slate-200 dark:border-slate-800 shadow-xs'
             }`}
           >
             <div className="space-y-4">
               {p.popular && (
-                <div className="inline-block px-3 py-1 rounded-full bg-[#7F1625] text-white text-[10px] font-bold">
+                <div className="inline-block px-3 py-1 rounded-full bg-[var(--brand-primary)] text-white text-[10px] font-bold">
                   {isAr ? 'الأكثر طلباً واختياراً' : 'Most Popular'}
                 </div>
               )}
@@ -232,7 +247,7 @@ export const FaqPage: React.FC<InfoPageProps> = ({ lang }) => {
               className="w-full p-4 sm:p-5 text-start flex items-center justify-between gap-4 font-bold text-xs sm:text-sm text-slate-900 dark:text-white cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
             >
               <span>{f.q}</span>
-              {openIdx === idx ? <ChevronUp className="w-4 h-4 text-[#7F1625]" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              {openIdx === idx ? <ChevronUp className="w-4 h-4 text-[var(--brand-primary)]" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
             </button>
             {openIdx === idx && (
               <div className="px-4 pb-5 sm:px-5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800 pt-3">
@@ -281,7 +296,7 @@ export const ContactPage: React.FC<InfoPageProps> = ({ lang }) => {
       setSubject('');
       setMessage('');
     } catch (err: any) {
-      setError(err.message || 'فشل إرسال الطلب، يرجى المحاولة لاحقاً.');
+      setError(err.message || (isAr ? 'فشل إرسال الطلب، يرجى المحاولة لاحقاً.' : 'Failed to submit inquiry, please try again later.'));
     } finally {
       setLoading(false);
     }

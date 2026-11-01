@@ -20,6 +20,7 @@ interface RegisterModalProps {
   onSuccess: (user: ApiUser, tenant: ApiTenant) => void;
   initialPlanTier?: string;
   onSwitchToLogin?: () => void;
+  isAr?: boolean;
 }
 
 export const RegisterModal: React.FC<RegisterModalProps> = ({
@@ -28,6 +29,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   onSuccess,
   initialPlanTier = 'starter',
   onSwitchToLogin,
+  isAr = true,
 }) => {
   const [companyName, setCompanyName] = useState('');
   const [subdomain, setSubdomain] = useState('');
@@ -47,7 +49,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setFieldErrors({});
 
     if (password !== passwordConfirmation) {
-      setErrorMessage('تأكيد كلمة المرور غير متطابق.');
+      setErrorMessage(isAr ? 'تأكيد كلمة المرور غير متطابق.' : 'Password confirmation does not match.');
       return;
     }
 
@@ -70,7 +72,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       if (err.errors) {
         setFieldErrors(err.errors);
       }
-      setErrorMessage(err.message || 'حدث خطأ أثناء تسجيل المصنع. يرجى مراجعة البيانات.');
+      setErrorMessage(err.message || (isAr ? 'حدث خطأ أثناء تسجيل المصنع. يرجى مراجعة البيانات.' : 'Error registering company. Please review your details.'));
     } finally {
       setLoading(false);
     }
@@ -81,14 +83,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       <CModalHeader closeButton>
         <CModalTitle className="d-flex align-items-center gap-2">
           <Building2 className="w-5 h-5 text-primary" />
-          <span>تسجيل مصنع جديد — GarmentOS Cloud</span>
+          <span>{isAr ? 'تسجيل مصنع جديد — GarmentOS Cloud' : 'Register New Factory — GarmentOS Cloud'}</span>
         </CModalTitle>
       </CModalHeader>
       <CModalBody className="p-4">
         <div className="mb-4 p-3 rounded-3 bg-primary/10 border border-primary/20 d-flex align-items-start gap-2">
           <Sparkles className="w-5 h-5 text-primary shrink-0 mt-1" />
           <div className="small text-slate-800 dark:text-slate-200 font-medium">
-            أنشئ حساب مصنعك خلال دقيقة واحدة واحصل على تجربة مجانية تشمل إدارة كاملة للقص، أوامر الإنتاج، المخزون، والتشغيل للغير (CMT).
+            {isAr
+              ? 'أنشئ حساب مصنعك خلال دقيقة واحدة واحصل على تجربة مجانية تشمل إدارة كاملة للقص، أوامر الإنتاج، المخزون، والتشغيل للغير (CMT).'
+              : 'Create your factory account in 1 minute with a free trial including cutting, production orders, inventory, and CMT subcontracting.'}
           </div>
         </div>
 
@@ -102,7 +106,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="row g-3">
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                اسم المصنع / الشركة *
+                {isAr ? 'اسم المصنع / الشركة *' : 'Factory / Company Name *'}
               </label>
               <div className="input-group">
                 <span className="input-group-text bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
@@ -110,7 +114,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </span>
                 <CFormInput
                   type="text"
-                  placeholder="مثال: مصنع النيل للملابس"
+                  placeholder={isAr ? 'مثال: مصنع النيل للملابس' : 'e.g. Nile Garments Factory'}
                   value={companyName}
                   onChange={(e) => {
                     setCompanyName(e.target.value);
@@ -129,7 +133,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                نطاق المصنع المخصص (Subdomain)
+                {isAr ? 'نطاق المصنع المخصص (Subdomain)' : 'Custom Subdomain'}
               </label>
               <div className="input-group" dir="ltr">
                 <CFormInput
@@ -150,7 +154,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                اسم المالك / المدير المسؤول *
+                {isAr ? 'اسم المالك / المدير المسؤول *' : 'Owner / Manager Name *'}
               </label>
               <div className="input-group">
                 <span className="input-group-text bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
@@ -158,7 +162,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </span>
                 <CFormInput
                   type="text"
-                  placeholder="الاسم الثلاثي"
+                  placeholder={isAr ? 'الاسم الثلاثي' : 'Full Name'}
                   value={ownerName}
                   onChange={(e) => setOwnerName(e.target.value)}
                   required
@@ -172,7 +176,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                البريد الإلكتروني للعمل *
+                {isAr ? 'البريد الإلكتروني للعمل *' : 'Work Email *'}
               </label>
               <div className="input-group">
                 <span className="input-group-text bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
@@ -194,7 +198,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                رقم الهاتف / واتساب
+                {isAr ? 'رقم الهاتف / واتساب' : 'Phone / WhatsApp'}
               </label>
               <div className="input-group">
                 <span className="input-group-text bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
@@ -215,22 +219,22 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                باقة الاشتراك المبدئية
+                {isAr ? 'باقة الاشتراك المبدئية' : 'Initial Subscription Plan'}
               </label>
               <CFormSelect
                 value={planTier}
                 onChange={(e) => setPlanTier(e.target.value)}
                 disabled={loading}
               >
-                <option value="starter">باقة الورش والمشاغل (Starter)</option>
-                <option value="professional">باقة المصانع المتوسطة (Professional)</option>
-                <option value="enterprise">باقة خطوط الإنتاج الكبرى (Enterprise)</option>
+                <option value="starter">{isAr ? 'باقة الورش والمشاغل (Starter)' : 'Small Workshop (Starter)'}</option>
+                <option value="professional">{isAr ? 'باقة المصانع المتوسطة (Professional)' : 'Mid-size Factory (Professional)'}</option>
+                <option value="enterprise">{isAr ? 'باقة خطوط الإنتاج الكبرى (Enterprise)' : 'Large Enterprise (Enterprise)'}</option>
               </CFormSelect>
             </div>
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                كلمة المرور *
+                {isAr ? 'كلمة المرور *' : 'Password *'}
               </label>
               <div className="input-group">
                 <span className="input-group-text bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
@@ -238,7 +242,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </span>
                 <CFormInput
                   type="password"
-                  placeholder="8 أحرف على الأقل"
+                  placeholder={isAr ? '8 أحرف على الأقل' : 'At least 8 characters'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -253,7 +257,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
             <div className="col-md-6">
               <label className="form-label small fw-bold text-slate-900 dark:text-slate-200">
-                تأكيد كلمة المرور *
+                {isAr ? 'تأكيد كلمة المرور *' : 'Confirm Password *'}
               </label>
               <div className="input-group">
                 <span className="input-group-text bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
@@ -261,7 +265,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </span>
                 <CFormInput
                   type="password"
-                  placeholder="إعادة إدخال كلمة المرور"
+                  placeholder={isAr ? 'إعادة إدخال كلمة المرور' : 'Re-enter password'}
                   value={passwordConfirmation}
                   onChange={(e) => setPasswordConfirmation(e.target.value)}
                   required
@@ -273,7 +277,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
           <div className="mt-4 pt-3 border-top border-secondary d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3">
             <div className="small text-secondary">
-              لديك حساب مصنع بالفعل؟{' '}
+              {isAr ? 'لديك حساب مصنع بالفعل؟ ' : 'Already have a factory account? '}
               {onSwitchToLogin && (
                 <button
                   type="button"
@@ -283,14 +287,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     onSwitchToLogin();
                   }}
                 >
-                  تسجيل الدخول
+                  {isAr ? 'تسجيل الدخول' : 'Sign In'}
                 </button>
               )}
             </div>
 
             <div className="d-flex align-items-center gap-2 w-100 w-sm-auto justify-content-end">
               <CButton color="secondary" variant="ghost" onClick={onClose} disabled={loading}>
-                إلغاء
+                {isAr ? 'إلغاء' : 'Cancel'}
               </CButton>
               <CButton
                 type="submit"
@@ -302,12 +306,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 {loading ? (
                   <>
                     <CSpinner size="sm" />
-                    <span>جارِ إنشاء المصنع...</span>
+                    <span>{isAr ? 'جارِ إنشاء المصنع...' : 'Creating Factory...'}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>تأكيد التسجيل وبدء التشغيل</span>
+                    <span>{isAr ? 'تأكيد التسجيل وبدء التشغيل' : 'Register & Start'}</span>
                   </>
                 )}
               </CButton>

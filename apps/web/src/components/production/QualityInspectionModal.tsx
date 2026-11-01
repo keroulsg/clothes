@@ -12,6 +12,7 @@ interface QualityInspectionModalProps {
   productionOrder: ProductionOrder | null;
   bundle?: CuttingBundle | null;
   onSuccess: (newInspection: QualityInspection) => void;
+  isAr?: boolean;
 }
 
 export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
@@ -20,12 +21,13 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
   productionOrder,
   bundle,
   onSuccess,
+  isAr = true,
 }) => {
   if (!productionOrder) return null;
 
   const defaultTotal = bundle ? bundle.quantity : (productionOrder.target_quantity || 100);
 
-  const [inspectorName, setInspectorName] = useState('م. نادية سمير (مديرة الجودة)');
+  const [inspectorName, setInspectorName] = useState(isAr ? 'م. نادية سمير (مديرة الجودة)' : 'QC Manager');
   const [inspectionType, setInspectionType] = useState<'inline' | 'end_of_line' | 'final_audit'>('final_audit');
   const [inspectedQuantity, setInspectedQuantity] = useState(defaultTotal);
   const [passedQuantity, setPassedQuantity] = useState(defaultTotal - 2);
@@ -40,7 +42,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
       defect_type: 'skip_stitch',
       severity: 'minor',
       quantity: 2,
-      corrective_action: 'إعادة خياطة الحلية والياقة',
+      corrective_action: isAr ? 'إعادة خياطة الحلية والياقة' : 'Resew trim and collar',
     },
   ]);
 
@@ -54,7 +56,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         defect_type: 'fabric_flaw',
         severity: 'major',
         quantity: 1,
-        corrective_action: 'إعادة فحص الخامة واستبدال القطعة',
+        corrective_action: isAr ? 'إعادة فحص الخامة واستبدال القطعة' : 'Inspect fabric and replace piece',
       },
     ]);
   };
@@ -121,7 +123,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
       onSuccess(formattedInspection);
       onClose();
     } catch (err: any) {
-      setApiError(err.message || 'حدث خطأ أثناء حفظ محضر الفحص');
+      setApiError(err.message || (isAr ? 'حدث خطأ أثناء حفظ محضر الفحص' : 'An error occurred while saving the QC report'));
     } finally {
       setIsSubmitting(false);
     }
@@ -131,7 +133,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`محضر فحص الجودة والتفتيش: ${productionOrder.order_number}`}
+      title={isAr ? `محضر فحص الجودة والتفتيش: ${productionOrder.order_number}` : `Quality Inspection & Audit: ${productionOrder.order_number}`}
       maxWidth="lg"
     >
       {apiError && (
@@ -144,9 +146,9 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         {/* Banner with Target */}
         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
           <div>
-            <span className="text-slate-400 block text-[11px]">أمر الإنتاج / الحزمة:</span>
+            <span className="text-slate-400 block text-[11px]">{isAr ? 'أمر الإنتاج / الحزمة:' : 'Production Order / Bundle:'}</span>
             <span className="font-bold text-slate-200">
-              {productionOrder.model_name} {bundle ? `(حزمة: ${bundle.bundle_code})` : ''}
+              {productionOrder.model_name} {bundle ? `(${isAr ? 'حزمة:' : 'Bundle:'} ${bundle.bundle_code})` : ''}
             </span>
           </div>
           <div>
@@ -160,10 +162,10 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
               }
             >
               {decision === 'passed'
-                ? 'اجتياز الجودة (Passed)'
+                ? (isAr ? 'اجتياز الجودة (Passed)' : 'Passed')
                 : decision === 'rework_required'
-                ? 'إعادة تشغيل (Rework)'
-                : 'مرفوض نهائياً (Rejected)'}
+                ? (isAr ? 'إعادة تشغيل (Rework)' : 'Rework Required')
+                : (isAr ? 'مرفوض نهائياً (Rejected)' : 'Rejected')}
             </Badge>
           </div>
         </div>
@@ -173,9 +175,11 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
           <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
             <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
             <div>
-              <span className="font-bold block">الفحص النهائي للمنتج التام (Final Audit):</span>
+              <span className="font-bold block">{isAr ? 'الفحص النهائي للمنتج التام (Final Audit):' : 'Final Audit & Finished Goods Posting:'}</span>
               <p className="text-[11px] opacity-90 mt-0.5">
-                القطع المقبولة ({passedQuantity} قطعة) سيتم ترحيلها رسمياً كبضاعة تامة الصنع إلى مخزن المنتج النهائي، وتحديث حالة أمر الإنتاج.
+                {isAr
+                  ? `القطع المقبولة (${passedQuantity} قطعة) سيتم ترحيلها رسمياً كبضاعة تامة الصنع إلى مخزن المنتج النهائي، وتحديث حالة أمر الإنتاج.`
+                  : `Accepted pieces (${passedQuantity} pcs) will be officially posted as finished goods into the warehouse and order status updated.`}
               </p>
             </div>
           </div>
@@ -184,7 +188,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              اسم مسؤول / مهندس الجودة
+              {isAr ? 'اسم مسؤول / مهندس الجودة' : 'Quality Inspector / Engineer Name'}
             </label>
             <input
               type="text"
@@ -197,16 +201,16 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              نوع نقطة الفحص
+              {isAr ? 'نوع نقطة الفحص' : 'Inspection Checkpoint Type'}
             </label>
             <select
               value={inspectionType}
               onChange={(e) => setInspectionType(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="inline">فحص مرحلي أثناء الخياطة (Inline Inspection)</option>
-              <option value="end_of_line">فحص نهاية الخط والكي (End-of-Line Inspection)</option>
-              <option value="final_audit">فحص تدقيق الجودة النهائي والاعتماد (Final Audit)</option>
+              <option value="inline">{isAr ? 'فحص مرحلي أثناء الخياطة (Inline Inspection)' : 'Inline Inspection (Sewing)'}</option>
+              <option value="end_of_line">{isAr ? 'فحص نهاية الخط والكي (End-of-Line Inspection)' : 'End-of-Line / Ironing Inspection'}</option>
+              <option value="final_audit">{isAr ? 'فحص تدقيق الجودة النهائي والاعتماد (Final Audit)' : 'Final Quality Audit & Release'}</option>
             </select>
           </div>
         </div>
@@ -214,12 +218,14 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         {/* Quantities breakdown */}
         <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
           <span className="text-xs font-bold text-slate-900 dark:text-slate-300 block">
-            نتائج الفحص والفرز الفعلي
+            {isAr ? 'نتائج الفحص والفرز الفعلي' : 'Actual Inspection & Sorting Counts'}
           </span>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div>
-              <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">إجمالي المفحوص</label>
+              <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">
+                {isAr ? 'إجمالي المفحوص' : 'Total Inspected'}
+              </label>
               <input
                 type="number"
                 min="1"
@@ -231,7 +237,9 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-[10px] text-emerald-600 dark:text-emerald-400 mb-1">مقبول مطابق (Pass)</label>
+              <label className="block text-[10px] text-emerald-600 dark:text-emerald-400 mb-1">
+                {isAr ? 'مقبول مطابق (Pass)' : 'Passed'}
+              </label>
               <input
                 type="number"
                 min="0"
@@ -242,7 +250,9 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-[10px] text-amber-600 dark:text-amber-400 mb-1">إعادة تشغيل (Rework)</label>
+              <label className="block text-[10px] text-amber-600 dark:text-amber-400 mb-1">
+                {isAr ? 'إعادة تشغيل (Rework)' : 'Rework'}
+              </label>
               <input
                 type="number"
                 min="0"
@@ -253,7 +263,9 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-[10px] text-red-600 dark:text-red-400 mb-1">مرفوض نهائي (Reject)</label>
+              <label className="block text-[10px] text-red-600 dark:text-red-400 mb-1">
+                {isAr ? 'مرفوض نهائي (Reject)' : 'Rejected'}
+              </label>
               <input
                 type="number"
                 min="0"
@@ -268,7 +280,9 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
             <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-[11px] pt-1">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>
-                مجموع النتائج ({sumCheck}) لا يطابق إجمالي القطع المفحوصة ({inspectedQuantity}).
+                {isAr
+                  ? `مجموع النتائج (${sumCheck}) لا يطابق إجمالي القطع المفحوصة (${inspectedQuantity}).`
+                  : `Sum of results (${sumCheck}) does not match inspected pieces (${inspectedQuantity}).`}
               </span>
             </div>
           )}
@@ -278,7 +292,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-900 dark:text-slate-200">
-              سجل تفاصيل العيوب والإجراءات التصحيحية
+              {isAr ? 'سجل تفاصيل العيوب والإجراءات التصحيحية' : 'Defect Breakdown & Corrective Actions'}
             </span>
             <Button
               type="button"
@@ -288,24 +302,24 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
               icon={<Plus className="w-3.5 h-3.5" />}
               className="text-xs h-7"
             >
-              إضافة عيب
+              {isAr ? 'إضافة عيب' : 'Add Defect'}
             </Button>
           </div>
 
           {defects.length === 0 ? (
             <div className="p-3 text-center text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl">
-              لا توجد عيوب مسجلة — الدفعة مطابقة بالكامل.
+              {isAr ? 'لا توجد عيوب مسجلة — الدفعة مطابقة بالكامل.' : 'No defects recorded — Batch fully compliant.'}
             </div>
           ) : (
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-              <table className="w-full text-right text-xs">
+              <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
                 <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 font-semibold">
                   <tr>
-                    <th className="py-2.5 px-3">نوع العيب</th>
-                    <th className="py-2.5 px-3">الخطورة</th>
-                    <th className="py-2.5 px-3">العدد</th>
-                    <th className="py-2.5 px-3">الإجراء التصحيحي</th>
-                    <th className="py-2.5 px-2 text-center">حذف</th>
+                    <th className="py-2.5 px-3">{isAr ? 'نوع العيب' : 'Defect Type'}</th>
+                    <th className="py-2.5 px-3">{isAr ? 'الخطورة' : 'Severity'}</th>
+                    <th className="py-2.5 px-3">{isAr ? 'العدد' : 'Qty'}</th>
+                    <th className="py-2.5 px-3">{isAr ? 'الإجراء التصحيحي' : 'Corrective Action'}</th>
+                    <th className="py-2.5 px-2 text-center">{isAr ? 'حذف' : 'Remove'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 bg-white dark:bg-slate-950/40">
@@ -317,12 +331,12 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
                           onChange={(e) => handleDefectChange(idx, 'defect_type', e.target.value)}
                           className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
                         >
-                          <option value="skip_stitch">تنسيل أو غرزة ساقطة (Skip Stitch)</option>
-                          <option value="fabric_flaw">عيب نسيج أو خامة (Fabric Flaw)</option>
-                          <option value="size_measurement">عدم مطابقة المقاس والباترون</option>
-                          <option value="stain">بقعة زيت أو اتساخ ماكينات</option>
-                          <option value="broken_needle">كسر إبرة أو ثقب</option>
-                          <option value="color_shading">اختلاف درجات اللون بين الأجزاء</option>
+                          <option value="skip_stitch">{isAr ? 'تنسيل أو غرزة ساقطة (Skip Stitch)' : 'Skip Stitch / Unraveling'}</option>
+                          <option value="fabric_flaw">{isAr ? 'عيب نسيج أو خامة (Fabric Flaw)' : 'Fabric Flaw'}</option>
+                          <option value="size_measurement">{isAr ? 'عدم مطابقة المقاس والباترون' : 'Measurement / Pattern Out of Spec'}</option>
+                          <option value="stain">{isAr ? 'بقعة زيت أو اتساخ ماكينات' : 'Oil Stain / Machine Dirt'}</option>
+                          <option value="broken_needle">{isAr ? 'كسر إبرة أو ثقب' : 'Broken Needle / Hole'}</option>
+                          <option value="color_shading">{isAr ? 'اختلاف درجات اللون بين الأجزاء' : 'Color Shading / Panel Mismatch'}</option>
                         </select>
                       </td>
                       <td className="py-2 px-3">
@@ -331,9 +345,9 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
                           onChange={(e) => handleDefectChange(idx, 'severity', e.target.value as any)}
                           className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
                         >
-                          <option value="minor">طفيف (Minor)</option>
-                          <option value="major">جسيم (Major)</option>
-                          <option value="critical">حرج (Critical)</option>
+                          <option value="minor">{isAr ? 'طفيف (Minor)' : 'Minor'}</option>
+                          <option value="major">{isAr ? 'جسيم (Major)' : 'Major'}</option>
+                          <option value="critical">{isAr ? 'حرج (Critical)' : 'Critical'}</option>
                         </select>
                       </td>
                       <td className="py-2 px-3">
@@ -376,20 +390,20 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            ملاحظات وتوصيات التفتيش
+            {isAr ? 'ملاحظات وتوصيات التفتيش' : 'Inspection Notes & Recommendations'}
           </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="ملاحظات فحص القياسات أو درجات الشد..."
+            placeholder={isAr ? 'ملاحظات فحص القياسات أو درجات الشد...' : 'Tension notes, seam elasticity checks...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button
             type="submit"
@@ -397,7 +411,7 @@ export const QualityInspectionModal: React.FC<QualityInspectionModalProps> = ({
             isLoading={isSubmitting}
             icon={<CheckCircle2 className="w-3.5 h-3.5" />}
           >
-            اعتماد تقرير الفحص
+            {isAr ? 'اعتماد تقرير الفحص' : 'Approve QC Report'}
           </Button>
         </div>
       </form>

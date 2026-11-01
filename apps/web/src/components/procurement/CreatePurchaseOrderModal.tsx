@@ -12,6 +12,7 @@ interface CreatePurchaseOrderModalProps {
   warehouses: Warehouse[];
   items: InventoryItem[];
   onSuccess: (newPo: PurchaseOrder) => void;
+  isAr?: boolean;
 }
 
 export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> = ({
@@ -21,6 +22,7 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
   warehouses,
   items,
   onSuccess,
+  isAr = true,
 }) => {
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id || '');
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || '');
@@ -88,14 +90,19 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'تعذر إنشاء أمر الشراء على الخادم.');
+      setErrorMsg(err.message || (isAr ? 'تعذر إنشاء أمر الشراء على الخادم.' : 'Failed to create purchase order on server.'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="إصدار أمر شراء خامات جديد (Purchase Order)" maxWidth="xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isAr ? 'إصدار أمر شراء خامات جديد (Purchase Order)' : 'Create New Purchase Order'}
+      maxWidth="xl"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMsg && (
           <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
@@ -105,7 +112,9 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">المورد المعتمد</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'المورد المعتمد' : 'Approved Supplier'}
+            </label>
             <select
               required
               value={supplierId}
@@ -119,7 +128,9 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">مخزن الاستلام المستهدف</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'مخزن الاستلام المستهدف' : 'Target Receiving Warehouse'}
+            </label>
             <select
               required
               value={warehouseId}
@@ -135,7 +146,9 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ أمر الشراء</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ أمر الشراء' : 'Order Date'}
+            </label>
             <input
               type="date"
               required
@@ -146,7 +159,9 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ التوريد المتوقع</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ التوريد المتوقع' : 'Expected Delivery Date'}
+            </label>
             <input
               type="date"
               value={expectedDate}
@@ -159,9 +174,11 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
         {/* Line Items Table */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">بنود الأصناف المطلوبة</label>
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+              {isAr ? 'بنود الأصناف المطلوبة' : 'Order Line Items'}
+            </label>
             <Button type="button" size="sm" variant="outline" onClick={addItemRow} icon={<Plus className="w-3.5 h-3.5" />}>
-              إضافة بند
+              {isAr ? 'إضافة بند' : 'Add Item'}
             </Button>
           </div>
 
@@ -185,7 +202,7 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
                     type="number"
                     step="any"
                     min="0.1"
-                    placeholder="الكمية"
+                    placeholder={isAr ? 'الكمية' : 'Quantity'}
                     value={row.ordered_quantity}
                     onChange={(e) => updateItemRow(index, 'ordered_quantity', parseFloat(e.target.value) || 0)}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-mono text-center focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
@@ -196,7 +213,7 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
                   <input
                     type="number"
                     step="any"
-                    placeholder="سعر الوحدة"
+                    placeholder={isAr ? 'سعر الوحدة' : 'Unit Price'}
                     value={row.unit_price}
                     onChange={(e) => updateItemRow(index, 'unit_price', parseFloat(e.target.value) || 0)}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-mono text-center focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
@@ -219,12 +236,14 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات وشروط التوريد</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'ملاحظات وشروط التوريد' : 'Supply Terms & Remarks'}
+          </label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="شروط مطابقة عينات المعمل، مواصفات لف الثياب..."
+            placeholder={isAr ? 'شروط مطابقة عينات المعمل، مواصفات لف الثياب...' : 'Lab dips approval, roll packing specs...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
@@ -232,25 +251,25 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
         {/* Financial Summary */}
         <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>المجموع قبل الضريبة:</span>
-            <span className="font-mono text-slate-900 dark:text-slate-200">{subtotal.toLocaleString()} ج.م</span>
+            <span>{isAr ? 'المجموع قبل الضريبة:' : 'Subtotal before Tax:'}</span>
+            <span className="font-mono text-slate-900 dark:text-slate-200">{subtotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
           </div>
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>ضريبة القيمة المضافة (14%):</span>
-            <span className="font-mono text-slate-900 dark:text-slate-200">{taxAmount.toLocaleString()} ج.م</span>
+            <span>{isAr ? 'ضريبة القيمة المضافة (14%):' : 'VAT (14%):'}</span>
+            <span className="font-mono text-slate-900 dark:text-slate-200">{taxAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
           </div>
           <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 pt-1.5 border-t border-slate-200 dark:border-slate-800">
-            <span>إجمالي أمر الشراء المستهدف:</span>
-            <span className="font-mono text-brand-primary dark:text-rose-400 text-sm">{totalAmount.toLocaleString()} ج.م</span>
+            <span>{isAr ? 'إجمالي أمر الشراء المستهدف:' : 'Total Purchase Order Amount:'}</span>
+            <span className="font-mono text-brand-primary dark:text-rose-400 text-sm">{totalAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
           </div>
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            إنشاء أمر الشراء (مسودة)
+            {isAr ? 'إنشاء أمر الشراء (مسودة)' : 'Create Purchase Order (Draft)'}
           </Button>
         </div>
       </form>

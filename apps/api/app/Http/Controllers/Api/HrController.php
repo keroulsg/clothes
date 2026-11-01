@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeAdjustment;
 use App\Models\Payroll;
+use App\Models\PayrollPayment;
 use App\Models\PieceRate;
 use App\Models\PieceWorkLog;
 use App\Models\QualityDefectAdjustment;
@@ -18,11 +21,50 @@ class HrController extends Controller
         protected PayrollService $payrollService
     ) {}
 
-    public function employees(): JsonResponse
+    // ==========================================
+    // 1. إدارة الموظفين والعمال (Worker Management)
+    // ==========================================
+
+    public function employees(Request $request): JsonResponse
     {
-        $employees = Employee::withCount('pieceWorkLogs')->latest()->paginate(20);
+        $tenantId = app('current_tenant_id');
+        $query = Employee::where('tenant_id', $tenantId)->with('branch')->withCount('pieceWorkLogs');
+
+        if ($request->has('search')) {
+            $s = trim($request->query('search'));
+            $query->where(function ($q) use ($s) {
+                $q->where('name', 'like', "%{$s}%")
+                  ->orWhere('employee_code', 'like', "%{$s}%")
+                  ->orWhere('job_title', 'like', "%{$s}%")
+                  ->orWhere('phone', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->has('department') && $request->query('department') !== 'all') {
+            $query->where('department', $request->query('department'));
+        }
+
+        if ($request->has('pay_type') && $request->query('pay_type') !== 'all') {
+            $query->where('pay_type', $request->query('pay_type'));
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', filter_var($request->query('is_active'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $employees = $query->latest()->paginate(20);
 
         return response()->json($employees);
+    }
+
+    public function showEmployee(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $employee = Employee::where('tenant_id', $tenantId)
+            ->with(['branch', 'pieceWorkLogs' => fn($q) => $q->latest()->limit(10), 'attendances' => fn($q) => $q->latest()->limit(10)])
+            ->findOrFail($id);
+
+        return response()->json($employee);
     }
 
     public function storeEmployee(Request $request): JsonResponse
@@ -32,32 +74,253 @@ class HrController extends Controller
             'name' => 'required|string|max:255',
             'department' => 'required|string|max:50',
             'job_title' => 'required|string|max:100',
-            'pay_type' => 'required|string|in:piece_rate,fixed_salary,hourly,hybrid',
+            'pay_type' => 'required|string|in:piece_rate,fixed_salary,hourly,daily,hybrid',
             'base_salary' => 'nullable|numeric|min:0',
+            'hourly_rate' => 'nullable|numeric|min:0',
+            'daily_rate' => 'nullable|numeric|min:0',
+            'shift_name' => 'nullable|string|max:50',
+            'hire_date' => 'nullable|date',
+            'branch_id' => 'nullable|uuid',
             'phone' => 'nullable|string|max:50',
             'national_id' => 'nullable|string|max:50',
+            'is_active' => 'nullable|boolean',
         ]);
 
         $tenantId = app('current_tenant_id');
 
+        // منع تكرار كود الموظف داخل نفس المستأجر
+        $existing = Employee::where('tenant_id', $tenantId)->where('employee_code', $validated['employee_code'])->first();
+        if ($existing) {
+            return response()->json([
+                'error' => 'DuplicateEmployeeCode',
+                'message' => 'كود الموظف مستخدم بالفعل داخل منشأتك. يرجى اختيار كود فريد.',
+            ], 422);
+        }
+
         $employee = Employee::create([
             'tenant_id' => $tenantId,
+            'branch_id' => $validated['branch_id'] ?? null,
             'employee_code' => $validated['employee_code'],
             'name' => $validated['name'],
             'department' => $validated['department'],
             'job_title' => $validated['job_title'],
             'pay_type' => $validated['pay_type'],
             'base_salary' => $validated['base_salary'] ?? 0,
+            'hourly_rate' => $validated['hourly_rate'] ?? 0,
+            'daily_rate' => $validated['daily_rate'] ?? 0,
+            'shift_name' => $validated['shift_name'] ?? 'morning',
+            'hire_date' => $validated['hire_date'] ?? now()->toDateString(),
             'phone' => $validated['phone'] ?? null,
             'national_id' => $validated['national_id'] ?? null,
-            'is_active' => true,
+            'is_active' => $validated['is_active'] ?? true,
         ]);
 
         return response()->json([
             'message' => 'تم إضافة الموظف/العامل بنجاح',
-            'employee' => $employee,
+            'employee' => $employee->load('branch'),
         ], 201);
     }
+
+    public function updateEmployee(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $employee = Employee::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'employee_code' => 'sometimes|required|string|max:50',
+            'name' => 'sometimes|required|string|max:255',
+            'department' => 'sometimes|required|string|max:50',
+            'job_title' => 'sometimes|required|string|max:100',
+            'pay_type' => 'sometimes|required|string|in:piece_rate,fixed_salary,hourly,daily,hybrid',
+            'base_salary' => 'nullable|numeric|min:0',
+            'hourly_rate' => 'nullable|numeric|min:0',
+            'daily_rate' => 'nullable|numeric|min:0',
+            'shift_name' => 'nullable|string|max:50',
+            'hire_date' => 'nullable|date',
+            'termination_date' => 'nullable|date',
+            'branch_id' => 'nullable|uuid',
+            'phone' => 'nullable|string|max:50',
+            'national_id' => 'nullable|string|max:50',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        if (!empty($validated['employee_code']) && $validated['employee_code'] !== $employee->employee_code) {
+            $conflict = Employee::where('tenant_id', $tenantId)
+                ->where('employee_code', $validated['employee_code'])
+                ->where('id', '!=', $employee->id)
+                ->first();
+            if ($conflict) {
+                return response()->json([
+                    'error' => 'DuplicateEmployeeCode',
+                    'message' => 'كود الموظف الجديد مسجل مسبقاً لعامل آخر.',
+                ], 422);
+            }
+        }
+
+        $employee->update($validated);
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات الموظف والتعويض بنجاح',
+            'employee' => $employee->load('branch'),
+        ]);
+    }
+
+    // ==========================================
+    // 2. الحضور والانصراف (Attendance & Working Time)
+    // ==========================================
+
+    public function attendances(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $query = Attendance::where('tenant_id', $tenantId)->with(['employee', 'branch']);
+
+        if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->query('employee_id'));
+        }
+
+        if ($request->has('attendance_date')) {
+            $query->where('attendance_date', $request->query('attendance_date'));
+        }
+
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('attendance_date', [$request->query('start_date'), $request->query('end_date')]);
+        }
+
+        if ($request->has('status') && $request->query('status') !== 'all') {
+            $query->where('status', $request->query('status'));
+        }
+
+        $attendances = $query->latest('attendance_date')->paginate(25);
+
+        return response()->json($attendances);
+    }
+
+    public function storeAttendance(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|uuid',
+            'attendance_date' => 'required|date',
+            'check_in' => 'nullable|string',
+            'check_out' => 'nullable|string',
+            'status' => 'required|string|in:present,absent,late,excused_leave,unexcused_leave,half_day',
+            'working_hours' => 'nullable|numeric|min:0',
+            'overtime_hours' => 'nullable|numeric|min:0',
+            'late_minutes' => 'nullable|integer|min:0',
+            'is_payable' => 'nullable|boolean',
+            'notes' => 'nullable|string|max:255',
+            'branch_id' => 'nullable|uuid',
+        ]);
+
+        try {
+            $attendance = $this->payrollService->recordAttendance($validated, $request->user()->id);
+
+            return response()->json([
+                'message' => 'تم تسجيل حضور وانصراف العامل بنجاح',
+                'attendance' => $attendance->load('employee'),
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'DuplicateAttendance',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function updateAttendance(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => 'sometimes|required|string|in:present,absent,late,excused_leave,unexcused_leave,half_day',
+            'check_in' => 'nullable|string',
+            'check_out' => 'nullable|string',
+            'working_hours' => 'nullable|numeric|min:0',
+            'overtime_hours' => 'nullable|numeric|min:0',
+            'late_minutes' => 'nullable|integer|min:0',
+            'is_payable' => 'nullable|boolean',
+            'correction_reason' => 'required|string|max:255',
+        ]);
+
+        $attendance = $this->payrollService->updateAttendance($id, $validated, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم تصحيح سجل الحضور وتوثيق سبب التعديل بنجاح',
+            'attendance' => $attendance,
+        ]);
+    }
+
+    // ==========================================
+    // 3. السلف والتسويات المالية (Adjustments & Advances)
+    // ==========================================
+
+    public function adjustments(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $query = EmployeeAdjustment::where('tenant_id', $tenantId)->with(['employee', 'approver']);
+
+        if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->query('employee_id'));
+        }
+
+        if ($request->has('type') && $request->query('type') !== 'all') {
+            $query->where('type', $request->query('type'));
+        }
+
+        if ($request->has('status') && $request->query('status') !== 'all') {
+            $query->where('status', $request->query('status'));
+        }
+
+        $adjustments = $query->latest('adjustment_date')->paginate(20);
+
+        return response()->json($adjustments);
+    }
+
+    public function storeAdjustment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|uuid',
+            'type' => 'required|string|in:advance,advance_repayment,allowance,bonus,deduction',
+            'amount' => 'required|numeric|min:0.01',
+            'currency' => 'nullable|string|max:10',
+            'adjustment_date' => 'required|date',
+            'payroll_period' => 'nullable|string|max:50',
+            'reason' => 'required|string|max:255',
+            'notes' => 'nullable|string',
+        ]);
+
+        $adj = $this->payrollService->createEmployeeAdjustment($validated, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم تسجيل طلب التسوية/السلفة بنجاح وهو بانتظار الاعتماد',
+            'adjustment' => $adj->load('employee'),
+        ], 201);
+    }
+
+    public function approveAdjustment(Request $request, string $id): JsonResponse
+    {
+        $adj = $this->payrollService->approveEmployeeAdjustment($id, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم اعتماد السلفة/التسوية المالية بنجاح وستدرج في المسير',
+            'adjustment' => $adj,
+        ]);
+    }
+
+    public function rejectAdjustment(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:255',
+        ]);
+
+        $adj = $this->payrollService->rejectEmployeeAdjustment($id, $request->user()->id, $validated['reason']);
+
+        return response()->json([
+            'message' => 'تم رفض السلفة/التعديل المالي بنجاح',
+            'adjustment' => $adj,
+        ]);
+    }
+
+    // ==========================================
+    // 4. تسعيرة أجور القطعة وسجلات الإنتاج
+    // ==========================================
 
     public function pieceRates(): JsonResponse
     {
@@ -98,7 +361,7 @@ class HrController extends Controller
 
     public function pieceWorkLogs(): JsonResponse
     {
-        $logs = PieceWorkLog::with(['employee', 'productionOrder', 'pieceRate'])
+        $logs = PieceWorkLog::with(['employee', 'productionOrder', 'pieceRate', 'cuttingBundle'])
             ->latest('work_date')
             ->paginate(20);
 
@@ -122,35 +385,6 @@ class HrController extends Controller
         return response()->json([
             'message' => 'تم تسجيل إنتاجية العامل واحتساب الأجر بنجاح',
             'work_log' => $log,
-        ], 201);
-    }
-
-    public function payrolls(): JsonResponse
-    {
-        $payrolls = Payroll::with('items.employee')->latest()->paginate(20);
-
-        return response()->json($payrolls);
-    }
-
-    public function generatePayroll(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'payroll_period' => 'required|string|max:50',
-            'period_start' => 'required|date',
-            'period_end' => 'required|date|after_or_equal:period_start',
-        ]);
-
-        $tenantId = app('current_tenant_id');
-        $payroll = $this->payrollService->generatePayroll(
-            $tenantId,
-            $validated['payroll_period'],
-            $validated['period_start'],
-            $validated['period_end']
-        );
-
-        return response()->json([
-            'message' => 'تم استخراج مسير الرواتب واحتساب مستحقات العمال بنجاح',
-            'payroll' => $payroll,
         ], 201);
     }
 
@@ -178,6 +412,10 @@ class HrController extends Controller
         ]);
     }
 
+    // ==========================================
+    // 5. عيوب الجودة والخصومات (Defect Adjustments)
+    // ==========================================
+
     public function defectAdjustments(Request $request): JsonResponse
     {
         $query = QualityDefectAdjustment::with(['employee', 'productionOrder', 'cuttingBundle', 'approver', 'reporter', 'reverser'])
@@ -189,10 +427,6 @@ class HrController extends Controller
 
         if ($request->has('status')) {
             $query->where('status', $request->query('status'));
-        }
-
-        if ($request->has('production_order_id')) {
-            $query->where('production_order_id', $request->query('production_order_id'));
         }
 
         return response()->json($query->paginate(20));
@@ -291,8 +525,135 @@ class HrController extends Controller
         ]);
     }
 
+    // ==========================================
+    // 6. مسيرات الرواتب ودورة الاعتماد والصرف (Payrolls Lifecycle)
+    // ==========================================
+
+    public function payrolls(): JsonResponse
+    {
+        $payrolls = Payroll::with(['items.employee', 'payments', 'approver', 'finalizer'])->latest()->paginate(20);
+
+        return response()->json($payrolls);
+    }
+
+    public function showPayroll(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $payroll = Payroll::where('tenant_id', $tenantId)
+            ->with(['items.employee', 'payments', 'approver', 'finalizer'])
+            ->findOrFail($id);
+
+        return response()->json($payroll);
+    }
+
+    public function generatePayroll(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'payroll_period' => 'required|string|max:50',
+            'period_start' => 'required|date',
+            'period_end' => 'required|date|after_or_equal:period_start',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $initialStatus = $request->input('status', 'draft');
+        $payroll = $this->payrollService->generatePayroll(
+            $tenantId,
+            $validated['payroll_period'],
+            $validated['period_start'],
+            $validated['period_end'],
+            $initialStatus
+        );
+
+        return response()->json([
+            'message' => 'تم احتساب مسير الرواتب لجميع فئات التعويض بنجاح',
+            'payroll' => $payroll,
+        ], 201);
+    }
+
+    public function approvePayroll(Request $request, string $id): JsonResponse
+    {
+        $payroll = $this->payrollService->approvePayroll($id, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تمت مراجعة واعتماد مسير الرواتب بنجاح',
+            'payroll' => $payroll,
+        ]);
+    }
+
+    public function rejectPayroll(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:255',
+        ]);
+
+        $payroll = $this->payrollService->rejectPayroll($id, $request->user()->id, $validated['rejection_reason']);
+
+        return response()->json([
+            'message' => 'تم رفض مسير الرواتب وإعادته للمراجعة',
+            'payroll' => $payroll,
+        ]);
+    }
+
+    public function finalizePayroll(Request $request, string $id): JsonResponse
+    {
+        $payroll = $this->payrollService->finalizePayroll($id, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم قفل وتثبيت مسير الرواتب نهائياً ولا يمكن تعديل أرقامه تاريخياً',
+            'payroll' => $payroll,
+        ]);
+    }
+
+    public function recordPayment(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'payment_date' => 'required|date',
+            'payment_method' => 'required|string|in:cash,bank_transfer,cheque,instapay',
+            'reference_number' => 'nullable|string|max:100',
+            'notes' => 'nullable|string',
+            'payroll_item_id' => 'nullable|uuid',
+            'employee_id' => 'nullable|uuid',
+        ]);
+
+        $payment = $this->payrollService->recordPayrollPayment($id, $validated, $request->user()->id);
+
+        return response()->json([
+            'message' => 'تم تسجيل سند الصرف وتحديث الرصيد المستحق بنجاح',
+            'payment' => $payment,
+            'payroll' => $payment->payroll->load(['items.employee', 'payments']),
+        ], 201);
+    }
+
     public function markPayrollPaid(Request $request, string $id): JsonResponse
     {
+        if ($request->has('amount')) {
+            $validated = $request->validate([
+                'amount' => 'required|numeric|min:0.01',
+                'payment_date' => 'nullable|date',
+                'payment_method' => 'nullable|string|in:cash,bank_transfer,cheque,instapay',
+                'reference_number' => 'nullable|string|max:100',
+                'notes' => 'nullable|string',
+                'payroll_item_id' => 'nullable|uuid',
+                'employee_id' => 'nullable|uuid',
+            ]);
+
+            try {
+                $payment = $this->payrollService->recordPayrollPayment($id, $validated, $request->user()->id);
+
+                return response()->json([
+                    'message' => 'تم تسجيل سند الصرف وتحديث الرصيد المستحق بنجاح',
+                    'payment' => $payment,
+                    'payroll' => $payment->payroll->load(['items.employee', 'payments']),
+                ], 200);
+            } catch (\InvalidArgumentException $e) {
+                return response()->json([
+                    'error' => 'PaymentValidationError',
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+        }
+
         $payroll = $this->payrollService->markPayrollPaid($id);
 
         return response()->json([
@@ -300,5 +661,16 @@ class HrController extends Controller
             'payroll' => $payroll,
         ]);
     }
-}
 
+    public function payrollPayments(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $payments = PayrollPayment::where('tenant_id', $tenantId)
+            ->where('payroll_id', $id)
+            ->with(['employee', 'payrollItem'])
+            ->latest()
+            ->get();
+
+        return response()->json($payments);
+    }
+}

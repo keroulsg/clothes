@@ -39,32 +39,61 @@ export const PrivacyPage: React.FC<LegalPageProps> = ({ lang }) => {
 
         <div className="prose dark:prose-invert text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-6 leading-relaxed">
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">1. التزام عزل المستأجرين (Tenant Isolation Guarantee)</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '1. التزام عزل المستأجرين (Tenant Isolation Guarantee)' : '1. Tenant Isolation Guarantee'}
+            </h2>
             <p>
-              تطبق منظومة GarmentOS Cloud عزل برمجيات صارم (Multi-Tenant Architecture) حيث يتم تشفير وفصل قواعد بيانات وحسابات كل مصنع بشكل مستقل من خلال معرّف المستأجر (`tenant_id`) المقيد بمستوى النواة (Kernel Scope). لا يمكن لأي مستخدم من مصنع آخر أو ورشة منافسة الاطلاع على أوامر القص أو أسعار التوريد الخاصة بمصنعكم.
+              {isAr
+                ? 'تطبق منظومة GarmentOS Cloud عزل برمجيات صارم (Multi-Tenant Architecture) حيث يتم تشفير وفصل قواعد بيانات وحسابات كل مصنع بشكل مستقل من خلال معرّف المستأجر (`tenant_id`) المقيد بمستوى النواة (Kernel Scope). لا يمكن لأي مستخدم من مصنع آخر أو ورشة منافسة الاطلاع على أوامر القص أو أسعار التوريد الخاصة بمصنعكم.'
+                : 'GarmentOS Cloud implements strict multi-tenant architecture where databases and tenant accounts are logically separated via kernel-scoped `tenant_id`. No other factory or competing workshop can access your cutting orders or procurement pricing.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">2. نوعية البيانات التي نجمعها</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '2. نوعية البيانات التي نجمعها' : '2. Categories of Data Collected'}
+            </h2>
             <ul className="list-disc pr-5 rtl:pr-5 ltr:pl-5 space-y-1">
-              <li><strong>بيانات المصنع الإدارية:</strong> الاسم التجاري، السجل التجاري (إن وجد)، عنوان صالة القص، البريد الإلكتروني للمسؤول، وأرقام الهواتف للتواصل والدعم.</li>
-              <li><strong>البيانات التشغيلية:</strong> أوامر الشغل، كود الموديل والباركود، مخططات الفرش، أوزان الـ GSM، وأرصدة الأقمشة المسجلة داخل النظام.</li>
-              <li><strong>بيانات تسجيل الدخول والأمان:</strong> عناوين الـ IP، سجلات الدخول (Access Logs)، والتوقيعات الزمنية لتدقيق العمليات ومنع التلاعب.</li>
+              <li>
+                <strong>{isAr ? 'بيانات المصنع الإدارية:' : 'Administrative Data:'}</strong>{' '}
+                {isAr
+                  ? 'الاسم التجاري، السجل التجاري (إن وجد)، عنوان صالة القص، البريد الإلكتروني للمسؤول، وأرقام الهواتف للتواصل والدعم.'
+                  : 'Company name, commercial registration, facility address, administrator email, and contact phone numbers.'}
+              </li>
+              <li>
+                <strong>{isAr ? 'البيانات التشغيلية:' : 'Operational Production Data:'}</strong>{' '}
+                {isAr
+                  ? 'أوامر الشغل، كود الموديل والباركود، مخططات الفرش، أوزان الـ GSM، وأرصدة الأقمشة المسجلة داخل النظام.'
+                  : 'Work orders, model BOMs, barcodes, marker lay parameters, fabric GSM weights, and warehouse balances.'}
+              </li>
+              <li>
+                <strong>{isAr ? 'بيانات تسجيل الدخول والأمان:' : 'Security & Access Logs:'}</strong>{' '}
+                {isAr
+                  ? 'عناوين الـ IP، سجلات الدخول (Access Logs)، والتوقيعات الزمنية لتدقيق العمليات ومنع التلاعب.'
+                  : 'IP addresses, audit access logs, and timestamps for accountability and forensic security integrity.'}
+              </li>
             </ul>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">3. التشفير والحماية التقنية</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '3. التشفير والحماية التقنية' : '3. Encryption & Technical Safeguards'}
+            </h2>
             <p>
-              يتم تشفير كافة الاتصالات بين أجهزة صالة القص وخوادم السحابة عبر بروتوكول TLS 1.3 المعتمد، كما يتم تشفير كلمات المرور والرموز السرية باستخدام خوارزمية Bcrypt القوية، وتُحفظ النسخ الاحتياطية المشفرة في مراكز بيانات مؤمنة جغرافياً.
+              {isAr
+                ? 'يتم تشفير كافة الاتصالات بين أجهزة صالة القص وخوادم السحابة عبر بروتوكول TLS 1.3 المعتمد، كما يتم تشفير كلمات المرور والرموز السرية باستخدام خوارزمية Bcrypt القوية، وتُحفظ النسخ الاحتياطية المشفرة في مراكز بيانات مؤمنة جغرافياً.'
+                : 'All traffic between workshop devices and cloud servers is encrypted via TLS 1.3. Credentials are encrypted using salted Bcrypt, and encrypted backups are kept in geographically resilient centers.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">4. حقوق المصنع في استرداد أو حذف بياناته</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '4. حقوق المصنع في استرداد أو حذف بياناته' : '4. Data Export & Deletion Rights'}
+            </h2>
             <p>
-              يحق لمالك المصنع في أي وقت طلب تصدير كامل بياناته بصيغة Excel / JSON، أو طلب إتلاف وسحق سجلات مصنعه بالكامل فور انتهاء العلاقة التعاقدية وفقاً للإجراءات المعتمدة.
+              {isAr
+                ? 'يحق لمالك المصنع في أي وقت طلب تصدير كامل بياناته بصيغة Excel / JSON، أو طلب إتلاف وسحق سجلات مصنعه بالكامل فور انتهاء العلاقة التعاقدية وفقاً للإجراءات المعتمدة.'
+                : 'Tenants retain the right to export full operational datasets in Excel or JSON format at any time, or request complete data deletion upon service termination.'}
             </p>
           </section>
         </div>
@@ -94,30 +123,46 @@ export const TermsPage: React.FC<LegalPageProps> = ({ lang }) => {
 
         <div className="prose dark:prose-invert text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-6 leading-relaxed">
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">1. طبيعة الخدمة والترخيص</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '1. طبيعة الخدمة والترخيص' : '1. Nature of Service & Licensing'}
+            </h2>
             <p>
-              تقدم منصة GarmentOS Cloud خدمة اشتراك سحابية لإدارة مصانع وورش الملابس. يُمنح المشترك ترخيصاً غير حصري وغير قابل للتحويل لاستخدام البرمجيات وفقاً للباقة المختارة (Starter / Professional / Enterprise).
+              {isAr
+                ? 'تقدم منصة GarmentOS Cloud خدمة اشتراك سحابية لإدارة مصانع وورش الملابس. يُمنح المشترك ترخيصاً غير حصري وغير قابل للتحويل لاستخدام البرمجيات وفقاً للباقة المختارة (Starter / Professional / Enterprise).'
+                : 'GarmentOS Cloud provides cloud software subscriptions for apparel factories and workshops. Tenants are granted a non-exclusive, non-transferable license based on their active subscription tier.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">2. مسؤوليات المصنع المستأجر</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '2. مسؤوليات المصنع المستأجر' : '2. Tenant Responsibilities'}
+            </h2>
             <p>
-              يلتزم العميل بالحفاظ على سرية بيانات الدخول الخاصة بمستخدميه (مدير الإنتاج، المحاسب، مراقب الجودة)، ويكون مسؤولاً مسؤولية كاملة عن أي عمليات إدخال أو تعديل تتم باستخدام حسابات مصنعه.
+              {isAr
+                ? 'يلتزم العميل بالحفاظ على سرية بيانات الدخول الخاصة بمستخدميه (مدير الإنتاج، المحاسب، مراقب الجودة)، ويكون مسؤولاً مسؤولية كاملة عن أي عمليات إدخال أو تعديل تتم باستخدام حسابات مصنعه.'
+                : 'Tenants are responsible for safeguarding login credentials assigned to their operators, managers, and accountants, remaining fully liable for transactions made under their accounts.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">3. ضمان الجاهزية التشغيلية (SLA)</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '3. ضمان الجاهزية التشغيلية (SLA)' : '3. Service Level Agreement (SLA)'}
+            </h2>
             <p>
-              تلتزم إدارة GarmentOS Cloud بنسبة جاهزية لا تقل عن 99.5% شهرياً للأنظمة السحابية، مع جدولة أعمال الصيانة الدورية خارج أوقات ورديات التشغيل الرسمية وإشعار العملاء مسبقاً.
+              {isAr
+                ? 'تلتزم إدارة GarmentOS Cloud بنسبة جاهزية لا تقل عن 99.5% شهرياً للأنظمة السحابية، مع جدولة أعمال الصيانة الدورية خارج أوقات ورديات التشغيل الرسمية وإشعار العملاء مسبقاً.'
+                : 'GarmentOS Cloud targets a 99.5% monthly system uptime, scheduling routine maintenance outside official factory operating shifts with advance notice.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">4. الاستخدام غير المشروع</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '4. الاستخدام غير المشروع' : '4. Prohibited Uses'}
+            </h2>
             <p>
-              يحظر محاولة فك الشفرات البرمجية للمنظومة، أو شن هجمات حرمان من الخدمة، أو استخدام حسابات وهمية للتحايل على قيود الباقات أو تجاوز عدد المستخدمين المصرح به.
+              {isAr
+                ? 'يحظر محاولة فك الشفرات البرمجية للمنظومة، أو شن هجمات حرمان من الخدمة، أو استخدام حسابات وهمية للتحايل على قيود الباقات أو تجاوز عدد المستخدمين المصرح به.'
+                : 'Reverse engineering, vulnerability scanning, denial-of-service attempts, and bypassing subscription tier user caps are strictly prohibited.'}
             </p>
           </section>
         </div>
@@ -147,23 +192,35 @@ export const RefundPage: React.FC<LegalPageProps> = ({ lang }) => {
 
         <div className="prose dark:prose-invert text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-6 leading-relaxed">
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">1. الفترة التجريبية المجانية (14 يوماً)</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '1. الفترة التجريبية المجانية (14 يوماً)' : '1. Free 14-Day Trial Period'}
+            </h2>
             <p>
-              تتيح GarmentOS فترة تجريبية مجانية لمدة 14 يوماً بدون أي رسوم أو التزام مالي لتمكين إدارة المصنع من فحص واختبار كافة وحدات صالة القص والمخازن عملياً قبل دفع أي مبلغ.
+              {isAr
+                ? 'تتيح GarmentOS فترة تجريبية مجانية لمدة 14 يوماً بدون أي رسوم أو التزام مالي لتمكين إدارة المصنع من فحص واختبار كافة وحدات صالة القص والمخازن عملياً قبل دفع أي مبلغ.'
+                : 'GarmentOS offers a 14-day free trial with zero financial commitment, enabling factory leadership to evaluate all cutting and warehouse modules prior to billing.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">2. حق الإلغاء الفوري</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '2. حق الإلغاء الفوري' : '2. Cancellation Rights'}
+            </h2>
             <p>
-              يحق للعميل إلغاء اشتراكه الشهري أو السنوي في أي وقت من خلال لوحة إدارة الحساب أو التواصل مع فريق الدعم، ويسري الإلغاء عند انتهاء دورة الفوترة المدفوعة الحالية.
+              {isAr
+                ? 'يحق للعميل إلغاء اشتراكه الشهري أو السنوي في أي وقت من خلال لوحة إدارة الحساب أو التواصل مع فريق الدعم، ويسري الإلغاء عند انتهاء دورة الفوترة المدفوعة الحالية.'
+                : 'Tenants may cancel subscriptions at any time via the admin dashboard or customer support. Cancellations take effect at the conclusion of the active paid billing cycle.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">3. شروط استرداد المبالغ</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '3. شروط استرداد المبالغ' : '3. Refund Eligibility'}
+            </h2>
             <p>
-              في حال تم تجديد الاشتراك السنوي بالخطأ، يحق للعميل طلب استرداد كامل المبلغ خلال 7 أيام من تاريخ التجديد شريطة عدم استهلاك موارد سحابية استثنائية. يتم معالجة طلبات الاسترداد المعتمدة عبر نفس وسيلة الدفع الأصلية خلال 7 إلى 14 يوم عمل.
+              {isAr
+                ? 'في حال تم تجديد الاشتراك السنوي بالخطأ، يحق للعميل طلب استرداد كامل المبلغ خلال 7 أيام من تاريخ التجديد شريطة عدم استهلاك موارد سحابية استثنائية. يتم معالجة طلبات الاسترداد المعتمدة عبر نفس وسيلة الدفع الأصلية خلال 7 إلى 14 يوم عمل.'
+                : 'In the event of accidental annual renewals, tenants may request a full refund within 7 calendar days of renewal. Approved refunds are returned via the original payment method within 7 to 14 business days.'}
             </p>
           </section>
         </div>
@@ -193,16 +250,24 @@ export const CookiesPage: React.FC<LegalPageProps> = ({ lang }) => {
 
         <div className="prose dark:prose-invert text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-6 leading-relaxed">
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">1. التخزين المحلي الضروري (Essential Storage)</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '1. التخزين المحلي الضروري (Essential Storage)' : '1. Essential Local Storage'}
+            </h2>
             <p>
-              تستخدم المنظومة تقنية `localStorage` لتخزين الرموز الأمنية المعتمدة (`garmentos_auth_token`) ومعرّف المستأجر الحالي لتأكيد الصلاحيات وحماية الجلسة من التزييف، بالإضافة لحفظ خيارات الواجهة مثل الوضع الداكن واللغة وحالة طي القائمة الجانبية.
+              {isAr
+                ? 'تستخدم المنظومة تقنية `localStorage` لتخزين الرموز الأمنية المعتمدة (`garmentos_auth_token`) ومعرّف المستأجر الحالي لتأكيد الصلاحيات وحماية الجلسة من التزييف، بالإضافة لحفظ خيارات الواجهة مثل الوضع الداكن واللغة وحالة طي القائمة الجانبية.'
+                : 'The system uses `localStorage` strictly for active authentication tokens (`garmentos_auth_token`), current tenant identity, and UI preferences including dark mode, language, and sidebar collapse state.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">2. عدم استخدام ملفات تتبع إعلانية (No Ad-Trackers)</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '2. عدم استخدام ملفات تتبع إعلانية (No Ad-Trackers)' : '2. Zero Advertising Trackers'}
+            </h2>
             <p>
-              نؤكد بوضوح أن GarmentOS Cloud خالية تماماً من ملفات تعريف الارتباط الإعلانية التابعة لشركات التسويق أو شبكات الإعلانات الخارجية، ولا يتم تتبع نشاط العميل خارج نطاق تطبيق الـ ERP.
+              {isAr
+                ? 'نؤكد بوضوح أن GarmentOS Cloud خالية تماماً من ملفات تعريف الارتباط الإعلانية التابعة لشركات التسويق أو شبكات الإعلانات الخارجية، ولا يتم تتبع نشاط العميل خارج نطاق تطبيق الـ ERP.'
+                : 'GarmentOS Cloud does not employ any third-party marketing cookies, tracking pixels, or advertising beacons. We never track tenant behavior across external websites.'}
             </p>
           </section>
         </div>
@@ -217,7 +282,7 @@ export const IpPage: React.FC<LegalPageProps> = ({ lang }) => {
     <div className="py-12 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
       <div className="space-y-6">
         <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
-          <div className="w-10 h-10 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#f87171] flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#f87171] flex items-center justify-center shrink-0">
             <Award className="w-5 h-5" />
           </div>
           <div>
@@ -232,16 +297,24 @@ export const IpPage: React.FC<LegalPageProps> = ({ lang }) => {
 
         <div className="prose dark:prose-invert text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-6 leading-relaxed">
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">1. حقوق الملكية الفكرية للمنظومة</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '1. حقوق الملكية الفكرية للمنظومة' : '1. Platform Intellectual Property'}
+            </h2>
             <p>
-              تعتبر الشيفرة البرمجية (Source Code)، الخوارزميات الحسابية لهندسة صالات القص وتوليد حزم الباركود، التصاميم البصرية، والعلامات التجارية لـ GarmentOS ملكية فكرية حصرية لمالك المنظومة، ومحمية بالقوانين المحلية والدولية للملكية الفكرية.
+              {isAr
+                ? 'تعتبر الشيفرة البرمجية (Source Code)، الخوارزميات الحسابية لهندسة صالات القص وتوليد حزم الباركود، التصاميم البصرية، والعلامات التجارية لـ GarmentOS ملكية فكرية حصرية لمالك المنظومة، ومحمية بالقوانين المحلية والدولية للملكية الفكرية.'
+                : 'The source code, cutting floor marker optimization algorithms, barcode bundle tracker logic, visual designs, and GarmentOS trademarks remain exclusive proprietary property of the platform.'}
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">2. الملكية الحصرية لتصاميم العميل وباترونات الموديلات</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              {isAr ? '2. الملكية الحصرية لتصاميم العميل وباترونات الموديلات' : '2. Tenant Design & Pattern Ownership'}
+            </h2>
             <p>
-              يحتفظ المصنع المستأجر بكامل حقوق الملكية الفكرية والتجارية لكافة الباترونات، جداول المقاسات، أسماء الموديلات، صور العينات، وعقود التصنيع التي يرفعها إلى حسابه. لا تكتسب المنظومة أي حق أو ترخيص على تلك التصاميم وتعتبرها أسراراً صناعية وتجارية مشددة الحماية.
+              {isAr
+                ? 'يحتفظ المصنع المستأجر بكامل حقوق الملكية الفكرية والتجارية لكافة الباترونات، جداول المقاسات، أسماء الموديلات، صور العينات، وعقود التصنيع التي يرفعها إلى حسابه. لا تكتسب المنظومة أي حق أو ترخيص على تلك التصاميم وتعتبرها أسراراً صناعية وتجارية مشددة الحماية.'
+                : 'The tenant factory maintains absolute ownership and intellectual property rights over all patterns, size specs, model designs, sample photos, and manufacturing contracts uploaded to their tenant instance. GarmentOS treats all tenant operational assets as strictly confidential trade secrets.'}
             </p>
           </section>
         </div>

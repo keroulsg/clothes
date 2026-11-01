@@ -10,6 +10,7 @@ interface ReceiveGoodsModalProps {
   onClose: () => void;
   purchaseOrder: PurchaseOrder | null;
   onSuccess: (updatedPo: PurchaseOrder, newGrn: GoodsReceiptNote) => void;
+  isAr?: boolean;
 }
 
 export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
@@ -17,6 +18,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
   onClose,
   purchaseOrder,
   onSuccess,
+  isAr = true,
 }) => {
   if (!purchaseOrder) return null;
 
@@ -27,7 +29,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
   const [acceptedQuantity, setAcceptedQuantity] = useState(remainingMax);
   const [rejectedQuantity, setRejectedQuantity] = useState(0);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [inspectorName, setInspectorName] = useState('م. طارق كمال (فحص الجودة)');
+  const [inspectorName, setInspectorName] = useState(isAr ? 'م. طارق كمال (فحص الجودة)' : 'QC Inspector');
   const [inspectionStatus, setInspectionStatus] = useState<'passed' | 'partial_pass' | 'failed'>('passed');
   const [deliveryNoteNumber, setDeliveryNoteNumber] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -53,17 +55,21 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
     setErrorMsg('');
 
     if (deliveredQuantity <= 0) {
-      setErrorMsg('يجب أن تكون الكمية المسلمة أكبر من الصفر.');
+      setErrorMsg(isAr ? 'يجب أن تكون الكمية المسلمة أكبر من الصفر.' : 'Delivered quantity must be greater than zero.');
       return;
     }
 
     if (deliveredQuantity > remainingMax) {
-      setErrorMsg(`الكمية المسلمة [${deliveredQuantity}] تتجاوز الكمية المتبقية في أمر الشراء [${remainingMax}].`);
+      setErrorMsg(
+        isAr
+          ? `الكمية المسلمة [${deliveredQuantity}] تتجاوز الكمية المتبقية في أمر الشراء [${remainingMax}].`
+          : `Delivered quantity [${deliveredQuantity}] exceeds remaining in PO [${remainingMax}].`
+      );
       return;
     }
 
     if (acceptedQuantity + rejectedQuantity > deliveredQuantity) {
-      setErrorMsg('مجموع الكميات المقبولة والمرفوضة لا يتطابق مع الكمية المسلمة.');
+      setErrorMsg(isAr ? 'مجموع الكميات المقبولة والمرفوضة لا يتطابق مع الكمية المسلمة.' : 'Sum of accepted and rejected quantities exceeds delivered.');
       return;
     }
 
@@ -102,7 +108,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'تعذر تسجيل إذن الاستلام والفحص على الخادم.');
+      setErrorMsg(err.message || (isAr ? 'تعذر تسجيل إذن الاستلام والفحص على الخادم.' : 'Failed to record goods receipt on server.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -112,7 +118,7 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`استلام وفحص بضاعة: ${purchaseOrder.po_number}`}
+      title={isAr ? `استلام وفحص بضاعة: ${purchaseOrder.po_number}` : `Receive & Inspect Goods: ${purchaseOrder.po_number}`}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -125,22 +131,24 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
 
         <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 text-xs space-y-1">
           <div className="flex justify-between">
-            <span className="text-slate-400">المورد:</span>
+            <span className="text-slate-400">{isAr ? 'المورد:' : 'Supplier:'}</span>
             <span className="font-semibold text-slate-200">{purchaseOrder.supplier_name}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-400">المخزن المستهدف:</span>
+            <span className="text-slate-400">{isAr ? 'المخزن المستهدف:' : 'Target Warehouse:'}</span>
             <span className="text-primary dark:text-[#fca5a5] font-medium">{purchaseOrder.warehouse_name}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-400">الكمية المتبقية للتوريد في أمر الشراء:</span>
-            <span className="font-mono font-bold text-emerald-400">{remainingMax} متر / وحدة</span>
+            <span className="text-slate-400">{isAr ? 'الكمية المتبقية للتوريد في أمر الشراء:' : 'Remaining Quantity on PO:'}</span>
+            <span className="font-mono font-bold text-emerald-400">{remainingMax} {isAr ? 'متر / وحدة' : 'm / units'}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">الكمية المسلمة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الكمية المسلمة' : 'Delivered Quantity'}
+            </label>
             <input
               type="number"
               step="any"
@@ -154,7 +162,9 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">المقبول (يدخل المخزن)</label>
+            <label className="block text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">
+              {isAr ? 'المقبول (يدخل المخزن)' : 'Accepted (Store intake)'}
+            </label>
             <input
               type="number"
               step="any"
@@ -168,7 +178,9 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-400 mb-1">المرفوض (تالف/عيوب)</label>
+            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-400 mb-1">
+              {isAr ? 'المرفوض (تالف/عيوب)' : 'Rejected (Defects)'}
+            </label>
             <input
               type="number"
               step="any"
@@ -181,13 +193,15 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
 
         {rejectedQuantity > 0 && (
           <div>
-            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-300 mb-1">سبب رفض الكمية المعيبة</label>
+            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-300 mb-1">
+              {isAr ? 'سبب رفض الكمية المعيبة' : 'Rejection Reason'}
+            </label>
             <input
               type="text"
               required
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="مثال: وجود بقع زيتية وتنسيل في خيوط اللحمة أو اختلاف درجة الصباغة"
+              placeholder={isAr ? 'مثال: وجود بقع زيتية وتنسيل في خيوط اللحمة أو اختلاف درجة الصباغة' : 'e.g. Oil stains, weaving defects, or shade variation'}
               className="w-full bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-500/40 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-rose-500"
             />
           </div>
@@ -195,7 +209,9 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">اسم مهندس / مسؤول الجودة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم مهندس / مسؤول الجودة' : 'Quality Inspector Name'}
+            </label>
             <input
               type="text"
               required
@@ -206,31 +222,35 @@ export const ReceiveGoodsModal: React.FC<ReceiveGoodsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">رقم إذن تسليم المورد (سند الشحن)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'رقم إذن تسليم المورد (سند الشحن)' : 'Supplier Delivery Note #'}
+            </label>
             <input
               type="text"
               value={deliveryNoteNumber}
               onChange={(e) => setDeliveryNoteNumber(e.target.value)}
-              placeholder="مثال: DN-MISR-9844"
+              placeholder="DN-MISR-9844"
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
 
         <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-400">الكمية الصافية المضافة لرصيد المخزن الدفتري:</span>
+          <span className="text-slate-600 dark:text-slate-400">
+            {isAr ? 'الكمية الصافية المضافة لرصيد المخزن الدفتري:' : 'Net Quantity Added to Warehouse Inventory:'}
+          </span>
           <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4" />
-            +{acceptedQuantity.toLocaleString()} متر
+            +{acceptedQuantity.toLocaleString()} {isAr ? 'متر' : 'm'}
           </span>
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            اعتماد إذن الاستلام وتحديث المخزن
+            {isAr ? 'اعتماد إذن الاستلام وتحديث المخزن' : 'Approve Receipt & Update Stock'}
           </Button>
         </div>
       </form>

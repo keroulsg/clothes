@@ -9,7 +9,8 @@ interface PosReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
   invoice: SalesInvoice | null;
-  lang: Language;
+  lang?: Language;
+  isAr?: boolean;
   factoryName?: string;
   factoryTaxId?: string;
 }
@@ -18,11 +19,12 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
   isOpen,
   onClose,
   invoice,
-  lang,
+  lang = 'ar',
+  isAr: propIsAr,
   factoryName,
   factoryTaxId,
 }) => {
-  const isAr = lang === 'ar';
+  const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
 
   if (!invoice) return null;
 
@@ -210,10 +212,10 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
               <table className="w-full text-[10px] text-start">
                 <thead>
                   <tr className="border-b border-black">
-                    <th className="text-start pb-1">الصنف</th>
-                    <th className="text-center pb-1 w-8">الكمية</th>
-                    <th className="text-end pb-1 w-14">السعر</th>
-                    <th className="text-end pb-1 w-16">الإجمالي</th>
+                    <th className="text-start pb-1">{isAr ? 'الصنف' : 'Item'}</th>
+                    <th className="text-center pb-1 w-8">{isAr ? 'الكمية' : 'Qty'}</th>
+                    <th className="text-end pb-1 w-14">{isAr ? 'السعر' : 'Price'}</th>
+                    <th className="text-end pb-1 w-16">{isAr ? 'الإجمالي' : 'Total'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
@@ -239,29 +241,29 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
             {/* Totals Summary */}
             <div className="py-2.5 border-b border-dashed border-black space-y-1 text-[11px]">
               <div className="flex justify-between">
-                <span>المجموع الفرعي:</span>
-                <span>{subtotal.toFixed(2)} ج.م</span>
+                <span>{isAr ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
+                <span>{subtotal.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
               </div>
               {taxAmount > 0 && (
                 <div className="flex justify-between">
-                  <span>ضريبة القيمة المضافة (14%):</span>
-                  <span>{taxAmount.toFixed(2)} ج.م</span>
+                  <span>{isAr ? 'ضريبة القيمة المضافة (14%):' : 'VAT (14%):'}</span>
+                  <span>{taxAmount.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
               )}
               {discountAmount > 0 && (
                 <div className="flex justify-between text-zinc-600">
-                  <span>الخصم:</span>
-                  <span>-{discountAmount.toFixed(2)} ج.م</span>
+                  <span>{isAr ? 'الخصم:' : 'Discount:'}</span>
+                  <span>-{discountAmount.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-black pt-1 border-t border-black">
                 <span>{isAr ? 'الصافي الإجمالي:' : 'Total Amount:'}</span>
-                <span className="font-mono">{totalAmount.toFixed(2)} ج.م</span>
+                <span className="font-mono">{totalAmount.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
               </div>
               {balanceDue > 0 && (
                 <div className="flex justify-between text-xs font-bold pt-1 text-red-900">
                   <span>{isAr ? 'المتبقي غير المسدد:' : 'Balance Due:'}</span>
-                  <span className="font-mono">{balanceDue.toFixed(2)} ج.م</span>
+                  <span className="font-mono">{balanceDue.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
               )}
             </div>
@@ -272,10 +274,14 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
                 * {invoice.invoice_number} *
               </div>
               <p className="text-[9px] text-zinc-700 leading-tight">
-                شكراً لزيارتكم! سياسة الاسترجاع والاستبدال خلال 14 يوماً مع تقديم أصل الإيصال والبضاعة بحالتها الأصلية.
+                {isAr
+                  ? 'شكراً لزيارتكم! سياسة الاسترجاع والاستبدال خلال 14 يوماً مع تقديم أصل الإيصال والبضاعة بحالتها الأصلية.'
+                  : 'Thank you for your visit! Returns and exchanges within 14 days with original receipt and items in original condition.'}
               </p>
               <p className="text-[8px] text-zinc-500 pt-1">
-                نظام GarmentOS Cloud لإدارة مصانع ومعارض الملابس
+                {isAr
+                  ? 'نظام GarmentOS Cloud لإدارة مصانع ومعارض الملابس'
+                  : 'GarmentOS Cloud Apparel ERP & POS System'}
               </p>
             </div>
           </div>

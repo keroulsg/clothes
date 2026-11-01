@@ -8,7 +8,7 @@ interface SkeletonProps {
 
 export const LoadingSkeleton: React.FC<SkeletonProps> = ({ className, count = 1 }) => {
   return (
-    <div className="space-y-3 w-full animate-pulse">
+    <div className="space-y-3 w-full animate-pulse" role="status" aria-busy="true" aria-label="Loading content...">
       {Array.from({ length: count }).map((_, idx) => (
         <div
           key={idx}

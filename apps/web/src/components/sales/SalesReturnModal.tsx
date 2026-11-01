@@ -17,7 +17,8 @@ interface SalesReturnModalProps {
   onClose: () => void;
   onSuccess: (salesReturn: SalesReturn) => void;
   invoice: SalesInvoice | null;
-  lang: Language;
+  lang?: Language;
+  isAr?: boolean;
 }
 
 interface ReturnLineDraft {
@@ -39,9 +40,10 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
   onClose,
   onSuccess,
   invoice,
-  lang,
+  lang = 'ar',
+  isAr: propIsAr,
 }) => {
-  const isAr = lang === 'ar';
+  const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
 
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -54,19 +56,12 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Quick Return Reasons
-  const quickReasons = isAr
-    ? [
-        'عيب صناعة / خياطة غير مطابقة',
-        'مقاس غير مطابق لطلب العميل',
-        'طلب استبدال موديل من العميل',
-        'مرتجع فوري من نقطة البيع (POS)',
-      ]
-    : [
-        'Manufacturing defect / seam fault',
-        'Size mismatch with customer request',
-        'Customer requested style exchange',
-        'Instant POS counter return',
-      ];
+  const quickReasons = [
+    isAr ? 'عيب صناعة / خياطة غير مطابقة' : 'Manufacturing defect / seam fault',
+    isAr ? 'مقاس غير مطابق لطلب العميل' : 'Size mismatch with customer request',
+    isAr ? 'طلب استبدال موديل من العميل' : 'Customer requested style exchange',
+    isAr ? 'مرتجع فوري من نقطة البيع (POS)' : 'Instant POS counter return',
+  ];
 
   // Load Authoritative Invoice Data & Warehouses on open
   useEffect(() => {
@@ -270,7 +265,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
         {invoice && (
           <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#7F1625] dark:text-[#F87171] shrink-0" />
+              <FileText className="w-4 h-4 text-[var(--brand-primary)] dark:text-[#F87171] shrink-0" />
               <div>
                 <span className="font-bold text-slate-900 dark:text-white">
                   {isAr ? 'رقم الفاتورة:' : 'Invoice #:'} {invoice.invoice_number}
@@ -285,7 +280,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                 {invoice.status}
               </Badge>
               <span className="font-bold text-slate-900 dark:text-white font-mono">
-                {Number(invoice.total_amount).toLocaleString()} ج.م
+                {Number(invoice.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </span>
             </div>
           </div>
@@ -303,7 +298,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-900 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
-              <WarehouseIcon className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#F87171]" />
+              <WarehouseIcon className="w-3.5 h-3.5 text-[var(--brand-primary)] dark:text-[#F87171]" />
               {isAr ? 'المخزن المستلم للبضاعة المرتجعة' : 'Receiving Warehouse'}
               <span className="text-rose-500">*</span>
             </label>
@@ -311,7 +306,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
               value={selectedWarehouseId}
               onChange={(e) => setSelectedWarehouseId(e.target.value)}
               disabled={isSubmitting || warehouses.length === 0}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
               required
             >
               {warehouses.length === 0 ? (
@@ -335,7 +330,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                 type="checkbox"
                 checked={isRestocked}
                 onChange={(e) => setIsRestocked(e.target.checked)}
-                className="w-4 h-4 text-[#7F1625] rounded focus:ring-[#7F1625]"
+                className="w-4 h-4 text-[var(--brand-primary)] rounded focus:ring-[var(--brand-primary)]"
               />
               <span className="text-xs text-slate-800 dark:text-slate-200">
                 {isAr
@@ -360,8 +355,8 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                 onClick={() => setReason(qr)}
                 className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
                   reason === qr
-                    ? 'bg-[#7F1625] text-white border-[#7F1625]'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#7F1625]'
+                    ? 'bg-[var(--brand-primary)] text-white border-[var(--brand-primary)]'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[var(--brand-primary)]'
                 }`}
               >
                 {qr}
@@ -374,7 +369,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
             onChange={(e) => setReason(e.target.value)}
             placeholder={isAr ? 'اكتب أو اختر سبب المرتجع...' : 'Enter or select return reason...'}
             required
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
           />
         </div>
 
@@ -382,7 +377,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-slate-900 dark:text-slate-200">
             <span className="flex items-center gap-1.5">
-              <Package className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#F87171]" />
+              <Package className="w-3.5 h-3.5 text-[var(--brand-primary)] dark:text-[#F87171]" />
               {isAr ? 'بنود الفاتورة المؤهلة للإرجاع' : 'Invoice Items Eligible for Return'}
             </span>
             <span className="text-[11px] font-normal text-slate-500">
@@ -429,7 +424,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                           isExhausted
                             ? 'opacity-40 bg-slate-50/50 dark:bg-slate-900/30'
                             : line.is_selected
-                            ? 'bg-[#7F1625]/5 dark:bg-[#7F1625]/15'
+                            ? 'bg-[var(--brand-subtle)]'
                             : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/40'
                         }`}
                       >
@@ -439,7 +434,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                             checked={line.is_selected}
                             disabled={isExhausted}
                             onChange={() => handleToggleSelect(line.item_id)}
-                            className="w-4 h-4 text-[#7F1625] rounded focus:ring-[#7F1625]"
+                            className="w-4 h-4 text-[var(--brand-primary)] rounded focus:ring-[var(--brand-primary)]"
                           />
                         </td>
                         <td className="p-2.5">
@@ -447,7 +442,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                             {line.description}
                           </p>
                           <p className="text-[10px] text-slate-500 font-mono">
-                            {line.unit_price.toLocaleString()} ج.م / {isAr ? 'قطعة' : 'pc'}
+                            {line.unit_price.toLocaleString()} {isAr ? 'ج.م' : 'EGP'} / {isAr ? 'قطعة' : 'pc'}
                           </p>
                         </td>
                         <td className="p-2.5 text-center font-mono font-medium">{line.sold_qty}</td>
@@ -466,7 +461,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                             disabled={isExhausted || !line.is_selected}
                             value={line.return_qty}
                             onChange={(e) => handleQtyChange(line.item_id, parseFloat(e.target.value) || 0)}
-                            className="w-16 px-2 py-1 text-center font-bold font-mono bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                            className="w-16 px-2 py-1 text-center font-bold font-mono bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                           />
                         </td>
                         <td className="p-2.5 text-center space-y-1">
@@ -492,7 +487,7 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
                           </select>
                         </td>
                         <td className="p-2.5 text-end font-bold font-mono text-slate-900 dark:text-white">
-                          {lineValue.toLocaleString()} ج.م
+                          {lineValue.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                         </td>
                       </tr>
                     );
@@ -518,8 +513,8 @@ export const SalesReturnModal: React.FC<SalesReturnModalProps> = ({
             <p className="text-slate-500 dark:text-slate-400">
               {isAr ? 'قيمة إشعار الدائن المستحق (Credit Note):' : 'Authoritative Credit Note Amount:'}
             </p>
-            <p className="text-xl font-bold text-[#7F1625] dark:text-[#F87171] font-mono">
-              {totalReturnAmount.toLocaleString()} ج.م
+            <p className="text-xl font-bold text-[var(--brand-primary)] dark:text-[#F87171] font-mono">
+              {totalReturnAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
             </p>
           </div>
         </div>

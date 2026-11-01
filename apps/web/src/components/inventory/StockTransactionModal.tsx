@@ -10,6 +10,7 @@ interface StockTransactionModalProps {
   onClose: () => void;
   item: InventoryItem | null;
   onSuccess: (updatedBalance: number, newTransaction?: any) => void;
+  lang?: 'ar' | 'en';
 }
 
 export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
@@ -17,7 +18,9 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
   onClose,
   item,
   onSuccess,
+  lang = 'ar',
 }) => {
+  const isAr = lang !== 'en';
   const [direction, setDirection] = useState<'IN' | 'OUT'>('IN');
   const [transactionType, setTransactionType] = useState<string>('goods_receipt');
   const [quantity, setQuantity] = useState<number>(100);
@@ -29,28 +32,43 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
 
   if (!item) return null;
 
-  const currentBalance = item.current_balance;
+  const currentBalance = Number(item.current_balance ?? 0);
+  const reorderLevel = Number(item.reorder_level ?? 0);
+  const reservedQuantity = Number(item.reserved_quantity ?? 0);
+  const availableQuantity = item.available_quantity !== undefined
+    ? Number(item.available_quantity)
+    : Math.max(0, currentBalance - reservedQuantity);
+
   const simulatedAfterBalance = direction === 'IN'
     ? currentBalance + quantity
     : currentBalance - quantity;
+
+  // Low-stock warning calculations (Strictly distinct from prohibited negative stock error)
+  const isCurrentlyLowStock = reorderLevel > 0 && currentBalance <= reorderLevel;
+  const willBeLowStockAfterOut = direction === 'OUT' && reorderLevel > 0 && simulatedAfterBalance <= reorderLevel && simulatedAfterBalance >= 0;
+  const isLowStockWarning = isCurrentlyLowStock || willBeLowStockAfterOut;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
     if (quantity <= 0) {
-      setErrorMsg('يجب أن تكون الكمية أكبر من الصفر.');
+      setErrorMsg(isAr ? 'يجب أن تكون الكمية أكبر من الصفر.' : 'Quantity must be greater than zero.');
       return;
     }
 
     if (direction === 'OUT' && currentBalance < quantity) {
-      setErrorMsg(`رصيد الصنف غير كافٍ للصرف! المتاح: ${currentBalance} ${item.unit_of_measure}.`);
+      setErrorMsg(isAr
+        ? `رصيد الصنف غير كافٍ للصرف! المتاح: ${currentBalance} ${item.unit_of_measure}.`
+        : `Insufficient stock for issuance! Available: ${currentBalance} ${item.unit_of_measure}.`);
       return;
     }
 
     const isOperational = ['goods_receipt', 'material_issuance', 'transfer_in', 'transfer_out'].includes(transactionType);
     if (isOperational && !referenceNumber?.trim()) {
-      setErrorMsg('العمليات التشغيلية (التوريد، الصرف، التحويل) تتطلب إدخال رقم المستند المرجعي المعتمد (أمر شراء، أمر قص، أمر تحويل).');
+      setErrorMsg(isAr
+        ? 'العمليات التشغيلية (التوريد، الصرف، التحويل) تتطلب إدخال رقم المستند المرجعي المعتمد (أمر شراء، أمر قص، أمر تحويل).'
+        : 'Operational transactions (receipt, issuance, transfer) require an approved reference document number (PO, Cutting Order, Transfer Order).');
       return;
     }
 
@@ -91,10 +109,10 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
           const firstErr = Object.values(err.errors).flat()[0];
           setErrorMsg(firstErr ? String(firstErr) : err.message);
         } else {
-          setErrorMsg(err.message || 'فشل تسجيل الحركة المخزنية من الخادم');
+          setErrorMsg(err.message || (isAr ? 'فشل تسجيل الحركة المخزنية من الخادم' : 'Failed to record stock movement from server'));
         }
       } else {
-        setErrorMsg('حدث خطأ في الاتصال بالخادم. يرجى التأكد من تشغيل واجهة الـ API.');
+        setErrorMsg(isAr ? 'حدث خطأ في الاتصال بالخادم. يرجى التأكد من تشغيل واجهة الـ API.' : 'Server connection error. Please verify the API is running.');
       }
     }
   };
@@ -103,7 +121,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`تسجيل حركة مخزنية رسمية: ${item.name}`}
+      title={isAr ? `تسجيل حركة مخزنية رسمية: ${item.name}` : `Official Stock Transaction: ${item.name}`}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -114,15 +132,62 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
           </div>
         )}
 
-        {/* Current status bar */}
-        <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
-          <div>
-            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">كود الصنف والمخزن:</span>
-            <span className="font-mono text-brand-primary dark:text-rose-400 font-semibold">{item.code}</span> • <span className="text-slate-800 dark:text-slate-300">{item.warehouse_name}</span>
+        {/* Low Stock Warning Alert (Non-blocking warning) */}
+        {isLowStockWarning && (
+          <div
+            data-testid="low-stock-warning"
+            className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5 transition-all"
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                <span>
+                  {isAr ? 'تنبيه: الصنف عند حد إعادة الطلب أو أقل' : 'Warning: Item at or below Reorder Threshold'}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  {isAr ? `الحد الأدنى: ${reorderLevel} ${item.unit_of_measure}` : `Min Reorder: ${reorderLevel} ${item.unit_of_measure}`}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 leading-relaxed">
+                {willBeLowStockAfterOut
+                  ? (isAr
+                      ? `عملية الصرف الحالية ستخفض الرصيد إلى ${simulatedAfterBalance.toLocaleString()} ${item.unit_of_measure} وهو أقل من أو يساوي حد إعادة الطلب (${reorderLevel}). يرجى إصدار أمر شراء للتوريد.`
+                      : `This issuance will reduce stock to ${simulatedAfterBalance.toLocaleString()} ${item.unit_of_measure}, reaching or dropping below the reorder level (${reorderLevel}). Consider issuing a replenishment PO.`)
+                  : (isAr
+                      ? `رصيد الصنف الحالي (${currentBalance.toLocaleString()} ${item.unit_of_measure}) عند أو أقل من حد الأمان المحدد (${reorderLevel} ${item.unit_of_measure}).`
+                      : `Current item balance (${currentBalance.toLocaleString()} ${item.unit_of_measure}) is already at or below safety reorder level (${reorderLevel} ${item.unit_of_measure}).`)}
+              </p>
+            </div>
           </div>
-          <div className="text-left">
-            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">الرصيد الدفتري الحالي:</span>
-            <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">{currentBalance.toLocaleString()} {item.unit_of_measure}</span>
+        )}
+
+        {/* Current status bar */}
+        <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div>
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">
+              {isAr ? 'كود الصنف والمخزن:' : 'Item Code & Warehouse:'}
+            </span>
+            <span className="font-mono text-brand-primary dark:text-rose-400 font-semibold">{item.code}</span> • <span className="text-slate-800 dark:text-slate-300">{item.warehouse_name}</span>
+            {reorderLevel > 0 && (
+              <span className="ms-2 inline-flex items-center text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                {isAr ? `حد إعادة الطلب: ${reorderLevel} ${item.unit_of_measure}` : `Reorder: ${reorderLevel} ${item.unit_of_measure}`}
+              </span>
+            )}
+          </div>
+          <div className="text-right sm:text-left rtl:text-right rtl:sm:text-left ltr:text-left ltr:sm:text-right">
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">
+              {isAr ? 'الرصيد الدفتري الحالي:' : 'Current Ledger Balance:'}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
+                {currentBalance.toLocaleString()} {item.unit_of_measure}
+              </span>
+              {reservedQuantity > 0 && (
+                <span className="text-[10px] text-slate-500 font-mono">
+                  ({isAr ? `المتاح: ${availableQuantity}` : `Avail: ${availableQuantity}`})
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -138,7 +203,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
             }`}
           >
             <ArrowDownLeft className="w-4 h-4" />
-            إذن إضافة / استلام للمخزن (IN)
+            {isAr ? 'إذن إضافة / استلام للمخزن (IN)' : 'Goods Receipt / Inward (IN)'}
           </button>
           <button
             type="button"
@@ -150,14 +215,14 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
             }`}
           >
             <ArrowUpRight className="w-4 h-4" />
-            إذن صرف للإنتاج / صالة القص (OUT)
+            {isAr ? 'إذن صرف للإنتاج / صالة القص (OUT)' : 'Material Issuance / Cutting (OUT)'}
           </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              الكمية المطلوبة ({item.unit_of_measure})
+              {isAr ? `الكمية المطلوبة (${item.unit_of_measure})` : `Requested Quantity (${item.unit_of_measure})`}
             </label>
             <input
               type="number"
@@ -172,7 +237,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              نوع المستند المرجعي
+              {isAr ? 'نوع المستند المرجعي' : 'Reference Document Type'}
             </label>
             <select
               value={transactionType}
@@ -181,15 +246,15 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
             >
               {direction === 'IN' ? (
                 <>
-                  <option value="goods_receipt">استلام توريد من مورد (PO)</option>
-                  <option value="adjustment_positive">تسوية جردية بالزيادة</option>
-                  <option value="transfer_in">استلام تحويل من مخزن آخر</option>
+                  <option value="goods_receipt">{isAr ? 'استلام توريد من مورد (PO)' : 'Goods Receipt from PO'}</option>
+                  <option value="adjustment_positive">{isAr ? 'تسوية جردية بالزيادة' : 'Inventory Positive Adjustment'}</option>
+                  <option value="transfer_in">{isAr ? 'استلام تحويل من مخزن آخر' : 'Stock Transfer In'}</option>
                 </>
               ) : (
                 <>
-                  <option value="material_issuance">صرف خامات لصالة القص / الإنتاج</option>
-                  <option value="adjustment_negative">تسوية جردية بالعجز / هالك</option>
-                  <option value="transfer_out">تحويل لمخزن فرعي</option>
+                  <option value="material_issuance">{isAr ? 'صرف خامات لصالة القص / الإنتاج' : 'Material Issuance to Cutting'}</option>
+                  <option value="adjustment_negative">{isAr ? 'تسوية جردية بالعجز / هالك' : 'Inventory Negative / Scrap Adjustment'}</option>
+                  <option value="transfer_out">{isAr ? 'تحويل لمخزن فرعي' : 'Stock Transfer Out'}</option>
                 </>
               )}
             </select>
@@ -199,7 +264,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              تكلفة الوحدة (ج.م)
+              {isAr ? 'تكلفة الوحدة (ج.م)' : 'Unit Cost (EGP)'}
             </label>
             <input
               type="number"
@@ -213,43 +278,68 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              رقم إذن / أمر التشغيل
+              {isAr ? 'رقم إذن / أمر التشغيل' : 'Reference / Job Order No.'}
             </label>
             <input
               type="text"
               value={referenceNumber}
               onChange={(e) => setReferenceNumber(e.target.value)}
-              placeholder="مثال: CUT-ORD-2026-081"
+              placeholder={isAr ? 'مثال: CUT-ORD-2026-081' : 'e.g. CUT-ORD-2026-081'}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات مسؤول المخزن</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'ملاحظات مسؤول المخزن' : 'Storekeeper Notes'}
+          </label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="ملاحظات رقم اللفة، فحص العيوب، نسبة الهالك..."
+            placeholder={isAr ? 'ملاحظات رقم اللفة، فحص العيوب، نسبة الهالك...' : 'Roll/batch notes, defect inspection, scrap rate...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
 
         {/* Balance After Preview */}
-        <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-          <span className="text-slate-600 dark:text-slate-400">الرصيد الناتج بعد ترحيل القيد:</span>
-          <span className={`font-mono font-bold text-sm ${simulatedAfterBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            {simulatedAfterBalance.toLocaleString()} {item.unit_of_measure}
+        <div className="p-3 rounded-lg bg-slate-100 dark:bg-[var(--bg-elevated)] border border-slate-200 dark:border-[var(--border-subtle)] flex items-center justify-between text-xs">
+          <span className="text-slate-600 dark:text-slate-400">
+            {isAr ? 'الرصيد الناتج بعد ترحيل القيد:' : 'Resulting Balance After Movement:'}
           </span>
+          <div className="flex items-center gap-2">
+            {simulatedAfterBalance < 0 ? (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                {isAr ? 'غير مسموح — رصيد سالب' : 'Prohibited — Negative Stock'}
+              </span>
+            ) : willBeLowStockAfterOut ? (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                {isAr ? 'تحت حد إعادة الطلب' : 'Below Reorder Threshold'}
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                {isAr ? 'رصيد كافٍ' : 'Safe Balance'}
+              </span>
+            )}
+            <span className={`font-mono font-bold text-sm ${
+              simulatedAfterBalance < 0
+                ? 'text-rose-600 dark:text-rose-400'
+                : willBeLowStockAfterOut
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {simulatedAfterBalance.toLocaleString()} {item.unit_of_measure}
+            </span>
+          </div>
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            ترحيل الحركة واعتماد القيد
+            {isAr ? 'ترحيل الحركة واعتماد القيد' : 'Post Movement & Record Entry'}
           </Button>
         </div>
       </form>

@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
 use App\Models\PaymentVoucher;
 use App\Models\ProductionCostSheet;
 use App\Services\AccountingService;
 use App\Services\FinancialReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AccountingController extends Controller
@@ -31,6 +34,75 @@ class AccountingController extends Controller
         }
 
         return response()->json($accounts);
+    }
+
+    public function accountStatement(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $account = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $query = JournalEntryLine::where('journal_entry_lines.tenant_id', $tenantId)
+            ->where('journal_entry_lines.account_id', $account->id)
+            ->with(['journalEntry:id,entry_number,entry_date,reference_type,description']);
+
+        if ($request->filled('from_date')) {
+            $query->whereHas('journalEntry', function ($q) use ($request) {
+                $q->where('entry_date', '>=', $request->input('from_date'));
+            });
+        }
+
+        if ($request->filled('to_date')) {
+            $query->whereHas('journalEntry', function ($q) use ($request) {
+                $q->where('entry_date', '<=', $request->input('to_date'));
+            });
+        }
+
+        $lines = $query->join('journal_entries', 'journal_entry_lines.journal_entry_id', '=', 'journal_entries.id')
+            ->orderBy('journal_entries.entry_date', 'asc')
+            ->orderBy('journal_entries.created_at', 'asc')
+            ->select('journal_entry_lines.*')
+            ->get();
+
+        $runningBalance = (float) ($account->opening_balance ?? 0);
+        $isNormalDebit = in_array(strtolower($account->type), ['asset', 'expense']);
+
+        $formattedLines = $lines->map(function ($line) use (&$runningBalance, $isNormalDebit) {
+            $debit = (float) $line->debit;
+            $credit = (float) $line->credit;
+
+            if ($isNormalDebit) {
+                $runningBalance += ($debit - $credit);
+            } else {
+                $runningBalance += ($credit - $debit);
+            }
+
+            return [
+                'id' => $line->id,
+                'entry_id' => $line->journal_entry_id,
+                'entry_number' => $line->journalEntry?->entry_number,
+                'entry_date' => $line->journalEntry?->entry_date?->format('Y-m-d'),
+                'reference_type' => $line->journalEntry?->reference_type,
+                'description' => $line->description ?: $line->journalEntry?->description,
+                'debit' => $debit,
+                'credit' => $credit,
+                'running_balance' => round($runningBalance, 4),
+            ];
+        });
+
+        $totalDebit = $lines->sum('debit');
+        $totalCredit = $lines->sum('credit');
+
+        return response()->json([
+            'account' => $account,
+            'summary' => [
+                'opening_balance' => (float) ($account->opening_balance ?? 0),
+                'total_debit' => round($totalDebit, 4),
+                'total_credit' => round($totalCredit, 4),
+                'closing_balance' => round($runningBalance, 4),
+                'total_transactions' => $lines->count(),
+            ],
+            'lines' => $formattedLines,
+        ]);
     }
 
     public function storeAccount(Request $request): JsonResponse
@@ -80,7 +152,16 @@ class AccountingController extends Controller
             'lines.*.cost_center' => 'nullable|string',
         ]);
 
-        $entry = $this->accountingService->createJournalEntry($validated);
+        try {
+            $entry = $this->accountingService->createJournalEntry($validated);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [
+                    'lines' => [$e->getMessage()],
+                ],
+            ], 422);
+        }
 
         return response()->json([
             'message' => 'تم تسجيل وترحيل قيد اليومية بنجاح',
@@ -123,12 +204,66 @@ class AccountingController extends Controller
         return response()->json($sheets);
     }
 
-    public function calculateCost(string $productionOrderId): JsonResponse
+    public function calculateCost(Request $request, string $productionOrderId): JsonResponse
     {
-        $sheet = $this->accountingService->calculateProductionCost($productionOrderId);
+        $overrides = $request->only([
+            'direct_materials_cost',
+            'direct_labor_cost',
+            'subcontracted_services_cost',
+            'applied_overhead_rate',
+            'allocated_overhead_cost',
+            'force_recalculate',
+        ]);
+
+        $sheet = $this->accountingService->calculateProductionCost($productionOrderId, $overrides);
 
         return response()->json([
             'message' => 'تم احتساب التكلفة الفعلية لأمر الإنتاج بنجاح',
+            'cost_sheet' => $sheet,
+        ]);
+    }
+
+    public function approveCostSheet(string $id): JsonResponse
+    {
+        $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : auth()->user()->tenant_id;
+        $sheet = ProductionCostSheet::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if ($sheet->total_produced_pieces <= 0 || (float)$sheet->cost_per_piece <= 0) {
+            throw ValidationException::withMessages([
+                'cost_sheet' => ['لا يمكن اعتماد بطاقة تكلفة صناعية لكمية سليمة تساوي صفر أو بتكلفة وحدة غير محسوبة.'],
+            ]);
+        }
+
+        if ($sheet->status === 'approved') {
+            return response()->json([
+                'message' => 'بطاقة التكلفة معتمدة بالفعل',
+                'cost_sheet' => $sheet,
+            ]);
+        }
+
+        $sheet->status = 'approved';
+        $sheet->save();
+
+        try {
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id(),
+                'action' => 'cost_sheet.approved',
+                'auditable_type' => ProductionCostSheet::class,
+                'auditable_id' => $sheet->id,
+                'new_values' => [
+                    'status' => 'approved',
+                    'total_cost' => $sheet->total_cost,
+                    'cost_per_piece' => $sheet->cost_per_piece,
+                ],
+                'ip_address' => request()->ip(),
+            ]);
+        } catch (\Throwable $e) {
+            // Non-blocking audit record
+        }
+
+        return response()->json([
+            'message' => 'تم اعتماد بطاقة التكلفة الصناعية بنجاح وأصبحت نهائية وغير قابلة للتعديل',
             'cost_sheet' => $sheet,
         ]);
     }

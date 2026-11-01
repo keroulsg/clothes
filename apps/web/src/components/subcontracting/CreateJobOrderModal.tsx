@@ -11,6 +11,7 @@ interface CreateJobOrderModalProps {
   customers: Customer[];
   models: GarmentModel[];
   onSuccess: (newJob: JobOrder) => void;
+  isAr?: boolean;
 }
 
 export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
@@ -19,6 +20,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
   customers,
   models,
   onSuccess,
+  isAr = true,
 }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -35,8 +37,8 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
   );
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<Array<{ size_name: string; color_name: string; target_quantity: number }>>([
-    { size_name: '4-5 سنوات', color_name: 'أحمر', target_quantity: 100 },
-    { size_name: '6-7 سنوات', color_name: 'كحلي', target_quantity: 100 },
+    { size_name: '4-5Y', color_name: 'Red', target_quantity: 100 },
+    { size_name: '6-7Y', color_name: 'Navy', target_quantity: 100 },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim()) {
-      setError('يرجى اختيار العميل أو إدخال اسم العميل');
+      setError(isAr ? 'يرجى اختيار العميل أو إدخال اسم العميل' : 'Please select or enter the customer name');
       return;
     }
 
@@ -98,24 +100,24 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
         id: created.id,
         order_number: created.order_number,
         customer_id: created.customer_id,
-        customer_name: created.customer_name || (created.customer?.name ?? customerName),
+        customer_name: created.customer_name || customerName,
         service_type: created.service_type || serviceType,
+        status: created.status || 'draft',
         garment_model_id: created.garment_model_id,
-        model_name: created.garment_model?.name || models.find((m) => m.id === modelId)?.name,
+        model_name: models.find((m) => m.id === created.garment_model_id)?.name,
         fabric_source: created.fabric_source || fabricSource,
         trims_responsibility: created.trims_responsibility || trimsResponsibility,
-        status: created.status || 'draft',
         pricing_basis: created.pricing_basis || pricingBasis,
         unit_rate: Number(created.unit_rate ?? unitRate),
         total_target_quantity: Number(created.total_target_quantity ?? totalQty),
-        total_received_meters: Number(created.total_received_meters ?? 0),
         total_cut_quantity: Number(created.total_cut_quantity ?? 0),
         total_accepted_quantity: Number(created.total_accepted_quantity ?? 0),
         total_rejected_quantity: Number(created.total_rejected_quantity ?? 0),
         total_rework_quantity: Number(created.total_rework_quantity ?? 0),
         total_delivered_quantity: Number(created.total_delivered_quantity ?? 0),
-        planned_start_date: created.planned_start_date || plannedStartDate,
-        target_delivery_date: created.target_delivery_date || targetDeliveryDate,
+        total_received_meters: Number(created.total_received_meters ?? 0),
+        planned_start_date: created.planned_start_date,
+        target_delivery_date: created.target_delivery_date,
         notes: created.notes,
         created_at: created.created_at || new Date().toISOString(),
         items: (created.items || []).map((it: any) => ({
@@ -130,7 +132,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
       onSuccess(formattedJob);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ أثناء إنشاء أمر التشغيل للغير');
+      setError(err.message || (isAr ? 'حدث خطأ أثناء إنشاء أمر التشغيل للغير' : 'An error occurred while creating the job order'));
     } finally {
       setIsSubmitting(false);
     }
@@ -140,7 +142,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="إنشاء أمر تشغيل للغير (Contract Cutting / CMT)"
+      title={isAr ? 'إنشاء أمر تشغيل للغير (Contract Cutting / CMT)' : 'Create Subcontracting Order (Cutting / CMT)'}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
@@ -152,26 +154,34 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">نوع الخدمة المطلوبة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'نوع الخدمة المطلوبة' : 'Service Type'}
+            </label>
             <select
               value={serviceType}
               onChange={(e) => setServiceType(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="contract_cutting">قص للغير (Contract Cutting Service)</option>
-              <option value="cmt">تصنيع كامل للغير (CMT - Cut, Make & Trim)</option>
+              <option value="contract_cutting">
+                {isAr ? 'قص للغير (Contract Cutting Service)' : 'Contract Cutting Service'}
+              </option>
+              <option value="cmt">
+                {isAr ? 'تصنيع كامل للغير (CMT - Cut, Make & Trim)' : 'Full CMT (Cut, Make & Trim)'}
+              </option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">العميل الخارجي</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'العميل الخارجي' : 'External Customer'}
+            </label>
             {customers.length > 0 ? (
               <select
                 value={customerId}
                 onChange={(e) => handleCustomerChange(e.target.value)}
                 className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               >
-                <option value="">-- اختر من العملاء المسجلين --</option>
+                <option value="">{isAr ? '-- اختر من العملاء المسجلين --' : '-- Select registered customer --'}</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.code})
@@ -184,7 +194,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
                 required
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="اسم العميل أو البراند"
+                placeholder={isAr ? 'اسم العميل أو البراند' : 'Customer or brand name'}
                 className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
             )}
@@ -193,13 +203,15 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
 
         {customers.length > 0 && !customerId && (
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">اسم العميل (مباشر)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم العميل (مباشر)' : 'Customer Name (Direct)'}
+            </label>
             <input
               type="text"
               required
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="مثال: شركة كايرو فاشون لملابس الأطفال"
+              placeholder={isAr ? 'مثال: شركة كايرو فاشون لملابس الأطفال' : 'e.g. Cairo Fashion Apparel'}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -207,13 +219,15 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">موديل الملابس (اختياري)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'موديل الملابس (اختياري)' : 'Garment Model (Optional)'}
+            </label>
             <select
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="">-- اختياري: ربط بموديل من الكتالوج --</option>
+              <option value="">{isAr ? '-- اختياري: ربط بموديل من الكتالوج --' : '-- Optional: Link to catalog model --'}</option>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name} ({m.code})
@@ -223,48 +237,68 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">مصدر القماش</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'مصدر القماش' : 'Fabric Source'}
+            </label>
             <select
               value={fabricSource}
               onChange={(e) => setFabricSource(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="customer_supplied">أمانة موردة من العميل (Customer Deposit)</option>
-              <option value="factory_supplied">قماش مورد من المصنع (Factory Fabric)</option>
-              <option value="mixed">مختلط (قماش العميل + بطانة المصنع)</option>
+              <option value="customer_supplied">
+                {isAr ? 'أمانة موردة من العميل (Customer Deposit)' : 'Customer Supplied (Deposit)'}
+              </option>
+              <option value="factory_supplied">
+                {isAr ? 'قماش مورد من المصنع (Factory Fabric)' : 'Factory Supplied Fabric'}
+              </option>
+              <option value="mixed">
+                {isAr ? 'مختلط (قماش العميل + بطانة المصنع)' : 'Mixed (Customer Fabric + Factory Lining)'}
+              </option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">مسؤولية المستلزمات والإكسسوار</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'مسؤولية المستلزمات والإكسسوار' : 'Trims Responsibility'}
+            </label>
             <select
               value={trimsResponsibility}
               onChange={(e) => setTrimsResponsibility(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="customer_supplied">مستلزمات من العميل (Customer Trims)</option>
-              <option value="factory_supplied">مستلزمات من المصنع (Factory Trims)</option>
-              <option value="mixed">مختلط (أزرار المصنع وسوست العميل)</option>
+              <option value="customer_supplied">
+                {isAr ? 'مستلزمات من العميل (Customer Trims)' : 'Customer Trims'}
+              </option>
+              <option value="factory_supplied">
+                {isAr ? 'مستلزمات من المصنع (Factory Trims)' : 'Factory Trims'}
+              </option>
+              <option value="mixed">
+                {isAr ? 'مختلط (أزرار المصنع وسوست العميل)' : 'Mixed Trims'}
+              </option>
             </select>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">أساس التسعير</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'أساس التسعير' : 'Pricing Basis'}
+            </label>
             <select
               value={pricingBasis}
               onChange={(e) => setPricingBasis(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="per_piece">لكل قطعة مقصوصة/منجزة</option>
-              <option value="per_meter">لكل متر قماش مفروش</option>
-              <option value="per_bundle">لكل حزمة تشغيل</option>
+              <option value="per_piece">{isAr ? 'لكل قطعة مقصوصة/منجزة' : 'Per Finished/Cut Piece'}</option>
+              <option value="per_meter">{isAr ? 'لكل متر قماش مفروش' : 'Per Fabric Meter'}</option>
+              <option value="per_bundle">{isAr ? 'لكل حزمة تشغيل' : 'Per Work Bundle'}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">سعر الخدمة المتفق عليه (ج.م)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'سعر الخدمة المتفق عليه (ج.م)' : 'Service Rate (EGP)'}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -276,7 +310,9 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">إجمالي الكمية المطلوبة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'إجمالي الكمية المطلوبة' : 'Total Target Quantity'}
+            </label>
             <input
               type="number"
               required
@@ -287,16 +323,18 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
           </div>
         </div>
 
-        {/* تفصيل المقاسات والألوان */}
+        {/* Size/Color breakdown */}
         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-900 dark:text-slate-200">مصفوفة المقاسات والألوان المطلوبة</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-slate-200">
+              {isAr ? 'مصفوفة المقاسات والألوان المطلوبة' : 'Sizes & Colors Matrix'}
+            </span>
             <button
               type="button"
               onClick={handleAddItem}
               className="text-[11px] text-primary dark:text-[#fca5a5] hover:underline font-semibold"
             >
-              + إضافة مقاس/لون
+              {isAr ? '+ إضافة مقاس/لون' : '+ Add Size/Color'}
             </button>
           </div>
 
@@ -305,7 +343,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
               <div key={idx} className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="المقاس (مثال: 4-5Y)"
+                  placeholder={isAr ? 'المقاس (مثال: 4-5Y)' : 'Size (e.g. 4-5Y)'}
                   value={item.size_name}
                   onChange={(e) => {
                     const next = [...items];
@@ -316,7 +354,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
                 />
                 <input
                   type="text"
-                  placeholder="اللون (مثال: أحمر)"
+                  placeholder={isAr ? 'اللون (مثال: أحمر)' : 'Color (e.g. Red)'}
                   value={item.color_name}
                   onChange={(e) => {
                     const next = [...items];
@@ -327,7 +365,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
                 />
                 <input
                   type="number"
-                  placeholder="الكمية"
+                  placeholder={isAr ? 'الكمية' : 'Qty'}
                   value={item.target_quantity}
                   onChange={(e) => {
                     const next = [...items];
@@ -352,7 +390,9 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ البدء المخطط</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ البدء المخطط' : 'Planned Start Date'}
+            </label>
             <input
               type="date"
               value={plannedStartDate}
@@ -362,7 +402,9 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ التسليم المستهدف</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ التسليم المستهدف' : 'Target Delivery Date'}
+            </label>
             <input
               type="date"
               value={targetDeliveryDate}
@@ -373,22 +415,24 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات وشروط الاتفاق</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'ملاحظات وشروط الاتفاق' : 'Agreement Notes & Terms'}
+          </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="تعليمات خاصة بالفرش، الهالك المسموح، أو معايير فحص الجودة..."
+            placeholder={isAr ? 'تعليمات خاصة بالفرش، الهالك المسموح، أو معايير فحص الجودة...' : 'Special cutting instructions, allowed scrap tolerance, or QC criteria...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            تأكيد وإنشاء أمر التشغيل
+            {isAr ? 'تأكيد وإنشاء أمر التشغيل' : 'Confirm & Create Order'}
           </Button>
         </div>
       </form>

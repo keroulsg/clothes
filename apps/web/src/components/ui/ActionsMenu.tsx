@@ -14,6 +14,7 @@ export interface ActionMenuItem {
 
 interface ActionsMenuProps {
   label?: string;
+  isAr?: boolean;
   items: ActionMenuItem[];
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'icon-vertical' | 'icon-horizontal';
   size?: 'sm' | 'md';
@@ -22,13 +23,15 @@ interface ActionsMenuProps {
 }
 
 export const ActionsMenu: React.FC<ActionsMenuProps> = ({
-  label = 'إجراءات',
+  label,
+  isAr = true,
   items,
   variant = 'secondary',
   size = 'sm',
   align = 'right',
   className = '',
 }) => {
+  const displayLabel = label ?? (isAr ? 'إجراءات' : 'Actions');
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +55,7 @@ export const ActionsMenu: React.FC<ActionsMenuProps> = ({
   const getButtonClasses = () => {
     switch (variant) {
       case 'primary':
-        return 'bg-[#7F1625] text-white hover:bg-[#6a121e] border border-[#7F1625] shadow-sm font-bold';
+        return 'bg-[var(--brand-primary)] text-white hover:opacity-95 border border-[var(--brand-border)] shadow-sm font-bold';
       case 'outline':
         return 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold';
       case 'ghost':
@@ -72,24 +75,28 @@ export const ActionsMenu: React.FC<ActionsMenuProps> = ({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
-        className={`inline-flex items-center justify-between gap-1.5 rounded-lg transition-all select-none cursor-pointer ${
+        aria-haspopup="true"
+        aria-label={displayLabel}
+        className={`inline-flex items-center justify-between gap-1.5 rounded-lg transition-all select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] ${
           variant === 'icon-vertical' || variant === 'icon-horizontal' ? '' : sizeClasses
         } ${getButtonClasses()}`}
       >
         {variant === 'icon-vertical' ? (
-          <MoreVertical className="w-4 h-4" />
+          <MoreVertical className="w-4 h-4" aria-hidden="true" />
         ) : variant === 'icon-horizontal' ? (
-          <MoreHorizontal className="w-4 h-4" />
+          <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
         ) : (
           <>
-            <span>{label}</span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            <span>{displayLabel}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </>
         )}
       </button>
 
       {isOpen && (
         <div
+          role="menu"
+          aria-label={displayLabel}
           className={`absolute z-50 mt-1.5 w-56 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl py-1 text-xs text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-100 ${
             align === 'left' ? 'left-0' : 'right-0 rtl:right-0 rtl:left-auto ltr:right-auto ltr:left-0'
           }`}
@@ -97,9 +104,10 @@ export const ActionsMenu: React.FC<ActionsMenuProps> = ({
         >
           {items.map((item, idx) => (
             <React.Fragment key={item.id || idx}>
-              {item.divider && <div className="my-1 border-t border-slate-100 dark:border-slate-700" />}
+              {item.divider && <div className="my-1 border-t border-slate-100 dark:border-slate-700" role="separator" />}
               <button
                 type="button"
+                role="menuitem"
                 disabled={item.disabled}
                 onClick={() => {
                   if (!item.disabled) {

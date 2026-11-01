@@ -20,6 +20,7 @@ import {
   X,
   Wrench,
   Shirt,
+  CreditCard,
   Sun,
   Moon,
   ChevronRight,
@@ -74,7 +75,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   tenantCode,
   branchName,
   onOpenNewCompanyModal,
-  userName = 'مالك المصنع',
+  userName: propUserName,
   userRole = 'company_owner',
   isAuthenticated = true,
   onLogout,
@@ -82,8 +83,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onSwitchToPublic,
   onSwitchToAdmin,
 }) => {
+  const dir: Direction = lang === 'ar' ? 'rtl' : 'ltr';
+  const isAr = lang === 'ar';
+  const userName = propUserName || (isAr ? 'مالك المصنع' : 'Factory Owner');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('garmentos_sidebar_collapsed') === 'true';
@@ -112,8 +117,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mobileMenuOpen]);
 
-  const dir: Direction = lang === 'ar' ? 'rtl' : 'ltr';
-  const isAr = lang === 'ar';
+  const isTabAllowedForRole = (tabId: string, role: string): boolean => {
+    if (role === 'company_owner' || role === 'platform_admin') return true;
+    switch (role) {
+      case 'production_manager':
+        return ['dashboard', 'models', 'cutting', 'subcontracting', 'waslat_worsh', 'maintenance', 'inventory', 'purchasing', 'piece_rate'].includes(tabId);
+      case 'accountant':
+        return ['dashboard', 'inventory', 'purchasing', 'sales', 'costing', 'piece_rate', 'subscription'].includes(tabId);
+      case 'sales_rep':
+        return ['dashboard', 'sales', 'storefront', 'models', 'inventory'].includes(tabId);
+      case 'worker':
+        return ['cutting', 'piece_rate'].includes(tabId);
+      default:
+        return true;
+    }
+  };
 
   const navGroups: NavGroup[] = [
     {
@@ -123,27 +141,39 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           id: 'dashboard',
           label: isAr ? 'لوحة القيادة والمصنع' : 'Factory Command',
           icon: <LayoutDashboard className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('dashboard', userRole),
         },
         {
           id: 'models',
           label: isAr ? 'الموديلات وشجرة الـ BOM' : 'Models & BOMs',
           icon: <Shirt className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('models', userRole),
         },
         {
           id: 'cutting',
           label: isAr ? 'صالة القص والتشغيل' : 'Cutting & Bundles',
           icon: <Scissors className="w-4 h-4" />,
           badge: isAr ? 'نشط' : 'Live',
+          disabled: !isTabAllowedForRole('cutting', userRole),
         },
         {
           id: 'subcontracting',
           label: isAr ? 'التشغيل للغير والـ CMT' : 'Subcontracting CMT',
           icon: <Boxes className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('subcontracting', userRole),
+        },
+        {
+          id: 'waslat_worsh',
+          label: isAr ? 'منصة وصلة ورش (B2B)' : 'Waslat Worsh B2B',
+          icon: <Building2 className="w-4 h-4 text-primary" />,
+          badge: isAr ? 'سوق' : 'Market',
+          disabled: !isTabAllowedForRole('waslat_worsh', userRole),
         },
         {
           id: 'maintenance',
           label: isAr ? 'صيانة الماكينات والأصول' : 'Machine Assets',
           icon: <Wrench className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('maintenance', userRole),
         },
       ],
     },
@@ -154,11 +184,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           id: 'inventory',
           label: isAr ? 'المخازن والأقمشة' : 'Fabric Inventory',
           icon: <Layers className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('inventory', userRole),
         },
         {
           id: 'purchasing',
           label: isAr ? 'المشتريات والموردين' : 'Procurement & POs',
           icon: <ShoppingCart className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('purchasing', userRole),
         },
       ],
     },
@@ -169,21 +201,25 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           id: 'sales',
           label: isAr ? 'المبيعات ونقطة البيع' : 'Sales & POS',
           icon: <TrendingUp className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('sales', userRole),
         },
         {
           id: 'costing',
           label: isAr ? 'التكاليف والمالية' : 'Costing & Accounts',
           icon: <Receipt className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('costing', userRole),
         },
         {
           id: 'piece_rate',
           label: isAr ? 'أجور القطعة والعمال' : 'Piece-Rate & HR',
           icon: <Users className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('piece_rate', userRole),
         },
         {
           id: 'storefront',
           label: isAr ? 'المتجر الإلكتروني' : 'B2B Storefront',
           icon: <Store className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('storefront', userRole),
         },
       ],
     },
@@ -191,9 +227,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       groupTitle: isAr ? 'إدارة النظام' : 'Administration',
       items: [
         {
+          id: 'subscription',
+          label: isAr ? 'الاشتراك وسعة المصنع' : 'Subscription & Quotas',
+          icon: <CreditCard className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('subscription', userRole),
+        },
+        {
           id: 'settings',
           label: isAr ? 'إعدادات الشركة والمستخدمين' : 'Tenant Settings',
           icon: <Settings className="w-4 h-4" />,
+          disabled: !isTabAllowedForRole('settings', userRole),
         },
       ],
     },
@@ -207,7 +250,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   return (
     <div
       dir={dir}
-      className="h-screen max-h-screen w-full max-w-full overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)] flex flex-col antialiased selection:bg-[#7F1625] selection:text-white transition-colors duration-200"
+      className="h-screen max-h-screen w-full max-w-full overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)] flex flex-col antialiased selection:bg-[var(--brand-primary)] selection:text-white transition-colors duration-200"
     >
       {/* Top Navbar: Clean Industrial Enterprise Bar */}
       <header className="h-16 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--bg-header)]/95 backdrop-blur-md z-40 px-3 sm:px-6 flex items-center justify-between shadow-2xs max-w-full overflow-hidden">
@@ -222,7 +265,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           </button>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F1625] via-[#8c1929] to-[#941b2d] text-white shadow-xs border border-[#7F1625]/30 shrink-0">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-primary-light)] text-white shadow-xs border border-[var(--brand-border)] shrink-0">
               <Scissors className="w-4 h-4 sm:w-5 sm:h-5 -rotate-45" />
             </div>
             <div>
@@ -230,7 +273,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 <span className="font-black text-base sm:text-lg text-slate-900 dark:text-white font-sans">
                   GarmentOS
                 </span>
-                <span className="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full border border-[#7F1625]/25 bg-[#7F1625]/10 text-[#7F1625] dark:text-[#F87171] dark:border-[#9E2A3B]/40 dark:bg-[#9E2A3B]/20 hidden sm:inline-block">
+                <span className="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full border border-[var(--brand-border)] bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] hidden sm:inline-block">
                   Cloud ERP
                 </span>
               </div>
@@ -254,7 +297,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <input
             type="text"
             placeholder={isAr ? 'بحث سريع عن أمر، موديل، قماش (Ctrl+K)...' : 'Quick search order, model, fabric (Ctrl+K)...'}
-            className="w-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-[#7F1625] dark:focus:border-[#9E2A3B] transition-all"
+            className="w-full bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-[var(--brand-primary)] transition-all"
           />
         </div>
 
@@ -264,7 +307,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {userRole === 'platform_admin' && onSwitchToAdmin && (
             <button
               onClick={onSwitchToAdmin}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold border border-[#7F1625]/30 text-[#7F1625] dark:text-[#F87171] hover:bg-[#7F1625]/10 transition-colors flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold border border-[var(--brand-border)] text-[var(--brand-primary)] dark:text-[#F87171] hover:bg-[var(--brand-subtle)] transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Shield className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Admin</span>
@@ -325,8 +368,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       : userRole}
                   </span>
                 </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F1625] to-[#941b2d] text-white text-xs font-black shadow-xs ring-1 ring-white/10 shrink-0">
-                  {userName.charAt(0) || 'م'}
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-primary-light)] text-white text-xs font-black shadow-xs ring-1 ring-white/10 shrink-0">
+                  {userName.charAt(0) || (isAr ? 'م' : 'O')}
                 </div>
               </button>
 
@@ -374,7 +417,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                         <button
                           onClick={() => {
                             setUserMenuOpen(false);
-                            onLogout();
+                            setIsLogoutModalOpen(true);
                           }}
                           className="w-full text-start px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 cursor-pointer"
                         >
@@ -414,7 +457,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <div>
               <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#7F1625] text-white">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--brand-primary)] text-white">
                     <Scissors className="w-4 h-4" />
                   </div>
                   <span className="font-black text-base text-slate-900 dark:text-white font-sans">GarmentOS ERP</span>
@@ -446,12 +489,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                               item.disabled
                                 ? 'opacity-40 cursor-not-allowed text-slate-400'
                                 : isActive
-                                ? 'bg-[#7F1625]/10 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] font-bold border-s-4 border-[#7F1625] dark:border-[#9E2A3B]'
+                                ? 'bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] font-bold border-s-4 border-[var(--brand-primary)]'
                                 : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                             }`}
                           >
                             <div className="flex items-center gap-2.5">
-                              <span className={isActive ? 'text-[#7F1625] dark:text-[#F87171]' : 'text-slate-500'}>
+                              <span className={isActive ? 'text-[var(--brand-primary)] dark:text-[#F87171]' : 'text-slate-500'}>
                                 {item.icon}
                               </span>
                               <span>{item.label}</span>
@@ -480,6 +523,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               >
                 {isAr ? 'العودة للموقع التسويقي' : 'Back to Marketing Site'}
               </button>
+              {onLogout && (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setIsLogoutModalOpen(true);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl border border-rose-200 dark:border-rose-900/50 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{isAr ? 'تسجيل الخروج' : 'Sign Out'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -532,12 +587,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                             item.disabled
                               ? 'opacity-40 cursor-not-allowed text-slate-400'
                               : isActive
-                              ? 'bg-[#7F1625]/8 dark:bg-[#9E2A3B]/20 text-[#7F1625] dark:text-[#F87171] font-bold border-s-[3px] border-[#7F1625] dark:border-[#9E2A3B] shadow-2xs'
+                              ? 'bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] font-bold border-s-[3px] border-[var(--brand-primary)] shadow-2xs'
                               : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/80'
                           }`}
                         >
                           <div className={`flex items-center gap-2.5 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-                            <span className={isActive ? 'text-[#7F1625] dark:text-[#F87171]' : 'text-slate-500 dark:text-slate-400'}>
+                            <span className={isActive ? 'text-[var(--brand-primary)] dark:text-[#F87171]' : 'text-slate-500 dark:text-slate-400'}>
                               {item.icon}
                             </span>
                             {!sidebarCollapsed && <span>{item.label}</span>}
@@ -571,14 +626,36 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   <button
                     type="button"
                     onClick={onSwitchToPublic}
-                    className="w-full text-start text-[11px] font-medium text-slate-500 hover:text-[#7F1625] dark:text-slate-400 dark:hover:text-[#F87171] transition-colors cursor-pointer py-0.5"
+                    className="w-full text-start text-[11px] font-medium text-slate-500 hover:text-[var(--brand-primary)] dark:text-slate-400 dark:hover:text-[#F87171] transition-colors cursor-pointer py-0.5"
                   >
                     {isAr ? '← زيارة الموقع التعريفي' : 'Visit Marketing Site →'}
                   </button>
                 )}
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => setIsLogoutModalOpen(true)}
+                    className="w-full text-start text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 transition-colors cursor-pointer py-1 flex items-center gap-1.5"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'تسجيل الخروج' : 'Sign Out'}</span>
+                  </button>
+                )}
               </div>
             ) : (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 mx-auto" />
+              <div className="flex flex-col items-center gap-2 mx-auto">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => setIsLogoutModalOpen(true)}
+                    className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                    title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </aside>
@@ -588,6 +665,52 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <div className="max-w-7xl mx-auto space-y-6 w-full min-w-0">{children}</div>
         </main>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                  {isAr ? 'تأكيد تسجيل الخروج' : 'Confirm Sign Out'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isAr ? 'إنهاء جلسة العمل الحالية' : 'Terminate current active session'}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              {isAr
+                ? 'هل أنت متأكد من رغبتك في تسجيل الخروج من منظومة GarmentOS؟ سيتم إبطال رمز الجلسة ومسح بيانات المصنع الحالية بأمان.'
+                : 'Are you sure you want to sign out of GarmentOS? Your session token will be revoked and tenant workspace data cleared securely.'}
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogoutModalOpen(false);
+                  if (onLogout) onLogout();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{isAr ? 'تسجيل الخروج' : 'Sign Out'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

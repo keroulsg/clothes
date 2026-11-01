@@ -57,19 +57,7 @@ export const Pagination: React.FC<PaginationProps> = ({
     >
       {/* Range Info */}
       <div className="font-medium text-[var(--text-muted)] font-sans">
-        {isAr ? (
-          <>
-            عرض <span className="font-bold text-[var(--text-primary)]">{from}</span> إلى{' '}
-            <span className="font-bold text-[var(--text-primary)]">{to}</span> من إجمالي{' '}
-            <span className="font-bold text-[var(--text-primary)]">{totalItems}</span> عنصر
-          </>
-        ) : (
-          <>
-            Showing <span className="font-bold text-[var(--text-primary)]">{from}</span> to{' '}
-            <span className="font-bold text-[var(--text-primary)]">{to}</span> of{' '}
-            <span className="font-bold text-[var(--text-primary)]">{totalItems}</span> entries
-          </>
-        )}
+        {isAr ? <span>عرض <strong className="font-bold text-[var(--text-primary)]">{from}</strong> إلى <strong className="font-bold text-[var(--text-primary)]">{to}</strong> من إجمالي <strong className="font-bold text-[var(--text-primary)]">{totalItems}</strong> عنصر</span> : <span>Showing <strong className="font-bold text-[var(--text-primary)]">{from}</strong> to <strong className="font-bold text-[var(--text-primary)]">{to}</strong> of <strong className="font-bold text-[var(--text-primary)]">{totalItems}</strong> entries</span>}
       </div>
 
       {/* Page Navigation Controls */}
@@ -106,7 +94,7 @@ export const Pagination: React.FC<PaginationProps> = ({
                 aria-current={isActive ? 'page' : undefined}
                 className={`min-w-[30px] h-[30px] px-2 flex items-center justify-center rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-[#7F1625] dark:bg-[#9E2A3B] text-white shadow-xs font-bold'
+                    ? 'bg-[var(--brand-primary)] text-white shadow-xs font-bold'
                     : 'border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                 }`}
               >

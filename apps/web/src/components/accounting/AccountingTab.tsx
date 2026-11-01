@@ -14,6 +14,8 @@ import {
   Eye,
   BookOpen,
   RotateCw,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -23,6 +25,8 @@ import { ActionsMenu } from '../ui/ActionsMenu';
 import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import { FinancialReportsView } from './FinancialReportsView';
+import { AccountStatementModal } from './AccountStatementModal';
+import { CalculateCostModal } from './CalculateCostModal';
 import type { Language, ChartOfAccount, JournalEntry, ProductionCostSheet, PaymentVoucher } from '../../types';
 
 interface AccountingTabProps {
@@ -35,6 +39,8 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [isCalcCostModalOpen, setIsCalcCostModalOpen] = useState(false);
+  const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
+  const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -104,8 +110,6 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [voucherMethod, setVoucherMethod] = useState<'cash' | 'bank_transfer' | 'card' | 'check'>('cash');
   const [voucherNotes, setVoucherNotes] = useState('');
 
-  // Cost calculation state
-  const [calcOrderId, setCalcOrderId] = useState('');
 
   const handleCreateJournal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,29 +191,6 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
     }
   };
 
-  const handleCalculateCost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!calcOrderId) return;
-
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    try {
-      const res = await api.accounting.calculateCost(calcOrderId);
-      if (res?.cost_sheet) {
-        setCostSheets((prev) => [res.cost_sheet, ...prev.filter((cs) => cs.id !== res.cost_sheet.id)]);
-      } else {
-        await loadAccountingData();
-      }
-      setIsCalcCostModalOpen(false);
-      setCalcOrderId('');
-      setSuccessMsg(isAr ? 'تم احتساب التكلفة الفعلية لأمر الإنتاج بنجاح' : 'Production cost sheet calculated successfully');
-      setTimeout(() => setSuccessMsg(null), 4000);
-    } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل احتساب التكلفة' : 'Failed to calculate production cost'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Real server-backed dynamic calculations
   const totalAssets = accounts
@@ -234,7 +215,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         subtitle={isAr
           ? 'دليل الحسابات، قيود اليومية، سندات القبض والصرف، وتكلفة أوامر الإنتاج الفعلية.'
           : 'Chart of accounts, journal entries, vouchers, and actual production cost sheets.'}
-        icon={<Receipt className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        icon={<Receipt className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
         breadcrumbs={[
           { label: isAr ? 'الرئيسية' : 'Home' },
           { label: isAr ? 'المالية والتكاليف' : 'Finance & Costing' },
@@ -304,7 +285,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 {isAr ? 'إجمالي الأصول المتداولة والنقدية' : 'Total Current Assets & Cash'}
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {totalAssets.toLocaleString()} ج.م
+                {totalAssets.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                 {accounts.filter((a) => a.type === 'asset').length} {isAr ? 'حسابات أصول نشطة' : 'active asset accounts'}
@@ -323,7 +304,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 {isAr ? 'إيرادات المبيعات المحققة' : 'Garment Sales Revenue'}
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {totalRevenues.toLocaleString()} ج.م
+                {totalRevenues.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                 {isAr ? 'أرصدة قيود الإيرادات الدفترية' : 'Ledger revenue accounts'}
@@ -342,7 +323,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 {isAr ? 'التكاليف والمصروفات المباشرة' : 'Direct Expenses & Cost'}
               </p>
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                {directExpenses.toLocaleString()} ج.م
+                {directExpenses.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 {costSheets.length} {isAr ? 'أوامر إنتاج محسوبة' : 'costed orders'}
@@ -361,7 +342,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 {isAr ? 'صافي الربح الدفتري' : 'Net Book Profit'}
               </p>
               <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                {grossProfit.toLocaleString()} ج.م
+                {grossProfit.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                 {isAr ? `هامش ربح ${grossMarginPct}%` : `${grossMarginPct}% profit margin`}
@@ -492,7 +473,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                     </td>
                     <td className="p-3 text-xs text-slate-500 dark:text-slate-400">{acc.category.replace('_', ' ')}</td>
                     <td className="p-3 text-end font-bold text-slate-900 dark:text-white">
-                      {Number(acc.current_balance).toLocaleString()} ج.م
+                      {Number(acc.current_balance).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                     </td>
                     <td className="p-3 text-center">
                       <ActionsMenu
@@ -504,7 +485,8 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                             label: isAr ? 'كشف حركة الحساب' : 'Account Ledger',
                             icon: <BookOpen className="w-3.5 h-3.5 text-blue-500" />,
                             onClick: () => {
-                              alert(isAr ? `كشف حساب تحليلي: ${acc.code} - ${acc.name}\nالرصيد: ${Number(acc.current_balance).toLocaleString()} ج.م` : `Ledger for ${acc.name}: ${Number(acc.current_balance).toLocaleString()} EGP`);
+                              setSelectedAccountForStatement(acc);
+                              setIsStatementModalOpen(true);
                             },
                           },
                           {
@@ -545,9 +527,9 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                     <Badge variant="success">{j.status.toUpperCase()}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-900 dark:text-white">
-                    <span>{isAr ? 'المدين:' : 'Debit:'} {Number(j.total_debit).toLocaleString()} ج.م</span>
+                    <span>{isAr ? 'المدين:' : 'Debit:'} {Number(j.total_debit).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     <span>=</span>
-                    <span>{isAr ? 'الدائن:' : 'Credit:'} {Number(j.total_credit).toLocaleString()} ج.م</span>
+                    <span>{isAr ? 'الدائن:' : 'Credit:'} {Number(j.total_credit).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     <CheckCircle className="w-4 h-4 text-emerald-500" />
                     <ActionsMenu
                       variant="icon-horizontal"
@@ -582,10 +564,10 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                       </span>
                       <div className="flex items-center gap-6">
                         <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                          {Number(line.debit) > 0 ? `+${Number(line.debit).toLocaleString()} ج.م` : '-'}
+                          {Number(line.debit) > 0 ? `+${Number(line.debit).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'}` : '-'}
                         </span>
                         <span className="font-mono text-amber-600 dark:text-amber-400 font-semibold">
-                          {Number(line.credit) > 0 ? `-${Number(line.credit).toLocaleString()} ج.م` : '-'}
+                          {Number(line.credit) > 0 ? `-${Number(line.credit).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'}` : '-'}
                         </span>
                       </div>
                     </div>
@@ -596,6 +578,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
           )}
         </div>
       )}
+
 
       {/* VOUCHERS VIEW */}
       {activeSubTab === 'vouchers' && (
@@ -641,7 +624,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                       </td>
                       <td className="p-3 capitalize">{v.payment_method?.replace('_', ' ')}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(v.amount).toLocaleString()} ج.م
+                        {Number(v.amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3 text-slate-500">{v.voucher_date}</td>
                       <td className="p-3 text-slate-500 text-xs">{v.notes || '—'}</td>
@@ -687,13 +670,14 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                   <th className="p-3 text-start">{isAr ? 'المصاريف غير المباشرة' : 'Overheads'}</th>
                   <th className="p-3 text-start">{isAr ? 'إجمالي التكلفة' : 'Total Cost'}</th>
                   <th className="p-3 text-end">{isAr ? 'تكلفة القطعة الواحدة' : 'Cost / Piece'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
                   <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {costSheets.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
                       {isAr ? 'لا توجد بطاقات تكلفة مسجلة' : 'No cost sheets recorded'}
                     </td>
                   </tr>
@@ -702,12 +686,25 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                     <tr key={cs.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="p-3 font-semibold text-slate-900 dark:text-white">{cs.production_order_id}</td>
                       <td className="p-3 font-bold">{Number(cs.total_produced_pieces).toLocaleString()}</td>
-                      <td className="p-3">{Number(cs.direct_materials_cost).toLocaleString()} ج.م</td>
-                      <td className="p-3">{Number(cs.direct_labor_cost).toLocaleString()} ج.م</td>
-                      <td className="p-3">{Number(cs.allocated_overhead_cost).toLocaleString()} ج.م</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">{Number(cs.total_cost).toLocaleString()} ج.م</td>
+                      <td className="p-3">{Number(cs.direct_materials_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                      <td className="p-3">{Number(cs.direct_labor_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                      <td className="p-3">{Number(cs.allocated_overhead_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                      <td className="p-3 font-bold text-slate-900 dark:text-white">{Number(cs.total_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
                       <td className="p-3 text-end font-bold text-primary text-base">
-                        {Number(cs.cost_per_piece).toFixed(2)} ج.م
+                        {Number(cs.cost_per_piece).toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
+                      </td>
+                      <td className="p-3 text-center">
+                        {cs.status === 'approved' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {isAr ? 'معتمدة نهائياً' : 'Approved & Locked'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                            <Clock className="w-3.5 h-3.5" />
+                            {isAr ? 'مسودة محسوبة' : 'Calculated'}
+                          </span>
+                        )}
                       </td>
                       <td className="p-3 text-center">
                         <ActionsMenu
@@ -720,24 +717,52 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                               icon: <Printer className="w-3.5 h-3.5 text-primary" />,
                               onClick: () => window.print(),
                             },
-                            {
-                              id: 'recalc',
-                              label: isAr ? 'إعادة احتساب التكلفة' : 'Recalculate Cost',
-                              icon: <RotateCw className="w-3.5 h-3.5 text-blue-500" />,
-                              onClick: async () => {
-                                try {
-                                  setIsLoading(true);
-                                  await api.accounting.calculateCost(cs.production_order_id);
-                                  await loadAccountingData();
-                                  setSuccessMsg(isAr ? 'تمت إعادة احتساب التكلفة بنجاح' : 'Cost recalculated successfully');
-                                  setTimeout(() => setSuccessMsg(null), 3000);
-                                } catch (e: any) {
-                                  setErrorMsg(e?.message || 'Calculation failed');
-                                } finally {
-                                  setIsLoading(false);
-                                }
-                              },
-                            },
+                            ...(cs.status !== 'approved'
+                              ? [
+                                  {
+                                    id: 'approve-cost',
+                                    label: isAr ? 'اعتماد نهائي وإقفال' : 'Approve & Lock',
+                                    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />,
+                                    onClick: async () => {
+                                      try {
+                                        setIsLoading(true);
+                                        await api.accounting.approveCostSheet(cs.id);
+                                        await loadAccountingData();
+                                        setSuccessMsg(
+                                          isAr
+                                            ? 'تم اعتماد بطاقة التكلفة الصناعية بنجاح وأصبحت نهائية وغير قابلة للتعديل'
+                                            : 'Cost sheet approved and locked successfully'
+                                        );
+                                        setTimeout(() => setSuccessMsg(null), 3500);
+                                      } catch (e: any) {
+                                        setErrorMsg(e?.message || (isAr ? 'فشل الاعتماد' : 'Approval failed'));
+                                      } finally {
+                                        setIsLoading(false);
+                                      }
+                                    },
+                                  },
+                                  {
+                                    id: 'recalc',
+                                    label: isAr ? 'إعادة احتساب التكلفة' : 'Recalculate Cost',
+                                    icon: <RotateCw className="w-3.5 h-3.5 text-blue-500" />,
+                                    onClick: async () => {
+                                      try {
+                                        setIsLoading(true);
+                                        await api.accounting.calculateCost(cs.production_order_id);
+                                        await loadAccountingData();
+                                        setSuccessMsg(
+                                          isAr ? 'تمت إعادة احتساب التكلفة بنجاح' : 'Cost recalculated successfully'
+                                        );
+                                        setTimeout(() => setSuccessMsg(null), 3000);
+                                      } catch (e: any) {
+                                        setErrorMsg(e?.message || 'Calculation failed');
+                                      } finally {
+                                        setIsLoading(false);
+                                      }
+                                    },
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       </td>
@@ -980,49 +1005,33 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       </Modal>
 
       {/* Calculate Cost Modal */}
-      <Modal
+      <CalculateCostModal
         isOpen={isCalcCostModalOpen}
         onClose={() => setIsCalcCostModalOpen(false)}
-        title={isAr ? 'احتساب التكلفة الصناعية الفعلية لأمر الإنتاج' : 'Calculate Production Order Cost'}
-      >
-        <form onSubmit={handleCalculateCost} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {isAr ? 'معرف أمر الإنتاج (Production Order ID) *' : 'Production Order ID *'}
-            </label>
-            <input
-              type="text"
-              required
-              value={calcOrderId}
-              onChange={(e) => setCalcOrderId(e.target.value)}
-              placeholder="e.g. PO-2026-001 or UUID"
-              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
-            />
-          </div>
+        isAr={isAr}
+        onSuccess={(newSheet) => {
+          setCostSheets((prev) => [newSheet, ...prev.filter((s) => s.id !== newSheet.id)]);
+          setSuccessMsg(
+            isAr
+              ? 'تم احتساب التكلفة الفعلية وترحيل بطاقة التكلفة بنجاح'
+              : 'Actual production cost sheet calculated and recorded successfully'
+          );
+          setTimeout(() => setSuccessMsg(null), 4000);
+        }}
+      />
 
-          <p className="text-xs text-slate-500">
-            {isAr
-              ? 'سيقوم النظام بجمع أثمان الخامات المصروفة + أجور القطعة لعمال الخياطة + تحميل المصاريف الصناعية غير المباشرة واحتساب تكلفة القطعة الواحدة بدقة 4 خانات عشرية.'
-              : 'The system will aggregate material issuances + verified piece wages + allocated overheads to compute exact unit cost.'}
-          </p>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => setIsCalcCostModalOpen(false)}>
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
-                  {isAr ? 'جاري الاحتساب...' : 'Calculating...'}
-                </>
-              ) : (
-                isAr ? 'احتساب وترحيل بطاقة التكلفة' : 'Calculate & Record'
-              )}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      {/* Account Statement & Ledger Modal */}
+      <AccountStatementModal
+        isOpen={isStatementModalOpen}
+        onClose={() => {
+          setIsStatementModalOpen(false);
+          setSelectedAccountForStatement(null);
+        }}
+        accountId={selectedAccountForStatement?.id || null}
+        accountName={selectedAccountForStatement?.name}
+        accountCode={selectedAccountForStatement?.code}
+        isAr={isAr}
+      />
     </div>
   );
 };

@@ -10,6 +10,7 @@ interface JobInvoiceModalProps {
   onClose: () => void;
   jobOrder: JobOrder | null;
   onSuccess: (newInvoice: JobInvoice) => void;
+  isAr?: boolean;
 }
 
 export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
@@ -17,6 +18,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
   onClose,
   jobOrder,
   onSuccess,
+  isAr = true,
 }) => {
   const baseServiceAmount = jobOrder
     ? (jobOrder.total_delivered_quantity > 0
@@ -52,7 +54,9 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
     const quantity = jobOrder.total_delivered_quantity > 0 ? jobOrder.total_delivered_quantity : jobOrder.total_target_quantity;
     const items: any[] = [
       {
-        description: `أجور خدمة ${jobOrder.service_type === 'contract_cutting' ? 'قص أقمشة' : 'تصنيع كامل CMT'} (${quantity} قطعة)`,
+        description: isAr
+          ? `أجور خدمة ${jobOrder.service_type === 'contract_cutting' ? 'قص أقمشة' : 'تصنيع كامل CMT'} (${quantity} قطعة)`
+          : `Service fees for ${jobOrder.service_type === 'contract_cutting' ? 'cutting' : 'full CMT'} (${quantity} pcs)`,
         item_type: 'service_charge',
         quantity: quantity,
         unit_rate: Number(jobOrder.unit_rate || (Number(serviceAmount) / (quantity || 1))),
@@ -61,7 +65,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
 
     if (Number(additionalCharges) > 0) {
       items.push({
-        description: extraReason || 'مصاريف تشغيل إضافية معتمدة',
+        description: extraReason || (isAr ? 'مصاريف تشغيل إضافية معتمدة' : 'Approved additional charges'),
         item_type: 'extra_operation',
         quantity: 1,
         unit_rate: Number(additionalCharges),
@@ -71,7 +75,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
 
     if (Number(deductions) > 0) {
       items.push({
-        description: deductionReason || 'خصم متفق عليه / تعويض عيوب',
+        description: deductionReason || (isAr ? 'خصم متفق عليه / تعويض عيوب' : 'Agreed deduction / defect compensation'),
         item_type: 'deduction',
         quantity: 1,
         unit_rate: Number(deductions),
@@ -116,7 +120,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
       onSuccess(formattedInvoice);
       onClose();
     } catch (err: any) {
-      setApiError(err.message || 'حدث خطأ أثناء إصدار فاتورة خدمات التشغيل');
+      setApiError(err.message || (isAr ? 'حدث خطأ أثناء إصدار فاتورة خدمات التشغيل' : 'An error occurred while issuing the service invoice'));
     } finally {
       setIsSubmitting(false);
     }
@@ -126,7 +130,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`إصدار فاتورة خدمات التشغيل — ${jobOrder.order_number}`}
+      title={isAr ? `إصدار فاتورة خدمات التشغيل — ${jobOrder.order_number}` : `Issue Service Invoice — ${jobOrder.order_number}`}
     >
       {apiError && (
         <div className="mb-4 p-3 bg-red-950/60 border border-red-700/60 text-red-300 rounded-lg text-sm flex items-center gap-2">
@@ -136,12 +140,17 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
       )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed">
-          <strong>إيراد خدمات المصنع:</strong> يتم فوترة أتعاب التشغيل والقص وخدمات القيمة المضافة فقط. خامات العميل لا تدخل في إيرادات أو مبيعات المصنع.
+          <strong>{isAr ? 'إيراد خدمات المصنع:' : 'Factory Service Revenue:'}</strong>{' '}
+          {isAr
+            ? 'يتم فوترة أتعاب التشغيل والقص وخدمات القيمة المضافة فقط. خامات العميل لا تدخل في إيرادات أو مبيعات المصنع.'
+            : 'Only CMT/cutting labor and value-added service fees are invoiced. Customer fabrics are excluded from factory sales revenue.'}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">العميل</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'العميل' : 'Customer'}
+            </label>
             <input
               type="text"
               disabled
@@ -151,7 +160,9 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ الفاتورة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ الفاتورة' : 'Invoice Date'}
+            </label>
             <input
               type="date"
               required
@@ -162,7 +173,9 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ الاستحقاق</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ الاستحقاق' : 'Due Date'}
+            </label>
             <input
               type="date"
               value={dueDate}
@@ -173,7 +186,9 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">قيمة الخدمة الأساسية (ج.م)</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'قيمة الخدمة الأساسية (ج.م)' : 'Base Service Amount (EGP)'}
+          </label>
           <input
             type="number"
             step="0.01"
@@ -184,10 +199,12 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
           />
         </div>
 
-        {/* إضافات وخصومات معتمدة */}
+        {/* Additions & Deductions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
-            <label className="block text-xs font-semibold text-emerald-600 dark:text-emerald-400">+ إضافات / مصاريف إضافية (ج.م)</label>
+            <label className="block text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              {isAr ? '+ إضافات / مصاريف إضافية (ج.م)' : '+ Extra Charges (EGP)'}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -200,13 +217,15 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
               type="text"
               value={extraReason}
               onChange={(e) => setExtraReason(e.target.value)}
-              placeholder="السبب (مثال: شحن سريع، أزرار إضافية)"
+              placeholder={isAr ? 'السبب (مثال: شحن سريع، أزرار إضافية)' : 'Reason (e.g. Express shipping, trims)'}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-1.5 text-slate-900 dark:text-slate-300"
             />
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
-            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-400">- خصومات / تعويض عيوب (ج.م)</label>
+            <label className="block text-xs font-semibold text-rose-600 dark:text-rose-400">
+              {isAr ? '- خصومات / تعويض عيوب (ج.م)' : '- Deductions (EGP)'}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -219,14 +238,16 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
               type="text"
               value={deductionReason}
               onChange={(e) => setDeductionReason(e.target.value)}
-              placeholder="السبب (مثال: تعويض هالك قماش زائد)"
+              placeholder={isAr ? 'السبب (مثال: تعويض هالك قماش زائد)' : 'Reason (e.g. Excessive scrap penalty)'}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-1.5 text-slate-900 dark:text-slate-300"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">نسبة ضريبة القيمة المضافة (%)</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'نسبة ضريبة القيمة المضافة (%)' : 'VAT Rate (%)'}
+          </label>
           <input
             type="number"
             value={taxRate}
@@ -235,39 +256,47 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({
           />
         </div>
 
-        {/* ملخص الحسابات الآمن */}
+        {/* Totals Summary */}
         <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>المجموع قبل الضريبة:</span>
-            <span className="font-mono font-semibold text-slate-900 dark:text-slate-200">{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
+            <span>{isAr ? 'المجموع قبل الضريبة:' : 'Subtotal before Tax:'}</span>
+            <span className="font-mono font-semibold text-slate-900 dark:text-slate-200">
+              {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+            </span>
           </div>
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>ضريبة القيمة المضافة ({taxRate}%):</span>
-            <span className="font-mono font-semibold text-slate-900 dark:text-slate-200">{taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
+            <span>{isAr ? `ضريبة القيمة المضافة (${taxRate}%):` : `VAT (${taxRate}%):`}</span>
+            <span className="font-mono font-semibold text-slate-900 dark:text-slate-200">
+              {taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+            </span>
           </div>
           <div className="flex justify-between text-sm font-bold pt-2 border-t border-slate-200 dark:border-slate-800 text-primary dark:text-[#fca5a5]">
-            <span>إجمالي الفاتورة المستحقة:</span>
-            <span className="font-mono">{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
+            <span>{isAr ? 'إجمالي الفاتورة المستحقة:' : 'Total Invoice Due:'}</span>
+            <span className="font-mono">
+              {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+            </span>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">شروط الدفع والملاحظات</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'شروط الدفع والملاحظات' : 'Payment Terms & Remarks'}
+          </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="شروط السداد، الحساب البنكي..."
+            placeholder={isAr ? 'شروط السداد، الحساب البنكي...' : 'Payment terms, bank details...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            تأكيد وإصدار الفاتورة
+            {isAr ? 'تأكيد وإصدار الفاتورة' : 'Confirm & Issue Invoice'}
           </Button>
         </div>
       </form>

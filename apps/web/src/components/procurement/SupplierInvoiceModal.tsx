@@ -12,6 +12,7 @@ interface SupplierInvoiceModalProps {
   purchaseOrder: PurchaseOrder | null;
   goodsReceiptNote?: GoodsReceiptNote | null;
   onSuccess: (invoice: SupplierInvoice) => void;
+  isAr?: boolean;
 }
 
 export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
@@ -20,6 +21,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
   purchaseOrder,
   goodsReceiptNote,
   onSuccess,
+  isAr = true,
 }) => {
   if (!purchaseOrder) return null;
 
@@ -61,7 +63,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'تعذر مطابقة واعتماد فاتورة المورد على الخادم.');
+      setErrorMsg(err.message || (isAr ? 'تعذر مطابقة واعتماد فاتورة المورد على الخادم.' : 'Failed to match and approve supplier invoice on server.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -71,7 +73,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`المطابقة الثلاثية واعتماد فاتورة المورد: ${purchaseOrder.po_number}`}
+      title={isAr ? `المطابقة الثلاثية واعتماد فاتورة المورد: ${purchaseOrder.po_number}` : `3-Way Matching & Supplier Invoice: ${purchaseOrder.po_number}`}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -95,16 +97,24 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-sm">
-                {hasVariance ? 'تنبيه: تم رصد فرق في أسعار الفاتورة' : 'نتيجة المطابقة: مطابقة ثلاثية تامة (Matched)'}
+                {hasVariance
+                  ? (isAr ? 'تنبيه: تم رصد فرق في أسعار الفاتورة' : 'Warning: Price variance detected in invoice')
+                  : (isAr ? 'نتيجة المطابقة: مطابقة ثلاثية تامة (Matched)' : 'Match Result: 3-Way Matching Successful')}
               </span>
               <Badge variant={hasVariance ? 'warning' : 'success'}>
-                {hasVariance ? 'فرق سعر (Variance)' : 'مطابقة معتمدة'}
+                {hasVariance
+                  ? (isAr ? 'فرق سعر (Variance)' : 'Price Variance')
+                  : (isAr ? 'مطابقة معتمدة' : 'Matched')}
               </Badge>
             </div>
             <p className="text-[11px] opacity-90 leading-relaxed">
               {hasVariance
-                ? `قيمة أمر الشراء المتفق عليها: [${expectedSubtotal.toLocaleString()} ج.م]، بينما قيمة الفاتورة المدخلة: [${subtotal.toLocaleString()} ج.م] بفرق قدره [${priceDifference.toLocaleString()} ج.م].`
-                : `تمت مطابقة أسعار أمر الشراء مع الكميات المستلمة في إذن الفحص (${goodsReceiptNote?.accepted_quantity || 'المعتمدة'}) وتطابق أسعار البنود بدقة 100%.`}
+                ? (isAr
+                    ? `قيمة أمر الشراء المتفق عليها: [${expectedSubtotal.toLocaleString()} ج.م]، بينما قيمة الفاتورة المدخلة: [${subtotal.toLocaleString()} ج.م] بفرق قدره [${priceDifference.toLocaleString()} ج.م].`
+                    : `Agreed PO subtotal: [${expectedSubtotal.toLocaleString()} EGP], entered invoice subtotal: [${subtotal.toLocaleString()} EGP], difference: [${priceDifference.toLocaleString()} EGP].`)
+                : (isAr
+                    ? `تمت مطابقة أسعار أمر الشراء مع الكميات المستلمة في إذن الفحص (${goodsReceiptNote?.accepted_quantity || 'المعتمدة'}) وتطابق أسعار البنود بدقة 100%.`
+                    : `PO prices matched with received quantities in GRN (${goodsReceiptNote?.accepted_quantity || 'approved'}) with 100% price accuracy.`)}
             </p>
           </div>
         </div>
@@ -112,7 +122,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              رقم الفاتورة الضريبية للمورد
+              {isAr ? 'رقم الفاتورة الضريبية للمورد' : 'Supplier Tax Invoice #'}
             </label>
             <input
               type="text"
@@ -124,7 +134,9 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ الفاتورة</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ الفاتورة' : 'Invoice Date'}
+            </label>
             <input
               type="date"
               required
@@ -135,7 +147,9 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ الاستحقاق</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ الاستحقاق' : 'Due Date'}
+            </label>
             <input
               type="date"
               value={dueDate}
@@ -148,7 +162,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              المبلغ الصافي قبل الضريبة (ج.م)
+              {isAr ? 'المبلغ الصافي قبل الضريبة (ج.م)' : 'Net Subtotal (EGP)'}
             </label>
             <input
               type="number"
@@ -166,7 +180,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              ضريبة القيمة المضافة 14% (ج.م)
+              {isAr ? 'ضريبة القيمة المضافة 14% (ج.م)' : 'VAT 14% (EGP)'}
             </label>
             <input
               type="number"
@@ -181,23 +195,27 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
         {/* Total Obligation Preview */}
         <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
           <div>
-            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">الالتزام المالي النهائي للمورد:</span>
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">
+              {isAr ? 'الالتزام المالي النهائي للمورد:' : 'Final Payable Obligation to Supplier:'}
+            </span>
             <span className="text-slate-900 dark:text-slate-300 font-semibold">{purchaseOrder.supplier_name}</span>
           </div>
-          <div className="text-left">
+          <div className={isAr ? 'text-left' : 'text-right'}>
             <span className="text-xs font-mono font-bold text-lg text-brand-primary dark:text-rose-400">
-              {totalAmount.toLocaleString()} ج.م
+              {totalAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
             </span>
-            <span className="text-[10px] text-slate-600 dark:text-slate-400 block font-normal">شامل ضريبة القيمة المضافة</span>
+            <span className="text-[10px] text-slate-600 dark:text-slate-400 block font-normal">
+              {isAr ? 'شامل ضريبة القيمة المضافة' : 'Includes 14% VAT'}
+            </span>
           </div>
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting} icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
-            اعتماد الفاتورة وترحيل الالتزام
+            {isAr ? 'اعتماد الفاتورة وترحيل الالتزام' : 'Approve Invoice & Post Liability'}
           </Button>
         </div>
       </form>

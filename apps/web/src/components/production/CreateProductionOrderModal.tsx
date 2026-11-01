@@ -10,6 +10,7 @@ interface CreateProductionOrderModalProps {
   onClose: () => void;
   models: GarmentModel[];
   onSuccess: (newOrder: ProductionOrder) => void;
+  isAr?: boolean;
 }
 
 export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProps> = ({
@@ -17,6 +18,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
   onClose,
   models,
   onSuccess,
+  isAr = true,
 }) => {
   const [selectedModelId, setSelectedModelId] = useState(models[0]?.id || '');
   const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
@@ -45,9 +47,9 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
     {
       id: 'poi-' + Date.now(),
       color_id: 'col-1',
-      color_name: 'أحمر زاهي',
+      color_name: isAr ? 'أحمر زاهي' : 'Bright Red',
       size_id: 'sz-1',
-      size_name: '2Y (سنتين)',
+      size_name: isAr ? '2Y (سنتين)' : '2Y',
       planned_quantity: 150,
       cut_quantity: 0,
       completed_quantity: 0,
@@ -55,9 +57,9 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
     {
       id: 'poi-' + (Date.now() + 1),
       color_id: 'col-2',
-      color_name: 'كحلي غامق',
+      color_name: isAr ? 'كحلي غامق' : 'Dark Navy',
       size_id: 'sz-2',
-      size_name: '4Y (4 سنوات)',
+      size_name: isAr ? '4Y (4 سنوات)' : '4Y',
       planned_quantity: 150,
       cut_quantity: 0,
       completed_quantity: 0,
@@ -72,9 +74,9 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
       {
         id: 'poi-' + Date.now() + Math.random(),
         color_id: colorsList[0]?.id || 'col-1',
-        color_name: colorsList[0]?.name || 'أحمر زاهي',
+        color_name: colorsList[0]?.name || (isAr ? 'أحمر زاهي' : 'Bright Red'),
         size_id: sizesList[0]?.id || 'sz-3',
-        size_name: sizesList[0]?.name || '6Y (6 سنوات)',
+        size_name: sizesList[0]?.name || (isAr ? '6Y (6 سنوات)' : '6Y'),
         planned_quantity: 100,
         cut_quantity: 0,
         completed_quantity: 0,
@@ -120,7 +122,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'تعذر إصدار أمر الإنتاج على الخادم.');
+      setErrorMsg(err.message || (isAr ? 'تعذر إصدار أمر الإنتاج على الخادم.' : 'Failed to issue production order on server.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +132,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="تخطيط وإصدار أمر إنتاج جديد (Production Order)"
+      title={isAr ? 'تخطيط وإصدار أمر إنتاج جديد (Production Order)' : 'Plan & Issue New Production Order'}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -143,7 +145,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              موديل الملابس المستهدف للإنتاج
+              {isAr ? 'موديل الملابس المستهدف للإنتاج' : 'Target Garment Model'}
             </label>
             <select
               value={selectedModelId}
@@ -159,22 +161,24 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">أولوية التشغيل</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'أولوية التشغيل' : 'Production Priority'}
+            </label>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as any)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             >
-              <option value="normal">عادية (Normal)</option>
-              <option value="high">مرتفعة (High)</option>
-              <option value="urgent">عاجلة جداً (Urgent)</option>
+              <option value="normal">{isAr ? 'عادية (Normal)' : 'Normal'}</option>
+              <option value="high">{isAr ? 'مرتفعة (High)' : 'High'}</option>
+              <option value="urgent">{isAr ? 'عاجلة جداً (Urgent)' : 'Urgent'}</option>
             </select>
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            موعد التسليم والجاهزية المستهدف
+            {isAr ? 'موعد التسليم والجاهزية المستهدف' : 'Target Delivery & Completion Date'}
           </label>
           <div className="relative">
             <input
@@ -184,7 +188,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
               onChange={(e) => setTargetDeliveryDate(e.target.value)}
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
             />
-            <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+            <Calendar className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'left-3' : 'right-3'} top-3 pointer-events-none`} />
           </div>
         </div>
 
@@ -192,7 +196,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-900 dark:text-slate-200">
-              تفصيل كميات الإنتاج حسب الألوان والمقاسات (Size/Color Matrix)
+              {isAr ? 'تفصيل كميات الإنتاج حسب الألوان والمقاسات (Size/Color Matrix)' : 'Production Quantities Matrix (Size / Color)'}
             </span>
             <Button
               type="button"
@@ -202,18 +206,18 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
               icon={<Plus className="w-3.5 h-3.5" />}
               className="text-xs h-7"
             >
-              إضافة مقاس/لون
+              {isAr ? 'إضافة مقاس/لون' : 'Add Size/Color'}
             </Button>
           </div>
 
           <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-            <table className="w-full text-right text-xs">
+            <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
               <thead className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 font-semibold">
                 <tr>
-                  <th className="py-2.5 px-3">اللون</th>
-                  <th className="py-2.5 px-3">المقاس</th>
-                  <th className="py-2.5 px-3">الكمية المخططة (قطعة)</th>
-                  <th className="py-2.5 px-2 text-center">حذف</th>
+                  <th className="py-2.5 px-3">{isAr ? 'اللون' : 'Color'}</th>
+                  <th className="py-2.5 px-3">{isAr ? 'المقاس' : 'Size'}</th>
+                  <th className="py-2.5 px-3">{isAr ? 'الكمية المخططة (قطعة)' : 'Planned Qty (pcs)'}</th>
+                  <th className="py-2.5 px-2 text-center">{isAr ? 'حذف' : 'Remove'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 bg-white dark:bg-slate-950/40">
@@ -266,35 +270,39 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         {/* Total Quantity Card */}
         <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
           <div>
-            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">إجمالي الكمية المستهدفة لأمر الإنتاج:</span>
-            <span className="text-slate-700 dark:text-slate-300">مجموع المقاسات والألوان المجدولة</span>
+            <span className="text-slate-600 dark:text-slate-400 block text-[11px]">
+              {isAr ? 'إجمالي الكمية المستهدفة لأمر الإنتاج:' : 'Total Target Planned Quantity:'}
+            </span>
+            <span className="text-slate-700 dark:text-slate-300">
+              {isAr ? 'مجموع المقاسات والألوان المجدولة' : 'Sum of scheduled sizes and colors'}
+            </span>
           </div>
-          <div className="text-left">
+          <div className={isAr ? 'text-left' : 'text-right'}>
             <span className="text-base font-mono font-bold text-primary dark:text-[#fca5a5]">
-              {totalPlannedQuantity.toLocaleString()} قطعة
+              {totalPlannedQuantity.toLocaleString()} {isAr ? 'قطعة' : 'pcs'}
             </span>
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            ملاحظات وتوجيهات تشغيل الورشة
+            {isAr ? 'ملاحظات وتوجيهات تشغيل الورشة' : 'Workshop Production Notes'}
           </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="تعليمات خاصة بالتطريز، ونوع الخيط، أو مواعيد تسليم العينات..."
+            placeholder={isAr ? 'تعليمات خاصة بالتطريز، ونوع الخيط، أو مواعيد تسليم العينات...' : 'Special embellishment notes, thread specs, sample sign-offs...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting} icon={<Scissors className="w-3.5 h-3.5" />}>
-            إنشاء أمر الإنتاج
+            {isAr ? 'إنشاء أمر الإنتاج' : 'Create Production Order'}
           </Button>
         </div>
       </form>

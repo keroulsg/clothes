@@ -24,7 +24,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   purple:
     'bg-purple-500/10 text-purple-700 dark:text-purple-400 dark:bg-purple-500/20 border-purple-500/20 dark:border-purple-500/30 font-bold',
   brand:
-    'bg-[#7F1625]/10 text-[#7F1625] dark:text-[#F87171] dark:bg-[#9E2A3B]/20 border-[#7F1625]/25 dark:border-[#9E2A3B]/35 font-bold',
+    'bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] border-[var(--brand-border)] font-bold',
 };
 
 const dotStyles: Record<BadgeVariant, string> = {
@@ -34,7 +34,7 @@ const dotStyles: Record<BadgeVariant, string> = {
   danger: 'bg-rose-500',
   neutral: 'bg-slate-400 dark:bg-slate-500',
   purple: 'bg-purple-500',
-  brand: 'bg-[#7F1625] dark:bg-[#F87171]',
+  brand: 'bg-[var(--brand-primary)] dark:bg-[#F87171]',
 };
 
 export const Badge: React.FC<BadgeProps> = ({

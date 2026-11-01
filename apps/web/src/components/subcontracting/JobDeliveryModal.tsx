@@ -9,6 +9,7 @@ interface JobDeliveryModalProps {
   onClose: () => void;
   jobOrder: JobOrder | null;
   onSuccess: (newDelivery: JobDeliveryNote) => void;
+  isAr?: boolean;
 }
 
 export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
@@ -16,6 +17,7 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
   onClose,
   jobOrder,
   onSuccess,
+  isAr = true,
 }) => {
   const remainingToDeliver = jobOrder
     ? Math.max(0, jobOrder.total_target_quantity - jobOrder.total_delivered_quantity)
@@ -25,8 +27,8 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
   const [deliveredPieces, setDeliveredPieces] = useState<number>(remainingToDeliver);
   const [returnedFabric, setReturnedFabric] = useState<number>(0);
   const [scrapFabric, setScrapFabric] = useState<number>(0);
-  const [deliveredBy, setDeliveredBy] = useState('سائق سيارة المصنع');
-  const [receivedByCustomer, setReceivedByCustomer] = useState('مسؤول استلام العميل');
+  const [deliveredBy, setDeliveredBy] = useState(isAr ? 'سائق سيارة المصنع' : 'Factory Driver');
+  const [receivedByCustomer, setReceivedByCustomer] = useState(isAr ? 'مسؤول استلام العميل' : 'Customer Rep');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,12 +40,16 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
     setError(null);
 
     if (deliveredPieces <= 0) {
-      setError('يجب أن تكون كمية القطع المسلمة أكبر من الصفر');
+      setError(isAr ? 'يجب أن تكون كمية القطع المسلمة أكبر من الصفر' : 'Delivered pieces quantity must be greater than zero');
       return;
     }
 
     if (deliveredPieces > remainingToDeliver) {
-      setError(`الكمية المراد تسليمها (${deliveredPieces}) تتجاوز الرصيد المتبقي المتاح للتسليم (${remainingToDeliver})`);
+      setError(
+        isAr
+          ? `الكمية المراد تسليمها (${deliveredPieces}) تتجاوز الرصيد المتبقي المتاح للتسليم (${remainingToDeliver})`
+          : `Delivered quantity (${deliveredPieces}) exceeds remaining available to deliver (${remainingToDeliver})`
+      );
       return;
     }
 
@@ -90,7 +96,7 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
       onSuccess(formattedDelivery);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ أثناء إصدار إذن التسليم');
+      setError(err.message || (isAr ? 'حدث خطأ أثناء إصدار إذن التسليم' : 'An error occurred while issuing the delivery note'));
     } finally {
       setIsSubmitting(false);
     }
@@ -100,7 +106,7 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`إصدار إذن تسليم للعميل — ${jobOrder.order_number}`}
+      title={isAr ? `إصدار إذن تسليم للعميل — ${jobOrder.order_number}` : `Issue Delivery Note — ${jobOrder.order_number}`}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
@@ -109,25 +115,33 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
           </div>
         )}
 
-        {/* ملخص الرصيد المتاح للتسليم */}
+        {/* Balance summary */}
         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-2 text-center text-xs">
           <div>
-            <span className="text-slate-600 dark:text-slate-400 block mb-0.5">الكمية المستهدفة</span>
+            <span className="text-slate-600 dark:text-slate-400 block mb-0.5">
+              {isAr ? 'الكمية المستهدفة' : 'Target Quantity'}
+            </span>
             <strong className="text-slate-900 dark:text-slate-100 font-mono text-sm">{jobOrder.total_target_quantity}</strong>
           </div>
           <div>
-            <span className="text-slate-600 dark:text-slate-400 block mb-0.5">المسلم سابقاً</span>
+            <span className="text-slate-600 dark:text-slate-400 block mb-0.5">
+              {isAr ? 'المسلم سابقاً' : 'Previously Delivered'}
+            </span>
             <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-sm">{jobOrder.total_delivered_quantity}</strong>
           </div>
           <div>
-            <span className="text-slate-600 dark:text-slate-400 block mb-0.5">المتاح للتسليم</span>
+            <span className="text-slate-600 dark:text-slate-400 block mb-0.5">
+              {isAr ? 'المتاح للتسليم' : 'Available to Deliver'}
+            </span>
             <strong className="text-primary dark:text-[#fca5a5] font-mono text-sm">{remainingToDeliver}</strong>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">العميل المستلم</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'العميل المستلم' : 'Receiving Customer'}
+            </label>
             <input
               type="text"
               disabled
@@ -137,7 +151,9 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">تاريخ التسليم الفعلي</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تاريخ التسليم الفعلي' : 'Delivery Date'}
+            </label>
             <input
               type="date"
               required
@@ -149,7 +165,9 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">القطع المسلمة في هذا الإذن</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'القطع المسلمة في هذا الإذن' : 'Pieces Delivered on this Note'}
+          </label>
           <input
             type="number"
             required
@@ -160,12 +178,16 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
           />
         </div>
 
-        {/* مصالحة أمانة الخامات */}
+        {/* Custody Reconciliation */}
         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
-          <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block">مصالحة وتسليم خامات العميل (Reconciliation)</span>
+          <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block">
+            {isAr ? 'مصالحة وتسليم خامات العميل (Reconciliation)' : 'Customer Fabric Reconciliation & Return'}
+          </span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">أمتار قماش سليم مرتجع للعميل (إن وجد)</label>
+              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">
+                {isAr ? 'أمتار قماش سليم مرتجع للعميل (إن وجد)' : 'Returned Unused Fabric Meters (if any)'}
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -177,7 +199,9 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">أمتار عوادم وهالك مسلّمة للعميل (Scrap)</label>
+              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">
+                {isAr ? 'أمتار عوادم وهالك مسلّمة للعميل (Scrap)' : 'Delivered Scrap / Waste Meters'}
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -192,7 +216,9 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">المسؤول عن التسليم (المصنع)</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'المسؤول عن التسليم (المصنع)' : 'Delivered By (Factory Rep)'}
+            </label>
             <input
               type="text"
               value={deliveredBy}
@@ -202,7 +228,9 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">المستلم من طرف العميل</label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'المستلم من طرف العميل' : 'Received By (Customer Rep)'}
+            </label>
             <input
               type="text"
               value={receivedByCustomer}
@@ -213,22 +241,24 @@ export const JobDeliveryModal: React.FC<JobDeliveryModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات إذن التسليم</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            {isAr ? 'ملاحظات إذن التسليم' : 'Delivery Note Remarks'}
+          </label>
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="حالة التغليف، رقم بوليصة الشحن، أو توقيع الاستلام..."
+            placeholder={isAr ? 'حالة التغليف، رقم بوليصة الشحن، أو توقيع الاستلام...' : 'Packaging condition, waybill #, or signature notes...'}
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100"
           />
         </div>
 
         <div className="pt-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
-            إلغاء
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
-            تأكيد تسليم البضاعة ومصالحة الخامات
+            {isAr ? 'تأكيد تسليم البضاعة ومصالحة الخامات' : 'Confirm Delivery & Reconcile'}
           </Button>
         </div>
       </form>

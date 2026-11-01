@@ -358,10 +358,72 @@ export interface Customer {
   email?: string;
   tax_id?: string;
   address?: string;
+  credit_limit?: number;
   notes?: string;
   is_active: boolean;
   job_orders_count?: number;
   material_receipts_count?: number;
+  sales_orders_count?: number;
+  sales_invoices_count?: number;
+  current_balance?: number;
+  total_invoiced?: number;
+}
+
+export interface CustomerStatementLine {
+  id: string;
+  date: string;
+  type: 'invoice' | 'return';
+  type_label: string;
+  reference: string;
+  description: string;
+  debit: number;
+  credit: number;
+  running_balance: number;
+  payment_status: string;
+}
+
+export interface CustomerStatement {
+  customer: Customer;
+  summary: {
+    total_invoiced: number;
+    total_paid: number;
+    total_refunded: number;
+    closing_balance: number;
+    total_transactions: number;
+  };
+  lines: CustomerStatementLine[];
+}
+
+export interface AccountStatementLine {
+  id: string;
+  entry_id: string;
+  entry_number?: string;
+  entry_date?: string;
+  reference_type?: string;
+  description: string;
+  debit: number;
+  credit: number;
+  running_balance: number;
+}
+
+export interface AccountStatement {
+  account: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+    category: string;
+    opening_balance?: number;
+    current_balance: number;
+  };
+  summary: {
+    opening_balance: number;
+    total_debit: number;
+    total_credit: number;
+    closing_balance: number;
+    total_transactions: number;
+  };
+  lines: AccountStatementLine[];
 }
 
 export interface JobOrderItem {
@@ -732,18 +794,81 @@ export interface ProductionCostSheet {
   status: string;
 }
 
-// Phase 9: HR, Employees & Piece-Rate Payroll
+// Phase C: Complete Workforce, Attendance, Adjustments & Payroll Management
 export interface Employee {
   id: string;
   employee_code: string;
   name: string;
   department: string;
   job_title: string;
-  pay_type: 'piece_rate' | 'fixed_salary' | 'hourly' | 'hybrid';
+  pay_type: 'piece_rate' | 'fixed_salary' | 'hourly' | 'daily' | 'hybrid';
   base_salary: number;
+  hourly_rate?: number;
+  daily_rate?: number;
+  shift_name?: string;
+  hire_date?: string;
+  termination_date?: string;
+  branch_id?: string;
+  branch?: { id: string; name: string; code: string };
   phone?: string;
   national_id?: string;
   is_active: boolean;
+  piece_work_logs_count?: number;
+}
+
+export interface Attendance {
+  id: string;
+  tenant_id: string;
+  employee_id: string;
+  branch_id?: string;
+  attendance_date: string;
+  check_in?: string;
+  check_out?: string;
+  total_hours: number;
+  overtime_hours: number;
+  late_minutes: number;
+  early_leaving_minutes: number;
+  status: 'present' | 'absent' | 'leave' | 'late' | 'half_day';
+  is_payable: boolean;
+  correction_reason?: string;
+  corrected_by?: number;
+  created_at: string;
+  employee?: Employee;
+  corrector?: { id: number; name: string };
+}
+
+export interface EmployeeAdjustment {
+  id: string;
+  tenant_id: string;
+  employee_id: string;
+  type: 'advance' | 'bonus' | 'allowance' | 'deduction';
+  amount: number;
+  effective_date: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'applied';
+  approved_by?: number;
+  approved_at?: string;
+  rejection_reason?: string;
+  payroll_id?: string;
+  created_at: string;
+  employee?: Employee;
+  approver?: { id: number; name: string };
+}
+
+export interface PayrollPayment {
+  id: string;
+  tenant_id: string;
+  payroll_id: string;
+  employee_id?: string;
+  amount: number;
+  payment_date: string;
+  payment_method: 'cash' | 'bank_transfer' | 'instapay' | 'cheque';
+  reference_number?: string;
+  notes?: string;
+  paid_by: number;
+  created_at: string;
+  employee?: Employee;
+  payer?: { id: number; name: string };
 }
 
 export interface PieceRate {
@@ -802,13 +927,33 @@ export interface QualityDefectAdjustment {
 
 export interface PayrollItem {
   id: string;
+  payroll_id?: string;
   employee_id: string;
   base_amount: number;
   piece_rate_earnings: number;
+  hourly_earnings?: number;
+  daily_earnings?: number;
   overtime_earnings: number;
+  allowances_and_bonuses?: number;
+  advances_repaid?: number;
+  defect_deductions?: number;
+  general_deductions?: number;
   deductions_and_advances: number;
+  gross_amount?: number;
   net_salary: number;
+  paid_amount?: number;
+  balance_due?: number;
   is_paid: boolean;
+  calculation_breakdown?: {
+    pay_type: string;
+    base_salary?: number;
+    piece_rate?: { count: number; total_amount: number };
+    hourly?: { hours: number; rate: number; earnings: number; overtime_hours: number; overtime_earnings: number };
+    daily?: { days: number; rate: number; earnings: number };
+    adjustments?: { advances: number; bonuses_allowances: number; general_deductions: number };
+    defect_deductions?: { count: number; total: number; details: any[] };
+    summary: { gross: number; total_deductions: number; net: number };
+  };
   employee?: Employee;
 }
 
@@ -820,8 +965,19 @@ export interface Payroll {
   total_gross: number;
   total_deductions: number;
   total_net: number;
-  status: 'draft' | 'approved' | 'paid';
+  total_paid?: number;
+  remaining_balance?: number;
+  status: 'draft' | 'approved' | 'rejected' | 'finalized' | 'partially_paid' | 'paid';
+  approved_by?: number;
+  approved_at?: string;
+  rejection_reason?: string;
+  finalized_by?: number;
+  finalized_at?: string;
+  notes?: string;
   items?: PayrollItem[];
+  payments?: PayrollPayment[];
+  approver?: { id: number; name: string };
+  finalizer?: { id: number; name: string };
 }
 
 // Phase 10: E-Commerce Storefront & Theme Architecture
@@ -970,5 +1126,153 @@ export interface DowntimeSummary {
   total_downtime_hours: number;
   total_maintenance_cost: number;
 }
+
+// Commercial SaaS Subscription Plans & Usage Metering
+export interface SubscriptionPlanMeter {
+  id: string;
+  plan_id: string;
+  meter_key: string;
+  quota_limit: number;
+  period_type: 'monthly' | 'current_count' | 'lifetime';
+  limit_type: 'hard' | 'soft';
+  overage_unit_price: number;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  code: string;
+  name_ar: string;
+  name_en: string;
+  description_ar?: string;
+  description_en?: string;
+  monthly_price: number;
+  annual_price: number;
+  is_active: boolean;
+  is_public: boolean;
+  sort_order: number;
+  features?: string[];
+  meters?: SubscriptionPlanMeter[];
+}
+
+export interface MeterUsageItem {
+  meter_key: string;
+  name_ar: string;
+  name_en: string;
+  unit: string;
+  limit_type: 'hard' | 'soft';
+  current_usage: number;
+  limit: number;
+  percent_used: number;
+  is_warning_70: boolean;
+  is_warning_85: boolean;
+  is_exceeded: boolean;
+}
+
+export interface TenantSubscriptionReport {
+  tenant_id: string;
+  subscription: {
+    plan_code: string;
+    plan_name_ar: string;
+    plan_name_en: string;
+    monthly_price: number;
+    status: string;
+    billing_cycle: string;
+    current_period_start: string;
+    current_period_end: string;
+  };
+  meters: Record<string, MeterUsageItem>;
+}
+
+export interface SubscriptionQuotaOverride {
+  id: string;
+  tenant_id: string;
+  meter_key: string;
+  temporary_limit: number;
+  reason: string;
+  granted_by: string;
+  expires_at: string;
+  is_active: boolean;
+}
+
+// Phase G: Waslat Worsh Integrated B2B Marketplace
+export interface WorkshopProfile {
+  id: string;
+  tenant_id?: string;
+  workshop_name: string;
+  specialty_type: 'sewing' | 'cutting' | 'embroidery' | 'printing' | 'finishing' | 'full_cmt';
+  active_machines_count: number;
+  daily_capacity_pieces: number;
+  governorate: string;
+  city?: string;
+  address?: string;
+  phone: string;
+  contact_person: string;
+  is_verified: boolean;
+  rating_average: number;
+  completed_jobs_count: number;
+  created_at: string;
+  tenant?: any;
+}
+
+export interface RfqBid {
+  id: string;
+  rfq_id: string;
+  workshop_profile_id: string;
+  unit_rate: number;
+  promised_lead_days: number;
+  notes?: string;
+  status: 'submitted' | 'accepted' | 'rejected' | 'withdrawn';
+  converted_job_order_id?: string;
+  created_at: string;
+  workshop?: WorkshopProfile;
+}
+
+export interface Rfq {
+  id: string;
+  tenant_id: string;
+  rfq_number: string;
+  title: string;
+  service_type: 'sewing' | 'cutting' | 'embroidery' | 'printing' | 'full_cmt';
+  specifications: string;
+  target_quantity: number;
+  expected_delivery_date: string;
+  max_budget_per_piece?: number;
+  fabric_responsibility: 'seeker_provided' | 'workshop_sourced';
+  status: 'open' | 'awarded' | 'in_progress' | 'completed' | 'cancelled';
+  awarded_bid_id?: string;
+  created_at: string;
+  tenant?: any;
+  bids?: RfqBid[];
+  awarded_bid?: RfqBid;
+}
+
+export interface MarketplaceCommission {
+  id: string;
+  tenant_id: string;
+  rfq_id: string;
+  rfq_bid_id: string;
+  job_order_id?: string;
+  gross_amount: number;
+  commission_rate: number;
+  commission_amount: number;
+  status: 'pending' | 'collected' | 'waived';
+  created_at: string;
+}
+
+export interface WorkshopReview {
+  id: string;
+  rfq_id: string;
+  workshop_profile_id: string;
+  reviewer_tenant_id: string;
+  quality_rating: number;
+  timeliness_rating: number;
+  communication_rating: number;
+  review_notes?: string;
+  created_at: string;
+  workshop?: WorkshopProfile;
+  reviewer_tenant?: any;
+}
+
+
 
 

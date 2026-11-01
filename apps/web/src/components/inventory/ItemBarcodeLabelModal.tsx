@@ -96,7 +96,7 @@ export const ItemBarcodeLabelModal: React.FC<ItemBarcodeLabelModalProps> = ({
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
-              80 × 50 mm (قياسي)
+              {isAr ? '80 × 50 mm (قياسي)' : '80 × 50 mm (Standard)'}
             </button>
             <button
               type="button"
@@ -107,7 +107,7 @@ export const ItemBarcodeLabelModal: React.FC<ItemBarcodeLabelModalProps> = ({
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
-              50 × 25 mm (صغير)
+              {isAr ? '50 × 25 mm (صغير)' : '50 × 25 mm (Compact)'}
             </button>
           </div>
         </div>

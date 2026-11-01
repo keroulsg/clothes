@@ -31,7 +31,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
           {/* Brand Col (2 cols on lg) */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F1625] via-[#8c1929] to-[#941b2d] text-white shadow-xs">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-primary-light)] text-white shadow-xs">
                 <Scissors className="w-4 h-4 -rotate-45" />
               </div>
               <span className="font-black text-lg text-slate-950 dark:text-white font-sans">
@@ -61,7 +61,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features/cutting"
                   onClick={(e) => handleNavClick('manufacturing', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'صالة القص والفرش' : 'Cutting Floor & Lays'}
                 </a>
@@ -70,7 +70,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features/inventory"
                   onClick={(e) => handleNavClick('inventory', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'المخازن والأقمشة والـ GSM' : 'Fabric Stock & GSM'}
                 </a>
@@ -79,7 +79,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features/subcontracting"
                   onClick={(e) => handleNavClick('subcontracting', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'التشغيل للغير والـ CMT' : 'Subcontracting & CMT'}
                 </a>
@@ -88,7 +88,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features/costing"
                   onClick={(e) => handleNavClick('costing', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'التكاليف وشجرة الحسابات' : 'Costing & Accounts'}
                 </a>
@@ -97,7 +97,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features/workforce"
                   onClick={(e) => handleNavClick('workforce', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'أجور القطعة والعمال' : 'Piece-Rate & Payroll'}
                 </a>
@@ -106,7 +106,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features/storefront"
                   onClick={(e) => handleNavClick('storefront', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'المتجر الإلكتروني B2B' : 'B2B Wholesale Portal'}
                 </a>
@@ -124,7 +124,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/features"
                   onClick={(e) => handleNavClick('features', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'نظرة عامة على الميزات' : 'Platform Overview'}
                 </a>
@@ -133,7 +133,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/pricing"
                   onClick={(e) => handleNavClick('pricing', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'الأسعار وباقات الاشتراك' : 'Pricing & Plans'}
                 </a>
@@ -142,7 +142,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/about"
                   onClick={(e) => handleNavClick('about', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'عن GarmentOS Cloud' : 'About GarmentOS'}
                 </a>
@@ -151,7 +151,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/faq"
                   onClick={(e) => handleNavClick('faq', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'الأسئلة الشائعة والإجابات' : 'FAQ'}
                 </a>
@@ -160,7 +160,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/contact"
                   onClick={(e) => handleNavClick('contact', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'طلب استشارة أو ديمو' : 'Request Demo'}
                 </a>
@@ -178,7 +178,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/privacy"
                   onClick={(e) => handleNavClick('privacy', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'سياسة الخصوصية وأمان البيانات' : 'Privacy Policy'}
                 </a>
@@ -187,7 +187,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/terms"
                   onClick={(e) => handleNavClick('terms', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'شروط الخدمة والاستخدام' : 'Terms of Service'}
                 </a>
@@ -196,7 +196,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/refund"
                   onClick={(e) => handleNavClick('refund', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'سياسة الإلغاء والاسترداد' : 'Refund & Cancellation'}
                 </a>
@@ -205,7 +205,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/cookies"
                   onClick={(e) => handleNavClick('cookies', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'سياسة ملفات الارتباط (Cookies)' : 'Cookie Policy'}
                 </a>
@@ -214,7 +214,7 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                 <a
                   href="#/ip"
                   onClick={(e) => handleNavClick('ip', e)}
-                  className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors"
+                  className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors"
                 >
                   {isAr ? 'الملكية الفكرية والبيانات' : 'Intellectual Property'}
                 </a>
@@ -233,14 +233,14 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
           <div className="flex items-center gap-4 font-sans font-semibold text-xs">
             <button
               onClick={onOpenLogin}
-              className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors cursor-pointer"
+              className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors cursor-pointer"
             >
               {isAr ? 'دخول المصنع' : 'Sign In'}
             </button>
             <span>•</span>
             <button
               onClick={onOpenRegister}
-              className="hover:text-[#7F1625] dark:hover:text-[#f87171] transition-colors cursor-pointer text-[#7F1625] dark:text-[#f87171] font-bold"
+              className="hover:text-[var(--brand-primary)] dark:hover:text-[#f87171] transition-colors cursor-pointer text-[var(--brand-primary)] dark:text-[#f87171] font-bold"
             >
               {isAr ? 'تسجيل مصنع جديد' : 'Register Factory'}
             </button>

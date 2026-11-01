@@ -11,6 +11,7 @@ interface BundleTrackerModalProps {
   onClose: () => void;
   bundle: CuttingBundle | null;
   onTransferSuccess: (updatedBundle: CuttingBundle) => void;
+  isAr?: boolean;
 }
 
 export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
@@ -18,12 +19,13 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
   onClose,
   bundle,
   onTransferSuccess,
+  isAr = true,
 }) => {
   if (!bundle) return null;
 
   const [toStageCode, setToStageCode] = useState<'assembly' | 'sewing' | 'finishing' | 'ironing' | 'packing' | 'completed'>('sewing');
-  const [operatorName, setOperatorName] = useState('الأسطى إبراهيم حسن');
-  const [workLine, setWorkLine] = useState('خط أولادي 1');
+  const [operatorName, setOperatorName] = useState(isAr ? 'الأسطى إبراهيم حسن' : 'Ibrahim Hassan');
+  const [workLine, setWorkLine] = useState(isAr ? 'خط أولادي 1' : 'Boys Line 1');
   const inputQuantity = bundle.quantity;
   const [acceptedQuantity, setAcceptedQuantity] = useState(bundle.quantity);
   const [rejectedQuantity, setRejectedQuantity] = useState(0);
@@ -61,7 +63,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
       onTransferSuccess(updatedBundle);
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'تعذر تسجيل نقل الحزمة على الخادم.');
+      setErrorMsg(err.message || (isAr ? 'تعذر تسجيل نقل الحزمة على الخادم.' : 'Failed to transfer bundle on server.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -71,7 +73,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`بطاقة الحزمة ومسار التشغيل: ${bundle.bundle_code}`}
+      title={isAr ? `بطاقة الحزمة ومسار التشغيل: ${bundle.bundle_code}` : `Bundle Tracking Card: ${bundle.bundle_code}`}
       maxWidth="md"
     >
       <div className="space-y-4">
@@ -82,33 +84,33 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
           </div>
         )}
         {/* Printable Bundle Card Look */}
-        <div className="p-4 rounded-xl bg-slate-900 border-2 border-dashed border-slate-700 space-y-3 font-mono">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+        <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 space-y-3 font-mono">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
             <div className="flex items-center gap-2">
               <QrCode className="w-5 h-5 text-primary dark:text-[#fca5a5]" />
-              <span className="font-bold text-sm text-slate-100">{bundle.bundle_code}</span>
+              <span className="font-bold text-sm text-slate-900 dark:text-slate-100">{bundle.bundle_code}</span>
             </div>
-            <Badge variant="info">حزمة رقم #{bundle.bundle_number}</Badge>
+            <Badge variant="info">{isAr ? `حزمة رقم #${bundle.bundle_number}` : `Bundle #${bundle.bundle_number}`}</Badge>
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div>
-              <span className="text-slate-500 block text-[10px]">اللون</span>
-              <span className="text-slate-200 font-bold">{bundle.color_name}</span>
+              <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{isAr ? 'اللون' : 'Color'}</span>
+              <span className="text-slate-800 dark:text-slate-200 font-bold">{bundle.color_name}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[10px]">المقاس</span>
+              <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{isAr ? 'المقاس' : 'Size'}</span>
               <span className="text-primary dark:text-[#fca5a5] font-bold text-sm">{bundle.size_name}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[10px]">العدد بالحزمة</span>
-              <span className="text-emerald-400 font-bold text-sm">{bundle.quantity} قطعة</span>
+              <span className="text-slate-500 dark:text-slate-400 block text-[10px]">{isAr ? 'العدد بالحزمة' : 'Quantity'}</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm">{bundle.quantity} {isAr ? 'قطعة' : 'pcs'}</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-            <span>المرحلة الحالية: [{bundle.current_stage_code}]</span>
-            <span className="text-slate-500">باركود تتبع خطوط الإنتاج</span>
+          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-600 dark:text-slate-400">
+            <span>{isAr ? 'المرحلة الحالية:' : 'Current Stage:'} [{bundle.current_stage_code}]</span>
+            <span className="text-slate-500 dark:text-slate-400">{isAr ? 'باركود تتبع خطوط الإنتاج' : 'Production Floor Tracking'}</span>
           </div>
         </div>
 
@@ -116,31 +118,31 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
         <form onSubmit={handleTransfer} className="space-y-3">
           <div className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 pt-1">
             <ArrowRightLeft className="w-4 h-4 text-primary dark:text-[#fca5a5]" />
-            <span>تسليم الحزمة ونقلها للمرحلة التالية</span>
+            <span>{isAr ? 'تسليم الحزمة ونقلها للمرحلة التالية' : 'Handover & Advance Bundle to Next Stage'}</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                المرحلة المستهدفة للتشغيل
+                {isAr ? 'المرحلة المستهدفة للتشغيل' : 'Target Production Stage'}
               </label>
               <select
                 value={toStageCode}
                 onChange={(e) => setToStageCode(e.target.value as any)}
                 className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               >
-                <option value="assembly">التجهيز والتجميع (Assembly)</option>
-                <option value="sewing">خط الخياطة والتجميع (Sewing)</option>
-                <option value="finishing">التشطيب وإزالة الخيوط (Finishing)</option>
-                <option value="ironing">الكي بالبخار (Ironing)</option>
-                <option value="packing">الفحص النهائي والتعبئة (Packing)</option>
-                <option value="completed">اكتملت بالكامل (Completed)</option>
+                <option value="assembly">{isAr ? 'التجهيز والتجميع (Assembly)' : 'Assembly & Preparation'}</option>
+                <option value="sewing">{isAr ? 'خط الخياطة والتجميع (Sewing)' : 'Sewing Line'}</option>
+                <option value="finishing">{isAr ? 'التشطيب وإزالة الخيوط (Finishing)' : 'Finishing & Trimming'}</option>
+                <option value="ironing">{isAr ? 'الكي بالبخار (Ironing)' : 'Steam Ironing'}</option>
+                <option value="packing">{isAr ? 'الفحص النهائي والتعبئة (Packing)' : 'Final QC & Packing'}</option>
+                <option value="completed">{isAr ? 'اكتملت بالكامل (Completed)' : 'Completed'}</option>
               </select>
             </div>
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                خط الإنتاج / الورشة
+                {isAr ? 'خط الإنتاج / الورشة' : 'Production Line / Workshop'}
               </label>
               <input
                 type="text"
@@ -154,7 +156,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              اسم العامل / رئيس المرحلة المستلم
+              {isAr ? 'اسم العامل / رئيس المرحلة المستلم' : 'Operator / Stage Lead Name'}
             </label>
             <div className="relative">
               <input
@@ -164,19 +166,21 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
                 onChange={(e) => setOperatorName(e.target.value)}
                 className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
-              <User className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              <User className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'left-3' : 'right-3'} top-3 pointer-events-none`} />
             </div>
           </div>
 
           {/* Quantities Breakdown */}
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
             <span className="text-[11px] font-semibold text-slate-900 dark:text-slate-300 block">
-              مطابقة الكميات المسلمة والمقبولة والهالك
+              {isAr ? 'مطابقة الكميات المسلمة والمقبولة والهالك' : 'Quantity Reconciliation (Accepted / Rejected / Scrap)'}
             </span>
 
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">قطع مقبولة سليمة</label>
+                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">
+                  {isAr ? 'قطع مقبولة سليمة' : 'Accepted Sound'}
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -188,7 +192,9 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">معيب (إعادة تشغيل)</label>
+                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">
+                  {isAr ? 'معيب (إعادة تشغيل)' : 'Defective (Rework)'}
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -200,7 +206,9 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">هالك نهائي (Scrap)</label>
+                <label className="block text-[10px] text-slate-600 dark:text-slate-400 mb-1">
+                  {isAr ? 'هالك نهائي (Scrap)' : 'Scrap Final'}
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -216,7 +224,9 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
               <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-[11px] pt-1">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>
-                  مجموع الكميات ({sumCheck}) لا يساوي رصيد الحزمة الحالي ({inputQuantity}).
+                  {isAr
+                    ? `مجموع الكميات (${sumCheck}) لا يساوي رصيد الحزمة الحالي (${inputQuantity}).`
+                    : `Total sum (${sumCheck}) does not match current bundle quantity (${inputQuantity}).`}
                 </span>
               </div>
             )}
@@ -224,7 +234,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
 
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>
-              إلغاء
+              {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button
               type="submit"
@@ -232,7 +242,7 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
               isLoading={isSubmitting}
               icon={<CheckCircle2 className="w-3.5 h-3.5" />}
             >
-              تسجيل الحركة ونقل الحزمة
+              {isAr ? 'تسجيل الحركة ونقل الحزمة' : 'Post Movement & Transfer Bundle'}
             </Button>
           </div>
         </form>

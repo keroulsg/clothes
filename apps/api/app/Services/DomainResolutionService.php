@@ -94,9 +94,10 @@ class DomainResolutionService
         }
 
         // 3. مسار المعرف المعتمد في الـ URL (Store Identifier)
-        // يُقبل فقط إذا كان المعرف معرف UUID صالح أو كود شركة أو نطاق فرعي معتمد
+        // يُقبل إذا كان المعرف UUID صالح، أو كود شركة، أو نطاق فرعي، أو الاسم المعرب/المختصر
         if (!empty($storeIdentifier)) {
             $cleanIdentifier = trim($storeIdentifier);
+            $lowerIdentifier = strtolower($cleanIdentifier);
 
             if (Str::isUuid($cleanIdentifier)) {
                 $tenant = Tenant::withoutGlobalScopes()->where('id', $cleanIdentifier)->first();
@@ -106,9 +107,14 @@ class DomainResolutionService
             }
 
             $tenant = Tenant::withoutGlobalScopes()
-                ->where(function ($q) use ($cleanIdentifier) {
-                    $q->where('subdomain', strtolower($cleanIdentifier))
-                      ->orWhere('code', $cleanIdentifier);
+                ->where(function ($q) use ($cleanIdentifier, $lowerIdentifier) {
+                    $q->where('subdomain', $lowerIdentifier)
+                      ->orWhere('code', $cleanIdentifier)
+                      ->orWhereRaw('LOWER(code) = ?', [$lowerIdentifier])
+                      ->orWhereRaw('LOWER(subdomain) = ?', [$lowerIdentifier])
+                      ->orWhereRaw('LOWER(name) = ?', [$lowerIdentifier])
+                      ->orWhereRaw('LOWER(REPLACE(name, " ", "-")) = ?', [$lowerIdentifier])
+                      ->orWhereRaw('LOWER(REPLACE(name, " ", "")) = ?', [$lowerIdentifier]);
                 })
                 ->first();
 

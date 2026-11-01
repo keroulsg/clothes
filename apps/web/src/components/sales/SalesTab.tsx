@@ -15,6 +15,8 @@ import {
   Printer,
   FileText,
   RotateCcw,
+  BookOpen,
+  Pencil,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -24,17 +26,20 @@ import { ActionsMenu } from '../ui/ActionsMenu';
 import { PageHeader } from '../ui/PageHeader';
 import { SalesReturnModal } from './SalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
+import { CreateCustomerModal } from './CreateCustomerModal';
+import { CustomerStatementModal } from './CustomerStatementModal';
 import { api } from '../../api/client';
-import type { Language, SalesOrder, SalesInvoice, ProductVariant, Quotation, SalesReturn } from '../../types';
+import type { Language, SalesOrder, SalesInvoice, ProductVariant, Quotation, SalesReturn, Customer } from '../../types';
 
 interface SalesTabProps {
-  lang: Language;
+  lang?: Language;
+  isAr?: boolean;
   variants: ProductVariant[];
 }
 
-export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
-  const isAr = lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'returns' | 'pos' | 'deliveries'>('orders');
+export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr, variants }) => {
+  const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'customers' | 'returns' | 'pos' | 'deliveries'>('orders');
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -44,10 +49,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [deliveryNotes, setDeliveryNotes] = useState<any[]>([]);
   const [salesReturns, setSalesReturns] = useState<SalesReturn[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
   // Modals
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+  const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
+  const [isCustomerStatementOpen, setIsCustomerStatementOpen] = useState(false);
+  const [selectedCustomerForStatement, setSelectedCustomerForStatement] = useState<Customer | null>(null);
+  const [selectedCustomerForEdit, setSelectedCustomerForEdit] = useState<Customer | null>(null);
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<SalesInvoice | null>(null);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
@@ -74,12 +84,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [ordersRes, invRes, quotesRes, delivRes, returnsRes] = await Promise.allSettled([
+      const [ordersRes, invRes, quotesRes, delivRes, returnsRes, custRes] = await Promise.allSettled([
         api.sales.getOrders(1),
         api.sales.getInvoices(1),
         api.sales.getQuotations(1),
         api.sales.getDeliveryNotes(1),
         api.sales.getReturns(1),
+        api.customers.getCustomers(),
       ]);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
@@ -96,6 +107,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
       }
       if (returnsRes.status === 'fulfilled' && returnsRes.value?.data) {
         setSalesReturns(returnsRes.value.data);
+      }
+      if (custRes.status === 'fulfilled' && custRes.value?.data) {
+        setCustomers(custRes.value.data);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المبيعات' : 'Failed to load sales data'));
@@ -304,7 +318,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
         subtitle={isAr
           ? 'إدارة أوامر البيع للعملاء، إصدار عروض الأسعار، ونقطة بيع فورية (POS).'
           : 'Customer sales orders, quotations, invoices, and factory POS terminal.'}
-        icon={<TrendingUp className="w-5 h-5 text-[#7F1625] dark:text-[#F87171]" />}
+        icon={<TrendingUp className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
         breadcrumbs={[
           { label: isAr ? 'الرئيسية' : 'Home' },
           { label: isAr ? 'المبيعات ونقطة البيع' : 'Sales & POS' },
@@ -359,7 +373,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                 {isAr ? 'إجمالي المبيعات المؤكدة' : 'Confirmed Sales'}
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {totalConfirmedSales.toLocaleString()} ج.م
+                {totalConfirmedSales.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                 {isAr ? 'بيانات حية من السيرفر' : 'Server-backed totals'}
@@ -414,7 +428,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                 {isAr ? 'مبيعات منفذ المصنع (POS)' : 'Outlet POS Sales'}
               </p>
               <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
-                {posSalesTotal.toLocaleString()} ج.م
+                {posSalesTotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                 {isAr ? 'تسليم ودفع نقدي فوري' : 'Instant cash checkout'}
@@ -490,6 +504,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
           >
             {isAr ? 'إذون التسليم والشحن' : 'Delivery Notes'}
           </button>
+          <button
+            onClick={() => setActiveSubTab('customers')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeSubTab === 'customers'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'دليل العملاء والحسابات' : 'Customers & Accounts'}
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -503,6 +527,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
             <Button size="sm" onClick={() => setIsQuotationModalOpen(true)}>
               <Plus className="w-4 h-4 me-1" />
               {isAr ? 'عرض سعر جديد' : 'New Quotation'}
+            </Button>
+          )}
+          {activeSubTab === 'customers' && (
+            <Button size="sm" onClick={() => {
+              setSelectedCustomerForEdit(null);
+              setIsCreateCustomerOpen(true);
+            }}>
+              <Plus className="w-4 h-4 me-1" />
+              {isAr ? 'تسجيل عميل جديد' : 'New Customer'}
             </Button>
           )}
         </div>
@@ -558,7 +591,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                         </span>
                       </td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(order.total_amount).toLocaleString()} ج.م
+                        {Number(order.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3">
                         {order.status === 'confirmed' && (
@@ -677,7 +710,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                       <td className="p-3 font-semibold text-slate-900 dark:text-white">{q.quotation_number}</td>
                       <td className="p-3">{q.customer_name}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(q.total_amount).toLocaleString()} ج.م
+                        {Number(q.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3 text-slate-500">{q.valid_until || '—'}</td>
                       <td className="p-3 text-center">
@@ -786,10 +819,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                       <div key={idx} className="pt-2 flex items-center justify-between text-xs">
                         <div className="flex-1 pe-2">
                           <p className="font-semibold text-slate-900 dark:text-white">{item.name}</p>
-                          <p className="text-slate-400">{item.price} ج.م × {item.qty}</p>
+                          <p className="text-slate-400">{item.price} {isAr ? 'ج.م' : 'EGP'} × {item.qty}</p>
                         </div>
                         <span className="font-bold text-slate-900 dark:text-white">
-                          {(item.price * item.qty).toLocaleString()} ج.م
+                          {(item.price * item.qty).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                         </span>
                       </div>
                     ))
@@ -800,7 +833,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 mt-4 space-y-3">
                 <div className="flex items-center justify-between text-base font-bold text-slate-900 dark:text-white">
                   <span>{isAr ? 'الإجمالي المطلوب:' : 'Total Due:'}</span>
-                  <span className="text-primary text-xl">{posTotal.toLocaleString()} ج.م</span>
+                  <span className="text-primary text-xl">{posTotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
 
                 <Button
@@ -858,7 +891,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                       </td>
                       <td className="p-3 capitalize">{inv.payment_method?.replace('_', ' ')}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(inv.total_amount).toLocaleString()} ج.م
+                        {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3">
                         <Badge
@@ -1010,6 +1043,118 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
         </Card>
       )}
 
+      {/* CUSTOMERS VIEW */}
+      {activeSubTab === 'customers' && (
+        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white">
+                {isAr ? 'دليل العملاء التجاريين وكشوف الحسابات المعتمدة' : 'Commercial Customers Directory & Statements'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isAr ? 'متابعة حسابات عملاء الجملة والتجزئة، المديونيات، وسجل الفواتير والمرتجعات.' : 'Manage wholesale/retail customer ledgers, credit balances, and order histories.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => {
+                setSelectedCustomerForEdit(null);
+                setIsCreateCustomerOpen(true);
+              }} icon={<Plus className="w-3.5 h-3.5" />}>
+                {isAr ? 'تسجيل عميل جديد' : 'New Customer'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-start text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="p-3 text-start">{isAr ? 'كود العميل' : 'Code'}</th>
+                  <th className="p-3 text-start">{isAr ? 'اسم العميل / المتجر' : 'Client Name'}</th>
+                  <th className="p-3 text-start">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</th>
+                  <th className="p-3 text-start">{isAr ? 'الهاتف' : 'Phone'}</th>
+                  <th className="p-3 text-end">{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</th>
+                  <th className="p-3 text-end font-bold">{isAr ? 'الرصيد المستحق' : 'Balance Due'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                {customers.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-400 font-sans text-xs">
+                      {isAr ? 'لا يوجد عملاء مسجلون حالياً. اضغط على "تسجيل عميل جديد" لإضافة أول عميل.' : 'No customers registered yet. Click "New Customer" to add one.'}
+                    </td>
+                  </tr>
+                ) : (
+                  customers.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 font-bold text-slate-900 dark:text-white">{c.code}</td>
+                      <td className="p-3 font-sans font-medium text-slate-800 dark:text-slate-200">{c.name}</td>
+                      <td className="p-3 font-sans text-slate-600 dark:text-slate-400">{c.contact_person || '—'}</td>
+                      <td className="p-3 text-slate-600 dark:text-slate-400">{c.phone || '—'}</td>
+                      <td className="p-3 text-end text-slate-900 dark:text-white font-bold">
+                        {c.total_invoiced ? Number(c.total_invoiced).toLocaleString() : '0'} {isAr ? 'ج.م' : 'EGP'}
+                      </td>
+                      <td className="p-3 text-end font-bold">
+                        <span className={c.current_balance && c.current_balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                          {Number(c.current_balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center font-sans">
+                        <Badge variant={c.is_active ? 'success' : 'neutral'}>
+                          {c.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center font-sans">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={() => {
+                              setSelectedCustomerForStatement(c);
+                              setIsCustomerStatementOpen(true);
+                            }}
+                            icon={<BookOpen className="w-3 h-3 text-primary" />}
+                          >
+                            {isAr ? 'كشف الحساب' : 'Statement'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs px-2"
+                            onClick={() => {
+                              setSelectedCustomerForEdit(c);
+                              setIsCreateCustomerOpen(true);
+                            }}
+                            title={isAr ? 'تعديل بيانات العميل' : 'Edit Customer Profile'}
+                          >
+                            <Pencil className="w-3 h-3 text-slate-500" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs px-2"
+                            onClick={() => {
+                              setNewOrderCustomer(c.name);
+                              setIsOrderModalOpen(true);
+                            }}
+                            title={isAr ? 'إنشاء أمر بيع لهذا العميل' : 'New order for this customer'}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {/* Modal: New Sales Order */}
       <Modal
         isOpen={isOrderModalOpen}
@@ -1018,17 +1163,42 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
       >
         <form onSubmit={handleCreateOrder} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {isAr ? 'اسم العميل *' : 'Customer Name *'}
-            </label>
-            <input
-              type="text"
-              required
-              value={newOrderCustomer}
-              onChange={(e) => setNewOrderCustomer(e.target.value)}
-              placeholder={isAr ? 'مثال: شركة النصر للملابس الجاهزة' : 'e.g. Al-Nasr Apparel'}
-              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {isAr ? 'اسم العميل *' : 'Customer Name *'}
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsCreateCustomerOpen(true)}
+                className="text-xs text-primary hover:underline font-medium"
+              >
+                {isAr ? '+ تسجيل عميل جديد' : '+ New Customer'}
+              </button>
+            </div>
+            {customers.length > 0 ? (
+              <select
+                value={newOrderCustomer}
+                onChange={(e) => setNewOrderCustomer(e.target.value)}
+                required
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              >
+                <option value="">{isAr ? '— اختر العميل المسجل —' : '— Select Registered Customer —'}</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.code} - {c.name} {c.current_balance ? `(${isAr ? 'رصيد:' : 'Bal:'} ${Number(c.current_balance).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'})` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                required
+                value={newOrderCustomer}
+                onChange={(e) => setNewOrderCustomer(e.target.value)}
+                placeholder={isAr ? 'مثال: شركة النصر للملابس الجاهزة' : 'e.g. Al-Nasr Apparel'}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -1116,7 +1286,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
 
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg text-xs flex justify-between font-bold text-slate-900 dark:text-white">
             <span>{isAr ? 'إجمالي أمر البيع:' : 'Order Total:'}</span>
-            <span className="text-primary text-sm">{(newOrderQty * newOrderPrice).toLocaleString()} ج.م</span>
+            <span className="text-primary text-sm">{(newOrderQty * newOrderPrice).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -1284,9 +1454,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                       </div>
                       <div className="text-end">
                         <span className="font-bold text-slate-900 dark:text-white">
-                          {Number(it.total_price || (it.ordered_quantity * it.unit_price)).toLocaleString()} ج.م
+                          {Number(it.total_price || (it.ordered_quantity * it.unit_price)).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                         </span>
-                        <div className="text-[11px] text-slate-400">@{Number(it.unit_price).toLocaleString()} ج.م</div>
+                        <div className="text-[11px] text-slate-400">@{Number(it.unit_price).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</div>
                       </div>
                     </div>
                   ))}
@@ -1303,7 +1473,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                 {isAr ? 'إجمالي قيمة الأمر المستحقة:' : 'Total Order Amount:'}
               </span>
               <span className="text-xl font-extrabold text-primary">
-                {Number(selectedOrderForView.total_amount).toLocaleString()} ج.م
+                {Number(selectedOrderForView.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </span>
             </div>
 
@@ -1330,7 +1500,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
         <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <RotateCcw className="w-4 h-4 text-[#7F1625] dark:text-[#F87171]" />
+              <RotateCcw className="w-4 h-4 text-[var(--brand-primary)] dark:text-[#F87171]" />
               {isAr ? 'سجل مرتجعات المبيعات وإشعارات الدائن المعتمدة' : 'Sales Returns & Approved Credit Notes'}
             </h3>
             <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -1369,11 +1539,11 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
                       <td className="p-3 font-mono text-xs text-slate-600 dark:text-slate-400">
                         {ret.sales_invoice?.invoice_number || ret.sales_order?.order_number || '—'}
                       </td>
-                      <td className="p-3">{ret.customer?.name || 'عميل تجزئة'}</td>
-                      <td className="p-3 text-xs">{ret.warehouse?.name || 'مخزن تام'}</td>
+                      <td className="p-3">{ret.customer?.name || (isAr ? 'عميل تجزئة' : 'Retail Customer')}</td>
+                      <td className="p-3 text-xs">{ret.warehouse?.name || (isAr ? 'مخزن تام' : 'Finished Goods WH')}</td>
                       <td className="p-3 text-slate-500 font-mono text-xs">{ret.return_date}</td>
-                      <td className="p-3 font-bold text-[#7F1625] dark:text-[#F87171] font-mono">
-                        {Number(ret.total_amount).toLocaleString()} ج.م
+                      <td className="p-3 font-bold text-[var(--brand-primary)] dark:text-[#F87171] font-mono">
+                        {Number(ret.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3 text-center">
                         <Badge variant={ret.is_restocked ? 'success' : 'neutral'}>
@@ -1431,6 +1601,39 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang, variants }) => {
         }}
         invoice={selectedInvoiceForReceipt}
         lang={lang}
+      />
+
+      {/* CREATE / EDIT CUSTOMER MODAL */}
+      <CreateCustomerModal
+        isOpen={isCreateCustomerOpen}
+        customerToEdit={selectedCustomerForEdit}
+        onClose={() => {
+          setIsCreateCustomerOpen(false);
+          setSelectedCustomerForEdit(null);
+        }}
+        onSuccess={(savedCust) => {
+          setCustomers((prev) => {
+            const exists = prev.some((c) => c.id === savedCust.id);
+            if (exists) {
+              return prev.map((c) => (c.id === savedCust.id ? savedCust : c));
+            }
+            return [savedCust, ...prev];
+          });
+          setNewOrderCustomer(savedCust.name);
+        }}
+        isAr={isAr}
+      />
+
+      {/* CUSTOMER STATEMENT MODAL */}
+      <CustomerStatementModal
+        isOpen={isCustomerStatementOpen}
+        onClose={() => {
+          setIsCustomerStatementOpen(false);
+          setSelectedCustomerForStatement(null);
+        }}
+        customerId={selectedCustomerForStatement?.id || null}
+        customer={selectedCustomerForStatement}
+        isAr={isAr}
       />
     </div>
   );

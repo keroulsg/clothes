@@ -30,7 +30,8 @@ import { api } from '../../api/client';
 import type { Language, StoreOrder, ProductVariant, TenantStoreSetting, StorefrontThemeId } from '../../types';
 
 interface StorefrontTabProps {
-  lang: Language;
+  lang?: Language;
+  isAr?: boolean;
   variants: ProductVariant[];
 }
 
@@ -96,8 +97,8 @@ const THEME_OPTIONS: Array<{
   },
 ];
 
-export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) => {
-  const isAr = lang === 'ar';
+export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr: propIsAr, variants }) => {
+  const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
   const [activeSubTab, setActiveSubTab] = useState<'orders' | 'themes' | 'preview' | 'settings'>('orders');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -377,7 +378,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                 {orders
                   .filter((o) => o.status !== 'cancelled')
                   .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
-                  .toLocaleString()} ج.م
+                  .toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400">
                 {orders.filter((o) => o.status === 'delivered').length} {isAr ? 'طلب مكتمل ومسلّم' : 'delivered orders'}
@@ -598,7 +599,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                         )}
                       </td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(o.total_amount).toLocaleString()} ج.م
+                        {Number(o.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3">
                         {o.status === 'new' && <Badge variant="warning">{isAr ? 'جديد' : 'New'}</Badge>}
@@ -868,7 +869,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                       )}
                       {previewThemeId === 'kids_baby' && (
                         <span className="absolute top-2 start-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
-                          100% قطن آمن
+                          {isAr ? '100% قطن آمن' : '100% Safe Cotton'}
                         </span>
                       )}
                     </div>
@@ -888,7 +889,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                     <div>
                       <span className="text-[10px] text-slate-400 block">{isAr ? 'السعر' : 'Price'}</span>
                       <span className="font-bold text-base text-primary">
-                        {price.toLocaleString()} ج.م
+                        {price.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </span>
                     </div>
                     <Button size="sm" onClick={() => handleAddToCart(v)}>
@@ -923,7 +924,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                         <p className="text-slate-400">{i.variant.size?.name || 'L'} - {i.variant.color?.name || 'Color'} × {i.qty}</p>
                       </div>
                       <span className="font-bold text-primary">
-                        {((Number(i.variant.retail_price) || 250) * i.qty).toLocaleString()} ج.م
+                        {((Number(i.variant.retail_price) || 250) * i.qty).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </span>
                     </div>
                   ))
@@ -935,15 +936,15 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1 text-xs">
                     <div className="flex justify-between text-slate-500">
                       <span>{isAr ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
-                      <span>{cartSubtotal.toLocaleString()} ج.م</span>
+                      <span>{cartSubtotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>{isAr ? 'رسوم الشحن والتوصيل:' : 'Shipping:'}</span>
-                      <span>50 ج.م</span>
+                      <span>{isAr ? '50 ج.م' : '50 EGP'}</span>
                     </div>
                     <div className="flex justify-between font-bold text-sm text-slate-900 dark:text-white pt-1 border-t border-slate-200 dark:border-slate-800">
                       <span>{isAr ? 'الإجمالي النهائي:' : 'Total:'}</span>
-                      <span className="text-primary">{(cartSubtotal + 50).toLocaleString()} ج.م</span>
+                      <span className="text-primary">{(cartSubtotal + 50).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
                     </div>
                   </div>
 
@@ -1190,7 +1191,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
                       type="text"
                       value={storeSettings.instapay_account_name || ''}
                       onChange={(e) => setStoreSettings({ ...storeSettings, instapay_account_name: e.target.value })}
-                      placeholder="شركة الفا للملابس الجاهزة"
+                      placeholder={isAr ? "شركة الفا للملابس الجاهزة" : "Alpha Apparel Co."}
                       className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
                     />
                   </div>
@@ -1266,7 +1267,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang, variants }) 
               </div>
               <div>
                 <span className="text-slate-400 block">{isAr ? 'المبلغ المستحق:' : 'Amount Due:'}</span>
-                <span className="font-bold text-primary text-sm">{Number(selectedOrderForReview.total_amount).toLocaleString()} ج.م</span>
+                <span className="font-bold text-primary text-sm">{Number(selectedOrderForReview.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block">{isAr ? 'الرقم المرجعي (Reference):' : 'InstaPay Ref:'}</span>

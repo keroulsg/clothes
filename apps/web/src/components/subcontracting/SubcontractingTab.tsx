@@ -18,11 +18,16 @@ import {
   AlertCircle,
   ShieldCheck,
   ExternalLink,
+  QrCode,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Pagination } from '../ui/Pagination';
+import { Badge } from '../ui/Badge';
 import { CustomerDossierModal } from './CustomerDossierModal';
+import { CustomerProfilePage } from './CustomerProfilePage';
+import { CmtBundleTransferModal, type CmtBundle } from './CmtBundleTransferModal';
 import { SubcontractPrintModal, type SubcontractPrintType } from './SubcontractPrintModal';
 import type {
   Customer,
@@ -72,18 +77,143 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
   onPayInvoice,
   isAr = true,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'jobs' | 'receipts' | 'external_ops' | 'deliveries' | 'invoices' | 'customers'>('jobs');
+  const [activeSubTab, setActiveSubTab] = useState<'jobs' | 'bundles' | 'receipts' | 'external_ops' | 'deliveries' | 'invoices' | 'customers'>('jobs');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<'all' | 'contract_cutting' | 'cmt'>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Customer Dossier Modal State
+  // Internal Customer Profile Page View State
+  const [viewingCustomerId, setViewingCustomerId] = useState<string | null>(null);
+
+  // Customer Dossier Modal State (kept for backward compatibility)
   const [selectedCustomerIdForDossier, setSelectedCustomerIdForDossier] = useState<string | null>(null);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
 
   // Single-Document Print Modal State
   const [selectedPrintDoc, setSelectedPrintDoc] = useState<{ type: SubcontractPrintType; data: any } | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // CMT Bundle Floor Tracker State
+  const [cmtBundles, setCmtBundles] = useState<CmtBundle[]>(() => {
+    const bundles: CmtBundle[] = [];
+    const defaultColors = ['أبيض ناصع', 'أسود ملكي', 'كحلي داكن', 'رمادي ميلانج', 'بيج هادئ'];
+    const defaultSizes = ['S', 'M', 'L', 'XL', '2XL'];
+    const defaultStages: Array<CmtBundle['current_stage_code']> = ['cutting', 'sewing', 'external_op', 'finishing', 'packing'];
+
+    if (jobOrders && jobOrders.length > 0) {
+      jobOrders.forEach((job, jIdx) => {
+        const bundleCount = 3;
+        for (let i = 1; i <= bundleCount; i++) {
+          const size = defaultSizes[(jIdx + i) % defaultSizes.length];
+          const color = defaultColors[(jIdx * 2 + i) % defaultColors.length];
+          const stage = defaultStages[(jIdx + i) % defaultStages.length];
+          const qty = 20 + ((jIdx + i) % 3) * 5;
+          const unitRate = 10.0 + ((jIdx + i) % 4) * 2.5;
+          const emp = employees[i % Math.max(1, employees.length)];
+          const cleanJobNum = (job.order_number || `JO-${jIdx + 1}`).replace('JO-CMT-', '').replace('JO-', '');
+
+          bundles.push({
+            id: `cmt-bnd-${job.id || jIdx}-${i}`,
+            bundle_code: `BND-CMT-${cleanJobNum}-0${i}`,
+            bundle_number: i,
+            job_order_id: job.id,
+            job_order_number: job.order_number,
+            customer_id: job.customer_id,
+            customer_name: job.customer_name || 'عميل تشغيل',
+            model_name: job.model_name || 'موديل تشغيل للغير',
+            color_name: color,
+            size_name: size,
+            quantity: qty,
+            current_stage_code: stage,
+            status: 'active',
+            assigned_employee_id: emp?.id || 'EMP-107',
+            assigned_employee_name: emp?.name || 'وليد عبد العظيم النجار',
+            unit_rate: unitRate,
+            total_wage: qty * unitRate,
+            work_group: `خط تشغيل الغير ${(jIdx % 2) + 1}`,
+            logs: [
+              {
+                operator_name: emp?.name || 'وليد عبد العظيم النجار',
+                stage_name: stage === 'cutting' ? 'قص القماش' : stage === 'sewing' ? 'خياطة وتجميع CMT' : 'تجهيز وتشطيب',
+                accepted_qty: qty,
+                wage: qty * unitRate,
+                logged_at: new Date().toISOString(),
+              },
+            ],
+          });
+        }
+      });
+    }
+
+    if (bundles.length === 0) {
+      bundles.push(
+        {
+          id: 'cmt-bnd-demo-1',
+          bundle_code: 'BND-CMT-202611-01',
+          bundle_number: 1,
+          job_order_id: 'job-1',
+          job_order_number: 'JO-CMT-202611-001',
+          customer_name: 'شركة النيل للملابس الجاهزة',
+          model_name: 'تيشيرت بولو رجالي فاخر',
+          color_name: 'كحلي داكن',
+          size_name: 'L',
+          quantity: 25,
+          current_stage_code: 'sewing',
+          status: 'active',
+          assigned_employee_id: 'EMP-107',
+          assigned_employee_name: 'وليد عبد العظيم النجار',
+          unit_rate: 12.50,
+          total_wage: 312.50,
+          work_group: 'خط تشغيل الغير 1',
+        },
+        {
+          id: 'cmt-bnd-demo-2',
+          bundle_code: 'BND-CMT-202611-02',
+          bundle_number: 2,
+          job_order_id: 'job-1',
+          job_order_number: 'JO-CMT-202611-001',
+          customer_name: 'شركة النيل للملابس الجاهزة',
+          model_name: 'تيشيرت بولو رجالي فاخر',
+          color_name: 'أبيض ناصع',
+          size_name: 'M',
+          quantity: 20,
+          current_stage_code: 'cutting',
+          status: 'active',
+          assigned_employee_id: 'EMP-102',
+          assigned_employee_name: 'محمود عبد السلام الفقي',
+          unit_rate: 8.00,
+          total_wage: 160.00,
+          work_group: 'طاولة القص 1',
+        },
+        {
+          id: 'cmt-bnd-demo-3',
+          bundle_code: 'BND-CMT-202611-03',
+          bundle_number: 3,
+          job_order_id: 'job-2',
+          job_order_number: 'JO-CMT-202611-002',
+          customer_name: 'مجموعة الأهرام للتوريدات',
+          model_name: 'سويت شيرت هودي أوفر سايز',
+          color_name: 'أسود ملكي',
+          size_name: 'XL',
+          quantity: 30,
+          current_stage_code: 'external_op',
+          status: 'active',
+          assigned_employee_id: 'EMP-105',
+          assigned_employee_name: 'أحمد جمال المهدي',
+          unit_rate: 15.00,
+          total_wage: 450.00,
+          work_group: 'قسم التطريز والطباعة',
+        }
+      );
+    }
+    return bundles;
+  });
+
+  const [bundleStageFilter, setBundleStageFilter] = useState<string>('active');
+  const [bundleSearch, setBundleSearch] = useState<string>('');
+  const [bundlePage, setBundlePage] = useState<number>(1);
+  const bundlePerPage = 6;
+  const [selectedBundleForTransfer, setSelectedBundleForTransfer] = useState<CmtBundle | null>(null);
 
   // Pagination states
   const [jobPage, setJobPage] = useState(1);
@@ -106,8 +236,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
   };
 
   const handleOpenDossier = (customerId: string) => {
-    setSelectedCustomerIdForDossier(customerId);
-    setIsDossierOpen(true);
+    setViewingCustomerId(customerId);
   };
 
   const handlePrintDocument = (type: SubcontractPrintType, docData: any) => {
@@ -250,6 +379,46 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
   const totalCustomerPages = Math.max(1, Math.ceil(filteredCustomers.length / customerPerPage));
   const paginatedCustomers = filteredCustomers.slice((customerPage - 1) * customerPerPage, customerPage * customerPerPage);
+
+  // Filtered CMT bundles
+  const filteredBundles = cmtBundles.filter((b) => {
+    if (bundleStageFilter === 'active' && b.current_stage_code === 'completed') return false;
+    if (bundleStageFilter !== 'all' && bundleStageFilter !== 'active' && b.current_stage_code !== bundleStageFilter) return false;
+    if (bundleSearch) {
+      const term = bundleSearch.toLowerCase();
+      const matchCode = (b.bundle_code || '').toLowerCase().includes(term);
+      const matchWorker = (b.assigned_employee_name || '').toLowerCase().includes(term);
+      const matchCust = (b.customer_name || '').toLowerCase().includes(term);
+      const matchModel = (b.model_name || '').toLowerCase().includes(term);
+      const matchColor = (b.color_name || '').toLowerCase().includes(term);
+      const matchSize = (b.size_name || '').toLowerCase().includes(term);
+      if (!matchCode && !matchWorker && !matchCust && !matchModel && !matchColor && !matchSize) return false;
+    }
+    return true;
+  });
+
+  const totalBundlePages = Math.max(1, Math.ceil(filteredBundles.length / bundlePerPage));
+  const paginatedBundles = filteredBundles.slice((bundlePage - 1) * bundlePerPage, bundlePage * bundlePerPage);
+
+  // Render Full Dedicated Customer Profile Page when selected
+  if (viewingCustomerId) {
+    return (
+      <CustomerProfilePage
+        customerId={viewingCustomerId}
+        onBack={() => setViewingCustomerId(null)}
+        onOpenCreateJob={() => {
+          setViewingCustomerId(null);
+          onOpenCreateJob();
+        }}
+        onOpenReceiveMaterial={() => {
+          setViewingCustomerId(null);
+          onOpenReceiveMaterial();
+        }}
+        onPrintDocument={handlePrintDocument}
+        isAr={isAr}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -441,6 +610,22 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
         <button
           type="button"
+          onClick={() => setActiveSubTab('bundles')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+            activeSubTab === 'bundles'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+          }`}
+        >
+          <QrCode className="w-4 h-4" />
+          <span>{isAr ? 'بطاقات الحزم وتتبع الخط' : 'CMT Bundle Floor'}</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'bundles' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+            {cmtBundles.filter((b) => b.current_stage_code !== 'completed').length}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveSubTab('receipts')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'receipts'
@@ -565,6 +750,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <div className="flex items-center gap-2 justify-end text-slate-500 text-xs font-mono">
           <span>
             {activeSubTab === 'jobs' && `${filteredJobs.length} ${isAr ? 'أمر متاح' : 'orders'}`}
+            {activeSubTab === 'bundles' && `${filteredBundles.length} ${isAr ? 'حزمة تشغيل' : 'bundles'}`}
             {activeSubTab === 'receipts' && `${filteredReceipts.length} ${isAr ? 'إذن أمانة' : 'receipts'}`}
             {activeSubTab === 'external_ops' && `${filteredOps.length} ${isAr ? 'حركة خارجية' : 'operations'}`}
             {activeSubTab === 'deliveries' && `${filteredDeliveries.length} ${isAr ? 'إذن تسليم' : 'deliveries'}`}
@@ -790,6 +976,219 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             />
           </div>
         </Card>
+      )}
+
+      {/* VIEW: CMT Bundle Floor Tracker & Worker Piece-Rate Wages */}
+      {activeSubTab === 'bundles' && (
+        <div className="space-y-4">
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#000000] p-4 rounded-2xl border border-slate-200 dark:border-[#7F1625]/40 shadow-sm">
+            {/* Stage Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+              {[
+                { id: 'active', label: isAr ? `النشطة بالخطوط (${cmtBundles.filter(b => b.current_stage_code !== 'completed').length})` : `Active (${cmtBundles.filter(b => b.current_stage_code !== 'completed').length})` },
+                { id: 'all', label: isAr ? `كل الحزم (${cmtBundles.length})` : `All (${cmtBundles.length})` },
+                { id: 'cutting', label: isAr ? 'صالة القص للغير' : 'Cutting' },
+                { id: 'sewing', label: isAr ? 'خياطة وتجميع CMT' : 'Sewing' },
+                { id: 'external_op', label: isAr ? 'تطريز وطباعة خارجية' : 'External Op' },
+                { id: 'finishing', label: isAr ? 'التشطيب والكي' : 'Finishing' },
+                { id: 'packing', label: isAr ? 'التعبئة والتسليم' : 'Packing' },
+                { id: 'completed', label: isAr ? 'المكتملة' : 'Completed' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => {
+                    setBundleStageFilter(pill.id);
+                    setBundlePage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap cursor-pointer text-xs ${
+                    bundleStageFilter === pill.id
+                      ? 'bg-[#7F1625] text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Bundle Search */}
+            <div className="relative min-w-[240px]">
+              <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث بكود الحزمة، العميل، العامل، اللون...' : 'Search bundle, client, operator, color...'}
+                value={bundleSearch}
+                onChange={(e) => {
+                  setBundleSearch(e.target.value);
+                  setBundlePage(1);
+                }}
+                className={`bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl ${
+                  isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full focus:outline-none focus:border-[#7F1625]`}
+              />
+            </div>
+          </div>
+
+          {/* Bundle Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedBundles.map((bnd) => {
+              const isCompleted = bnd.current_stage_code === 'completed';
+              return (
+                <div
+                  key={bnd.id}
+                  className="rounded-2xl bg-white dark:bg-[#000000] border border-slate-200 dark:border-[#7F1625]/40 p-4 space-y-3 transition-all duration-200 hover:shadow-lg hover:border-[#7F1625]/70 relative overflow-hidden"
+                >
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
+                        <QrCode className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-mono font-black text-xs text-slate-900 dark:text-white block">
+                          {bnd.bundle_code}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono block">
+                          {bnd.job_order_number}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge variant={isCompleted ? 'success' : 'neutral'} className="font-mono text-[10px]">
+                      {isAr ? `حزمة #${bnd.bundle_number}` : `Bundle #${bnd.bundle_number}`}
+                    </Badge>
+                  </div>
+
+                  {/* Customer & Model Row */}
+                  <div className="flex items-center justify-between text-xs bg-slate-50/80 dark:bg-slate-900/60 p-2 rounded-xl">
+                    <div className="truncate">
+                      <span className="text-slate-400 block text-[10px]">{isAr ? 'العميل' : 'Client'}</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
+                        {bnd.customer_name}
+                      </span>
+                    </div>
+                    <div className="text-left rtl:text-right shrink-0">
+                      <span className="text-slate-400 block text-[10px]">{isAr ? 'الموديل' : 'Model'}</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300 text-[11px]">
+                        {bnd.model_name}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Specs Pills: Color, Size, Quantity */}
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">{isAr ? 'اللون' : 'Color'}</span>
+                      <span className="text-slate-900 dark:text-slate-100 font-bold truncate block">{bnd.color_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">{isAr ? 'المقاس' : 'Size'}</span>
+                      <span className="text-[#7F1625] dark:text-rose-400 font-black font-mono text-sm block">{bnd.size_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">{isAr ? 'الكمية' : 'Quantity'}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-black font-mono text-sm block">
+                        {bnd.quantity} {isAr ? 'ق' : 'pcs'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Worker & Wage Calculation Strip */}
+                  <div className="bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="w-5 h-5 rounded-md bg-[#7F1625]/10 text-[#7F1625] dark:text-rose-300 text-[10px] flex items-center justify-center font-bold">
+                          {bnd.assigned_employee_name ? bnd.assigned_employee_name.trim().charAt(0) : '؟'}
+                        </div>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                          {bnd.assigned_employee_name || (isAr ? 'قيد التخصيص' : 'Unassigned')}
+                        </span>
+                      </div>
+                      {bnd.work_group && (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          [{bnd.work_group}]
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/50 dark:border-slate-800">
+                      <span className="text-slate-500 text-[10px]">{isAr ? 'أجر القطعة المستحق:' : 'Piece Wage:'}</span>
+                      <span className="font-mono font-bold text-[#7F1625] dark:text-rose-300">
+                        {Number(bnd.unit_rate || 10).toFixed(2)} ج.م × {bnd.quantity} = {Number(bnd.total_wage || (bnd.quantity * (bnd.unit_rate || 10))).toFixed(2)} ج.م
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Footer: Current Stage & Action Buttons */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-xs gap-2">
+                    <Badge
+                      variant={
+                        bnd.current_stage_code === 'completed'
+                          ? 'success'
+                          : bnd.current_stage_code === 'sewing'
+                          ? 'info'
+                          : bnd.current_stage_code === 'finishing'
+                          ? 'purple'
+                          : 'warning'
+                      }
+                      dot
+                    >
+                      {bnd.current_stage_code === 'cutting' ? (isAr ? 'صالة القص للغير' : 'Cutting') :
+                       bnd.current_stage_code === 'sewing' ? (isAr ? 'خياطة وتجميع CMT' : 'Sewing') :
+                       bnd.current_stage_code === 'external_op' ? (isAr ? 'تطريز / طباعة خارجية' : 'External Op') :
+                       bnd.current_stage_code === 'finishing' ? (isAr ? 'التشطيب والكي' : 'Finishing') :
+                       bnd.current_stage_code === 'packing' ? (isAr ? 'التعبئة والتسليم' : 'Packing') :
+                       (isAr ? 'مكتملة بالكامل' : 'Completed')}
+                    </Badge>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBundleForTransfer(bnd)}
+                        title={isAr ? 'نقل الحزمة للمرحلة التالية وتحديد أجر العامل بالقطعة' : 'Transfer Stage & Worker Wage'}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#7F1625] hover:bg-[#68121e] text-white text-[11px] font-bold shadow-xs cursor-pointer transition-all"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'نقل المرحلة والأجر' : 'Transfer'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePrintDocument('bundle', bnd)}
+                        title={isAr ? 'طباعة تذكرة باركود الحزمة القياسية' : 'Print Bundle Ticket'}
+                        className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer transition-all"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filteredBundles.length === 0 && (
+            <div className="py-16 text-center text-slate-400 bg-white dark:bg-[#000000] border border-slate-200 dark:border-[#7F1625]/30 rounded-2xl">
+              <QrCode className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+              <p className="font-bold text-xs">{isAr ? 'لا توجد حزم تشغيل مطابقة للفلاتر المحددة.' : 'No bundles found.'}</p>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {filteredBundles.length > 0 && (
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-white dark:bg-[#000000] rounded-2xl">
+              <Pagination
+                currentPage={bundlePage}
+                totalPages={totalBundlePages}
+                totalItems={filteredBundles.length}
+                perPage={bundlePerPage}
+                onPageChange={setBundlePage}
+                alwaysShow={true}
+                isAr={isAr}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {/* 6. VIEW 2: Customer Material Receipts */}
@@ -1345,6 +1744,21 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             />
           </div>
         </div>
+      )}
+
+      {/* CMT Bundle Stage Transfer & Piece Rate Wages Modal */}
+      {selectedBundleForTransfer && (
+        <CmtBundleTransferModal
+          isOpen={Boolean(selectedBundleForTransfer)}
+          onClose={() => setSelectedBundleForTransfer(null)}
+          bundle={selectedBundleForTransfer}
+          employees={employees}
+          onTransferSuccess={(updatedBundle) => {
+            setCmtBundles((prev) => prev.map((b) => (b.id === updatedBundle.id ? updatedBundle : b)));
+            setSelectedBundleForTransfer(null);
+          }}
+          isAr={isAr}
+        />
       )}
 
       {/* Customer Complete Dossier Modal */}

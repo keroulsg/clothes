@@ -17,7 +17,7 @@ import type {
   JobInvoice,
 } from '../../types';
 
-export type SubcontractPrintType = 'job' | 'receipt' | 'delivery' | 'invoice';
+export type SubcontractPrintType = 'job' | 'receipt' | 'delivery' | 'invoice' | 'bundle';
 
 export interface SubcontractPrintModalProps {
   isOpen: boolean;
@@ -544,6 +544,135 @@ export const SubcontractPrintModal: React.FC<SubcontractPrintModalProps> = ({
                   ............................
                 </span>
               </div>
+            </div>
+          </div>
+        );
+      }
+
+      case 'bundle': {
+        const bundle = data as any;
+        return (
+          <div className="space-y-6">
+            {/* Ticket Header with Barcode simulation */}
+            <div className="border-b-2 border-slate-900 pb-4 flex items-start justify-between">
+              <div>
+                <span className="text-xs font-black tracking-wider text-rose-800 uppercase block">
+                  {isAr ? 'تذكرة تشغيل حزمة وتتبع خطوط الإنتاج (CMT)' : 'CMT Bundle Shopfloor Tracking Ticket'}
+                </span>
+                <h1 className="text-2xl font-black font-mono tracking-tight text-slate-900 mt-1">
+                  {bundle.bundle_code || `BND-${bundle.id}`}
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  {isAr ? 'تابع لأمر تشغيل للغير:' : 'Parent CMT Job Order:'}{' '}
+                  <span className="font-bold font-mono text-slate-800">{bundle.job_order_number || '—'}</span>
+                </p>
+              </div>
+
+              {/* Barcode & QR Box */}
+              <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-300">
+                <QrCode className="w-16 h-16 mx-auto text-slate-900" />
+                <span className="block font-mono text-[11px] font-bold text-slate-700 mt-1">
+                  *{bundle.bundle_code || bundle.id}*
+                </span>
+              </div>
+            </div>
+
+            {/* Main Specs Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'العميل' : 'Customer'}</span>
+                <span className="font-black text-slate-900 text-sm">{bundle.customer_name || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'الموديل والصنف' : 'Model'}</span>
+                <span className="font-bold text-slate-900 text-sm">{bundle.model_name || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'اللون / المقاس' : 'Color / Size'}</span>
+                <span className="font-bold text-slate-900 text-sm">
+                  {bundle.color_name || '—'} / <span className="font-black text-rose-800 font-mono text-base">{bundle.size_name || '—'}</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'الكمية بالحزمة' : 'Quantity'}</span>
+                <span className="font-black text-slate-900 font-mono text-lg text-emerald-700">
+                  {bundle.quantity || 0} {isAr ? 'قطعة' : 'Pcs'}
+                </span>
+              </div>
+            </div>
+
+            {/* Stage & Operator Details */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 border border-slate-200 p-4 rounded-xl text-xs bg-white">
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'المرحلة التشغيلية الحالية' : 'Current Stage'}</span>
+                <span className="font-bold text-slate-800 text-sm">
+                  {bundle.current_stage_code === 'cutting' ? (isAr ? 'صالة القص للغير' : 'Cutting') :
+                   bundle.current_stage_code === 'sewing' ? (isAr ? 'خياطة وتجميع CMT' : 'Sewing') :
+                   bundle.current_stage_code === 'external_op' ? (isAr ? 'تطريز / طباعة خارجية' : 'External Op') :
+                   bundle.current_stage_code === 'finishing' ? (isAr ? 'التشطيب والكي' : 'Finishing') :
+                   bundle.current_stage_code === 'packing' ? (isAr ? 'التعبئة والتغليف' : 'Packing') :
+                   (isAr ? 'مكتملة بالكامل' : 'Completed')}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'العامل / الفني المسؤول' : 'Assigned Operator'}</span>
+                <span className="font-bold text-slate-800 text-sm">
+                  {bundle.assigned_employee_name || (isAr ? 'قيد التخصيص بالخط' : 'Unassigned')}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">{isAr ? 'أجر القطعة المستحق' : 'Piece Rate / Wage'}</span>
+                <span className="font-bold text-slate-900 text-sm font-mono">
+                  {Number(bundle.unit_rate || 0).toFixed(2)} ج.م / قط ({Number(bundle.total_wage || 0).toFixed(2)} ج.م إجمالي)
+                </span>
+              </div>
+            </div>
+
+            {/* Shopfloor Routing Checklist */}
+            <div className="border border-slate-200 rounded-xl p-4">
+              <h4 className="text-xs font-black text-slate-800 mb-3 uppercase tracking-wider">
+                {isAr ? 'مسار المراحل وتوقيع المشرفين (Routing Checklist):' : 'Stage Routing Checklist:'}
+              </h4>
+              <table className="w-full text-xs text-center border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 border-b border-slate-300">
+                    <th className="p-2 text-right">{isAr ? 'المرحلة' : 'Stage'}</th>
+                    <th className="p-2">{isAr ? 'الكمية المستلمة' : 'Qty In'}</th>
+                    <th className="p-2">{isAr ? 'السليم' : 'Passed'}</th>
+                    <th className="p-2">{isAr ? 'الهالك / عيوب' : 'Scrap'}</th>
+                    <th className="p-2">{isAr ? 'اسم وتوقيع العامل' : 'Operator Signature'}</th>
+                    <th className="p-2">{isAr ? 'اعتماد الجودة' : 'QC Pass'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {[
+                    { name: isAr ? '1. قص القماش للغير' : '1. Cutting' },
+                    { name: isAr ? '2. الخياطة والتجميع CMT' : '2. Sewing & Assembly' },
+                    { name: isAr ? '3. التطريز / الطباعة' : '3. Print / Embroidery' },
+                    { name: isAr ? '4. التشطيب والكي والزرائر' : '4. Finishing & Ironing' },
+                    { name: isAr ? '5. الفحص النهائي والتعبئة' : '5. Final QC & Packing' },
+                  ].map((row, idx) => (
+                    <tr key={idx} className="h-10">
+                      <td className="p-2 text-right font-bold text-slate-800">{row.name}</td>
+                      <td className="p-2 font-mono text-slate-400">........</td>
+                      <td className="p-2 font-mono text-slate-400">........</td>
+                      <td className="p-2 font-mono text-slate-400">........</td>
+                      <td className="p-2 font-mono text-slate-400">........................</td>
+                      <td className="p-2 font-mono text-slate-400">[  ]</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer Notice */}
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
+              <span className="font-bold block mb-0.5">{isAr ? 'تعليمات مشددة للورشة:' : 'Shopfloor Notice:'}</span>
+              <p>
+                {isAr
+                  ? 'يجب أن ترافق هذه التذكرة الحزمة طوال مراحل التشغيل وحتى مخزن التسليم، ويمنع صرف أجر العامل بدون قراءة الباركود وتدقيق المشرف.'
+                  : 'This ticket must travel with the physical bundle until final delivery note issuance.'}
+              </p>
             </div>
           </div>
         );

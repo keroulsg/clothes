@@ -15,13 +15,16 @@ class BundleStageLog extends Model
         'tenant_id',
         'cutting_bundle_id',
         'production_stage_id',
+        'employee_id',
         'operation_type',
         'operator_name',
         'work_line',
         'input_quantity',
         'output_accepted_quantity',
         'output_rejected_quantity',
+        'rework_quantity',
         'scrap_quantity',
+        'notes',
         'logged_at',
     ];
 
@@ -29,9 +32,15 @@ class BundleStageLog extends Model
         'input_quantity' => 'integer',
         'output_accepted_quantity' => 'integer',
         'output_rejected_quantity' => 'integer',
+        'rework_quantity' => 'integer',
         'scrap_quantity' => 'integer',
         'logged_at' => 'datetime',
     ];
+
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
 
     public function cuttingBundle(): BelongsTo
     {

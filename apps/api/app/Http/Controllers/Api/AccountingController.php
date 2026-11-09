@@ -5,10 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\ChartOfAccount;
+use App\Models\CostCenter;
+use App\Models\FinancialAccount;
+use App\Models\FinancialAccountTransfer;
+use App\Models\FiscalPeriod;
+use App\Models\FiscalYear;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\PaymentVoucher;
 use App\Models\ProductionCostSheet;
+use App\Models\TenantAccountMapping;
 use App\Services\AccountingService;
 use App\Services\FinancialReportService;
 use Illuminate\Http\JsonResponse;
@@ -26,14 +32,62 @@ class AccountingController extends Controller
     public function accounts(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $accounts = ChartOfAccount::where('tenant_id', $tenantId)->orderBy('code')->get();
+        $accounts = ChartOfAccount::where('tenant_id', $tenantId)
+            ->with('parent')
+            ->orderBy('code')
+            ->get();
 
         if ($accounts->isEmpty()) {
             $this->accountingService->initializeDefaultChartOfAccounts($tenantId);
-            $accounts = ChartOfAccount::where('tenant_id', $tenantId)->orderBy('code')->get();
+            $accounts = ChartOfAccount::where('tenant_id', $tenantId)
+                ->with('parent')
+                ->orderBy('code')
+                ->get();
         }
 
         return response()->json($accounts);
+    }
+
+    public function initDefaultAccounts(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $this->accountingService->initializeDefaultChartOfAccounts($tenantId);
+
+        $accounts = ChartOfAccount::where('tenant_id', $tenantId)
+            ->with('parent')
+            ->orderBy('code')
+            ->get();
+
+        return response()->json([
+            'message' => 'تم تهيئة شجرة الحسابات الافتراضية وحسابات الربط بنجاح',
+            'accounts' => $accounts,
+        ]);
+    }
+
+    public function getMappings(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $mappings = TenantAccountMapping::where('tenant_id', $tenantId)
+            ->with('account')
+            ->get();
+
+        return response()->json($mappings);
+    }
+
+    public function setMapping(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'mapping_key' => 'required|string|max:100',
+            'account_id' => 'required|uuid',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $mapping = $this->accountingService->setAccountMapping($tenantId, $validated['mapping_key'], $validated['account_id']);
+
+        return response()->json([
+            'message' => 'تم تحديث حساب الربط المالي بنجاح',
+            'mapping' => $mapping->load('account'),
+        ]);
     }
 
     public function accountStatement(Request $request, string $id): JsonResponse
@@ -110,31 +164,115 @@ class AccountingController extends Controller
         $validated = $request->validate([
             'code' => 'required|string|max:50',
             'name' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
             'type' => 'required|string|in:asset,liability,equity,revenue,expense',
             'category' => 'required|string|max:50',
+            'parent_id' => 'nullable|uuid',
+            'normal_balance' => 'nullable|string|in:debit,credit',
+            'is_control_account' => 'nullable|boolean',
+            'is_cash_bank' => 'nullable|boolean',
+            'is_postable' => 'nullable|boolean',
+            'notes' => 'nullable|string',
         ]);
 
         $tenantId = app('current_tenant_id');
+
+        // التحقق من تكرار كود الحساب للمستأجر
+        if (ChartOfAccount::where('tenant_id', $tenantId)->where('code', $validated['code'])->exists()) {
+            throw ValidationException::withMessages([
+                'code' => ['كود الحساب المحاسبي مستخدم بالفعل لمصنعك.'],
+            ]);
+        }
+
+        $level = 1;
+        if (!empty($validated['parent_id'])) {
+            $parent = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($validated['parent_id']);
+            $level = ($parent->level ?? 1) + 1;
+        }
 
         $account = ChartOfAccount::create([
             'tenant_id' => $tenantId,
             'code' => $validated['code'],
             'name' => $validated['name'],
+            'name_en' => $validated['name_en'] ?? null,
             'type' => $validated['type'],
             'category' => $validated['category'],
+            'parent_id' => $validated['parent_id'] ?? null,
+            'level' => $level,
+            'normal_balance' => $validated['normal_balance'] ?? (in_array($validated['type'], ['asset', 'expense']) ? 'debit' : 'credit'),
+            'is_control_account' => $validated['is_control_account'] ?? false,
+            'is_cash_bank' => $validated['is_cash_bank'] ?? false,
+            'is_postable' => $validated['is_postable'] ?? true,
+            'notes' => $validated['notes'] ?? null,
             'current_balance' => 0,
             'is_active' => true,
         ]);
 
         return response()->json([
             'message' => 'تم إنشاء الحساب في شجرة الحسابات بنجاح',
-            'account' => $account,
+            'account' => $account->load('parent'),
         ], 201);
+    }
+
+    public function updateAccount(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $account = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'category' => 'sometimes|required|string|max:50',
+            'parent_id' => 'nullable|uuid',
+            'is_control_account' => 'nullable|boolean',
+            'is_cash_bank' => 'nullable|boolean',
+            'is_postable' => 'nullable|boolean',
+            'is_active' => 'nullable|boolean',
+            'notes' => 'nullable|string',
+        ]);
+
+        // منع الحساب من أن يكون أباً لنفسه
+        if (isset($validated['parent_id']) && $validated['parent_id'] === $account->id) {
+            throw ValidationException::withMessages([
+                'parent_id' => ['لا يمكن للحساب المحاسبي أن يكون أباً لنفسه.'],
+            ]);
+        }
+
+        if (isset($validated['parent_id'])) {
+            $account->parent_id = $validated['parent_id'];
+            if ($validated['parent_id']) {
+                $parent = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($validated['parent_id']);
+                $account->level = ($parent->level ?? 1) + 1;
+            } else {
+                $account->level = 1;
+            }
+        }
+
+        if (isset($validated['name'])) $account->name = $validated['name'];
+        if (array_key_exists('name_en', $validated)) $account->name_en = $validated['name_en'];
+        if (isset($validated['category'])) $account->category = $validated['category'];
+        if (isset($validated['is_control_account'])) $account->is_control_account = $validated['is_control_account'];
+        if (isset($validated['is_cash_bank'])) $account->is_cash_bank = $validated['is_cash_bank'];
+        if (isset($validated['is_postable'])) $account->is_postable = $validated['is_postable'];
+        if (isset($validated['is_active'])) $account->is_active = $validated['is_active'];
+        if (array_key_exists('notes', $validated)) $account->notes = $validated['notes'];
+
+        $account->save();
+
+        return response()->json([
+            'message' => 'تم تحديث الحساب بنجاح',
+            'account' => $account->load('parent'),
+        ]);
     }
 
     public function journalEntries(): JsonResponse
     {
-        $entries = JournalEntry::with('lines.account')->latest()->paginate(20);
+        $tenantId = app('current_tenant_id');
+        $entries = JournalEntry::where('tenant_id', $tenantId)
+            ->with(['lines.account', 'lines.costCenterRelation', 'reversedEntry', 'fiscalPeriod'])
+            ->latest('entry_date')
+            ->latest('created_at')
+            ->paginate(20);
 
         return response()->json($entries);
     }
@@ -150,6 +288,7 @@ class AccountingController extends Controller
             'lines.*.debit' => 'nullable|numeric|min:0',
             'lines.*.credit' => 'nullable|numeric|min:0',
             'lines.*.cost_center' => 'nullable|string',
+            'lines.*.cost_center_id' => 'nullable|uuid',
         ]);
 
         try {
@@ -169,9 +308,267 @@ class AccountingController extends Controller
         ], 201);
     }
 
+    public function reverseJournalEntry(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reversal_reason' => 'required|string|min:3|max:500',
+        ]);
+
+        $reversal = $this->accountingService->reverseJournalEntry($id, $validated['reversal_reason'], auth()->id());
+
+        return response()->json([
+            'message' => 'تم عكس القيد المحاسبي وإنشاء قيد التسوية العكسي بنجاح',
+            'reversal_entry' => $reversal,
+        ]);
+    }
+
+    // ==========================================
+    // الخزائن والبنوك والحسابات المالية والتحويلات
+    // ==========================================
+
+    public function financialAccounts(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $accounts = FinancialAccount::where('tenant_id', $tenantId)
+            ->with('chartOfAccount')
+            ->orderBy('code')
+            ->get();
+
+        return response()->json($accounts);
+    }
+
+    public function storeFinancialAccount(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'chart_of_account_id' => 'required|uuid',
+            'code' => 'required|string|max:50',
+            'name' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'type' => 'required|string|in:cash,bank,wallet',
+            'account_number' => 'nullable|string|max:100',
+            'bank_name' => 'nullable|string|max:255',
+            'currency' => 'nullable|string|max:10',
+            'opening_balance' => 'nullable|numeric',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $coa = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($validated['chart_of_account_id']);
+
+        $openingBal = round((float)($validated['opening_balance'] ?? 0), 4);
+
+        $account = FinancialAccount::create([
+            'tenant_id' => $tenantId,
+            'chart_of_account_id' => $coa->id,
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'name_en' => $validated['name_en'] ?? null,
+            'type' => $validated['type'],
+            'account_number' => $validated['account_number'] ?? null,
+            'bank_name' => $validated['bank_name'] ?? null,
+            'currency' => $validated['currency'] ?? 'EGP',
+            'opening_balance' => $openingBal,
+            'current_balance' => $openingBal,
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'تم إنشاء الحساب المالي (خزينة/بنك) بنجاح',
+            'financial_account' => $account->load('chartOfAccount'),
+        ], 201);
+    }
+
+    public function transfers(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $transfers = FinancialAccountTransfer::where('tenant_id', $tenantId)
+            ->with(['fromAccount', 'toAccount', 'journalEntry'])
+            ->latest('transfer_date')
+            ->latest('created_at')
+            ->paginate(20);
+
+        return response()->json($transfers);
+    }
+
+    public function storeTransfer(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from_financial_account_id' => 'required|uuid',
+            'to_financial_account_id' => 'required|uuid',
+            'amount' => 'required|numeric|min:0.01',
+            'transfer_date' => 'nullable|date',
+            'reference' => 'nullable|string|max:100',
+            'notes' => 'nullable|string',
+        ]);
+
+        $transfer = $this->accountingService->transferFunds($validated);
+
+        return response()->json([
+            'message' => 'تم تنفيذ التحويل المالي الداخلي وترحيل القيد بنجاح',
+            'transfer' => $transfer,
+        ], 201);
+    }
+
+    public function reverseTransfer(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reversal_reason' => 'required|string|min:3|max:500',
+        ]);
+
+        $reversed = $this->accountingService->reverseTransfer($id, $validated['reversal_reason'], auth()->id());
+
+        return response()->json([
+            'message' => 'تم إلغاء وعكس التحويل المالي بنجاح',
+            'transfer' => $reversed,
+        ]);
+    }
+
+    // ==========================================
+    // مراكز التكلفة (Cost Centers)
+    // ==========================================
+
+    public function costCenters(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $centers = CostCenter::where('tenant_id', $tenantId)
+            ->with('parent')
+            ->orderBy('code')
+            ->get();
+
+        return response()->json($centers);
+    }
+
+    public function storeCostCenter(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'code' => 'required|string|max:50',
+            'name' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'parent_id' => 'nullable|uuid',
+            'description' => 'nullable|string',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+
+        $center = CostCenter::create([
+            'tenant_id' => $tenantId,
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'name_en' => $validated['name_en'] ?? null,
+            'parent_id' => $validated['parent_id'] ?? null,
+            'description' => $validated['description'] ?? null,
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'تم إنشاء مركز التكلفة بنجاح',
+            'cost_center' => $center->load('parent'),
+        ], 201);
+    }
+
+    // ==========================================
+    // السنوات والفترات المالية (Fiscal Periods)
+    // ==========================================
+
+    public function fiscalYears(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $years = FiscalYear::where('tenant_id', $tenantId)
+            ->with('periods')
+            ->latest('start_date')
+            ->get();
+
+        return response()->json($years);
+    }
+
+    public function storeFiscalYear(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after:start_date',
+            'periods_count' => 'nullable|integer|min:1|max:12',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $year = $this->accountingService->createFiscalYearWithPeriods(
+            $tenantId,
+            $validated['name'],
+            $validated['start_date'],
+            $validated['end_date'],
+            $validated['periods_count'] ?? 12
+        );
+
+        return response()->json([
+            'message' => 'تم إنشاء السنة المالية والفترات المحاسبية بنجاح',
+            'fiscal_year' => $year,
+        ], 201);
+    }
+
+    public function closeFiscalPeriod(string $id): JsonResponse
+    {
+        $period = $this->accountingService->closeFiscalPeriod($id, auth()->id());
+
+        return response()->json([
+            'message' => 'تم إغلاق الفترة المالية بنجاح ومنع الترحيل فيها',
+            'fiscal_period' => $period,
+        ]);
+    }
+
+    public function reopenFiscalPeriod(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|min:3|max:500',
+        ]);
+
+        $period = $this->accountingService->reopenFiscalPeriod($id, $validated['reason'], auth()->id());
+
+        return response()->json([
+            'message' => 'تم إعادة فتح الفترة المالية بنجاح مع تسجيل السبب',
+            'fiscal_period' => $period,
+        ]);
+    }
+
+    public function closeFiscalYear(string $id): JsonResponse
+    {
+        $year = $this->accountingService->closeFiscalYear($id, auth()->id());
+
+        return response()->json([
+            'message' => 'تم إغلاق السنة المالية وترحيل الأرباح والخسائر إلى الأرباح المحتجزة بنجاح',
+            'fiscal_year' => $year,
+        ]);
+    }
+
+    // ==========================================
+    // المطابقة والتسوية (Reconciliation)
+    // ==========================================
+
+    public function reconcileAR(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $reconciliation = $this->accountingService->reconcileAccountsReceivable($tenantId);
+
+        return response()->json($reconciliation);
+    }
+
+    public function reconcileAP(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $reconciliation = $this->accountingService->reconcileAccountsPayable($tenantId);
+
+        return response()->json($reconciliation);
+    }
+
+    // ==========================================
+    // سندات القبض والصرف
+    // ==========================================
+
     public function paymentVouchers(): JsonResponse
     {
-        $vouchers = PaymentVoucher::with('account')->latest()->paginate(20);
+        $tenantId = app('current_tenant_id');
+        $vouchers = PaymentVoucher::where('tenant_id', $tenantId)
+            ->with('account')
+            ->latest()
+            ->paginate(20);
 
         return response()->json($vouchers);
     }
@@ -192,14 +589,22 @@ class AccountingController extends Controller
         $voucher = $this->accountingService->createPaymentVoucher($validated);
 
         return response()->json([
-            'message' => 'تم تسجيل السند المالي بنجاح',
+            'message' => 'تم تسجيل السند المالي وترحيل القيد بنجاح',
             'voucher' => $voucher,
         ], 201);
     }
 
+    // ==========================================
+    // التكاليف الصناعية (Industrial Costing)
+    // ==========================================
+
     public function costSheets(): JsonResponse
     {
-        $sheets = ProductionCostSheet::with(['productionOrder', 'garmentModel'])->latest()->paginate(20);
+        $tenantId = app('current_tenant_id');
+        $sheets = ProductionCostSheet::where('tenant_id', $tenantId)
+            ->with(['productionOrder', 'garmentModel'])
+            ->latest()
+            ->paginate(20);
 
         return response()->json($sheets);
     }
@@ -207,11 +612,15 @@ class AccountingController extends Controller
     public function calculateCost(Request $request, string $productionOrderId): JsonResponse
     {
         $overrides = $request->only([
+            'costing_method',
+            'overhead_allocation_method',
             'direct_materials_cost',
             'direct_labor_cost',
             'subcontracted_services_cost',
             'applied_overhead_rate',
             'allocated_overhead_cost',
+            'planned_total_cost',
+            'notes',
             'force_recalculate',
         ]);
 
@@ -258,9 +667,7 @@ class AccountingController extends Controller
                 ],
                 'ip_address' => request()->ip(),
             ]);
-        } catch (\Throwable $e) {
-            // Non-blocking audit record
-        }
+        } catch (\Throwable $e) {}
 
         return response()->json([
             'message' => 'تم اعتماد بطاقة التكلفة الصناعية بنجاح وأصبحت نهائية وغير قابلة للتعديل',
@@ -268,9 +675,10 @@ class AccountingController extends Controller
         ]);
     }
 
-    /**
-     * تقرير ميزان المراجعة الآلي
-     */
+    // ==========================================
+    // التقارير المالية (Financial Reports)
+    // ==========================================
+
     public function trialBalance(Request $request): JsonResponse|StreamedResponse
     {
         $validated = $request->validate([
@@ -293,9 +701,6 @@ class AccountingController extends Controller
         return response()->json($report);
     }
 
-    /**
-     * تقرير قائمة الدخل (الأرباح والخسائر)
-     */
     public function incomeStatement(Request $request): JsonResponse|StreamedResponse
     {
         $validated = $request->validate([
@@ -318,9 +723,6 @@ class AccountingController extends Controller
         return response()->json($report);
     }
 
-    /**
-     * تقرير الميزانية العمومية
-     */
     public function balanceSheet(Request $request): JsonResponse|StreamedResponse
     {
         $validated = $request->validate([
@@ -341,9 +743,6 @@ class AccountingController extends Controller
         return response()->json($report);
     }
 
-    /**
-     * تقرير ملخص إقرار ضريبة القيمة المضافة
-     */
     public function vatSummary(Request $request): JsonResponse|StreamedResponse
     {
         $validated = $request->validate([
@@ -366,9 +765,6 @@ class AccountingController extends Controller
         return response()->json($report);
     }
 
-    /**
-     * كشف انحرافات تكلفة التصنيع الصناعي
-     */
     public function costVariance(Request $request): JsonResponse|StreamedResponse
     {
         $validated = $request->validate([

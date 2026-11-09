@@ -74,8 +74,30 @@ class IdentifyTenant
                 ], 403);
             }
 
-            // 5. التحقق من انتهاء الفترة التجريبية (Trial Expiration Enforcement)
-            if ($user->role !== 'platform_admin' && $tenant->isTrialExpired()) {
+            // 4.5 حظر حسابات طالبي الخدمة المستقلين من دخول وحدات الـ ERP أو إنشاء الورش (Marketplace Requester Gating)
+            if ($user->role !== 'platform_admin' && $tenant->isMarketplaceRequester()) {
+                $isAllowedForRequester = $request->is('api/v1/tenant/profile')
+                    || $request->is('api/v1/auth/*')
+                    || $request->is('api/v1/subscriptions/*')
+                    || $request->is('api/v1/waslat-worsh/rfqs*')
+                    || $request->is('api/v1/waslat-worsh/eligibility');
+
+                // حظر إنشاء ملف ورشة لطالبي الخدمة
+                if ($request->is('api/v1/waslat-worsh/workshops*') && $request->isMethod('POST')) {
+                    $isAllowedForRequester = false;
+                }
+
+                if (!$isAllowedForRequester) {
+                    return response()->json([
+                        'error' => 'ERP_ACCESS_DENIED',
+                        'error_code' => 'ERP_ACCESS_DENIED',
+                        'message' => 'حساب طالب الخدمة المستقل غير مصرح له بالوصول إلى وحدات تخطيط الموارد ERP أو إنشاء ورش. يرجى الترقية إلى باقة مصنع متكامل.',
+                    ], 403);
+                }
+            }
+
+            // 5. التحقق من انتهاء الفترة التجريبية لمصانع الـ ERP (Trial Expiration Enforcement)
+            if ($user->role !== 'platform_admin' && !$tenant->isMarketplaceRequester() && $tenant->isTrialExpired()) {
                 $isAllowedForExpiredTrial = $request->is('api/v1/tenant/profile')
                     || $request->is('api/v1/tenant/subscription*')
                     || $request->is('api/v1/auth/*');

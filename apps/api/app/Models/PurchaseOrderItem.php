@@ -35,6 +35,18 @@ class PurchaseOrderItem extends Model
         'total_price' => 'decimal:4',
     ];
 
+    protected $appends = ['item_code', 'item_name'];
+
+    public function getItemCodeAttribute(): ?string
+    {
+        return $this->item?->code ?? $this->item?->barcode ?? 'MAT-01';
+    }
+
+    public function getItemNameAttribute(): ?string
+    {
+        return $this->item?->name ?? 'خامات توريد';
+    }
+
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);

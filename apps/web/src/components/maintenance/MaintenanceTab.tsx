@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Wrench,
   AlertTriangle,
   Clock,
-  CheckCircle,
+  CheckCircle2,
   Plus,
   ShieldAlert,
   Cpu,
@@ -12,12 +12,21 @@ import {
   AlertCircle,
   Printer,
   Eye,
+  Search,
+  X,
+  MapPin,
+  Activity,
+  Scissors,
+  Zap,
+  Sliders,
+  Sparkles,
+  Coins,
+  Boxes,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { ActionsMenu } from '../ui/ActionsMenu';
 import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import type { Language, Machine, MaintenanceWorkOrder, MaintenanceSparePart, DowntimeSummary } from '../../types';
@@ -28,16 +37,40 @@ interface MaintenanceTabProps {
 
 export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   const isAr = lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'machines' | 'workorders' | 'spareparts' | 'analytics'>('machines');
+  const [activeSubTab, setActiveSubTab] = useState<'machines' | 'workorders' | 'spareparts'>('machines');
+  
+  // Modals state
   const [isAddMachineModalOpen, setIsAddMachineModalOpen] = useState(false);
   const [isWorkOrderModalOpen, setIsWorkOrderModalOpen] = useState(false);
-  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isSparePartModalOpen, setIsSparePartModalOpen] = useState(false);
+  const [isAddSparePartStockModalOpen, setIsAddSparePartStockModalOpen] = useState(false);
+  const [viewingMachineDetails, setViewingMachineDetails] = useState<Machine | null>(null);
+  const [viewingMachineBarcode, setViewingMachineBarcode] = useState<Machine | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<MaintenanceWorkOrder | null>(null);
+  const [orderToPrint, setOrderToPrint] = useState<MaintenanceWorkOrder | null>(null);
+
+  // Subtab 3 view mode: warehouse stock vs issued usage ledger
+  const [sparePartsViewMode, setSparePartsViewMode] = useState<'stock' | 'issued'>('stock');
+
+  // Spare parts stock & warehouses from backend
+  const [sparePartsStock, setSparePartsStock] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+
+  // Submitting debounce states
+  const [isSubmittingPart, setIsSubmittingPart] = useState(false);
+  const [isSubmittingStockPart, setIsSubmittingStockPart] = useState(false);
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [machineStatusFilter, setMachineStatusFilter] = useState<'all' | 'operational' | 'breakdown' | 'under_maintenance'>('all');
+  const [machineTypeFilter, setMachineTypeFilter] = useState('all');
+  const [workOrderFilter, setWorkOrderFilter] = useState<'all' | 'breakdown' | 'preventive' | 'in_progress' | 'completed'>('all');
+
+  // Loading & error
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Initial State for Machines
+  // Data
   const [machines, setMachines] = useState<Machine[]>([]);
   const [workOrders, setWorkOrders] = useState<MaintenanceWorkOrder[]>([]);
   const [downtimeSummary, setDowntimeSummary] = useState<DowntimeSummary | null>(null);
@@ -46,10 +79,12 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [mchRes, woRes, dtRes] = await Promise.allSettled([
+      const [mchRes, woRes, dtRes, spRes, whRes] = await Promise.allSettled([
         api.maintenance.getMachines(1),
         api.maintenance.getWorkOrders(1),
         api.maintenance.getDowntimeSummary(),
+        api.maintenance.getSparePartsStock(),
+        api.inventory.getWarehouses(),
       ]);
 
       if (mchRes.status === 'fulfilled' && mchRes.value?.data) {
@@ -60,6 +95,19 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
       }
       if (dtRes.status === 'fulfilled' && dtRes.value) {
         setDowntimeSummary(dtRes.value);
+      }
+      if (spRes.status === 'fulfilled' && (spRes.value as any)?.spare_parts) {
+        setSparePartsStock((spRes.value as any).spare_parts);
+      }
+      if (whRes.status === 'fulfilled') {
+        const whList = (whRes.value as any)?.warehouses || (Array.isArray(whRes.value) ? whRes.value : []);
+        setWarehouses(whList);
+        if (whList.length > 0) {
+          setNewStockPart((prev) => ({
+            ...prev,
+            warehouse_id: prev.warehouse_id || whList[0].id,
+          }));
+        }
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات الصيانة والماكينات' : 'Failed to load maintenance data'));
@@ -73,32 +121,50 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   }, []);
 
   // Spare parts ledger derived directly from server-backed work orders
-  const spareParts: (MaintenanceSparePart & { work_order_number?: string })[] = workOrders.flatMap((wo) =>
-    (wo.spare_parts || []).map((sp) => ({
-      ...sp,
-      work_order_id: wo.id,
-      work_order_number: wo.order_number,
-    }))
+  const spareParts: (MaintenanceSparePart & { work_order_number?: string; machine_name?: string })[] = workOrders.flatMap((wo) =>
+    (wo.spare_parts || []).map((sp) => {
+      const mch = machines.find((m) => m.id === wo.machine_id);
+      return {
+        ...sp,
+        work_order_id: wo.id,
+        work_order_number: wo.order_number,
+        machine_name: mch?.name,
+      };
+    })
   );
 
-  // New Spare Part Form State
+  // Form States
   const [selectedWoForPart, setSelectedWoForPart] = useState('');
+  const [partSource, setPartSource] = useState<'stock' | 'custom'>('stock');
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
   const [newPartName, setNewPartName] = useState('');
   const [newPartNumber, setNewPartNumber] = useState('');
   const [newPartQty, setNewPartQty] = useState<number>(1);
   const [newPartUnitCost, setNewPartUnitCost] = useState<number>(150);
 
-  // New Machine Form State
+  // Add new spare part into warehouse stock
+  const [newStockPart, setNewStockPart] = useState({
+    name: '',
+    part_number: '',
+    warehouse_id: '',
+    unit_of_measure: 'قطعة',
+    initial_balance: 10,
+    unit_cost: 150,
+    reorder_level: 2,
+    description: '',
+  });
+
   const [newMachine, setNewMachine] = useState({
     machine_code: '',
     name: '',
     model_number: '',
+    serial_number: '',
     machine_type: 'sewing',
     location: '',
     maintenance_interval_days: 30,
+    notes: '',
   });
 
-  // New Work Order Form State
   const [newOrder, setNewOrder] = useState({
     machine_id: '',
     work_type: 'breakdown',
@@ -109,7 +175,6 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
     labor_cost: 100,
   });
 
-  // Complete Order Form State
   const [completeData, setCompleteData] = useState({
     resolution_notes: '',
     downtime_hours: 1.5,
@@ -123,12 +188,14 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
 
     try {
       const res = await api.maintenance.createMachine({
-        machine_code: newMachine.machine_code,
-        name: newMachine.name,
-        model_number: newMachine.model_number,
+        machine_code: newMachine.machine_code.trim(),
+        name: newMachine.name.trim(),
+        model_number: newMachine.model_number.trim() || undefined,
+        serial_number: newMachine.serial_number.trim() || undefined,
         machine_type: newMachine.machine_type,
-        location: newMachine.location,
+        location: newMachine.location.trim() || undefined,
         maintenance_interval_days: Number(newMachine.maintenance_interval_days) || 30,
+        notes: newMachine.notes.trim() || undefined,
       });
 
       if (res?.machine) {
@@ -141,9 +208,11 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         machine_code: '',
         name: '',
         model_number: '',
+        serial_number: '',
         machine_type: 'sewing',
         location: '',
         maintenance_interval_days: 30,
+        notes: '',
       });
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تسجيل الماكينة' : 'Failed to register machine'));
@@ -159,9 +228,9 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         machine_id: newOrder.machine_id,
         work_type: newOrder.work_type,
         priority: newOrder.priority,
-        issue_description: newOrder.issue_description,
-        reported_by: newOrder.reported_by,
-        technician_name: newOrder.technician_name,
+        issue_description: newOrder.issue_description.trim(),
+        reported_by: newOrder.reported_by.trim() || undefined,
+        technician_name: newOrder.technician_name.trim() || undefined,
         labor_cost: Number(newOrder.labor_cost) || 0,
       });
 
@@ -191,12 +260,11 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
 
     try {
       await api.maintenance.completeWorkOrder(selectedOrder.id, {
-        resolution_notes: completeData.resolution_notes,
+        resolution_notes: completeData.resolution_notes.trim(),
         downtime_hours: Number(completeData.downtime_hours) || 0,
       });
 
       await loadMaintenanceData();
-      setIsCompleteModalOpen(false);
       setSelectedOrder(null);
       setCompleteData({ resolution_notes: '', downtime_hours: 1.5, labor_cost: 120 });
     } catch (err: any) {
@@ -206,17 +274,17 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
 
   const handleAddSparePart = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingPart) return;
     if (!selectedWoForPart || !newPartName || newPartQty <= 0) return;
 
+    setIsSubmittingPart(true);
     try {
-      await (api as any).request(`/maintenance/work-orders/${selectedWoForPart}/spare-parts`, {
-        method: 'POST',
-        body: JSON.stringify({
-          part_name: newPartName,
-          part_number: newPartNumber || undefined,
-          quantity: newPartQty,
-          unit_cost: newPartUnitCost,
-        }),
+      await api.maintenance.addSparePart(selectedWoForPart, {
+        part_name: newPartName.trim(),
+        part_number: newPartNumber.trim() || undefined,
+        quantity: Number(newPartQty),
+        unit_cost: Number(newPartUnitCost),
+        inventory_item_id: partSource === 'stock' && selectedInventoryItemId ? selectedInventoryItemId : undefined,
       });
 
       await loadMaintenanceData();
@@ -224,9 +292,60 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
       setNewPartName('');
       setNewPartNumber('');
       setNewPartQty(1);
+      setSelectedInventoryItemId('');
+      setPartSource('stock');
     } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل إضافة قطعة الغيار' : 'Failed to add spare part'));
+      setErrorMsg(err?.message || (isAr ? 'فشل إضافة وصرف قطعة الغيار' : 'Failed to add spare part'));
+    } finally {
+      setIsSubmittingPart(false);
     }
+  };
+
+  const handleAddSparePartStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmittingStockPart) return;
+    if (!newStockPart.name || !newStockPart.warehouse_id) return;
+
+    setIsSubmittingStockPart(true);
+    try {
+      await api.maintenance.createSparePartStock({
+        name: newStockPart.name.trim(),
+        part_number: newStockPart.part_number.trim() || undefined,
+        warehouse_id: newStockPart.warehouse_id,
+        unit_of_measure: newStockPart.unit_of_measure,
+        initial_balance: Number(newStockPart.initial_balance) || 0,
+        unit_cost: Number(newStockPart.unit_cost) || 0,
+        reorder_level: Number(newStockPart.reorder_level) || 0,
+        description: newStockPart.description.trim() || undefined,
+      });
+
+      await loadMaintenanceData();
+      setIsAddSparePartStockModalOpen(false);
+      setNewStockPart({
+        name: '',
+        part_number: '',
+        warehouse_id: warehouses[0]?.id || '',
+        unit_of_measure: 'قطعة',
+        initial_balance: 10,
+        unit_cost: 150,
+        reorder_level: 2,
+        description: '',
+      });
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إضافة قطعة الغيار إلى المخزن' : 'Failed to add spare part to stock'));
+    } finally {
+      setIsSubmittingStockPart(false);
+    }
+  };
+
+  const handleOpenIssueForStockItem = (item: any) => {
+    setPartSource('stock');
+    setSelectedInventoryItemId(item.id);
+    setNewPartName(item.name);
+    setNewPartNumber(item.item_code || item.code || '');
+    setNewPartUnitCost(Number(item.unit_cost || item.average_cost || 0));
+    setNewPartQty(1);
+    setIsSparePartModalOpen(true);
   };
 
   // Authoritative server-backed metrics
@@ -237,505 +356,726 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   const totalDowntimeHours = downtimeSummary?.total_downtime_hours ?? workOrders.reduce((sum, wo) => sum + (Number(wo.downtime_hours) || 0), 0);
   const totalMaintenanceExpense = downtimeSummary?.total_maintenance_cost ?? workOrders.reduce((sum, wo) => sum + (Number(wo.total_cost) || 0), 0);
 
+  // Filtered Machines
+  const filteredMachines = useMemo(() => {
+    return machines.filter((m) => {
+      // Search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matches =
+          (m.machine_code && m.machine_code.toLowerCase().includes(q)) ||
+          (m.name && m.name.toLowerCase().includes(q)) ||
+          (m.model_number && m.model_number.toLowerCase().includes(q)) ||
+          (m.serial_number && m.serial_number.toLowerCase().includes(q)) ||
+          (m.location && m.location.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      // Status
+      if (machineStatusFilter !== 'all' && m.status !== machineStatusFilter) {
+        return false;
+      }
+      // Type
+      if (machineTypeFilter !== 'all' && m.machine_type !== machineTypeFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [machines, searchQuery, machineStatusFilter, machineTypeFilter]);
+
+  // Filtered Work Orders
+  const filteredWorkOrders = useMemo(() => {
+    return workOrders.filter((wo) => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const mch = machines.find((m) => m.id === wo.machine_id);
+        const matches =
+          (wo.order_number && wo.order_number.toLowerCase().includes(q)) ||
+          (wo.issue_description && wo.issue_description.toLowerCase().includes(q)) ||
+          (wo.technician_name && wo.technician_name.toLowerCase().includes(q)) ||
+          (mch?.name && mch.name.toLowerCase().includes(q)) ||
+          (mch?.machine_code && mch.machine_code.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      if (workOrderFilter === 'breakdown' && wo.work_type !== 'breakdown') return false;
+      if (workOrderFilter === 'preventive' && wo.work_type !== 'preventive') return false;
+      if (workOrderFilter === 'in_progress' && wo.status !== 'in_progress') return false;
+      if (workOrderFilter === 'completed' && wo.status !== 'completed') return false;
+      return true;
+    });
+  }, [workOrders, machines, searchQuery, workOrderFilter]);
+
+  // Filtered Spare Parts Stock in Warehouse
+  const filteredSparePartsStock = useMemo(() => {
+    if (!searchQuery) return sparePartsStock;
+    const q = searchQuery.toLowerCase();
+    return sparePartsStock.filter((item) => {
+      return (
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.item_code && item.item_code.toLowerCase().includes(q)) ||
+        (item.code && item.code.toLowerCase().includes(q)) ||
+        (item.warehouse?.name && item.warehouse.name.toLowerCase().includes(q))
+      );
+    });
+  }, [sparePartsStock, searchQuery]);
+
+  // Filtered Issued Spare Parts Ledger
+  const filteredSparePartsIssued = useMemo(() => {
+    if (!searchQuery) return spareParts;
+    const q = searchQuery.toLowerCase();
+    return spareParts.filter((sp) => {
+      return (
+        (sp.part_name && sp.part_name.toLowerCase().includes(q)) ||
+        (sp.part_number && sp.part_number.toLowerCase().includes(q)) ||
+        (sp.work_order_number && sp.work_order_number.toLowerCase().includes(q)) ||
+        (sp.machine_name && sp.machine_name.toLowerCase().includes(q))
+      );
+    });
+  }, [spareParts, searchQuery]);
+
+  const getMachineTypeBadge = (type: string) => {
+    switch (type) {
+      case 'sewing':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+            <Zap className="w-3 h-3 text-indigo-600" />
+            <span>{isAr ? 'حياكة سنجر' : 'Sewing'}</span>
+          </span>
+        );
+      case 'cutting':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+            <Scissors className="w-3 h-3 text-amber-600" />
+            <span>{isAr ? 'مقص ومعدات قص' : 'Cutting'}</span>
+          </span>
+        );
+      case 'overlock':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+            <Sliders className="w-3 h-3 text-purple-600" />
+            <span>{isAr ? 'أوفرلوك وسرفلة' : 'Overlock'}</span>
+          </span>
+        );
+      case 'buttonhole':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+            <Cpu className="w-3 h-3 text-sky-600" />
+            <span>{isAr ? 'عراوي وأزرار' : 'Buttonhole'}</span>
+          </span>
+        );
+      case 'interlock':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            <Activity className="w-3 h-3 text-blue-600" />
+            <span>{isAr ? 'أورليه كولاريت' : 'Interlock'}</span>
+          </span>
+        );
+      case 'pressing':
+      case 'ironing':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+            <Clock className="w-3 h-3 text-orange-600" />
+            <span>{isAr ? 'مكبس كي وبخار' : 'Pressing'}</span>
+          </span>
+        );
+      case 'embroidery':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800">
+            <Sparkles className="w-3 h-3 text-pink-600" />
+            <span>{isAr ? 'تطريز كمبيوتر' : 'Embroidery'}</span>
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            <Cpu className="w-3 h-3 text-slate-500" />
+            <span>{type}</span>
+          </span>
+        );
+    }
+  };
+
+  const getMachineStatusBadge = (status: string) => {
+    if (status === 'operational') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 shadow-2xs">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>{isAr ? 'جاهزة للعمل' : 'Operational'}</span>
+        </span>
+      );
+    }
+    if (status === 'breakdown') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-300/80 dark:border-rose-800 shadow-2xs">
+          <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+          <span>{isAr ? 'عطل وتوقف' : 'Breakdown'}</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800 shadow-2xs">
+        <Wrench className="w-3 h-3 text-amber-600 animate-spin" />
+        <span>{isAr ? 'تحت الصيانة' : 'In Maintenance'}</span>
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 animate-in fade-in duration-200">
+      {/* 1. Page Header */}
       <PageHeader
         title={isAr ? 'صيانة الماكينات والأصول الصناعية' : 'Machine Assets & Maintenance'}
         subtitle={isAr
           ? 'سجل ماكينات الخياطة والقص، أوامر الصيانة الدورية والطارئة، وتتبع ساعات التوقف وقطع الغيار.'
           : 'Machine asset registry, emergency & preventative work orders, downtime logs, and spare parts.'}
-        icon={<Wrench className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
+        icon={<Wrench className="w-5 h-5 text-amber-500" />}
         breadcrumbs={[
           { label: isAr ? 'الرئيسية' : 'Home' },
           { label: isAr ? 'صيانة الماكينات' : 'Machine Assets' },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsWorkOrderModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNewOrder((prev) => ({ ...prev, work_type: 'breakdown', priority: 'critical' }));
+                setIsWorkOrderModalOpen(true);
+              }}
+              title={isAr ? 'إبلاغ فوري عن عطل وتوقف خط إنتاج' : 'Report Emergency Breakdown'}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-xs transition-all cursor-pointer"
             >
-              {isAr ? '+ أمر صيانة' : '+ Work Order'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+              <ShieldAlert className="w-4 h-4" />
+              <span>{isAr ? '+ بلاغ عطل طارئ' : '+ Emergency Ticket'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNewOrder((prev) => ({ ...prev, work_type: 'preventive', priority: 'medium' }));
+                setIsWorkOrderModalOpen(true);
+              }}
+              title={isAr ? 'إصدار أمر صيانة وقائية مجدولة' : 'New Preventative Order'}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-xs transition-all cursor-pointer"
+            >
+              <Wrench className="w-4 h-4" />
+              <span>{isAr ? '+ أمر صيانة' : '+ Work Order'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsAddSparePartStockModalOpen(true)}
+              title={isAr ? 'إضافة وتوريد قطعة غيار جديدة إلى مستودع المصنع' : 'Add Spare Part to Stock'}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-xs transition-all cursor-pointer"
+            >
+              <Boxes className="w-4 h-4" />
+              <span>{isAr ? '+ قطعة للمخزن' : '+ Add Part to Stock'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsAddMachineModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
+              title={isAr ? 'تسجيل ماكينة ومعدة جديدة بالمصنع' : 'Register New Machine'}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-900 bg-amber-400 hover:bg-amber-300 shadow-xs transition-all cursor-pointer"
             >
-              {isAr ? '+ إضافة ماكينة' : '+ New Machine'}
-            </Button>
+              <Plus className="w-4 h-4" />
+              <span>{isAr ? '+ تسجيل ماكينة' : '+ New Machine'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={loadMaintenanceData}
+              title={isAr ? 'تحديث البيانات' : 'Refresh'}
+              className="inline-flex items-center justify-center w-8.5 h-8.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-amber-500' : ''}`} />
+            </button>
           </div>
         }
       />
+
       {errorMsg && (
-        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between shadow-2xs">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span className="font-medium">{errorMsg}</span>
           </div>
-          <Button size="sm" variant="outline" onClick={loadMaintenanceData} className="text-xs py-1">
-            <RefreshCw className="w-3.5 h-3.5 mr-1" />
-            {isAr ? 'إعادة المحاولة' : 'Retry'}
-          </Button>
+          <button
+            type="button"
+            onClick={loadMaintenanceData}
+            className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>{isAr ? 'إعادة المحاولة' : 'Retry'}</span>
+          </button>
         </div>
       )}
 
-      {isLoading && (
-        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-          <span>{isAr ? 'جاري تحميل سجلات الصيانة والماكينات...' : 'Loading asset maintenance records...'}</span>
+      {/* 2. Top 4 Interactive Modern KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* Card 1: Operational Assets */}
+        <div
+          onClick={() => {
+            setActiveSubTab('machines');
+            setMachineStatusFilter('operational');
+          }}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+            machineStatusFilter === 'operational' && activeSubTab === 'machines'
+              ? 'bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 border-emerald-400 dark:border-emerald-700 ring-2 ring-emerald-400/30'
+              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-emerald-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+              {isAr ? 'الماكينات العاملة' : 'Operational Assets'}
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-2xs border border-emerald-200/60 dark:border-emerald-800/40">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1">
+            {operationalCount} <span className="text-xs font-normal text-slate-400">/ {totalMachines}</span>
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
+            <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>{Math.round((operationalCount / (totalMachines || 1)) * 100)}% {isAr ? 'جاهزية تشغيلية' : 'Availability'}</span>
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium">{isAr ? 'خطوط الإنتاج' : 'Floor Assets'}</span>
+          </div>
         </div>
-      )}
 
-      {/* Top Banner / Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4 border-l-4 border-emerald-600">
+        {/* Card 2: Active Breakdowns & Maintenance */}
+        <div
+          onClick={() => {
+            setActiveSubTab('machines');
+            setMachineStatusFilter('breakdown');
+          }}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+            machineStatusFilter === 'breakdown' && activeSubTab === 'machines'
+              ? 'bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/40 dark:to-red-950/30 border-rose-400 dark:border-rose-700 ring-2 ring-rose-400/30'
+              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-rose-300'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                {isAr ? 'الماكينات العاملة' : 'Operational Assets'}
-              </p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">
-                {operationalCount} / {totalMachines}
-              </h3>
-              <p className="text-xs text-emerald-600 mt-1 font-semibold">
-                {Math.round((operationalCount / (totalMachines || 1)) * 100)}% {isAr ? 'كفاءة تشغيلية' : 'Availability'}
-              </p>
-            </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-600">
-              <CheckCircle className="w-6 h-6" />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+              {isAr ? 'أعطال متوقفة حالياً' : 'Active Breakdowns'}
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shadow-2xs border border-rose-200/60 dark:border-rose-800/40">
+              <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+          <div className="text-2xl font-black font-mono text-rose-600 dark:text-rose-400 mt-1">
+            {breakdownCount + underMaintenanceCount}{' '}
+            <span className="text-xs font-normal text-slate-400">{isAr ? 'ماكينة' : 'machines'}</span>
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
+            <span className="text-rose-600 font-bold">{breakdownCount} {isAr ? 'عطل حرج' : 'Critical'}</span>
+            <span className="text-slate-400 font-bold">•</span>
+            <span className="text-amber-600 font-bold">{underMaintenanceCount} {isAr ? 'تحت الصيانة' : 'In Service'}</span>
+          </div>
+        </div>
 
-        <Card className="p-4 border-l-4 border-rose-600">
+        {/* Card 3: Downtime Hours */}
+        <div
+          onClick={() => {
+            setActiveSubTab('workorders');
+            setWorkOrderFilter('breakdown');
+          }}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+            workOrderFilter === 'breakdown' && activeSubTab === 'workorders'
+              ? 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 border-amber-400 dark:border-amber-700 ring-2 ring-amber-400/30'
+              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-amber-300'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                {isAr ? 'أعطال متوقفة حالياً' : 'Active Breakdowns'}
-              </p>
-              <h3 className="text-2xl font-bold text-rose-600 mt-1">
-                {breakdownCount + underMaintenanceCount}
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                {breakdownCount} {isAr ? 'عطل حرج' : 'Critical'} | {underMaintenanceCount} {isAr ? 'صيانة جارية' : 'In Service'}
-              </p>
-            </div>
-            <div className="p-3 bg-rose-500/10 rounded-xl text-rose-600">
-              <AlertTriangle className="w-6 h-6" />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+              {isAr ? 'ساعات التوقف الكلية' : 'Total Downtime'}
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs border border-amber-200/60 dark:border-amber-800/40">
+              <Clock className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+          <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1">
+            {totalDowntimeHours.toFixed(1)}{' '}
+            <span className="text-xs font-normal text-slate-400">{isAr ? 'ساعة عمل' : 'hrs'}</span>
+          </div>
+          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1 truncate">
+            <Activity className="w-3.5 h-3.5 shrink-0" />
+            <span>{isAr ? 'فاقد إنتاجي مقدّر للورديات' : 'Lost floor production'}</span>
+          </div>
+        </div>
 
-        <Card className="p-4 border-l-4 border-amber-600">
+        {/* Card 4: Maintenance Expense */}
+        <div
+          onClick={() => setActiveSubTab('spareparts')}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+            activeSubTab === 'spareparts'
+              ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/30 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-400/30'
+              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-indigo-300'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                {isAr ? 'ساعات التوقف الكلية' : 'Total Downtime'}
-              </p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">
-                {totalDowntimeHours.toFixed(1)} {isAr ? 'ساعة' : 'Hrs'}
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                {isAr ? 'تأثير خطوط الإنتاج' : 'Lost floor production'}
-              </p>
-            </div>
-            <div className="p-3 bg-amber-500/10 rounded-xl text-amber-600">
-              <Clock className="w-6 h-6" />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+              {isAr ? 'تكلفة الصيانة وقطع الغيار' : 'Maintenance Expense'}
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs border border-indigo-200/60 dark:border-indigo-800/40">
+              <Wrench className="w-5 h-5" />
             </div>
           </div>
-        </Card>
-
-        <Card className="p-4 border-l-4 border-primary">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                {isAr ? 'تكلفة الصيانة وقطع الغيار' : 'Maintenance Expense'}
-              </p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">
-                {totalMaintenanceExpense.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                {isAr ? 'شاملة أجور الفنيين والقطع' : 'Spare parts & labor'}
-              </p>
-            </div>
-            <div className="p-3 bg-primary/10 rounded-xl text-primary">
-              <Wrench className="w-6 h-6" />
-            </div>
+          <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-1">
+            {totalMaintenanceExpense.toLocaleString()}{' '}
+            <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
           </div>
-        </Card>
+          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+            {isAr ? 'شاملة أجور الفنيين والقطع' : 'Spare parts & labor cost'}
+          </div>
+        </div>
       </div>
 
-      {/* Action Bar & Subtabs */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant={activeSubTab === 'machines' ? 'primary' : 'outline'}
-            size="sm"
-            onClick={() => setActiveSubTab('machines')}
-            className="flex items-center gap-2"
-          >
-            <Cpu className="w-4 h-4" />
-            {isAr ? 'سجل الماكينات والمعدات' : 'Asset Register'}
-          </Button>
+      {/* 3. Sub-Tabs Navigation Bar */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('machines')}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+            activeSubTab === 'machines'
+              ? 'bg-indigo-600 text-white ring-2 ring-indigo-500/30'
+              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+          }`}
+        >
+          <Cpu className="w-4 h-4" />
+          <span>{isAr ? 'سجل الماكينات والمعدات' : 'Asset Register'}</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'machines' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+            {machines.length}
+          </span>
+        </button>
 
-          <Button
-            variant={activeSubTab === 'workorders' ? 'primary' : 'outline'}
-            size="sm"
-            onClick={() => setActiveSubTab('workorders')}
-            className="flex items-center gap-2"
-          >
-            <Wrench className="w-4 h-4" />
-            {isAr ? 'أوامر الصيانة وبلاغات الأعطال' : 'Work Orders & Tickets'}
-          </Button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('workorders')}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+            activeSubTab === 'workorders'
+              ? 'bg-rose-600 text-white ring-2 ring-rose-500/30'
+              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+          }`}
+        >
+          <Wrench className="w-4 h-4" />
+          <span>{isAr ? 'أوامر الصيانة وبلاغات الأعطال' : 'Work Orders & Tickets'}</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'workorders' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+            {workOrders.length}
+          </span>
+        </button>
 
-          <Button
-            variant={activeSubTab === 'spareparts' ? 'primary' : 'outline'}
-            size="sm"
-            onClick={() => setActiveSubTab('spareparts')}
-            className="flex items-center gap-2"
-          >
-            <Package className="w-4 h-4" />
-            {isAr ? 'مخزون قطع الغيار' : 'Spare Parts'}
-          </Button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('spareparts')}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+            activeSubTab === 'spareparts'
+              ? 'bg-amber-600 text-white ring-2 ring-amber-500/30'
+              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>{isAr ? 'مخزون وقطع غيار الماكينات' : 'Spare Parts & Stock'}</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'spareparts' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+            {sparePartsStock.length} {isAr ? 'بالمخزن' : 'stock'} | {spareParts.length} {isAr ? 'منصرف' : 'used'}
+          </span>
+        </button>
+      </div>
 
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {activeSubTab === 'spareparts' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsSparePartModalOpen(true)}
-              className="flex items-center gap-1 border-primary/40 text-primary hover:bg-primary/10"
+      {/* 4. Filters & Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={
+              activeSubTab === 'machines'
+                ? (isAr ? 'بحث بكود الماكينة، الاسم، الموديل، أو الموقع...' : 'Search asset code, name, location...')
+                : activeSubTab === 'workorders'
+                ? (isAr ? 'بحث برقم الإذن، وصف العطل، الفني، أو الماكينة...' : 'Search order #, issue, technician...')
+                : (isAr ? 'بحث باسم قطعة الغيار، أو رقم القطعة...' : 'Search part name or part number...')
+            }
+            className="w-full ps-9 pe-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute end-2.5 top-2 text-slate-400 hover:text-slate-600"
             >
-              <Plus className="w-4 h-4" />
-              {isAr ? 'صرف قطعة غيار لأمر صيانة' : 'Add Spare Part'}
-            </Button>
+              <X className="w-3.5 h-3.5" />
+            </button>
           )}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsWorkOrderModalOpen(true)}
-            className="flex items-center gap-1 border-rose-600/30 text-rose-600 hover:bg-rose-500/10"
-          >
-            <ShieldAlert className="w-4 h-4" />
-            {isAr ? 'إبلاغ عن عطل / طلب صيانة' : 'Report Breakdown'}
-          </Button>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsAddMachineModalOpen(true)}
-            className="flex items-center gap-1"
-          >
-            <Plus className="w-4 h-4" />
-            {isAr ? 'تسجيل ماكينة جديدة' : 'Add Machine'}
-          </Button>
         </div>
+
+        {/* Tab-Specific Filters */}
+        {activeSubTab === 'machines' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setMachineStatusFilter('all')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  machineStatusFilter === 'all'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                {isAr ? 'كافة الحالات' : 'All'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMachineStatusFilter('operational')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  machineStatusFilter === 'operational'
+                    ? 'bg-emerald-500 text-white shadow-2xs'
+                    : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                }`}
+              >
+                {isAr ? 'جاهزة للعمل' : 'Operational'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMachineStatusFilter('breakdown')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  machineStatusFilter === 'breakdown'
+                    ? 'bg-rose-500 text-white shadow-2xs'
+                    : 'text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                }`}
+              >
+                {isAr ? 'أعطال وتوقف' : 'Breakdowns'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMachineStatusFilter('under_maintenance')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                  machineStatusFilter === 'under_maintenance'
+                    ? 'bg-amber-500 text-white shadow-2xs'
+                    : 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                }`}
+              >
+                {isAr ? 'تحت الصيانة' : 'Service'}
+              </button>
+            </div>
+
+            <select
+              value={machineTypeFilter}
+              onChange={(e) => setMachineTypeFilter(e.target.value)}
+              className="px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300"
+            >
+              <option value="all">{isAr ? 'كافة أنواع المعدات' : 'All Equipment'}</option>
+              <option value="sewing">{isAr ? 'ماكينات خياطة (سنجر)' : 'Sewing'}</option>
+              <option value="cutting">{isAr ? 'مقصات صالة القص' : 'Cutting'}</option>
+              <option value="overlock">{isAr ? 'أوفرلوك وسرفلة' : 'Overlock'}</option>
+              <option value="buttonhole">{isAr ? 'عراوي وأزرار' : 'Buttonhole'}</option>
+              <option value="interlock">{isAr ? 'أورليه كولاريت' : 'Interlock'}</option>
+              <option value="pressing">{isAr ? 'مكابس كي وبخار' : 'Pressing'}</option>
+              <option value="embroidery">{isAr ? 'تطريز كمبيوتر' : 'Embroidery'}</option>
+            </select>
+          </div>
+        )}
+
+        {activeSubTab === 'workorders' && (
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setWorkOrderFilter('all')}
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                workOrderFilter === 'all'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              {isAr ? 'الكل' : 'All'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkOrderFilter('breakdown')}
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                workOrderFilter === 'breakdown'
+                  ? 'bg-rose-500 text-white shadow-2xs'
+                  : 'text-rose-700 dark:text-rose-400'
+              }`}
+            >
+              {isAr ? '🚨 أعطال مفاجئة' : 'Breakdown'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkOrderFilter('preventive')}
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                workOrderFilter === 'preventive'
+                  ? 'bg-indigo-500 text-white shadow-2xs'
+                  : 'text-indigo-700 dark:text-indigo-400'
+              }`}
+            >
+              {isAr ? '📅 صيانة دورية' : 'Preventative'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkOrderFilter('in_progress')}
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                workOrderFilter === 'in_progress'
+                  ? 'bg-amber-500 text-white shadow-2xs'
+                  : 'text-amber-700 dark:text-amber-400'
+              }`}
+            >
+              {isAr ? '⏳ جارية' : 'In Progress'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkOrderFilter('completed')}
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                workOrderFilter === 'completed'
+                  ? 'bg-emerald-500 text-white shadow-2xs'
+                  : 'text-emerald-700 dark:text-emerald-400'
+              }`}
+            >
+              {isAr ? '✓ تم الإصلاح' : 'Closed'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Subtab 1: Machines Register */}
+      {/* 5. Subtab 1: Machines Register */}
       {activeSubTab === 'machines' && (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-start">
-              <thead className="bg-muted/50 border-b border-border text-muted-foreground text-xs font-semibold">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold">
                 <tr>
-                  <th className="p-3 text-start">{isAr ? 'كود الماكينة' : 'Code'}</th>
-                  <th className="p-3 text-start">{isAr ? 'اسم المعدة / الموديل' : 'Asset Name & Model'}</th>
-                  <th className="p-3 text-start">{isAr ? 'النوع والموقع' : 'Type & Location'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-start">{isAr ? 'دورية الصيانة' : 'Interval'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الصيانة القادمة' : 'Next Due'}</th>
-                  <th className="p-3 text-end">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  <th className="py-3 px-4">{isAr ? 'كود الماكينة' : 'Asset Code'}</th>
+                  <th className="py-3 px-4">{isAr ? 'اسم المعدة / الموديل' : 'Machine & Model'}</th>
+                  <th className="py-3 px-4">{isAr ? 'النوع والموقع' : 'Type & Location'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'الحالة التشغيلية' : 'Status'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'دورية الصيانة' : 'Interval'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'الصيانة القادمة' : 'Next Due'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {machines.map((m) => (
-                  <tr key={m.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-3 font-mono font-semibold text-xs text-primary">
-                      {m.machine_code}
-                    </td>
-                    <td className="p-3">
-                      <div className="font-medium text-foreground">{m.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {m.model_number || 'N/A'} • SN: {m.serial_number || 'N/A'}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <span className="capitalize font-medium text-foreground">{m.machine_type}</span>
-                      <div className="text-xs text-muted-foreground">{m.location || 'General Floor'}</div>
-                    </td>
-                    <td className="p-3">
-                      <Badge
-                        variant={
-                          m.status === 'operational'
-                            ? 'success'
-                            : m.status === 'breakdown'
-                            ? 'danger'
-                            : 'warning'
-                        }
-                      >
-                        {m.status === 'operational'
-                          ? isAr
-                            ? 'جاهزة للعمل'
-                            : 'Operational'
-                          : m.status === 'breakdown'
-                          ? isAr
-                            ? 'عطل وتوقف'
-                            : 'Breakdown'
-                          : isAr
-                          ? 'تحت الصيانة'
-                          : 'In Maintenance'}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-xs text-muted-foreground">
-                      {m.maintenance_interval_days} {isAr ? 'يوم' : 'Days'}
-                    </td>
-                    <td className="p-3 text-xs">
-                      <span className="font-semibold text-foreground">{m.next_maintenance_date || 'N/A'}</span>
-                    </td>
-                    <td className="p-3 text-end">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setNewOrder((prev) => ({ ...prev, machine_id: m.id }));
-                            setIsWorkOrderModalOpen(true);
-                          }}
-                          className="text-xs py-1"
-                        >
-                          <Wrench className="w-3.5 h-3.5 me-1" />
-                          {isAr ? 'طلب صيانة' : 'Service'}
-                        </Button>
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'barcode',
-                              label: isAr ? 'طباعة باركود الماكينة' : 'Print Asset QR',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                            {
-                              id: 'orders',
-                              label: isAr ? 'سجل أعطال الماكينة' : 'Asset Breakdown History',
-                              icon: <Eye className="w-3.5 h-3.5 text-blue-500" />,
-                              onClick: () => setActiveSubTab('workorders'),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Subtab 2: Maintenance Work Orders */}
-      {activeSubTab === 'workorders' && (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-start">
-              <thead className="bg-muted/50 border-b border-border text-muted-foreground text-xs font-semibold">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم الإذن' : 'Order #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الماكينة المستهدفة' : 'Machine Asset'}</th>
-                  <th className="p-3 text-start">{isAr ? 'نوع العمل والأولوية' : 'Type & Priority'}</th>
-                  <th className="p-3 text-start">{isAr ? 'وصف المشكلة / الفني' : 'Issue & Tech'}</th>
-                  <th className="p-3 text-start">{isAr ? 'التكلفة الإجمالية' : 'Total Cost'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-end">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {workOrders.map((wo) => {
-                  const mch = machines.find((m) => m.id === wo.machine_id);
-                  return (
-                    <tr key={wo.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="p-3 font-mono font-semibold text-xs text-foreground">
-                        {wo.order_number}
-                        <div className="text-[11px] text-muted-foreground">{wo.created_at}</div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-medium text-foreground">{mch ? mch.name : 'Unknown Machine'}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{mch?.machine_code}</div>
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={wo.work_type === 'breakdown' ? 'danger' : 'neutral'}>
-                          {wo.work_type === 'breakdown'
-                            ? isAr
-                              ? 'عطل مفاجئ'
-                              : 'Breakdown'
-                            : isAr
-                            ? 'صيانة دورية'
-                            : 'Preventive'}
-                        </Badge>
-                        <div className="text-xs text-muted-foreground mt-1 capitalize">
-                          {isAr ? 'أولوية: ' : 'Priority: '}
-                          <span
-                            className={
-                              wo.priority === 'critical'
-                                ? 'text-rose-600 font-bold'
-                                : wo.priority === 'high'
-                                ? 'text-amber-600 font-semibold'
-                                : 'text-foreground'
-                            }
-                          >
-                            {wo.priority}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3 max-w-xs">
-                        <div className="text-xs text-foreground font-medium truncate">{wo.issue_description}</div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">
-                          {isAr ? 'الفني: ' : 'Tech: '} {wo.technician_name || 'Unassigned'}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-semibold text-foreground">
-                          {wo.total_cost.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {wo.downtime_hours} {isAr ? 'ساعة توقف' : 'Hrs Downtime'}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Badge
-                          variant={
-                            wo.status === 'completed'
-                              ? 'success'
-                              : wo.status === 'in_progress'
-                              ? 'warning'
-                              : 'neutral'
-                          }
-                        >
-                          {wo.status === 'completed'
-                            ? isAr
-                              ? 'تم الإصلاح'
-                              : 'Completed'
-                            : wo.status === 'in_progress'
-                            ? isAr
-                              ? 'قيد التنفيذ'
-                              : 'In Progress'
-                            : isAr
-                            ? 'مجدول'
-                            : 'Scheduled'}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-end">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {wo.status !== 'completed' ? (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedOrder(wo);
-                                setIsCompleteModalOpen(true);
-                              }}
-                              className="text-xs py-1"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'إتمام وإغلاق' : 'Complete'}
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center">
-                              <CheckCircle className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'تم الإصلاح' : 'Closed'}
-                            </span>
-                          )}
-                          <ActionsMenu
-                            variant="icon-horizontal"
-                            align={isAr ? 'left' : 'right'}
-                            items={[
-                              {
-                                id: 'print-wo',
-                                label: isAr ? 'طباعة إذن الصيانة' : 'Print Work Order',
-                                icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                                onClick: () => window.print(),
-                              },
-                              {
-                                id: 'add-part',
-                                label: isAr ? 'صرف قطعة غيار لهذا الإذن' : 'Issue Spare Part',
-                                icon: <Package className="w-3.5 h-3.5 text-amber-500" />,
-                                onClick: () => {
-                                  setSelectedWoForPart(wo.id);
-                                  setIsSparePartModalOpen(true);
-                                },
-                              },
-                            ]}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Subtab 3: Spare Parts Inventory */}
-      {activeSubTab === 'spareparts' && (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-start">
-              <thead className="bg-muted/50 border-b border-border text-muted-foreground text-xs font-semibold">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'اسم قطعة الغيار' : 'Part Name'}</th>
-                  <th className="p-3 text-start">{isAr ? 'رقم القطعة (Part #)' : 'Part Number'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الكمية المتوفرة' : 'Stock Qty'}</th>
-                  <th className="p-3 text-start">{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
-                  <th className="p-3 text-start">{isAr ? 'القيمة الإجمالية' : 'Total Asset Value'}</th>
-                  <th className="p-3 text-end">{isAr ? 'الحالة' : 'Status'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {spareParts.length === 0 ? (
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredMachines.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground text-sm">
-                      {isAr ? 'لا توجد قطع غيار منصرفة لأوامر الصيانة حالياً' : 'No spare parts logged to work orders'}
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Cpu className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                        <span className="font-semibold text-xs">
+                          {isAr ? 'لا توجد ماكينات مطابقة لمعايير البحث.' : 'No machines found.'}
+                        </span>
+                        {(searchQuery || machineStatusFilter !== 'all' || machineTypeFilter !== 'all') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSearchQuery('');
+                              setMachineStatusFilter('all');
+                              setMachineTypeFilter('all');
+                            }}
+                            className="text-xs text-indigo-600 font-bold hover:underline"
+                          >
+                            {isAr ? 'إعادة ضبط الفلاتر' : 'Reset filters'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
-                  spareParts.map((sp, idx) => (
-                    <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                      <td className="p-3 font-medium text-foreground">
-                        {sp.part_name}
-                        {sp.work_order_number && (
-                          <div className="text-[11px] text-muted-foreground font-mono">
-                            {isAr ? 'أمر صيانة: ' : 'Order: '} {sp.work_order_number}
-                          </div>
-                        )}
+                  filteredMachines.map((m) => (
+                    <tr key={m.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      {/* Code */}
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                        <span className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                          {m.machine_code}
+                        </span>
                       </td>
-                      <td className="p-3 font-mono text-xs text-muted-foreground">{sp.part_number || '—'}</td>
-                      <td className="p-3 font-semibold text-foreground">{sp.quantity}</td>
-                      <td className="p-3">
-                        {Number(sp.unit_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+
+                      {/* Name & Model */}
+                      <td className="py-3 px-4">
+                        <div
+                          onClick={() => setViewingMachineDetails(m)}
+                          className="font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors"
+                        >
+                          {m.name}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          {m.model_number || 'Model: N/A'} {m.serial_number ? `• SN: ${m.serial_number}` : ''}
+                        </div>
                       </td>
-                      <td className="p-3 font-semibold text-primary">
-                        {(Number(sp.total_cost) || (Number(sp.quantity) * Number(sp.unit_cost))).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+
+                      {/* Type & Location */}
+                      <td className="py-3 px-4">
+                        <div>{getMachineTypeBadge(m.machine_type)}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate max-w-xs">{m.location || (isAr ? 'عنبر التشغيل العام' : 'General Floor')}</span>
+                        </div>
                       </td>
-                      <td className="p-3 text-end">
-                        <Badge variant={Number(sp.quantity) > 5 ? 'success' : 'warning'}>
-                          {Number(sp.quantity) > 5
-                            ? isAr
-                              ? 'منصرف وموثق'
-                              : 'Logged'
-                            : isAr
-                            ? 'منصرف'
-                            : 'Logged'}
-                        </Badge>
+
+                      {/* Status */}
+                      <td className="py-3 px-4 text-center">
+                        {getMachineStatusBadge(m.status)}
+                      </td>
+
+                      {/* Interval */}
+                      <td className="py-3 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
+                        {m.maintenance_interval_days} {isAr ? 'يوم' : 'd'}
+                      </td>
+
+                      {/* Next Due */}
+                      <td className="py-3 px-4 text-center font-mono font-bold">
+                        <span className={
+                          m.status === 'breakdown'
+                            ? 'text-rose-600'
+                            : m.status === 'under_maintenance'
+                            ? 'text-amber-600'
+                            : 'text-slate-800 dark:text-slate-200'
+                        }>
+                          {m.next_maintenance_date || '—'}
+                        </span>
+                      </td>
+
+                      {/* Modern Actions as Icons */}
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* 1. Request Service Icon */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewOrder((prev) => ({
+                                ...prev,
+                                machine_id: m.id,
+                                work_type: m.status === 'breakdown' ? 'breakdown' : 'preventive',
+                                priority: m.status === 'breakdown' ? 'critical' : 'high',
+                              }));
+                              setIsWorkOrderModalOpen(true);
+                            }}
+                            title={isAr ? `إصدار أمر صيانة للماكينة (${m.machine_code})` : 'New Work Order'}
+                            className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/60 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Wrench className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 2. Machine Details / History Icon */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingMachineDetails(m)}
+                            title={isAr ? 'عرض بطاقة وسجل أعطال الماكينة الشامل' : 'View Asset Profile'}
+                            className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 3. Print QR / Barcode Label Icon */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingMachineBarcode(m)}
+                            title={isAr ? 'طباعة بطاقة الأصل والباركود' : 'Print Asset QR Label'}
+                            className="p-1.5 rounded-lg text-amber-600 dark:text-amber-400 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -746,170 +1086,676 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         </Card>
       )}
 
-      {/* Modal: Register Machine */}
+      {/* 6. Subtab 2: Work Orders & Breakdown Tickets */}
+      {activeSubTab === 'workorders' && (
+        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                <tr>
+                  <th className="py-3 px-4">{isAr ? 'رقم الإذن وتاريخه' : 'Order #'}</th>
+                  <th className="py-3 px-4">{isAr ? 'الماكينة المستهدفة' : 'Machine Asset'}</th>
+                  <th className="py-3 px-4">{isAr ? 'نوع العمل والأولوية' : 'Type & Priority'}</th>
+                  <th className="py-3 px-4">{isAr ? 'وصف العطل والفني المسؤول' : 'Issue & Tech'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'التكلفة وساعات التوقف' : 'Cost & Downtime'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredWorkOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Wrench className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                        <span className="font-semibold text-xs">
+                          {isAr ? 'لا توجد أوامر صيانة تطابق المعايير.' : 'No work orders found.'}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredWorkOrders.map((wo) => {
+                    const mch = machines.find((m) => m.id === wo.machine_id);
+                    const isClosed = wo.status === 'completed';
+
+                    return (
+                      <tr key={wo.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        {/* Order # */}
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                          <span className="block">{wo.order_number}</span>
+                          <span className="text-[10px] text-slate-400 font-sans block mt-0.5">
+                            {wo.scheduled_date || wo.created_at || '—'}
+                          </span>
+                        </td>
+
+                        {/* Machine */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            {mch ? mch.name : (isAr ? 'ماكينة غير محددة' : 'Unknown Machine')}
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono mt-0.5">
+                            <span className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{mch?.machine_code}</span>
+                            <span>• {mch?.location}</span>
+                          </div>
+                        </td>
+
+                        {/* Work Type & Priority */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant={wo.work_type === 'breakdown' ? 'danger' : 'neutral'}>
+                              {wo.work_type === 'breakdown'
+                                ? (isAr ? '🚨 عطل وتوقف' : 'Breakdown')
+                                : (isAr ? '📅 صيانة وقائية' : 'Preventative')}
+                            </Badge>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              wo.priority === 'critical'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                                : wo.priority === 'high'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                            }`}>
+                              {wo.priority === 'critical' ? 'حرجة' : wo.priority === 'high' ? 'عالية' : 'عادية'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Issue & Tech */}
+                        <td className="py-3 px-4 max-w-xs">
+                          <p className="text-slate-800 dark:text-slate-200 font-medium truncate" title={wo.issue_description}>
+                            {wo.issue_description}
+                          </p>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {isAr ? 'الفني: ' : 'Tech: '} <strong>{wo.technician_name || (isAr ? 'غير مسند' : 'Unassigned')}</strong>
+                          </div>
+                        </td>
+
+                        {/* Cost & Downtime */}
+                        <td className="py-3 px-4 text-center">
+                          <div className="font-mono font-bold text-slate-900 dark:text-white">
+                            {Number(wo.total_cost || 0).toLocaleString()} ج.م
+                          </div>
+                          <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400 mt-0.5">
+                            {wo.downtime_hours || 0} {isAr ? 'ساعة توقف' : 'hrs lost'}
+                          </div>
+                          {isClosed && (
+                            <div
+                              className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 mt-1 inline-flex items-center gap-0.5 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800"
+                              title={isAr ? 'تم ترحيل وتوجيه تكلفة الصيانة آلياً إلى حساب مصروفات المصنع (6010: مصاريف صناعية غير مباشرة واستهلاك)' : 'Posted to GL 6010'}
+                            >
+                              <span>✓ {isAr ? 'مصروفات المصنع (حساب 6010)' : 'GL 6010'}</span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant={isClosed ? 'success' : wo.status === 'in_progress' ? 'warning' : 'neutral'}>
+                            {isClosed
+                              ? (isAr ? '✓ تم الإصلاح' : 'Completed')
+                              : wo.status === 'in_progress'
+                              ? (isAr ? '⏳ قيد التنفيذ' : 'In Progress')
+                              : (isAr ? 'مجدول' : 'Scheduled')}
+                          </Badge>
+                        </td>
+
+                        {/* Actions Icons */}
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Complete Icon */}
+                            {!isClosed ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedOrder(wo);
+                                }}
+                                title={isAr ? 'إتمام وإغلاق أمر الصيانة' : 'Complete Work Order'}
+                                className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30">
+                                {isAr ? 'مغلق' : 'Closed'}
+                              </span>
+                            )}
+
+                            {/* Add Spare Part Icon */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedWoForPart(wo.id);
+                                setIsSparePartModalOpen(true);
+                              }}
+                              title={isAr ? 'صرف قطعة غيار لهذا الإذن' : 'Add Spare Part'}
+                              className="p-1.5 rounded-lg text-amber-600 dark:text-amber-400 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Package className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Print Voucher Icon */}
+                            <button
+                              type="button"
+                              onClick={() => setOrderToPrint(wo)}
+                              title={isAr ? 'طباعة إذن الصيانة الرسمي' : 'Print Work Order'}
+                              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* 7. Subtab 3: Spare Parts Inventory & Stock Management */}
+      {activeSubTab === 'spareparts' && (
+        <div className="space-y-4">
+          {/* A. Financial & Inventory Accounting Integration Banner */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/30 dark:border-emerald-500/20 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                <Coins className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs text-slate-900 dark:text-white">
+                    {isAr ? 'التكامل المالي والمخزني المعتمد للمصنع' : 'Factory Accounting & Inventory Integration'}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    {isAr ? '✓ حساب 6010: مصاريف صناعية غير مباشرة' : 'GL 6010 Synced'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                  {isAr
+                    ? 'أي قطعة غيار تُصرف يتم خصمها آلياً من رصيد المستودع (إذن صرف OUT)، وتُسجل تكلفتها مع أجور الفنيين مباشرة في مصروفات تشغيل المصنع بدفتر الأستاذ العام عند إغلاق أمر الصيانة.'
+                    : 'Issued spare parts automatically decrement warehouse stock (OUT) and post with technician labor into factory indirect expenses (GL 6010).'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs px-4 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
+              <div className="text-right">
+                <div className="text-[10px] text-slate-400 font-semibold">{isAr ? 'إجمالي قيمة قطع الغيار بالمستودع' : 'Stock Value'}</div>
+                <div className="text-sm font-mono font-black text-emerald-700 dark:text-emerald-400">
+                  {sparePartsStock.reduce((sum, item) => sum + (Number(item.current_balance || 0) * Number(item.unit_cost || item.average_cost || 0)), 0).toLocaleString()} ج.م
+                </div>
+              </div>
+              <div className="h-7 w-px bg-slate-200 dark:bg-slate-700" />
+              <div className="text-right">
+                <div className="text-[10px] text-slate-400 font-semibold">{isAr ? 'إجمالي المنصرف للصيانة' : 'Total Issued'}</div>
+                <div className="text-sm font-mono font-black text-amber-600 dark:text-amber-400">
+                  {spareParts.reduce((sum, sp) => sum + (Number(sp.total_cost) || (Number(sp.quantity) * Number(sp.unit_cost))), 0).toLocaleString()} ج.م
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* B. Sub-navigation View Switcher and Action Buttons */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+            {/* View Mode Pills */}
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/70 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setSparePartsViewMode('stock')}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  sparePartsViewMode === 'stock'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5" />
+                <span>{isAr ? 'رصيد المخزون المتوفر' : 'Available Stock'}</span>
+                <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold">
+                  {sparePartsStock.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSparePartsViewMode('issued')}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  sparePartsViewMode === 'issued'
+                    ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>{isAr ? 'سجل القطع المنصرفة للأوامر' : 'Issued Usage Ledger'}</span>
+                <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold">
+                  {spareParts.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddSparePartStockModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-2xs transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{isAr ? '+ إضافة قطعة غيار للمخزن' : '+ Add Part to Stock'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPartSource('stock');
+                  setIsSparePartModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-2xs transition-all cursor-pointer"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>{isAr ? '+ صرف قطعة غيار' : '+ Issue Part'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* C. View 1: Warehouse Available Stock */}
+          {sparePartsViewMode === 'stock' && (
+            <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                    <tr>
+                      <th className="py-3 px-4">{isAr ? 'كود القطعة (Part #)' : 'Item Code'}</th>
+                      <th className="py-3 px-4">{isAr ? 'اسم قطعة الغيار والمواصفات' : 'Part Name & Specs'}</th>
+                      <th className="py-3 px-4">{isAr ? 'المستودع' : 'Warehouse'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'الرصيد المتاح' : 'Available Stock'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
+                      <th className="py-3 px-4 text-center text-emerald-700 dark:text-emerald-300">{isAr ? 'إجمالي القيمة التقديرية' : 'Total Value'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'حد إعادة الطلب' : 'Reorder Level'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredSparePartsStock.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Boxes className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                            <span className="font-semibold text-xs">
+                              {isAr ? 'لا توجد قطع غيار مسجلة في المخزن.' : 'No spare parts in stock.'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setIsAddSparePartStockModalOpen(true)}
+                              className="text-xs text-emerald-600 font-bold hover:underline"
+                            >
+                              {isAr ? '+ إضافة أول قطعة غيار للمستودع الآن' : '+ Add first spare part'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSparePartsStock.map((item) => {
+                        const balance = Number(item.current_balance || 0);
+                        const reorder = Number(item.reorder_level || 0);
+                        const isLow = balance <= reorder;
+                        const isOut = balance <= 0;
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                            {/* Code */}
+                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                              <span className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                                {item.item_code || item.code}
+                              </span>
+                            </td>
+
+                            {/* Name & Desc */}
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-slate-900 dark:text-white">{item.name}</div>
+                              {item.description && (
+                                <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs">
+                                  {item.description}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Warehouse */}
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-300 font-medium">
+                              {item.warehouse?.name || (isAr ? 'المستودع الرئيسي' : 'Main Warehouse')}
+                            </td>
+
+                            {/* Current Balance */}
+                            <td className="py-3 px-4 text-center">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl font-mono text-xs font-bold border ${
+                                  isOut
+                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                    : isLow
+                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                }`}
+                              >
+                                <span>{balance}</span>
+                                <span className="text-[10px] font-normal">{item.unit_of_measure || 'قطعة'}</span>
+                              </span>
+                            </td>
+
+                            {/* Unit Cost */}
+                            <td className="py-3 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
+                              {Number(item.unit_cost || item.average_cost || 0).toLocaleString()} ج.م
+                            </td>
+
+                            {/* Total Stock Value */}
+                            <td className="py-3 px-4 text-center font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                              {(balance * Number(item.unit_cost || item.average_cost || 0)).toLocaleString()} ج.م
+                            </td>
+
+                            {/* Reorder Level */}
+                            <td className="py-3 px-4 text-center font-mono text-slate-500">
+                              {reorder} {item.unit_of_measure || 'قطعة'}
+                            </td>
+
+                            {/* Action: Issue directly */}
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                type="button"
+                                disabled={isOut}
+                                onClick={() => handleOpenIssueForStockItem(item)}
+                                title={isOut ? (isAr ? 'الرصيد نفد من المستودع' : 'Out of stock') : (isAr ? 'صرف هذه القطعة فوراً لماكينة أو أمر صيانة' : 'Issue to Work Order')}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all ${
+                                  isOut
+                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/60 cursor-pointer shadow-2xs'
+                                }`}
+                              >
+                                <Package className="w-3 h-3" />
+                                <span>{isAr ? 'صرف لماكينة' : 'Issue'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* D. View 2: Issued Parts Usage Ledger */}
+          {sparePartsViewMode === 'issued' && (
+            <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                    <tr>
+                      <th className="py-3 px-4">{isAr ? 'اسم قطعة الغيار' : 'Part Name'}</th>
+                      <th className="py-3 px-4">{isAr ? 'رقم القطعة (Part #)' : 'Part Number'}</th>
+                      <th className="py-3 px-4">{isAr ? 'أمر الصيانة / الماكينة' : 'Work Order & Machine'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'الكمية المنصرفة' : 'Quantity'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'سعر الوحدة' : 'Unit Cost'}</th>
+                      <th className="py-3 px-4 text-center text-amber-700 dark:text-amber-300">{isAr ? 'القيمة الإجمالية' : 'Total Cost'}</th>
+                      <th className="py-3 px-4 text-center">{isAr ? 'التأثير المالي والمخزني' : 'GL & Stock Impact'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredSparePartsIssued.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Package className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                            <span className="font-semibold text-xs">
+                              {isAr ? 'لا توجد قطع غيار منصرفة مسجلة حتى الآن.' : 'No spare parts logged.'}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSparePartsIssued.map((sp, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                            {sp.part_name}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-500">
+                            {sp.part_number || '—'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold block">
+                              {sp.work_order_number || '—'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              {sp.machine_name || (isAr ? 'ماكينة خط إنتاج' : 'Line Asset')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 dark:text-white">
+                            {sp.quantity}
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
+                            {Number(sp.unit_cost).toLocaleString()} ج.م
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono font-black text-amber-700 dark:text-amber-400 text-sm">
+                            {(Number(sp.total_cost) || (Number(sp.quantity) * Number(sp.unit_cost))).toLocaleString()} ج.م
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                title="تم خصم الكمية من رصيد المستودع الفعلي آلياً"
+                              >
+                                <span>✓ {isAr ? 'مخصوم من المستودع' : 'Stock Deducted'}</span>
+                              </span>
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                title="التكلفة مرحلة لمصروفات المصنع (حساب 6010: مصاريف صناعية غير مباشرة واستهلاك ماكينات)"
+                              >
+                                <span>✓ {isAr ? 'مرحل لمصروفات المصنع (6010)' : 'GL 6010 Posted'}</span>
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* 8. MODAL 1: REGISTER NEW MACHINE */}
       <Modal
         isOpen={isAddMachineModalOpen}
         onClose={() => setIsAddMachineModalOpen(false)}
         title={isAr ? 'تسجيل ماكينة ومعدة جديدة بالمصنع' : 'Register New Machine Asset'}
+        maxWidth="md"
       >
         <form onSubmit={handleAddMachine} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {isAr ? 'كود الماكينة الداخلي *' : 'Asset Code *'}
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. SEW-BROTHER-04"
+                placeholder="مثال: MCH-SEW-09"
                 value={newMachine.machine_code}
                 onChange={(e) => setNewMachine({ ...newMachine, machine_code: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {isAr ? 'اسم الماكينة / المعدة *' : 'Machine Name *'}
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Brother S-7200C"
+                placeholder="مثال: ماكينة خياطة سنجر 1 إبرة"
                 value={newMachine.name}
                 onChange={(e) => setNewMachine({ ...newMachine, name: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {isAr ? 'نوع المعدة' : 'Equipment Type'}
               </label>
               <select
                 value={newMachine.machine_type}
                 onChange={(e) => setNewMachine({ ...newMachine, machine_type: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               >
                 <option value="sewing">{isAr ? 'ماكينة خياطة (سنجر/سراجة)' : 'Sewing Machine'}</option>
                 <option value="cutting">{isAr ? 'مقص ومعدات صالة القص' : 'Cutting Equipment'}</option>
                 <option value="overlock">{isAr ? 'ماكينة أوفرلوك' : 'Overlock Machine'}</option>
                 <option value="ironing">{isAr ? 'مكبس ومعدات كي وبخار' : 'Fusing & Ironing'}</option>
                 <option value="buttonhole">{isAr ? 'عراوي وأزرار' : 'Buttonhole / Button Attach'}</option>
-                <option value="boiler">{isAr ? 'غلاية بخار مركزية' : 'Steam Boiler'}</option>
-                <option value="compressor">{isAr ? 'كمبروسر هواء مضغوط' : 'Air Compressor'}</option>
+                <option value="interlock">{isAr ? 'ماكينة أورليه كولاريت' : 'Interlock Machine'}</option>
+                <option value="embroidery">{isAr ? 'ماكينة تطريز كمبيوتر' : 'Embroidery Machine'}</option>
                 <option value="other">{isAr ? 'أخرى' : 'Other Equipment'}</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {isAr ? 'موقع الماكينة بالمصنع' : 'Floor Location'}
               </label>
               <input
                 type="text"
-                placeholder={isAr ? 'عنبر 1 - خط ب' : 'Floor 1 - Line B'}
+                placeholder={isAr ? 'مثال: خط إنتاج 1 - مرحلة الحياكة' : 'Floor 1 - Line B'}
                 value={newMachine.location}
                 onChange={(e) => setNewMachine({ ...newMachine, location: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'رقم الموديل' : 'Model Number'}
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'رقم الموديل' : 'Model #'}
               </label>
               <input
                 type="text"
-                placeholder="e.g. S-7200C-403"
+                placeholder="e.g. DDL-9000C"
                 value={newMachine.model_number}
                 onChange={(e) => setNewMachine({ ...newMachine, model_number: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'دورية الصيانة الوقائية (أيام)' : 'Preventive Interval (Days)'}
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الرقم التسلسلي (SN)' : 'Serial #'}
+              </label>
+              <input
+                type="text"
+                placeholder="SN-9941"
+                value={newMachine.serial_number}
+                onChange={(e) => setNewMachine({ ...newMachine, serial_number: e.target.value })}
+                className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'دورية الصيانة (أيام)' : 'Interval (Days)'}
               </label>
               <input
                 type="number"
                 min="1"
                 value={newMachine.maintenance_interval_days}
                 onChange={(e) => setNewMachine({ ...newMachine, maintenance_interval_days: Number(e.target.value) })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setIsAddMachineModalOpen(false)}>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'ملاحظات ومواصفات التشغيل' : 'Notes & Specs'}
+            </label>
+            <input
+              type="text"
+              placeholder={isAr ? 'مثال: تعمل بكهرباء 220 فولت، سرعة دوران 5000 غرزة/دقيقة' : 'Technical notes...'}
+              value={newMachine.notes}
+              onChange={(e) => setNewMachine({ ...newMachine, notes: e.target.value })}
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button type="button" variant="ghost" onClick={() => setIsAddMachineModalOpen(false)}>
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button type="submit" variant="primary">
-              {isAr ? 'حفظ الماكينة' : 'Register Machine'}
+            <Button type="submit" variant="primary" icon={<Plus className="w-3.5 h-3.5" />}>
+              {isAr ? 'حفظ وتسجيل الماكينة' : 'Save Machine'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* Modal: Report Breakdown / Work Order */}
+      {/* 9. MODAL 2: REPORT BREAKDOWN / WORK ORDER */}
       <Modal
         isOpen={isWorkOrderModalOpen}
         onClose={() => setIsWorkOrderModalOpen(false)}
-        title={isAr ? 'إبلاغ عن عطل / إنشاء أمر صيانة' : 'Report Breakdown / Maintenance Order'}
+        title={isAr ? 'إبلاغ عن عطل / إنشاء أمر صيانة جديد' : 'Report Breakdown / Work Order'}
+        maxWidth="md"
       >
         <form onSubmit={handleCreateWorkOrder} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-              {isAr ? 'الماكينة المتعطلة *' : 'Target Machine Asset *'}
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الماكينة المستهدفة *' : 'Target Machine *'}
             </label>
             <select
               required
               value={newOrder.machine_id}
               onChange={(e) => setNewOrder({ ...newOrder, machine_id: e.target.value })}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
             >
-              <option value="">{isAr ? '-- اختر الماكينة --' : '-- Select Machine --'}</option>
+              <option value="">{isAr ? '-- اختر الماكينة المستهدفة --' : '-- Select Machine --'}</option>
               {machines.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.machine_code} - {m.name} ({m.location})
+                  {m.machine_code} - {m.name} ({m.location || 'خط الإنتاج'})
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'نوع العمل' : 'Work Type'}
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'نوع العمل والصيانة' : 'Work Type'}
               </label>
               <select
                 value={newOrder.work_type}
                 onChange={(e) => setNewOrder({ ...newOrder, work_type: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               >
-                <option value="breakdown">{isAr ? 'عطل وتوقف مفاجئ (Breakdown)' : 'Breakdown'}</option>
-                <option value="preventive">{isAr ? 'صيانة دورية وقائية (Preventive)' : 'Preventive'}</option>
-                <option value="emergency">{isAr ? 'طوارئ وسلامة مهنية (Emergency)' : 'Emergency'}</option>
-                <option value="calibration">{isAr ? 'معايرة وضبط جودة (Calibration)' : 'Calibration'}</option>
+                <option value="breakdown">{isAr ? '🚨 عطل وتوقف مفاجئ (Breakdown)' : 'Breakdown'}</option>
+                <option value="preventive">{isAr ? '📅 صيانة دورية وقائية (Preventive)' : 'Preventive'}</option>
+                <option value="emergency">{isAr ? '⚡ طوارئ وسلامة مهنية (Emergency)' : 'Emergency'}</option>
+                <option value="calibration">{isAr ? '⚙️ معايرة وضبط جودة (Calibration)' : 'Calibration'}</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {isAr ? 'مستوى الأولوية' : 'Priority Level'}
               </label>
               <select
                 value={newOrder.priority}
                 onChange={(e) => setNewOrder({ ...newOrder, priority: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               >
-                <option value="critical">{isAr ? 'حرجة (توقف خط الإنتاج)' : 'Critical (Line Down)'}</option>
+                <option value="critical">{isAr ? '🔥 حرجة (توقف خط الإنتاج)' : 'Critical (Line Down)'}</option>
                 <option value="high">{isAr ? 'عالية' : 'High'}</option>
                 <option value="medium">{isAr ? 'متوسطة' : 'Medium'}</option>
                 <option value="low">{isAr ? 'منخفضة' : 'Low'}</option>
@@ -918,181 +1764,314 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {isAr ? 'وصف العطل بالتفصيل *' : 'Issue Description *'}
             </label>
             <textarea
               required
               rows={3}
-              placeholder={isAr ? 'اذكر الأعراض، مكان العطل، وملاحظات المشغل...' : 'Describe fault symptoms, line impact...'}
+              placeholder={isAr ? 'اذكر الأعراض، مكان العطل، وملاحظات المشغل وتأثيره على خط الإنتاج...' : 'Describe fault symptoms, line impact...'}
               value={newOrder.issue_description}
               onChange={(e) => setNewOrder({ ...newOrder, issue_description: e.target.value })}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'مبلغ العطل / المشرف' : 'Reported By'}
-              </label>
-              <input
-                type="text"
-                placeholder={isAr ? 'مشرف الخط' : 'Line Supervisor'}
-                value={newOrder.reported_by}
-                onChange={(e) => setNewOrder({ ...newOrder, reported_by: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'اسم الفني المسند إليه' : 'Assigned Technician'}
-              </label>
-              <input
-                type="text"
-                placeholder={isAr ? 'فني الميكانيكا / الكهرباء' : 'Maintenance Tech'}
-                value={newOrder.technician_name}
-                onChange={(e) => setNewOrder({ ...newOrder, technician_name: e.target.value })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setIsWorkOrderModalOpen(false)}>
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="primary">
-              {isAr ? 'إصدار أمر الشغل' : 'Dispatch Order'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Modal: Complete Work Order */}
-      <Modal
-        isOpen={isCompleteModalOpen}
-        onClose={() => setIsCompleteModalOpen(false)}
-        title={isAr ? 'إتمام وإغلاق أمر الصيانة' : 'Complete Maintenance Work Order'}
-      >
-        <form onSubmit={handleCompleteWorkOrder} className="space-y-4">
-          <div className="p-3 bg-muted/50 rounded-lg text-xs space-y-1">
-            <div className="font-semibold text-foreground">
-              {isAr ? 'رقم الإذن: ' : 'Order: '} {selectedOrder?.order_number}
-            </div>
-            <div className="text-muted-foreground">{selectedOrder?.issue_description}</div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-              {isAr ? 'تقرير الإصلاح والإجراءات المتخذة *' : 'Resolution Notes *'}
-            </label>
-            <textarea
-              required
-              rows={3}
-              placeholder={isAr ? 'تم استبدال القطع، تنظيف الحوض، وضبط المعايرة...' : 'Parts replaced, tested under load...'}
-              value={completeData.resolution_notes}
-              onChange={(e) => setCompleteData({ ...completeData, resolution_notes: e.target.value })}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'ساعات توقف الماكينة الفعلية' : 'Actual Downtime (Hours)'}
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={completeData.downtime_hours}
-                onChange={(e) => setCompleteData({ ...completeData, downtime_hours: Number(e.target.value) })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'تكلفة المصنعية / أجر الفني (ج.م)' : 'Labor Cost (EGP)'}
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={completeData.labor_cost}
-                onChange={(e) => setCompleteData({ ...completeData, labor_cost: Number(e.target.value) })}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setIsCompleteModalOpen(false)}>
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="primary">
-              {isAr ? 'تأكيد اكتمال الصيانة وتشغيل الماكينة' : 'Confirm Completion'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-      {/* Modal: Add Spare Part */}
-      <Modal
-        isOpen={isSparePartModalOpen}
-        onClose={() => setIsSparePartModalOpen(false)}
-        title={isAr ? 'صرف وتسجيل قطعة غيار لأمر الصيانة' : 'Add Spare Part to Work Order'}
-      >
-        <form onSubmit={handleAddSparePart} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-              {isAr ? 'أمر الصيانة المستهدف *' : 'Work Order *'}
-            </label>
-            <select
-              required
-              value={selectedWoForPart}
-              onChange={(e) => setSelectedWoForPart(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
-            >
-              <option value="">{isAr ? '-- اختر أمر الشغل --' : '-- Select Work Order --'}</option>
-              {workOrders.map((wo) => (
-                <option key={wo.id} value={wo.id}>
-                  {wo.order_number} - {wo.issue_description?.slice(0, 40)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-              {isAr ? 'اسم قطعة الغيار *' : 'Part Name *'}
-            </label>
-            <input
-              type="text"
-              required
-              value={newPartName}
-              onChange={(e) => setNewPartName(e.target.value)}
-              placeholder="e.g. Needle plate, Timing belt"
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'رقم القطعة (Part #)' : 'Part Number'}
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'مبلغ العطل / المشرف' : 'Reported By'}
+              </label>
+              <input
+                type="text"
+                placeholder={isAr ? 'مثال: مشرف الوردية أسامة' : 'Line Supervisor'}
+                value={newOrder.reported_by}
+                onChange={(e) => setNewOrder({ ...newOrder, reported_by: e.target.value })}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'اسم الفني المسند إليه' : 'Assigned Technician'}
+              </label>
+              <input
+                type="text"
+                placeholder={isAr ? 'مثال: م. أحمد عبد الفتاح' : 'Maintenance Tech'}
+                value={newOrder.technician_name}
+                onChange={(e) => setNewOrder({ ...newOrder, technician_name: e.target.value })}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button type="button" variant="ghost" onClick={() => setIsWorkOrderModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" variant="primary" icon={<Wrench className="w-3.5 h-3.5" />}>
+              {isAr ? 'إصدار أمر الصيانة' : 'Dispatch Order'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 10. MODAL 3: COMPLETE WORK ORDER */}
+      {selectedOrder && (
+        <Modal
+          isOpen={Boolean(selectedOrder)}
+          onClose={() => setSelectedOrder(null)}
+          title={isAr ? `إتمام وإغلاق أمر الصيانة: ${selectedOrder.order_number}` : `Complete Work Order: ${selectedOrder.order_number}`}
+          maxWidth="md"
+        >
+          <form onSubmit={handleCompleteWorkOrder} className="space-y-4">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-xs space-y-1 border border-slate-200 dark:border-slate-700">
+              <div className="font-bold text-slate-900 dark:text-white">
+                {isAr ? 'وصف العطل المسجل:' : 'Issue:'}
+              </div>
+              <p className="text-slate-600 dark:text-slate-300">{selectedOrder.issue_description}</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تقرير الإصلاح والإجراءات المتخذة *' : 'Resolution Notes *'}
+              </label>
+              <textarea
+                required
+                rows={3}
+                placeholder={isAr ? 'تم استبدال الكروشيه، تنظيف حوض الزيت، وضبط المعايرة واختبار 50 قطعة بنجاح...' : 'Parts replaced, tested under load...'}
+                value={completeData.resolution_notes}
+                onChange={(e) => setCompleteData({ ...completeData, resolution_notes: e.target.value })}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'ساعات توقف الماكينة الفعلية' : 'Actual Downtime (Hours)'}
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={completeData.downtime_hours}
+                  onChange={(e) => setCompleteData({ ...completeData, downtime_hours: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'تكلفة المصنعية وأجر الفني (ج.م)' : 'Labor Cost (EGP)'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={completeData.labor_cost}
+                  onChange={(e) => setCompleteData({ ...completeData, labor_cost: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setSelectedOrder(null)}>
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button type="submit" variant="primary" icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
+                {isAr ? 'تأكيد اكتمال الصيانة وتشغيل الماكينة' : 'Confirm Completion'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* 11. MODAL 4: ISSUE SPARE PART & STOCK AUTO-DEDUCTION */}
+      <Modal
+        isOpen={isSparePartModalOpen}
+        onClose={() => {
+          if (!isSubmittingPart) {
+            setIsSparePartModalOpen(false);
+          }
+        }}
+        title={isAr ? 'صرف قطعة غيار وخصمها من المستودع لأمر صيانة' : 'Issue Spare Part & Deduct from Stock'}
+        maxWidth="md"
+      >
+        <form onSubmit={handleAddSparePart} className="space-y-4">
+          {/* Target Work Order */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'أمر الصيانة المستهدف *' : 'Target Work Order *'}
+            </label>
+            <select
+              required
+              value={selectedWoForPart}
+              onChange={(e) => setSelectedWoForPart(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+            >
+              <option value="">{isAr ? '-- اختر أمر الشغل المرتبط --' : '-- Select Work Order --'}</option>
+              {workOrders.map((wo) => {
+                const mch = machines.find((m) => m.id === wo.machine_id);
+                return (
+                  <option key={wo.id} value={wo.id}>
+                    {wo.order_number} — {mch?.name || (isAr ? 'ماكينة' : 'Machine')} ({wo.issue_description?.slice(0, 35)}...)
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Part Source Mode Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              {isAr ? 'مصدر قطعة الغيار' : 'Part Source'}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPartSource('stock')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  partSource === 'stock'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isAr ? 'سحب من المستودع (خصم فوري آلي)' : 'From Warehouse Stock'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPartSource('custom');
+                  setSelectedInventoryItemId('');
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  partSource === 'custom'
+                    ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-700 dark:text-amber-300 ring-2 ring-amber-500/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5 text-amber-600" />
+                <span>{isAr ? 'بند مباشر / شراء طارئ' : 'Direct / Manual Entry'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* If Stock Mode: Pick from Warehouse Inventory */}
+          {partSource === 'stock' ? (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {isAr ? 'اختر قطعة الغيار من رصيد المستودع *' : 'Select Part from Inventory *'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddSparePartStockModalOpen(true)}
+                  className="text-[11px] font-bold text-emerald-600 hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{isAr ? 'إضافة قطعة جديدة للمخزن' : 'Add new item'}</span>
+                </button>
+              </div>
+
+              <select
+                required
+                value={selectedInventoryItemId}
+                onChange={(e) => {
+                  const itemId = e.target.value;
+                  setSelectedInventoryItemId(itemId);
+                  const found = sparePartsStock.find((item) => item.id === itemId);
+                  if (found) {
+                    setNewPartName(found.name);
+                    setNewPartNumber(found.item_code || found.code || '');
+                    setNewPartUnitCost(Number(found.unit_cost || found.average_cost || 0));
+                  } else {
+                    setNewPartName('');
+                    setNewPartNumber('');
+                    setNewPartUnitCost(0);
+                  }
+                }}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">{isAr ? '-- اختر قطعة الغيار المتوفرة بالمخزن --' : '-- Select Stock Item --'}</option>
+                {sparePartsStock.map((item) => {
+                  const balance = Number(item.current_balance || 0);
+                  return (
+                    <option key={item.id} value={item.id} disabled={balance <= 0}>
+                      {item.name} ({item.item_code || item.code}) — {isAr ? 'المتاح بالمخزن:' : 'Stock:'} {balance} {item.unit_of_measure || 'قطعة'} [{item.warehouse?.name || 'المستودع الرئيسي'}] {balance <= 0 ? (isAr ? '(نفد)' : '(Out)') : ''}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {/* Live Stock Notification */}
+              {selectedInventoryItemId && (() => {
+                const found = sparePartsStock.find((item) => item.id === selectedInventoryItemId);
+                if (!found) return null;
+                const balance = Number(found.current_balance || 0);
+                const isOver = newPartQty > balance;
+
+                return (
+                  <div
+                    className={`mt-2 p-2.5 rounded-xl border text-xs flex items-center justify-between ${
+                      isOver
+                        ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 text-rose-700 dark:text-rose-300'
+                        : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-800 dark:text-emerald-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Boxes className="w-4 h-4 shrink-0" />
+                      <span>
+                        {isAr ? 'الرصيد المتاح حالياً بالمستودع:' : 'Warehouse Balance:'}{' '}
+                        <strong>
+                          {balance} {found.unit_of_measure || 'قطعة'}
+                        </strong>
+                      </span>
+                    </div>
+                    {isOver && (
+                      <span className="font-bold text-[10px] bg-rose-200 text-rose-800 px-2 py-0.5 rounded">
+                        {isAr ? '⚠️ الكمية تتجاوز الرصيد!' : 'Exceeds Stock!'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'اسم قطعة الغيار المستهلكة *' : 'Part Name *'}
+              </label>
+              <input
+                type="text"
+                required
+                value={newPartName}
+                onChange={(e) => setNewPartName(e.target.value)}
+                placeholder={isAr ? 'مثال: كروشيه أصلي، سير سحب، طقم إبر' : 'e.g. Needle plate, Timing belt'}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'رقم / كود القطعة (Part #)' : 'Part Number'}
               </label>
               <input
                 type="text"
                 value={newPartNumber}
                 onChange={(e) => setNewPartNumber(e.target.value)}
-                placeholder="e.g. JK-NP-900"
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                placeholder="e.g. SP-NDL-14"
+                className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
               />
             </div>
+
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                {isAr ? 'الكمية المستهلكة *' : 'Quantity *'}
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الكمية المنصرفة *' : 'Quantity *'}
               </label>
               <input
                 type="number"
@@ -1101,13 +2080,13 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
                 required
                 value={newPartQty}
                 onChange={(e) => setNewPartQty(Number(e.target.value))}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {isAr ? 'تكلفة الوحدة (ج.م) *' : 'Unit Cost (EGP) *'}
             </label>
             <input
@@ -1117,20 +2096,508 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
               required
               value={newPartUnitCost}
               onChange={(e) => setNewPartUnitCost(Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground"
+              className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setIsSparePartModalOpen(false)}>
+          {/* GL Accounting summary box */}
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-xs space-y-1 border border-slate-200 dark:border-slate-700/80">
+            <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+              <span>{isAr ? 'إجمالي تكلفة الصرف:' : 'Total Cost:'}</span>
+              <span className="font-mono text-sm text-amber-600 dark:text-amber-400">
+                {(Number(newPartQty) * Number(newPartUnitCost)).toLocaleString()} ج.م
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+              <Coins className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>
+                {isAr
+                  ? 'يتم ترحيل هذه التكلفة مباشرة إلى حساب مصروفات المصنع (6010: مصاريف صناعية غير مباشرة واستهلاك) عند إتمام الصيانة.'
+                  : 'Posted to Factory GL Account 6010 upon work order completion.'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isSubmittingPart}
+              onClick={() => setIsSparePartModalOpen(false)}
+            >
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button type="submit" variant="primary">
-              {isAr ? 'تسجيل وخصم القطعة' : 'Record Spare Part'}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={
+                isSubmittingPart ||
+                (partSource === 'stock' && !selectedInventoryItemId) ||
+                (partSource === 'stock' && (() => {
+                  const found = sparePartsStock.find((item) => item.id === selectedInventoryItemId);
+                  return found && newPartQty > Number(found.current_balance || 0);
+                })())
+              }
+              icon={<Package className={`w-3.5 h-3.5 ${isSubmittingPart ? 'animate-spin' : ''}`} />}
+            >
+              {isSubmittingPart
+                ? (isAr ? 'جاري الصرف والخصم...' : 'Processing...')
+                : (isAr ? 'تأكيد الصرف والخصم من المستودع' : 'Confirm Issue & Deduct')}
             </Button>
           </div>
         </form>
       </Modal>
+
+      {/* 12. MODAL 6: ADD NEW SPARE PART TO WAREHOUSE STOCK */}
+      <Modal
+        isOpen={isAddSparePartStockModalOpen}
+        onClose={() => {
+          if (!isSubmittingStockPart) {
+            setIsAddSparePartStockModalOpen(false);
+          }
+        }}
+        title={isAr ? 'إضافة وتوريد قطعة غيار جديدة إلى مخزن المصنع' : 'Register New Spare Part to Warehouse'}
+        maxWidth="md"
+      >
+        <form onSubmit={handleAddSparePartStock} className="space-y-4">
+          <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+            <Boxes className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span>
+              {isAr
+                ? 'إضافة قطع الغيار إلى المخزن يتيح لك الصرف الفوري مع الخصم التلقائي من الرصيد والربط التلقائي بدفتر مصروفات المصنع.'
+                : 'Items added to inventory can be issued with automatic stock deduction and accounting synchronization.'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'اسم قطعة الغيار *' : 'Part Name *'}
+              </label>
+              <input
+                type="text"
+                required
+                placeholder={isAr ? 'مثال: كروشيه أصلي ماكينة سنجر' : 'e.g. Rotary Hook'}
+                value={newStockPart.name}
+                onChange={(e) => setNewStockPart({ ...newStockPart, name: e.target.value })}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'كود / رقم القطعة (Part #) *' : 'Part Number / SKU *'}
+              </label>
+              <input
+                type="text"
+                required
+                placeholder={isAr ? 'مثال: SP-CHK-01' : 'e.g. SP-CHK-01'}
+                value={newStockPart.part_number}
+                onChange={(e) => setNewStockPart({ ...newStockPart, part_number: e.target.value })}
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'المستودع المستهدف *' : 'Target Warehouse *'}
+              </label>
+              <select
+                required
+                value={newStockPart.warehouse_id}
+                onChange={(e) => setNewStockPart({ ...newStockPart, warehouse_id: e.target.value })}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              >
+                {warehouses.length === 0 ? (
+                  <option value="">{isAr ? 'المستودع الرئيسي' : 'Main Warehouse'}</option>
+                ) : (
+                  warehouses.map((wh) => (
+                    <option key={wh.id} value={wh.id}>
+                      {wh.name} {wh.code ? `(${wh.code})` : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'وحدة القياس *' : 'Unit of Measure *'}
+              </label>
+              <select
+                value={newStockPart.unit_of_measure}
+                onChange={(e) => setNewStockPart({ ...newStockPart, unit_of_measure: e.target.value })}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="قطعة">{isAr ? 'قطعة (Pcs)' : 'Pcs'}</option>
+                <option value="طقم">{isAr ? 'طقم (Set)' : 'Set'}</option>
+                <option value="لتر">{isAr ? 'لتر (Litre)' : 'Litre'}</option>
+                <option value="علبة">{isAr ? 'علبة / باكو (Pack)' : 'Pack'}</option>
+                <option value="متر">{isAr ? 'متر (Meter)' : 'Meter'}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الرصيد الافتتاحي *' : 'Initial Stock *'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={newStockPart.initial_balance}
+                onChange={(e) => setNewStockPart({ ...newStockPart, initial_balance: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تكلفة الشراء للوحدة (ج.م) *' : 'Unit Cost (EGP) *'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                required
+                value={newStockPart.unit_cost}
+                onChange={(e) => setNewStockPart({ ...newStockPart, unit_cost: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'حد إعادة الطلب *' : 'Reorder Level *'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={newStockPart.reorder_level}
+                onChange={(e) => setNewStockPart({ ...newStockPart, reorder_level: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الوصف وملاحظات الاستخدام' : 'Description & Notes'}
+            </label>
+            <input
+              type="text"
+              placeholder={isAr ? 'مثال: مناسبة لماكينات الخياطة الأوتوماتيك وسنجر موديل 8700' : 'e.g. Compatible with DDL-8700'}
+              value={newStockPart.description}
+              onChange={(e) => setNewStockPart({ ...newStockPart, description: e.target.value })}
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isSubmittingStockPart}
+              onClick={() => setIsAddSparePartStockModalOpen(false)}
+            >
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isSubmittingStockPart || !newStockPart.name}
+              icon={<Boxes className={`w-3.5 h-3.5 ${isSubmittingStockPart ? 'animate-spin' : ''}`} />}
+            >
+              {isSubmittingStockPart
+                ? (isAr ? 'جاري الحفظ في المخزن...' : 'Saving to Stock...')
+                : (isAr ? 'إضافة القطعة للمخزن' : 'Add to Warehouse')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 13. MODAL 5: MACHINE DETAILS & HISTORY CARD */}
+      {viewingMachineDetails && (
+        <Modal
+          isOpen={Boolean(viewingMachineDetails)}
+          onClose={() => setViewingMachineDetails(null)}
+          title={isAr ? `الملف الفني للماكينة: ${viewingMachineDetails.name}` : `Asset Profile: ${viewingMachineDetails.name}`}
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            {/* Header Micro Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white shadow-md flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-md">
+                    {viewingMachineDetails.machine_code}
+                  </span>
+                  <h3 className="text-base font-bold">{viewingMachineDetails.name}</h3>
+                </div>
+                <p className="text-xs text-slate-300 font-mono mt-1">
+                  {viewingMachineDetails.model_number || 'Model: N/A'} • SN: {viewingMachineDetails.serial_number || 'N/A'}
+                </p>
+              </div>
+              <div>{getMachineStatusBadge(viewingMachineDetails.status)}</div>
+            </div>
+
+            {/* Specs Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-slate-400 block text-[10px]">{isAr ? 'نوع المعدة:' : 'Type:'}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">{viewingMachineDetails.machine_type}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-slate-400 block text-[10px]">{isAr ? 'موقع خط الإنتاج:' : 'Location:'}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">{viewingMachineDetails.location || '—'}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-slate-400 block text-[10px]">{isAr ? 'دورية الصيانة:' : 'Interval:'}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block font-mono">{viewingMachineDetails.maintenance_interval_days} يوم</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="text-slate-400 block text-[10px]">{isAr ? 'الصيانة القادمة:' : 'Next Due:'}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block font-mono">{viewingMachineDetails.next_maintenance_date || '—'}</span>
+              </div>
+            </div>
+
+            {/* Breakdown History */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Wrench className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{isAr ? 'سجل أوامر الصيانة والأعطال السابقة لهذه الماكينة:' : 'Maintenance History:'}</span>
+              </h4>
+
+              {workOrders.filter((wo) => wo.machine_id === viewingMachineDetails.id).length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-center text-xs text-slate-400">
+                  {isAr ? 'لا توجد بلاغات أعطال سابقة مسجلة لهذه الماكينة (سجل نظيف).' : 'No work orders logged for this machine.'}
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                  {workOrders
+                    .filter((wo) => wo.machine_id === viewingMachineDetails.id)
+                    .map((wo) => (
+                      <div
+                        key={wo.id}
+                        className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">{wo.order_number}</span>
+                            <span className="text-[10px] text-slate-400">{wo.scheduled_date || wo.created_at}</span>
+                            <Badge variant={wo.status === 'completed' ? 'success' : 'warning'}>
+                              {wo.status === 'completed' ? 'تم الإصلاح' : 'قيد التنفيذ'}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 truncate max-w-md">
+                            {wo.issue_description}
+                          </p>
+                        </div>
+                        <div className="text-left font-mono">
+                          <span className="font-bold text-slate-900 dark:text-white block">{Number(wo.total_cost).toLocaleString()} ج.م</span>
+                          <span className="text-[10px] text-amber-600 block">{wo.downtime_hours || 0} س توقف</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const mch = viewingMachineDetails;
+                  setViewingMachineDetails(null);
+                  setViewingMachineBarcode(mch);
+                }}
+                className="text-xs font-bold flex items-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{isAr ? 'طباعة باركود وبطاقة الماكينة' : 'Print Asset QR'}</span>
+              </Button>
+
+              <Button variant="ghost" size="sm" onClick={() => setViewingMachineDetails(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 13. MODAL 6: PRINTABLE ASSET CARD / BARCODE */}
+      {viewingMachineBarcode && (
+        <Modal
+          isOpen={Boolean(viewingMachineBarcode)}
+          onClose={() => setViewingMachineBarcode(null)}
+          title={isAr ? `بطاقة أصل صناعي: ${viewingMachineBarcode.machine_code}` : `Asset Card: ${viewingMachineBarcode.machine_code}`}
+          maxWidth="md"
+        >
+          <div className="printable-voucher space-y-4">
+            <div className="border-2 border-slate-900 dark:border-slate-300 p-5 rounded-2xl bg-white text-slate-900 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="text-base font-black tracking-tight">{isAr ? 'مصنع الملابس الجاهزة' : 'Garment Factory'}</h3>
+                  <span className="text-[11px] font-mono text-slate-500 block">{isAr ? 'بطاقة تعريف أصل صناعي رسمي' : 'Industrial Equipment Asset Tag'}</span>
+                </div>
+                <div className="text-left">
+                  <span className="font-mono text-lg font-black text-indigo-700 block">{viewingMachineBarcode.machine_code}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">ID: {viewingMachineBarcode.id.slice(0, 8)}</span>
+                </div>
+              </div>
+
+              {/* Machine Details */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block">{isAr ? 'اسم المعدة:' : 'Equipment:'}</span>
+                  <strong className="text-slate-900 text-xs block mt-0.5">{viewingMachineBarcode.name}</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block">{isAr ? 'الموديل والسيريال:' : 'Model & SN:'}</span>
+                  <strong className="text-slate-900 text-xs font-mono block mt-0.5">
+                    {viewingMachineBarcode.model_number || 'N/A'} • {viewingMachineBarcode.serial_number || 'N/A'}
+                  </strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block">{isAr ? 'موقع خط الإنتاج:' : 'Location:'}</span>
+                  <strong className="text-slate-900 text-xs block mt-0.5">{viewingMachineBarcode.location || 'General Floor'}</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] text-slate-400 block">{isAr ? 'دورية الصيانة:' : 'Interval:'}</span>
+                  <strong className="text-slate-900 text-xs font-mono block mt-0.5">{viewingMachineBarcode.maintenance_interval_days} يوم</strong>
+                </div>
+              </div>
+
+              {/* QR Mock Pattern & Barcode */}
+              <div className="p-3 bg-slate-100 rounded-xl text-center space-y-1">
+                <div className="font-mono text-xs font-black tracking-widest text-slate-800">
+                  * {viewingMachineBarcode.machine_code} *
+                </div>
+                <div className="h-9 w-48 mx-auto bg-[repeating-linear-gradient(90deg,#000,#000_2px,transparent_2px,transparent_4px)] opacity-85" />
+                <span className="text-[9px] text-slate-500 font-mono block">SCAN FOR WORK ORDER / BREAKDOWN LOG</span>
+              </div>
+
+              {/* Stamp & Verification */}
+              <div className="flex justify-between items-center pt-2 text-[10px] text-slate-500 border-t">
+                <span>{isAr ? 'اعتماد إدارة الصيانة والتشغيل' : 'Maintenance Dept Stamp'}</span>
+                <span className="font-mono font-bold text-emerald-700">✓ CERTIFIED ASSET</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center print:hidden no-print">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => window.print()}
+                className="font-bold flex items-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{isAr ? 'طباعة البطاقة' : 'Print Label'}</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setViewingMachineBarcode(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 14. MODAL 7: PRINTABLE WORK ORDER */}
+      {orderToPrint && (
+        <Modal
+          isOpen={Boolean(orderToPrint)}
+          onClose={() => setOrderToPrint(null)}
+          title={isAr ? `إذن صيانة رسمي: ${orderToPrint.order_number}` : `Work Order: ${orderToPrint.order_number}`}
+          maxWidth="md"
+        >
+          <div className="printable-voucher space-y-4">
+            <div className="border border-slate-300 p-5 rounded-2xl bg-white text-slate-900 space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">{isAr ? 'مصنع الملابس الجاهزة' : 'Garment Factory'}</h3>
+                  <p className="text-xs text-slate-500 font-mono">{isAr ? 'إذن وأمر صيانة ماكينات صناعي' : 'Industrial Maintenance Work Order'}</p>
+                </div>
+                <div className="text-left font-mono">
+                  <span className="font-bold text-indigo-700 block text-sm">{orderToPrint.order_number}</span>
+                  <span className="text-xs text-slate-400">{orderToPrint.scheduled_date || orderToPrint.created_at}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-400 block text-[10px]">{isAr ? 'الماكينة المستهدفة:' : 'Machine:'}</span>
+                  <strong className="text-slate-900">{machines.find((m) => m.id === orderToPrint.machine_id)?.name || 'ماكينة خط الإنتاج'}</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-400 block text-[10px]">{isAr ? 'نوع الصيانة والأولوية:' : 'Type & Priority:'}</span>
+                  <strong className="text-slate-900">
+                    {orderToPrint.work_type === 'breakdown' ? 'عطل مفاجئ' : 'صيانة وقائية'} ({orderToPrint.priority})
+                  </strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-400 block text-[10px]">{isAr ? 'الفني المسند إليه:' : 'Technician:'}</span>
+                  <strong className="text-slate-900">{orderToPrint.technician_name || 'غير مسند'}</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-slate-400 block text-[10px]">{isAr ? 'التكلفة الإجمالية:' : 'Total Cost:'}</span>
+                  <strong className="text-slate-900 font-mono text-sm">{Number(orderToPrint.total_cost || 0).toLocaleString()} ج.م</strong>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <span className="text-[10px] text-slate-400 block">{isAr ? 'وصف العطل / المشكلة:' : 'Issue:'}</span>
+                <p className="mt-0.5 font-medium">{orderToPrint.issue_description}</p>
+              </div>
+
+              {orderToPrint.resolution_notes && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                  <span className="text-[10px] text-emerald-700 block font-bold">{isAr ? 'تقرير الإصلاح والإجراءات:' : 'Resolution:'}</span>
+                  <p className="mt-0.5 text-emerald-900">{orderToPrint.resolution_notes}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t text-center text-[10px] text-slate-500">
+                <div>
+                  <span>{isAr ? 'مشرف الخط' : 'Supervisor'}</span>
+                  <div className="mt-6 border-b border-dashed border-slate-300"></div>
+                </div>
+                <div>
+                  <span>{isAr ? 'الفني المنفذ' : 'Technician'}</span>
+                  <div className="mt-6 border-b border-dashed border-slate-300"></div>
+                </div>
+                <div>
+                  <span>{isAr ? 'اعتماد مدير الصيانة' : 'Maintenance Mgr'}</span>
+                  <div className="mt-6 border-b border-dashed border-slate-300"></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center print:hidden no-print">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => window.print()}
+                className="font-bold flex items-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{isAr ? 'طباعة الإذن' : 'Print Order'}</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setOrderToPrint(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

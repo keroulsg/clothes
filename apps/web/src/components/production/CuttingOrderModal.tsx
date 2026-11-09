@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Scissors, Layers, AlertCircle } from 'lucide-react';
-import type { ProductionOrder, Warehouse, InventoryItem, CustomerMaterial, CuttingOrder, CuttingBundle } from '../../types';
+import { Scissors, Layers, AlertCircle, UserCheck } from 'lucide-react';
+import type { ProductionOrder, Warehouse, InventoryItem, CustomerMaterial, CuttingOrder, CuttingBundle, Employee } from '../../types';
 import { api } from '../../api/client';
 
 interface CuttingOrderModalProps {
@@ -12,6 +12,7 @@ interface CuttingOrderModalProps {
   warehouses: Warehouse[];
   fabricItems: InventoryItem[];
   customerMaterials: CustomerMaterial[];
+  employees?: Employee[];
   onSuccess: (newCuttingOrder: CuttingOrder, generatedBundles: CuttingBundle[]) => void;
   isAr?: boolean;
 }
@@ -23,6 +24,7 @@ export const CuttingOrderModal: React.FC<CuttingOrderModalProps> = ({
   warehouses,
   fabricItems,
   customerMaterials,
+  employees = [],
   onSuccess,
   isAr = true,
 }) => {
@@ -33,6 +35,29 @@ export const CuttingOrderModal: React.FC<CuttingOrderModalProps> = ({
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || '');
   const [selectedFabricId, setSelectedFabricId] = useState(fabricItems[0]?.id || '');
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerMaterials[0]?.id || '');
+
+  const [cutters, setCutters] = useState<Employee[]>(employees);
+  const [assignedCutterId, setAssignedCutterId] = useState<string>('');
+  const [assignedCutterName, setAssignedCutterName] = useState<string>('');
+  const [cutterUnitRate, setCutterUnitRate] = useState<number>(0.75);
+
+  useEffect(() => {
+    if (cutters.length === 0) {
+      api.hr.getEmployees(1)
+        .then((res: any) => {
+          if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+            setCutters(res.data);
+            const masterCutter = res.data.find((e: any) => e.department === 'cutting' || e.job_title?.includes('قص')) || res.data[0];
+            setAssignedCutterId(masterCutter.id);
+            setAssignedCutterName(masterCutter.name);
+          }
+        })
+        .catch(() => {});
+    } else if (!assignedCutterId && cutters.length > 0) {
+      setAssignedCutterId(cutters[0].id);
+      setAssignedCutterName(cutters[0].name);
+    }
+  }, [cutters]);
 
   const [layLengthMeters, setLayLengthMeters] = useState(2.2);
   const [layersCount, setLayersCount] = useState(50);
@@ -75,10 +100,17 @@ export const CuttingOrderModal: React.FC<CuttingOrderModalProps> = ({
         fabric_relaxation_hours_actual: Number(relaxationHours),
         measured_shrinkage_percent: Number(shrinkagePercent),
         total_cut_pieces: Number(totalCutPieces),
+        assigned_cutter_id: assignedCutterId || undefined,
+        cutter_unit_rate: Number(cutterUnitRate),
+        notes: assignedCutterName ? `[المقصدار: ${assignedCutterName}]` : undefined,
       });
 
       if (res.data) {
-        const orderData = res.data;
+        const orderData = {
+          ...res.data,
+          assigned_cutter_id: assignedCutterId || undefined,
+          assigned_cutter_name: assignedCutterName || undefined,
+        };
         const bundles = orderData.bundles || [];
         onSuccess(orderData, bundles);
         onClose();
@@ -151,6 +183,56 @@ export const CuttingOrderModal: React.FC<CuttingOrderModalProps> = ({
               className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             />
           </div>
+        </div>
+
+        {/* Assigned Master Cutter (HR Worker Integration) */}
+        <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl">
+          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>{isAr ? 'المقصدار المسؤول عن الفرشة والقص (ربط مع سجل العمال)' : 'Assigned Master Cutter (HR Link)'}</span>
+          </label>
+          <select
+            value={assignedCutterId}
+            onChange={(e) => {
+              const cutter = cutters.find((c) => c.id === e.target.value);
+              setAssignedCutterId(e.target.value);
+              setAssignedCutterName(cutter ? cutter.name : '');
+            }}
+            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-indigo-500"
+          >
+            <option value="">{isAr ? '-- اختر فني المقصدار المسؤول --' : '-- Select Master Cutter --'}</option>
+            {cutters.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.employee_code} - {c.name} ({c.job_title || (isAr ? 'فني مقصدار' : 'Cutter')})
+              </option>
+            ))}
+          </select>
+
+          <div className="mt-2.5 flex items-center justify-between text-xs pt-2 border-t border-indigo-200/50 dark:border-indigo-800/40">
+            <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+              {isAr ? 'أجر قص القطعة الواحدة للمقصدار:' : 'Rate per cut piece:'}
+            </span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.05"
+                min="0"
+                value={cutterUnitRate}
+                onChange={(e) => setCutterUnitRate(parseFloat(e.target.value) || 0)}
+                className="w-16 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded px-1.5 py-0.5 text-xs text-center font-mono font-bold text-indigo-600 dark:text-indigo-400"
+              />
+              <span className="text-[10px] text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+            </div>
+          </div>
+
+          {assignedCutterId && (
+            <div className="mt-1.5 flex items-center justify-between text-[11px] text-indigo-700 dark:text-indigo-300 font-mono">
+              <span>{isAr ? 'الأجر الإجمالي المستحق للمقصدار:' : 'Total estimated cutter wage:'}</span>
+              <span className="font-bold">
+                {totalCutPieces} {isAr ? 'قطعة' : 'pcs'} × {cutterUnitRate.toFixed(2)} = {(totalCutPieces * cutterUnitRate).toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Fabric Item selection */}

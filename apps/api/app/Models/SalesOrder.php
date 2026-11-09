@@ -21,6 +21,8 @@ class SalesOrder extends Model
         'quotation_id',
         'warehouse_id',
         'order_type',
+        'channel',
+        'store_order_id',
         'status',
         'payment_status',
         'subtotal',
@@ -28,7 +30,10 @@ class SalesOrder extends Model
         'discount_amount',
         'total_amount',
         'expected_delivery_date',
+        'delivery_address',
         'notes',
+        'cancelled_at',
+        'cancellation_reason',
     ];
 
     protected $casts = [
@@ -37,6 +42,7 @@ class SalesOrder extends Model
         'discount_amount' => 'decimal:4',
         'total_amount' => 'decimal:4',
         'expected_delivery_date' => 'date',
+        'cancelled_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -54,6 +60,11 @@ class SalesOrder extends Model
         return $this->belongsTo(Warehouse::class);
     }
 
+    public function storeOrder(): BelongsTo
+    {
+        return $this->belongsTo(StoreOrder::class, 'store_order_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class);
@@ -62,5 +73,15 @@ class SalesOrder extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(SalesInvoice::class);
+    }
+
+    public function deliveryNotes(): HasMany
+    {
+        return $this->hasMany(SalesDeliveryNote::class);
+    }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(SalesReturn::class);
     }
 }

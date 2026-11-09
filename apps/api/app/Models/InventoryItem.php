@@ -20,20 +20,30 @@ class InventoryItem extends Model
         'item_type',
         'code',
         'name',
+        'name_en',
+        'barcode',
         'unit_of_measure',
         'reorder_level',
+        'min_stock_level',
         'current_balance',
+        'reserved_balance',
         'average_cost',
         'is_customer_owned',
         'customer_name',
+        'is_active',
+        'description',
+        'image_url',
         'technical_specs',
     ];
 
     protected $casts = [
         'reorder_level' => 'decimal:4',
+        'min_stock_level' => 'decimal:4',
         'current_balance' => 'decimal:4',
+        'reserved_balance' => 'decimal:4',
         'average_cost' => 'decimal:4',
         'is_customer_owned' => 'boolean',
+        'is_active' => 'boolean',
         'technical_specs' => 'array',
     ];
 
@@ -121,4 +131,3 @@ class InventoryItem extends Model
         return $this->hasMany(InventoryTransaction::class);
     }
 }
-

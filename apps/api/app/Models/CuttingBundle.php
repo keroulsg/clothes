@@ -18,10 +18,18 @@ class CuttingBundle extends Model
         'cutting_order_id',
         'production_order_id',
         'product_variant_id',
+        'assigned_employee_id',
+        'work_group',
+        'issue_date',
+        'due_date',
+        'completion_date',
         'bundle_number',
         'color_id',
         'size_id',
         'quantity',
+        'accepted_quantity',
+        'rejected_quantity',
+        'rework_quantity',
         'current_stage_code',
         'status',
         'notes',
@@ -30,7 +38,18 @@ class CuttingBundle extends Model
     protected $casts = [
         'bundle_number' => 'integer',
         'quantity' => 'integer',
+        'accepted_quantity' => 'integer',
+        'rejected_quantity' => 'integer',
+        'rework_quantity' => 'integer',
+        'issue_date' => 'date',
+        'due_date' => 'date',
+        'completion_date' => 'date',
     ];
+
+    public function assignedEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'assigned_employee_id');
+    }
 
     public function cuttingOrder(): BelongsTo
     {

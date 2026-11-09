@@ -21,10 +21,48 @@ class CuttingOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $orders = CuttingOrder::where('tenant_id', $tenantId)
-            ->with(['productionOrder.garmentModel', 'warehouse', 'bundles'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = CuttingOrder::where('tenant_id', $tenantId)
+            ->with(['productionOrder.garmentModel', 'warehouse', 'assignedCutter', 'bundles.assignedEmployee']);
+
+        if ($request->filled('search')) {
+            $s = trim($request->query('search'));
+            $query->where(function ($q) use ($s) {
+                $q->where('cutting_order_number', 'like', "%{$s}%")
+                  ->orWhere('marker_name', 'like', "%{$s}%")
+                  ->orWhere('table_number', 'like', "%{$s}%")
+                  ->orWhere('notes', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->filled('production_order_id') && $request->query('production_order_id') !== 'all') {
+            $query->where('production_order_id', $request->query('production_order_id'));
+        }
+
+        if ($request->filled('status') && $request->query('status') !== 'all') {
+            $query->where('status', $request->query('status'));
+        }
+
+        if ($request->filled('fabric_source') && $request->query('fabric_source') !== 'all') {
+            $query->where('fabric_source', $request->query('fabric_source'));
+        }
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $perPage = (int) $request->query('per_page', 15);
+            $paginated = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $paginated->items(),
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                ],
+            ]);
+        }
+
+        $orders = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'success' => true,
@@ -44,6 +82,8 @@ class CuttingOrderController extends Controller
             'customer_material_id' => 'nullable|uuid',
             'warehouse_id' => 'required|uuid',
             'fabric_color_id' => 'nullable|uuid',
+            'assigned_cutter_id' => 'nullable|uuid',
+            'cutter_unit_rate' => 'nullable|numeric|min:0',
             'usable_width_meters' => 'nullable|numeric|min:0.5',
             'lay_length_meters' => 'required|numeric|min:0.1',
             'layers_count' => 'required|integer|min:1',
@@ -111,12 +151,53 @@ class CuttingOrderController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $order = CuttingOrder::where('tenant_id', $tenantId)
-            ->with(['productionOrder.garmentModel', 'warehouse', 'bundles.stageLogs'])
+            ->with(['productionOrder.garmentModel', 'warehouse', 'assignedCutter', 'bundles.assignedEmployee', 'bundles.stageLogs.employee'])
             ->findOrFail($id);
 
         return response()->json([
             'success' => true,
             'data' => $order,
         ]);
+    }
+
+    public function cancel(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = CuttingOrder::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'cancellation_reason' => 'required|string|max:255',
+        ]);
+
+        try {
+            $cancelled = $this->productionService->cancelCuttingOrder($order->id, $validated['cancellation_reason']);
+
+            // توثيق سجل التدقيق
+            \App\Models\AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => $request->user()?->id,
+                'action' => 'cutting_order_cancelled',
+                'auditable_type' => CuttingOrder::class,
+                'auditable_id' => $order->id,
+                'old_values' => ['status' => $order->status],
+                'new_values' => [
+                    'status' => 'cancelled',
+                    'cancellation_reason' => $validated['cancellation_reason'],
+                    'cancelled_at' => $cancelled->cancelled_at,
+                ],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إلغاء أمر القص واسترجاع الأقمشة المصروفة إلى المخزن بنجاح.',
+                'data' => $cancelled,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 }

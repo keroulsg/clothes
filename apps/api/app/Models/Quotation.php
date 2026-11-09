@@ -25,6 +25,8 @@ class Quotation extends Model
         'total_amount',
         'valid_until',
         'notes',
+        'converted_sales_order_id',
+        'converted_at',
     ];
 
     protected $casts = [
@@ -33,6 +35,7 @@ class Quotation extends Model
         'discount_amount' => 'decimal:4',
         'total_amount' => 'decimal:4',
         'valid_until' => 'date',
+        'converted_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -48,5 +51,10 @@ class Quotation extends Model
     public function salesOrders(): HasMany
     {
         return $this->hasMany(SalesOrder::class);
+    }
+
+    public function convertedSalesOrder(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class, 'converted_sales_order_id');
     }
 }

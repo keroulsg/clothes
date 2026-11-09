@@ -24,17 +24,17 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variants = {
     primary:
-      'bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-primary-light)] hover:opacity-95 text-white shadow-xs border border-[var(--brand-border)] font-bold hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0',
+      'bg-[var(--brand-primary)] hover:brightness-110 text-white shadow-xs border border-transparent font-bold hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0',
     secondary:
       'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700',
     outline:
-      'bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] font-semibold dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:border-[var(--brand-primary)] dark:hover:text-[#F87171]',
+      'bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] font-semibold dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:border-[var(--brand-primary)] dark:hover:text-[#F87171] shadow-2xs',
     accent:
       'bg-[var(--brand-subtle)] border border-[var(--brand-border)] text-[var(--brand-primary)] hover:opacity-90 font-bold dark:text-[#F87171]',
     success:
-      'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-bold border border-emerald-600 dark:bg-emerald-700 dark:hover:bg-emerald-600',
+      'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-semibold border border-transparent',
     danger:
-      'bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-bold border border-rose-600 dark:bg-rose-700 dark:hover:bg-rose-600',
+      'bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold border border-transparent',
     ghost:
       'bg-transparent hover:bg-slate-100 text-slate-700 hover:text-slate-950 font-semibold dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white',
   };

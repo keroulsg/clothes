@@ -2,23 +2,27 @@
 
 namespace App\Services;
 
+use App\Models\AuditLog;
+use App\Models\ChartOfAccount;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\InventoryItem;
+use App\Models\PaymentVoucher;
+use App\Models\PaymentVoucherAllocation;
 use App\Models\PosSession;
 use App\Models\ProductVariant;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use App\Models\SalesCarton;
+use App\Models\SalesDeliveryItem;
+use App\Models\SalesDeliveryNote;
 use App\Models\SalesInvoice;
 use App\Models\SalesInvoiceItem;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderItem;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnItem;
-use App\Models\SalesDeliveryNote;
-use App\Models\SalesCarton;
-use App\Models\AuditLog;
-use App\Models\ChartOfAccount;
-use App\Models\PaymentVoucher;
+use App\Models\Tenant;
 use App\Models\Warehouse;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +46,10 @@ class SalesService
                 Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
             }
 
+            $tenant = Tenant::find($tenantId);
+            $taxSettings = $tenant?->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+            $defaultTaxRate = (!empty($taxSettings['enabled']) && isset($taxSettings['rate'])) ? (float) $taxSettings['rate'] : 0.0;
+
             $subtotal = 0;
             $taxTotal = 0;
 
@@ -51,7 +59,7 @@ class SalesService
                 }
                 $qty = (float) $item['quantity'];
                 $price = (float) $item['unit_price'];
-                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : (isset($data['tax_rate']) ? (float) $data['tax_rate'] : $defaultTaxRate);
 
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
@@ -80,7 +88,7 @@ class SalesService
             foreach ($data['items'] as $item) {
                 $qty = (float) $item['quantity'];
                 $price = (float) $item['unit_price'];
-                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : (isset($data['tax_rate']) ? (float) $data['tax_rate'] : $defaultTaxRate);
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
 
@@ -123,13 +131,17 @@ class SalesService
                 ProductVariant::where('tenant_id', $tenantId)->findOrFail($item['variant_id']);
             }
 
+            $tenant = Tenant::find($tenantId);
+            $taxSettings = $tenant?->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+            $defaultTaxRate = (!empty($taxSettings['enabled']) && isset($taxSettings['rate'])) ? (float) $taxSettings['rate'] : 0.0;
+
             $subtotal = 0;
             $taxTotal = 0;
 
             foreach ($data['items'] as $item) {
                 $qty = (float) $item['ordered_quantity'];
                 $price = (float) $item['unit_price'];
-                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : (isset($data['tax_rate']) ? (float) $data['tax_rate'] : $defaultTaxRate);
 
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
@@ -149,13 +161,14 @@ class SalesService
                 'quotation_id' => $data['quotation_id'] ?? null,
                 'warehouse_id' => $data['warehouse_id'] ?? null,
                 'order_type' => $data['order_type'] ?? 'wholesale',
-                'status' => 'confirmed',
+                'status' => $data['status'] ?? 'confirmed',
                 'payment_status' => 'unpaid',
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxTotal,
                 'discount_amount' => $discount,
                 'total_amount' => $total,
                 'expected_delivery_date' => $data['expected_delivery_date'] ?? null,
+                'delivery_address' => $data['delivery_address'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -387,7 +400,7 @@ class SalesService
             foreach ($data['items'] as $item) {
                 $qty = (float) $item['quantity'];
                 $price = (float) $item['unit_price'];
-                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : (isset($data['tax_rate']) ? (float) $data['tax_rate'] : $defaultTaxRate);
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
 
@@ -756,6 +769,21 @@ class SalesService
                 // تجاهل في حالة عدم توفر سياق الطلب
             }
 
+            // إنشاء إشعار دائن رسمي مرتبط بالمرتجع (Credit Note)
+            CreditNote::create([
+                'tenant_id' => $tenantId,
+                'credit_note_number' => 'CN-' . (str_starts_with($salesReturn->return_number, 'SRT-') ? substr($salesReturn->return_number, 4) : $salesReturn->return_number),
+                'customer_id' => $salesReturn->customer_id,
+                'sales_invoice_id' => $salesReturn->sales_invoice_id,
+                'sales_return_id' => $salesReturn->id,
+                'subtotal' => $totalAmount,
+                'tax_amount' => 0,
+                'total_amount' => $totalAmount,
+                'status' => 'issued',
+                'credit_note_date' => $salesReturn->return_date ? $salesReturn->return_date->toDateString() : now()->toDateString(),
+                'notes' => 'إشعار دائن صادر لمرتجع مبيعات رقم ' . $salesReturn->return_number,
+            ]);
+
             return $salesReturn->load(['items.variant.garmentModel', 'customer', 'warehouse', 'salesInvoice']);
         });
     }
@@ -1117,5 +1145,753 @@ class SalesService
             ->latest()
             ->paginate(20);
     }
+
+    /**
+     * تحويل عرض سعر معتمد إلى أمر بيع رسمي دون تكرار
+     */
+    public function convertQuotationToOrder(string $quotationId): SalesOrder
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($quotationId, $tenantId) {
+            $quotation = Quotation::where('tenant_id', $tenantId)
+                ->where('id', $quotationId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($quotation->status === 'converted' || $quotation->converted_sales_order_id) {
+                throw new InvalidArgumentException("عرض السعر محول مسبقاً إلى أمر بيع رقم " . ($quotation->convertedSalesOrder?->order_number ?? ''));
+            }
+
+            if (in_array($quotation->status, ['rejected', 'expired'])) {
+                throw new InvalidArgumentException("لا يمكن تحويل عرض سعر بحالة ({$quotation->status}) إلى أمر بيع بدون تفويض خاص");
+            }
+
+            $items = [];
+            foreach ($quotation->items as $qItem) {
+                if (!$qItem->variant_id) {
+                    throw new InvalidArgumentException("بند عرض السعر '{$qItem->description}' غير مرتبط بمنتج/متغير مقاس ولون محدد للتحويل.");
+                }
+                $items[] = [
+                    'variant_id' => $qItem->variant_id,
+                    'ordered_quantity' => $qItem->quantity,
+                    'unit_price' => $qItem->unit_price,
+                    'tax_rate' => $qItem->tax_rate,
+                ];
+            }
+
+            $orderData = [
+                'customer_id' => $quotation->customer_id,
+                'customer_name' => $quotation->customer_name,
+                'quotation_id' => $quotation->id,
+                'subtotal' => $quotation->subtotal,
+                'tax_amount' => $quotation->tax_amount,
+                'discount_amount' => $quotation->discount_amount,
+                'total_amount' => $quotation->total_amount,
+                'items' => $items,
+                'notes' => 'تم إنشاء أمر البيع تحويلاً من عرض السعر ' . $quotation->quotation_number,
+            ];
+
+            $order = $this->createSalesOrder($orderData);
+
+            $quotation->status = 'converted';
+            $quotation->converted_sales_order_id = $order->id;
+            $quotation->converted_at = now();
+            $quotation->save();
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'quotation_converted',
+                'auditable_type' => 'quotations',
+                'auditable_id' => $quotation->id,
+                'new_values' => ['converted_sales_order_id' => $order->id],
+            ]);
+
+            return $order;
+        });
+    }
+
+    /**
+     * إلغاء أمر البيع وفك حجز المخزون غير المنفذ
+     */
+    public function cancelSalesOrder(string $orderId, string $reason): SalesOrder
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($orderId, $reason, $tenantId) {
+            $order = SalesOrder::where('tenant_id', $tenantId)
+                ->where('id', $orderId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($order->status === 'fulfilled') {
+                throw new InvalidArgumentException("لا يمكن إلغاء أمر بيع مكتمل وتم تسليمه بالكامل");
+            }
+
+            if ($order->status === 'cancelled') {
+                throw new InvalidArgumentException("أمر البيع ملغي مسبقاً");
+            }
+
+            // فك حجز المخزون المحجوز
+            foreach ($order->items as $item) {
+                $item->reserved_quantity = 0;
+                $item->save();
+            }
+
+            $order->status = 'cancelled';
+            $order->cancelled_at = now();
+            $order->cancellation_reason = $reason;
+            $order->save();
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'sales_order_cancelled',
+                'auditable_type' => 'sales_orders',
+                'auditable_id' => $order->id,
+                'new_values' => ['reason' => $reason],
+            ]);
+
+            return $order->fresh(['items']);
+        });
+    }
+
+    /**
+     * إلغاء فاتورة مبيعات غير مسددة مع حفظ سجل التدقيق
+     */
+    public function cancelSalesInvoice(string $invoiceId, string $reason): SalesInvoice
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($invoiceId, $reason, $tenantId) {
+            $invoice = SalesInvoice::where('tenant_id', $tenantId)
+                ->where('id', $invoiceId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($invoice->status === 'cancelled') {
+                throw new InvalidArgumentException("الفاتورة ملغاة مسبقاً");
+            }
+
+            if ((float) $invoice->paid_amount > 0) {
+                throw new InvalidArgumentException("لا يمكن إلغاء فاتورة مسددة كلياً أو جزئياً. يجب استخدام مرتجع مبيعات وإشعار دائن لحماية الأمانة المالية.");
+            }
+
+            $invoice->status = 'cancelled';
+            $invoice->cancelled_at = now();
+            $invoice->cancellation_reason = $reason;
+            $invoice->save();
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'sales_invoice_cancelled',
+                'auditable_type' => 'sales_invoices',
+                'auditable_id' => $invoice->id,
+                'new_values' => ['reason' => $reason],
+            ]);
+
+            return $invoice;
+        });
+    }
+
+    /**
+     * تسليم أمر البيع وصرف البضاعة التامة مع دعم التسليم الجزئي
+     */
+    public function deliverOrder(string $salesOrderId, array $data): SalesDeliveryNote
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($salesOrderId, $data, $tenantId) {
+            $order = SalesOrder::where('tenant_id', $tenantId)
+                ->where('id', $salesOrderId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($order->status === 'fulfilled' || $order->status === 'cancelled') {
+                throw new InvalidArgumentException("لا يمكن إصدار تسليم لأمر بيع بحالة {$order->status}");
+            }
+
+            $warehouseId = $data['warehouse_id'] ?? $order->warehouse_id;
+            if (!$warehouseId) {
+                $wh = Warehouse::where('tenant_id', $tenantId)->first();
+                $warehouseId = $wh?->id;
+            }
+
+            if (!$warehouseId) {
+                throw new InvalidArgumentException("يجب تحديد مستودع الصرف لتسليم أمر البيع");
+            }
+
+            $deliveryNumber = $data['delivery_number'] ?? ('DN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
+
+            $deliveryNote = SalesDeliveryNote::create([
+                'tenant_id' => $tenantId,
+                'delivery_number' => $deliveryNumber,
+                'sales_order_id' => $order->id,
+                'customer_id' => $order->customer_id,
+                'warehouse_id' => $warehouseId,
+                'delivery_date' => $data['delivery_date'] ?? now()->toDateString(),
+                'status' => 'dispatched',
+                'shipping_carrier' => $data['shipping_carrier'] ?? null,
+                'tracking_number' => $data['tracking_number'] ?? null,
+                'total_cartons' => count($data['cartons'] ?? [1]),
+                'total_pieces' => 0,
+                'recipient_name' => $data['recipient_name'] ?? $order->customer_name,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            $totalPieces = 0;
+            $itemsData = $data['items'] ?? [];
+
+            // إذا لم يتم تحديد بنود للتسليم الجزئي، يتم تسليم كامل الكمية المتبقية
+            if (empty($itemsData)) {
+                foreach ($order->items as $orderItem) {
+                    $remaining = $orderItem->ordered_quantity - $orderItem->fulfilled_quantity;
+                    if ($remaining > 0) {
+                        $itemsData[] = [
+                            'sales_order_item_id' => $orderItem->id,
+                            'variant_id' => $orderItem->variant_id,
+                            'quantity' => $remaining,
+                        ];
+                    }
+                }
+            }
+
+            foreach ($itemsData as $line) {
+                $orderItem = $order->items()->where('id', $line['sales_order_item_id'])->first();
+                if (!$orderItem) {
+                    $orderItem = $order->items()->where('variant_id', $line['variant_id'])->first();
+                }
+
+                if (!$orderItem) {
+                    throw new InvalidArgumentException("بند التسليم غير مدرج في أمر البيع الأصلي");
+                }
+
+                $qtyToDeliver = (float) $line['quantity'];
+                $maxDeliverable = (float) $orderItem->ordered_quantity - (float) $orderItem->fulfilled_quantity;
+
+                if ($qtyToDeliver > $maxDeliverable + 0.0001) {
+                    throw new InvalidArgumentException("الكمية المسلمة ({$qtyToDeliver}) تتجاوز الكمية المتبقية في أمر البيع ({$maxDeliverable})");
+                }
+
+                // العثور على الصنف المخزني في المستودع
+                $invItem = InventoryItem::where('tenant_id', $tenantId)
+                    ->where('variant_id', $orderItem->variant_id)
+                    ->where('warehouse_id', $warehouseId)
+                    ->where('is_customer_owned', false)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$invItem) {
+                    $invItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('variant_id', $orderItem->variant_id)
+                        ->where('is_customer_owned', false)
+                        ->lockForUpdate()
+                        ->first();
+                }
+
+                if ($invItem) {
+                    if ($invItem->current_balance < $qtyToDeliver) {
+                        throw new InvalidArgumentException("رصيد المخزن غير كافٍ لصرف الكمية المطلوبة للمنتج {$invItem->name}. المتاح: {$invItem->current_balance}، المطلوب: {$qtyToDeliver}");
+                    }
+
+                    $unitCost = (float)($invItem->average_cost ?? 0);
+                    $totalCogs = round(($totalCogs ?? 0) + ($qtyToDeliver * $unitCost), 4);
+
+                    $this->inventoryService->recordTransaction([
+                        'tenant_id' => $tenantId,
+                        'inventory_item_id' => $invItem->id,
+                        'warehouse_id' => $warehouseId,
+                        'quantity' => $qtyToDeliver,
+                        'direction' => 'OUT',
+                        'transaction_type' => 'sales_delivery',
+                        'unit_cost' => $invItem->average_cost,
+                        'reference_type' => 'sales_delivery_notes',
+                        'reference_id' => $deliveryNote->id,
+                        'idempotency_key' => 'DN-' . $deliveryNote->id . '-' . $orderItem->id,
+                    ]);
+
+                    if ((float)($invItem->reserved_balance ?? 0) > 0) {
+                        $invItem->reserved_balance = max(0, (float)$invItem->reserved_balance - $qtyToDeliver);
+                        $invItem->save();
+                    }
+                }
+
+                SalesDeliveryItem::create([
+                    'tenant_id' => $tenantId,
+                    'sales_delivery_note_id' => $deliveryNote->id,
+                    'sales_order_item_id' => $orderItem->id,
+                    'variant_id' => $orderItem->variant_id,
+                    'inventory_item_id' => $invItem?->id,
+                    'quantity' => $qtyToDeliver,
+                ]);
+
+                $orderItem->fulfilled_quantity += $qtyToDeliver;
+                $orderItem->reserved_quantity = max(0, $orderItem->reserved_quantity - $qtyToDeliver);
+                $orderItem->save();
+
+                $totalPieces += $qtyToDeliver;
+            }
+
+            $deliveryNote->total_pieces = $totalPieces;
+            $deliveryNote->save();
+
+            // إثبات قيد تكلفة البضاعة المباعة COGS محاسبياً
+            if (!empty($totalCogs) && $totalCogs > 0) {
+                try {
+                    app(\App\Services\AccountingService::class)->postSalesDeliveryCOGS($tenantId, $deliveryNote, $totalCogs);
+                } catch (\Throwable) {}
+            }
+
+            // فحص حالة إكمال أمر البيع
+            $freshOrder = $order->fresh(['items']);
+            $allFulfilled = true;
+            foreach ($freshOrder->items as $it) {
+                if ($it->fulfilled_quantity < $it->ordered_quantity - 0.0001) {
+                    $allFulfilled = false;
+                    break;
+                }
+            }
+
+            $order->status = $allFulfilled ? 'fulfilled' : 'partially_fulfilled';
+            $order->save();
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'sales_order_delivered',
+                'auditable_type' => 'sales_orders',
+                'auditable_id' => $order->id,
+                'new_values' => ['delivery_note_id' => $deliveryNote->id, 'delivered_pieces' => $totalPieces],
+            ]);
+
+            return $deliveryNote->load(['items.variant', 'customer', 'warehouse', 'salesOrder']);
+        });
+    }
+
+    /**
+     * إلغاء إذن التسليم واسترجاع الكميات لدفتر المخزون
+     */
+    public function cancelDeliveryNote(string $deliveryId, string $reason): SalesDeliveryNote
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($deliveryId, $reason, $tenantId) {
+            $deliveryNote = SalesDeliveryNote::where('tenant_id', $tenantId)
+                ->where('id', $deliveryId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($deliveryNote->status === 'cancelled') {
+                throw new InvalidArgumentException("إذن التسليم ملغي مسبقاً");
+            }
+
+            // عكس الحركات المخزنية وإرجاع الكميات
+            $totalReversalCogs = 0;
+            foreach ($deliveryNote->items as $dItem) {
+                if ($dItem->inventory_item_id) {
+                    $invItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('id', $dItem->inventory_item_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($invItem) {
+                        $unitCost = (float) $invItem->average_cost;
+                        $totalReversalCogs = round($totalReversalCogs + ($dItem->quantity * $unitCost), 4);
+
+                        $this->inventoryService->recordTransaction([
+                            'tenant_id' => $tenantId,
+                            'inventory_item_id' => $invItem->id,
+                            'warehouse_id' => $deliveryNote->warehouse_id,
+                            'quantity' => $dItem->quantity,
+                            'direction' => 'IN',
+                            'transaction_type' => 'sales_delivery_reversal',
+                            'unit_cost' => $invItem->average_cost,
+                            'reference_type' => 'sales_delivery_notes',
+                            'reference_id' => $deliveryNote->id,
+                            'idempotency_key' => 'DN-REV-' . $deliveryNote->id . '-' . $dItem->id,
+                        ]);
+                    }
+                }
+
+                if ($dItem->sales_order_item_id) {
+                    $orderItem = SalesOrderItem::where('tenant_id', $tenantId)
+                        ->where('id', $dItem->sales_order_item_id)
+                        ->first();
+
+                    if ($orderItem) {
+                        $orderItem->fulfilled_quantity = max(0, $orderItem->fulfilled_quantity - $dItem->quantity);
+                        $orderItem->save();
+                    }
+                }
+            }
+
+            // تحديث حالة أمر البيع
+            if ($deliveryNote->sales_order_id) {
+                $order = SalesOrder::where('tenant_id', $tenantId)
+                    ->where('id', $deliveryNote->sales_order_id)
+                    ->first();
+
+                if ($order && $order->status !== 'cancelled') {
+                    $order->status = 'confirmed';
+                    $order->save();
+                }
+            }
+
+            $deliveryNote->status = 'cancelled';
+            $deliveryNote->cancelled_at = now();
+            $deliveryNote->cancellation_reason = $reason;
+            $deliveryNote->save();
+
+            // إثبات عكس قيد تكلفة المبيعات محاسبياً
+            if ($totalReversalCogs > 0) {
+                try {
+                    app(\App\Services\AccountingService::class)->postSalesDeliveryCOGSReversal($tenantId, $deliveryNote, $totalReversalCogs);
+                } catch (\Throwable) {}
+            }
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'sales_delivery_cancelled',
+                'auditable_type' => 'sales_delivery_notes',
+                'auditable_id' => $deliveryNote->id,
+                'new_values' => ['reason' => $reason],
+            ]);
+
+            return $deliveryNote;
+        });
+    }
+
+    /**
+     * تسجيل سند قبض مالي من العميل وتخصيصه على الفواتير
+     */
+    public function recordCustomerPayment(array $data): PaymentVoucher
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($data, $tenantId) {
+            $customerId = $data['customer_id'];
+            $customer = Customer::where('tenant_id', $tenantId)->findOrFail($customerId);
+
+            $amount = (float) $data['amount'];
+            if ($amount <= 0) {
+                throw new InvalidArgumentException("مبلغ سند القبض يجب أن يكون أكبر من الصفر");
+            }
+
+            $paymentMethod = $data['payment_method'] ?? 'cash';
+            $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card']) ? '1020' : '1010';
+
+            $accountId = $data['account_id'] ?? null;
+            if ($accountId) {
+                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('id', $accountId)->first();
+            } else {
+                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', $preferredCode)->first();
+                if (!$cashAccount && $preferredCode === '1020') {
+                    $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1010')->first();
+                }
+            }
+
+            if (!$cashAccount) {
+                if (ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() === 0) {
+                    app(AccountingService::class)->initializeDefaultChartOfAccounts($tenantId);
+                }
+                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', $preferredCode)->first()
+                    ?? ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1010')->first()
+                    ?? ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('type', 'asset')->first();
+            }
+
+            $arAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1110')->first();
+            if (!$arAccount && ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() === 0) {
+                app(AccountingService::class)->initializeDefaultChartOfAccounts($tenantId);
+                $arAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1110')->first();
+            }
+
+            $voucherNumber = $data['voucher_number'] ?? ('RCV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
+
+            $voucher = PaymentVoucher::create([
+                'tenant_id' => $tenantId,
+                'voucher_number' => $voucherNumber,
+                'voucher_type' => 'receipt',
+                'party_type' => 'customer',
+                'party_id' => $customer->id,
+                'party_name' => $customer->name,
+                'payment_method' => $paymentMethod,
+                'account_id' => $cashAccount ? $cashAccount->id : ($arAccount ? $arAccount->id : null),
+                'amount' => $amount,
+                'voucher_date' => $data['voucher_date'] ?? now()->toDateString(),
+                'notes' => $data['notes'] ?? null,
+                'idempotency_key' => $data['idempotency_key'] ?? null,
+            ]);
+
+            // تخصيص الدفعة على الفواتير
+            $allocations = $data['allocations'] ?? [];
+            if (empty($allocations) && !empty($data['sales_invoice_id'])) {
+                $allocations = [['sales_invoice_id' => $data['sales_invoice_id'], 'amount' => $amount]];
+            } elseif (empty($allocations) && !empty($data['invoice_id'])) {
+                $allocations = [['sales_invoice_id' => $data['invoice_id'], 'amount' => $amount]];
+            }
+
+            // تخصيص تلقائي FIFO على الفواتير المفتوحة إذا لم يتم تحديد فواتير بعينها
+            if (empty($allocations)) {
+                $unpaidInvoices = SalesInvoice::where('tenant_id', $tenantId)
+                    ->where('customer_id', $customer->id)
+                    ->whereIn('status', ['issued', 'partially_paid'])
+                    ->where('balance_due', '>', 0)
+                    ->orderBy('invoice_date', 'asc')
+                    ->get();
+
+                $remainingToAllocate = $amount;
+                foreach ($unpaidInvoices as $inv) {
+                    if ($remainingToAllocate <= 0) break;
+                    $allocAmount = min($remainingToAllocate, (float) $inv->balance_due);
+                    $allocations[] = ['sales_invoice_id' => $inv->id, 'amount' => $allocAmount];
+                    $remainingToAllocate -= $allocAmount;
+                }
+            }
+
+            foreach ($allocations as $alloc) {
+                $invId = $alloc['sales_invoice_id'] ?? $alloc['invoice_id'] ?? null;
+                $allocAmt = (float) ($alloc['amount'] ?? 0);
+                if (!$invId || $allocAmt <= 0) continue;
+
+                $invoice = SalesInvoice::where('tenant_id', $tenantId)
+                    ->where('id', $invId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($allocAmt > (float)$invoice->balance_due + 0.0001) {
+                    throw new InvalidArgumentException("مبلغ التخصيص ({$allocAmt}) يتجاوز الرصيد المستحق على الفاتورة {$invoice->invoice_number} ({$invoice->balance_due})");
+                }
+
+                $invoice->paid_amount += $allocAmt;
+                $invoice->balance_due = max(0, round($invoice->total_amount - $invoice->paid_amount, 4));
+                $invoice->status = ($invoice->balance_due <= 0.0001) ? 'paid' : 'partially_paid';
+                $invoice->save();
+
+                PaymentVoucherAllocation::create([
+                    'tenant_id' => $tenantId,
+                    'payment_voucher_id' => $voucher->id,
+                    'sales_invoice_id' => $invoice->id,
+                    'amount' => $allocAmt,
+                ]);
+            }
+
+            // إثبات القيد المحاسبي المتوازن إذا كانت شجرة الحسابات نشطة
+            if ($cashAccount && $arAccount) {
+                try {
+                    $lines = [
+                        [
+                            'account_id' => $cashAccount->id,
+                            'debit' => $amount,
+                            'credit' => 0,
+                            'description' => "سند قبض من العميل {$customer->name} برقم {$voucher->voucher_number}",
+                        ],
+                        [
+                            'account_id' => $arAccount->id,
+                            'debit' => 0,
+                            'credit' => $amount,
+                            'description' => "سداد مديونية العميل {$customer->name} بموجب سند قبض {$voucher->voucher_number}",
+                        ]
+                    ];
+
+                    app(AccountingService::class)->createJournalEntry([
+                        'entry_number' => 'JE-RCV-' . $voucher->voucher_number,
+                        'description' => "سند قبض عميل {$voucher->voucher_number} - {$customer->name}",
+                        'reference_type' => 'payment_vouchers',
+                        'reference_id' => $voucher->id,
+                        'entry_date' => $voucher->voucher_date ? $voucher->voucher_date->toDateString() : now()->toDateString(),
+                        'lines' => $lines,
+                    ]);
+                } catch (\Throwable) {
+                    // فشل غير مانع إذا كانت الحسابات تجريبية
+                }
+            }
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'customer_payment_recorded',
+                'auditable_type' => 'payment_vouchers',
+                'auditable_id' => $voucher->id,
+                'new_values' => ['amount' => $amount, 'customer_id' => $customer->id],
+            ]);
+
+            return $voucher->load(['allocations.salesInvoice', 'account']);
+        });
+    }
+
+    /**
+     * إلغاء وعكس سند القبض وإعادة فتح أرصدة الفواتير المرتبطة
+     */
+    public function reverseCustomerPayment(string $voucherId, string $reason): PaymentVoucher
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($voucherId, $reason, $tenantId) {
+            $voucher = PaymentVoucher::where('tenant_id', $tenantId)
+                ->where('id', $voucherId)
+                ->where('voucher_type', 'receipt')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (str_starts_with($voucher->notes ?? '', '[REVERSED]')) {
+                throw new InvalidArgumentException("سند القبض معكوس مسبقاً");
+            }
+
+            // عكس التخصيصات وإعادة الرصيد المستحق للفواتير
+            foreach ($voucher->allocations as $alloc) {
+                $invoice = SalesInvoice::where('tenant_id', $tenantId)
+                    ->where('id', $alloc->sales_invoice_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($invoice) {
+                    $invoice->paid_amount = max(0, round($invoice->paid_amount - $alloc->amount, 4));
+                    $invoice->balance_due = max(0, round($invoice->total_amount - $invoice->paid_amount, 4));
+                    $invoice->status = ($invoice->paid_amount <= 0.0001) ? 'issued' : 'partially_paid';
+                    $invoice->save();
+                }
+            }
+
+            $voucher->notes = '[REVERSED] ' . $reason . ' | ' . ($voucher->notes ?? '');
+            $voucher->save();
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'customer_payment_reversed',
+                'auditable_type' => 'payment_vouchers',
+                'auditable_id' => $voucher->id,
+                'new_values' => ['reason' => $reason],
+            ]);
+
+            return $voucher;
+        });
+    }
+
+    /**
+     * إنشاء إشعار دائن صريح
+     */
+    public function createCreditNote(array $data): CreditNote
+    {
+        $tenantId = $data['tenant_id'] ?? (app()->bound('current_tenant_id') ? app('current_tenant_id') : null);
+
+        return DB::transaction(function () use ($data, $tenantId) {
+            $customerId = $data['customer_id'] ?? null;
+            $salesInvoiceId = $data['sales_invoice_id'] ?? null;
+            $salesReturnId = $data['sales_return_id'] ?? null;
+
+            $creditNoteNumber = $data['credit_note_number'] ?? ('CN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
+
+            $subtotal = (float) ($data['subtotal'] ?? $data['amount'] ?? 0);
+            $taxAmount = (float) ($data['tax_amount'] ?? 0);
+            $totalAmount = round($subtotal + $taxAmount, 4);
+
+            $creditNote = CreditNote::create([
+                'tenant_id' => $tenantId,
+                'credit_note_number' => $creditNoteNumber,
+                'customer_id' => $customerId,
+                'sales_invoice_id' => $salesInvoiceId,
+                'sales_return_id' => $salesReturnId,
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'total_amount' => $totalAmount,
+                'status' => 'issued',
+                'credit_note_date' => $data['credit_note_date'] ?? now()->toDateString(),
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id() ?? 1,
+                'action' => 'credit_note_created',
+                'auditable_type' => 'credit_notes',
+                'auditable_id' => $creditNote->id,
+                'new_values' => ['total_amount' => $totalAmount],
+            ]);
+
+            // إثبات قيد محاسبي لإشعار الدائن إذا كان المبلغ > 0
+            if ($totalAmount > 0) {
+                app(\App\Services\AccountingService::class)->postCreditNote($tenantId, $creditNote);
+            }
+
+            return $creditNote;
+        });
+    }
+
+    /**
+     * قائمة الإشعارات الدائنة
+     */
+    public function getCreditNotes()
+    {
+        $tenantId = app('current_tenant_id');
+
+        return CreditNote::where('tenant_id', $tenantId)
+            ->with(['customer', 'salesInvoice', 'salesReturn'])
+            ->latest()
+            ->paginate(20);
+    }
+
+    /**
+     * قائمة سندات القبض والدفعات
+     */
+    public function getPayments()
+    {
+        $tenantId = app('current_tenant_id');
+
+        return PaymentVoucher::where('tenant_id', $tenantId)
+            ->where('voucher_type', 'receipt')
+            ->where('party_type', 'customer')
+            ->with(['allocations.salesInvoice', 'account'])
+            ->latest()
+            ->paginate(20);
+    }
+
+    /**
+     * فحص باركود فوري للـ POS
+     */
+    public function barcodeLookup(string $barcode): ?array
+    {
+        $tenantId = app('current_tenant_id');
+
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('barcode', $barcode)
+            ->with(['garmentModel', 'size', 'color'])
+            ->first();
+
+        if (!$variant) {
+            $invItem = InventoryItem::where('tenant_id', $tenantId)
+                ->where('barcode', $barcode)
+                ->with(['variant.garmentModel', 'variant.size', 'variant.color'])
+                ->first();
+
+            if ($invItem && $invItem->variant) {
+                $variant = $invItem->variant;
+            }
+        }
+
+        if (!$variant) {
+            return null;
+        }
+
+        $stock = InventoryItem::where('tenant_id', $tenantId)
+            ->where('variant_id', $variant->id)
+            ->sum('current_balance');
+
+        return [
+            'id' => $variant->id,
+            'name' => ($variant->garmentModel?->name ?? 'Garment') . ' - ' . ($variant->size?->name ?? '') . ' / ' . ($variant->color?->name ?? ''),
+            'sku' => $variant->sku,
+            'barcode' => $variant->barcode,
+            'price' => (float) ($variant->retail_price ?? $variant->wholesale_price ?? 0),
+            'wholesale_price' => (float) $variant->wholesale_price,
+            'retail_price' => (float) $variant->retail_price,
+            'current_stock' => (float) $stock,
+            'variant' => $variant,
+        ];
+    }
 }
+
 

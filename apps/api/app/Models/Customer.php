@@ -16,18 +16,59 @@ class Customer extends Model
         'tenant_id',
         'code',
         'name',
+        'classification',
+        'company_name',
         'contact_person',
         'phone',
         'email',
         'tax_id',
+        'commercial_registry',
+        'credit_limit',
+        'payment_terms',
+        'opening_balance',
         'address',
+        'billing_address',
+        'delivery_address',
         'notes',
         'is_active',
+        'status',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'credit_limit' => 'decimal:4',
+        'opening_balance' => 'decimal:4',
     ];
+
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class);
+    }
+
+    public function salesOrders(): HasMany
+    {
+        return $this->hasMany(SalesOrder::class);
+    }
+
+    public function salesInvoices(): HasMany
+    {
+        return $this->hasMany(SalesInvoice::class);
+    }
+
+    public function salesReturns(): HasMany
+    {
+        return $this->hasMany(SalesReturn::class);
+    }
+
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
+    public function paymentVouchers(): HasMany
+    {
+        return $this->hasMany(PaymentVoucher::class, 'party_id')->where('party_type', 'customer');
+    }
 
     public function jobOrders(): HasMany
     {

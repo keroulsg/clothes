@@ -32,6 +32,7 @@ import {
   FaqPage,
   ContactPage,
 } from './pages/InfoPages';
+import { WaslatWorshPublicPage } from './pages/WaslatWorshPublicPage';
 
 export interface PublicWebsiteProps {
   lang: Language;
@@ -115,15 +116,6 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
               className="px-6 py-3 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer backdrop-blur-md"
             >
               <span>{isAr ? 'استكشف صالة القص' : 'Explore Cutting Engine'}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                window.location.hash = '#/store';
-              }}
-              className="px-5 py-3 rounded-xl border border-emerald-400/40 bg-emerald-500/20 hover:bg-emerald-500/30 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer backdrop-blur-md shadow-md"
-            >
-              <span>{isAr ? 'المتجر الإلكتروني العام' : 'Public Storefront'}</span>
             </button>
           </div>
         </div>
@@ -234,6 +226,68 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         </div>
       </section>
 
+      {/* 3.5 Waslat Worsh — Cutting Floor Exchange Spotlight */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-rose-950/40 to-slate-900 border border-rose-500/30 p-8 sm:p-12 text-white shadow-xl">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div className="space-y-4 text-center lg:text-start max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-[11px] font-bold text-rose-300">
+                <Scissors className="w-3.5 h-3.5 text-rose-400 -rotate-45" />
+                <span>{isAr ? 'بورصة القص والتصنيع B2B • حصري للباقة المؤسسية' : 'B2B Cutting Floor Exchange • Enterprise Exclusive'}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black font-sans leading-tight">
+                {isAr ? (
+                  <>وصلة ورش: <span className="text-rose-400">سوق تبادل طاقات صالات القص</span> للمصانع والورش</>
+                ) : (
+                  <>Waslat Worsh: <span className="text-rose-400">Cutting Floor Capacity Exchange</span></>
+                )}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                {isAr
+                  ? 'هل تبحث عن صالة قص شاغرة لتنفيذ طلبياتك بالمواصفات الفنية المعتمدة؟ أو تمتلك ماكينات وفرشات بطاقة فائضة وتريد تشغيلها؟ وصلة ورش تربط طالبي ومنفذي خدمات القص بطريقة مشفرة، شفافة، وبنظام عروض أسعار تنافسي.'
+                  : 'Connect with verified cutting floors across Egypt or monetize idle cutting capacity. Full technical specs, competitive bids, and privacy-first escrow mediation.'}
+              </p>
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
+                <button
+                  onClick={() => handleNavigate('waslat-worsh')}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-xs sm:text-sm shadow-lg shadow-rose-900/30 flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Scissors className="w-4 h-4 -rotate-45" />
+                  <span>{isAr ? 'استكشف بورصة القص الحية' : 'Explore Live Exchange'}</span>
+                  <ArrowIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleNavigate('pricing')}
+                  className="px-5 py-3 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                >
+                  {isAr ? 'شروط الاشتراك المؤسسي' : 'Enterprise Access Rules'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 w-full sm:w-auto shrink-0">
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center space-y-1">
+                <div className="text-2xl font-black text-rose-400">100%</div>
+                <div className="text-[11px] text-slate-400">{isAr ? 'حماية خصوصية الطرفين' : 'Privacy Protection'}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center space-y-1">
+                <div className="text-2xl font-black text-amber-400">CMT + FOB</div>
+                <div className="text-[11px] text-slate-400">{isAr ? 'أنماط تشغيل مرنة' : 'Flexible Contract Models'}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center space-y-1">
+                <div className="text-2xl font-black text-emerald-400">PDF/CAD</div>
+                <div className="text-[11px] text-slate-400">{isAr ? 'ملفات باترون وتعشيق' : 'Markers & Tech Specs'}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center space-y-1">
+                <div className="text-2xl font-black text-blue-400">Enterprise</div>
+                <div className="text-[11px] text-slate-400">{isAr ? 'مصانع معتمدة ومحققة' : 'Verified Factories'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 4. Pricing CTA Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="p-8 sm:p-12 rounded-3xl bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
@@ -295,6 +349,7 @@ export const PublicWebsite: React.FC<PublicWebsiteProps> = ({
         {activePage === 'costing' && <CostingPage lang={lang} onNavigate={handleNavigate} onOpenRegister={onOpenRegister} />}
         {activePage === 'workforce' && <WorkforcePage lang={lang} onNavigate={handleNavigate} onOpenRegister={onOpenRegister} />}
         {activePage === 'storefront' && <StorefrontPage lang={lang} onNavigate={handleNavigate} onOpenRegister={onOpenRegister} />}
+        {activePage === 'waslat-worsh' && <WaslatWorshPublicPage lang={lang} onNavigate={handleNavigate} onOpenLogin={onOpenLogin} onOpenRegister={onOpenRegister} />}
         {activePage === 'pricing' && <PricingPage lang={lang} onNavigate={handleNavigate} onOpenRegister={onOpenRegister} />}
         {activePage === 'about' && <AboutPage lang={lang} onNavigate={handleNavigate} onOpenRegister={onOpenRegister} />}
         {activePage === 'faq' && <FaqPage lang={lang} onNavigate={handleNavigate} onOpenRegister={onOpenRegister} />}

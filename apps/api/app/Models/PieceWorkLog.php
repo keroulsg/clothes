@@ -17,6 +17,8 @@ class PieceWorkLog extends Model
         'employee_id',
         'production_order_id',
         'cutting_bundle_id',
+        'cutting_order_id',
+        'job_order_id',
         'piece_rate_id',
         'work_date',
         'completed_quantity',
@@ -54,6 +56,16 @@ class PieceWorkLog extends Model
     public function cuttingBundle(): BelongsTo
     {
         return $this->belongsTo(CuttingBundle::class);
+    }
+
+    public function cuttingOrder(): BelongsTo
+    {
+        return $this->belongsTo(CuttingOrder::class);
+    }
+
+    public function jobOrder(): BelongsTo
+    {
+        return $this->belongsTo(JobOrder::class);
     }
 
     public function pieceRate(): BelongsTo

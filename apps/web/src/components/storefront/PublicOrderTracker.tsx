@@ -44,6 +44,7 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
   // Receipt submission state
   const [instapayRef, setInstapayRef] = useState('');
   const [receiptUrl, setReceiptUrl] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmittingReceipt, setIsSubmittingReceipt] = useState(false);
   const [receiptSuccessMsg, setReceiptSuccessMsg] = useState<string | null>(null);
 
@@ -100,11 +101,27 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
     setReceiptSuccessMsg(null);
 
     try {
+      let finalReceiptUrl = receiptUrl.trim() || undefined;
+      if (receiptFile) {
+        try {
+          const formData = new FormData();
+          formData.append('receipt', receiptFile);
+          formData.append('order_number', orderData.order_number);
+          formData.append('customer_phone', phone.trim());
+          const uploadRes = await api.storefront.uploadReceipt(formData, tenantIdentifier);
+          if (uploadRes?.receipt_url) {
+            finalReceiptUrl = uploadRes.receipt_url;
+          }
+        } catch (uploadErr: any) {
+          console.warn('Receipt upload fallback:', uploadErr);
+        }
+      }
+
       const res = await api.storefront.submitReceipt({
         order_number: orderData.order_number,
         customer_phone: phone.trim(),
         instapay_reference: instapayRef.trim(),
-        instapay_receipt_url: receiptUrl.trim() || undefined,
+        instapay_receipt_url: finalReceiptUrl,
         tenant_id: tenantIdentifier,
       });
 
@@ -380,15 +397,15 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
                     {isAr ? 'رفع / تصحيح بيانات تحويل InstaPay' : 'Submit / Update InstaPay Receipt'}
                   </h4>
 
-                  {storeInfo?.instapay_handle && (
+                  {(storeInfo?.instapay_identifier || storeInfo?.instapay_handle) && (
                     <div className="mb-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 text-xs space-y-1">
                       <div className="flex justify-between">
-                        <span className="text-purple-800 dark:text-purple-300 font-semibold">{isAr ? 'معرف التحويل (Handle):' : 'InstaPay Handle:'}</span>
-                        <span className="font-mono font-bold text-purple-900 dark:text-purple-100">{storeInfo.instapay_handle}</span>
+                        <span className="text-purple-800 dark:text-purple-300 font-semibold">{isAr ? 'معرف التحويل (InstaPay):' : 'InstaPay Handle:'}</span>
+                        <span className="font-mono font-bold text-purple-900 dark:text-purple-100">{storeInfo.instapay_identifier || storeInfo.instapay_handle}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-purple-800 dark:text-purple-300">{isAr ? 'اسم المستفيد:' : 'Beneficiary:'}</span>
-                        <span className="font-semibold">{storeInfo.instapay_account_name}</span>
+                        <span className="font-semibold">{storeInfo.instapay_display_name || storeInfo.instapay_account_name}</span>
                       </div>
                     </div>
                   )}
@@ -410,7 +427,19 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
 
                     <div>
                       <label className="block text-xs font-semibold mb-1">
-                        {isAr ? 'رابط صورة إيصال التحويل (اختياري)' : 'Receipt Screenshot URL (Optional)'}
+                        {isAr ? 'ملف إيصال التحويل (صورة أو PDF)' : 'Receipt File (Image or PDF)'}
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                        className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold mb-1">
+                        {isAr ? 'أو رابط صورة الإيصال (اختياري)' : 'Or Receipt Screenshot URL (Optional)'}
                       </label>
                       <input
                         type="url"

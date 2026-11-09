@@ -28,12 +28,15 @@ class SalesDeliveryNote extends Model
         'recipient_name',
         'proof_of_delivery',
         'notes',
+        'cancelled_at',
+        'cancellation_reason',
     ];
 
     protected $casts = [
         'delivery_date' => 'date',
         'total_cartons' => 'integer',
         'total_pieces' => 'decimal:4',
+        'cancelled_at' => 'datetime',
     ];
 
     public function salesOrder(): BelongsTo
@@ -49,6 +52,11 @@ class SalesDeliveryNote extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(SalesDeliveryItem::class, 'sales_delivery_note_id');
     }
 
     public function cartons(): HasMany

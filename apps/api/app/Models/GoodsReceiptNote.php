@@ -33,6 +33,39 @@ class GoodsReceiptNote extends Model
         'receipt_date' => 'date',
     ];
 
+    protected $appends = ['supplier_name', 'warehouse_name', 'po_number', 'accepted_quantity', 'delivered_quantity'];
+
+    public function getAcceptedQuantityAttribute(): float
+    {
+        if ($this->relationLoaded('items')) {
+            return (float) $this->items->sum('accepted_quantity');
+        }
+        return (float) $this->items()->sum('accepted_quantity');
+    }
+
+    public function getDeliveredQuantityAttribute(): float
+    {
+        if ($this->relationLoaded('items')) {
+            return (float) $this->items->sum('delivered_quantity');
+        }
+        return (float) $this->items()->sum('delivered_quantity');
+    }
+
+    public function getSupplierNameAttribute(): ?string
+    {
+        return $this->supplier?->name;
+    }
+
+    public function getWarehouseNameAttribute(): ?string
+    {
+        return $this->warehouse?->name;
+    }
+
+    public function getPoNumberAttribute(): ?string
+    {
+        return $this->purchaseOrder?->po_number;
+    }
+
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);

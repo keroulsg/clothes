@@ -27,32 +27,69 @@ class InventoryController extends Controller
     }
 
     /**
-     * عرض المخازن المتاحة للشركة
+     * عرض المخازن المتاحة للشركة مع الفلترة والبحث
      */
-    public function warehouses(): JsonResponse
+    public function warehouses(Request $request): JsonResponse
     {
-        $warehouses = Warehouse::withCount('items')->get();
+        $tenantId = app('current_tenant_id');
+        $query = Warehouse::where('tenant_id', $tenantId)->with(['branch'])->withCount('items');
+
+        if ($request->filled('branch_id') && $request->branch_id !== 'all') {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if ($request->filled('type') && $request->type !== 'all') {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
+                  ->orWhere('manager_name', 'like', "%{$search}%");
+            });
+        }
+
+        $warehouses = $query->orderBy('name')->get();
 
         return response()->json([
             'warehouses' => $warehouses,
+            'total' => $warehouses->count(),
         ]);
     }
 
     /**
-     * إنشاء مخزن جديد تابع للشركة
+     * إنشاء مخزن جديد تابع للشركة مع دعم الأنواع القياسية والمخصصة
      */
     public function storeWarehouse(Request $request): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:50',
-            'type' => 'required|string|in:fabric,accessories,finished_goods,wip,returns,customer_deposits',
+            'type' => 'required|string|max:50',
             'branch_id' => 'nullable|string|exists:branches,id',
             'address' => 'nullable|string|max:500',
+            'manager_name' => 'nullable|string|max:255',
             'allow_negative_stock' => 'nullable|boolean',
+            'is_active' => 'nullable|boolean',
         ]);
 
-        $tenantId = app('current_tenant_id');
+        if (!empty($validated['branch_id'])) {
+            $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($validated['branch_id']);
+            if (!$branch) {
+                return response()->json([
+                    'error' => 'CrossTenantAccessDenied',
+                    'message' => 'الفرع المحدد غير تابع لشركتك.',
+                ], 403);
+            }
+        }
 
         $exists = Warehouse::where('tenant_id', $tenantId)->where('code', $validated['code'])->exists();
         if ($exists) {
@@ -69,13 +106,169 @@ class InventoryController extends Controller
             'type' => $validated['type'],
             'branch_id' => $validated['branch_id'] ?? null,
             'address' => $validated['address'] ?? null,
+            'manager_name' => $validated['manager_name'] ?? null,
             'allow_negative_stock' => $validated['allow_negative_stock'] ?? false,
-            'is_active' => true,
+            'is_active' => $validated['is_active'] ?? true,
         ]);
+
+        $warehouse->load('branch');
 
         return response()->json([
             'message' => 'تم إنشاء المستودع بنجاح.',
             'warehouse' => $warehouse,
+        ], 201);
+    }
+
+    /**
+     * تحديث بيانات مستودع
+     */
+    public function updateWarehouse(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $warehouse = Warehouse::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'code' => 'sometimes|required|string|max:50',
+            'type' => 'sometimes|required|string|max:50',
+            'branch_id' => 'nullable|string|exists:branches,id',
+            'address' => 'nullable|string|max:500',
+            'manager_name' => 'nullable|string|max:255',
+            'allow_negative_stock' => 'nullable|boolean',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        if (!empty($validated['code']) && $validated['code'] !== $warehouse->code) {
+            $exists = Warehouse::where('tenant_id', $tenantId)
+                ->where('code', $validated['code'])
+                ->where('id', '!=', $warehouse->id)
+                ->exists();
+            if ($exists) {
+                return response()->json([
+                    'error' => 'DuplicateWarehouseCode',
+                    'message' => 'كود المستودع مستخدم مسبقاً في شركتك.',
+                ], 422);
+            }
+        }
+
+        if (isset($validated['branch_id']) && $validated['branch_id'] !== $warehouse->branch_id) {
+            if ($validated['branch_id'] !== null) {
+                $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($validated['branch_id']);
+                if (!$branch) {
+                    return response()->json([
+                        'error' => 'CrossTenantAccessDenied',
+                        'message' => 'الفرع المحدد غير تابع لشركتك.',
+                    ], 403);
+                }
+            }
+        }
+
+        $warehouse->update($validated);
+        $warehouse->load('branch');
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات المستودع بنجاح.',
+            'warehouse' => $warehouse,
+        ]);
+    }
+
+    /**
+     * حذف مستودع بعد التحقق من خلوه من الأرصدة والحركات
+     */
+    public function destroyWarehouse(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $warehouse = Warehouse::where('tenant_id', $tenantId)->withCount(['items', 'transactions'])->findOrFail($id);
+
+        $hasStock = InventoryItem::where('tenant_id', $tenantId)
+            ->where('warehouse_id', $warehouse->id)
+            ->where('current_balance', '>', 0)
+            ->exists();
+
+        if ($hasStock || $warehouse->transactions_count > 0) {
+            return response()->json([
+                'error' => 'WarehouseNotEmpty',
+                'message' => 'لا يمكن حذف المستودع نظراً لوجود أرصدة مخزنية أو حركات سابقة مسجلة عليه. يمكنك تعطيل المستودع بدلاً من حذفه.',
+            ], 422);
+        }
+
+        // حذف الأصناف الصفرية إذا كانت غير مرتبطة بحركات
+        InventoryItem::where('tenant_id', $tenantId)->where('warehouse_id', $warehouse->id)->delete();
+        $warehouse->delete();
+
+        return response()->json([
+            'message' => 'تم حذف المستودع بنجاح.',
+        ]);
+    }
+
+    /**
+     * استرجاع أنواع المستودعات القياسية والمخصصة للشركة
+     */
+    public function warehouseTypes(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = \App\Models\Tenant::find($tenantId);
+
+        $standardTypes = [
+            ['code' => 'raw_materials', 'name' => 'مستودع الخامات والأقمشة', 'name_en' => 'Raw Materials & Fabric'],
+            ['code' => 'finished_goods', 'name' => 'مستودع المنتجات التامة', 'name_en' => 'Finished Goods'],
+            ['code' => 'wip', 'name' => 'مستودع تحت التشغيل (خط الإنتاج)', 'name_en' => 'Work in Progress (WIP)'],
+            ['code' => 'accessories', 'name' => 'مستودع الإكسسوارات ومستلزمات الإنتاج', 'name_en' => 'Accessories & Trims'],
+            ['code' => 'spare_parts', 'name' => 'مستودع قطع غيار الماكينات', 'name_en' => 'Machine Spare Parts'],
+            ['code' => 'customer_custody', 'name' => 'مستودع أمانات وتشغيل للغير', 'name_en' => 'Customer Custody Materials'],
+            ['code' => 'returns_damaged', 'name' => 'مستودع المرتجعات والهوالك', 'name_en' => 'Returns & Damaged Goods'],
+            ['code' => 'general_storage', 'name' => 'مستودع التخزين العام', 'name_en' => 'General Storage'],
+        ];
+
+        $customTypes = $tenant?->settings['custom_warehouse_types'] ?? [];
+
+        return response()->json([
+            'standard_types' => $standardTypes,
+            'custom_types' => $customTypes,
+            'all_types' => array_merge($standardTypes, $customTypes),
+        ]);
+    }
+
+    /**
+     * إضافة نوع مستودع مخصص للشركة
+     */
+    public function storeWarehouseType(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'code' => 'required|string|max:50|alpha_dash',
+            'name' => 'required|string|max:100',
+            'name_en' => 'nullable|string|max:100',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $tenant = \App\Models\Tenant::findOrFail($tenantId);
+
+        $settings = $tenant->settings ?? [];
+        $customTypes = $settings['custom_warehouse_types'] ?? [];
+
+        foreach ($customTypes as $t) {
+            if ($t['code'] === $validated['code']) {
+                return response()->json([
+                    'error' => 'DuplicateTypeCode',
+                    'message' => 'كود نوع المستودع موجود مسبقاً.',
+                ], 422);
+            }
+        }
+
+        $newType = [
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'name_en' => $validated['name_en'] ?? $validated['name'],
+        ];
+
+        $customTypes[] = $newType;
+        $settings['custom_warehouse_types'] = $customTypes;
+        $tenant->settings = $settings;
+        $tenant->save();
+
+        return response()->json([
+            'message' => 'تمت إضافة نوع المستودع المخصص بنجاح.',
+            'type' => $newType,
         ], 201);
     }
 
@@ -127,16 +320,22 @@ class InventoryController extends Controller
     {
         $validated = $request->validate([
             'warehouse_id' => 'required|string|exists:warehouses,id',
-            'item_type' => 'required|string|in:fabric_raw,accessory_raw,finished_good,packaging,fabric,accessory,finished_product,yarn,thread,trims',
+            'item_type' => 'required|string|in:fabric_raw,accessory_raw,finished_good,packaging,fabric,accessory,finished_product,yarn,thread,trims,spare_parts,general',
             'code' => 'required|string|max:100',
             'name' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'barcode' => 'nullable|string|max:100',
             'unit_of_measure' => 'required|string|max:50',
             'reorder_level' => 'nullable|numeric|min:0',
+            'min_stock_level' => 'nullable|numeric|min:0',
             'average_cost' => 'nullable|numeric|min:0',
             'initial_balance' => 'nullable|numeric|min:0',
             'variant_id' => 'nullable|string|exists:product_variants,id',
             'is_customer_owned' => 'nullable|boolean',
             'customer_name' => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
+            'description' => 'nullable|string',
+            'image_url' => 'nullable|string|max:500',
             'storage_zone' => 'nullable|string|max:100',
             'rack_location' => 'nullable|string|max:100',
             'shelf_bin_location' => 'nullable|string|max:100',
@@ -179,12 +378,18 @@ class InventoryController extends Controller
                 'item_type' => $validated['item_type'],
                 'code' => $validated['code'],
                 'name' => $validated['name'],
+                'name_en' => $validated['name_en'] ?? null,
+                'barcode' => $validated['barcode'] ?? null,
                 'unit_of_measure' => $validated['unit_of_measure'],
                 'reorder_level' => $validated['reorder_level'] ?? 0.0,
+                'min_stock_level' => $validated['min_stock_level'] ?? 0.0,
                 'current_balance' => $initialBalance,
                 'average_cost' => $avgCost,
                 'is_customer_owned' => $validated['is_customer_owned'] ?? false,
                 'customer_name' => $validated['customer_name'] ?? null,
+                'is_active' => $validated['is_active'] ?? true,
+                'description' => $validated['description'] ?? null,
+                'image_url' => $validated['image_url'] ?? null,
                 'technical_specs' => $specs,
             ]);
 
@@ -236,8 +441,14 @@ class InventoryController extends Controller
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'barcode' => 'nullable|string|max:100',
             'reorder_level' => 'nullable|numeric|min:0',
+            'min_stock_level' => 'nullable|numeric|min:0',
             'average_cost' => 'nullable|numeric|min:0',
+            'is_active' => 'nullable|boolean',
+            'description' => 'nullable|string',
+            'image_url' => 'nullable|string|max:500',
             'storage_zone' => 'nullable|string|max:100',
             'rack_location' => 'nullable|string|max:100',
             'shelf_bin_location' => 'nullable|string|max:100',
@@ -245,8 +456,14 @@ class InventoryController extends Controller
         ]);
 
         if (isset($validated['name'])) $item->name = $validated['name'];
+        if (isset($validated['name_en'])) $item->name_en = $validated['name_en'];
+        if (isset($validated['barcode'])) $item->barcode = $validated['barcode'];
         if (isset($validated['reorder_level'])) $item->reorder_level = $validated['reorder_level'];
+        if (isset($validated['min_stock_level'])) $item->min_stock_level = $validated['min_stock_level'];
         if (isset($validated['average_cost'])) $item->average_cost = $validated['average_cost'];
+        if (isset($validated['is_active'])) $item->is_active = $validated['is_active'];
+        if (isset($validated['description'])) $item->description = $validated['description'];
+        if (isset($validated['image_url'])) $item->image_url = $validated['image_url'];
 
         $specs = $item->technical_specs ?? [];
         if (isset($validated['technical_specs'])) {
@@ -265,6 +482,161 @@ class InventoryController extends Controller
             'message' => 'تم تحديث بيانات الصنف المخزني وموضع التخزين بنجاح.',
             'item' => $item,
         ]);
+    }
+
+    /**
+     * حذف صنف مخزني مع التحقق الصارم من عدم وجود رصيد أو حركات
+     */
+    public function destroyItem(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $item = InventoryItem::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if ((float) $item->current_balance > 0) {
+            return response()->json([
+                'error' => 'ItemHasPositiveStock',
+                'message' => "لا يمكن حذف الصنف نظراً لوجود رصيد حالي بالمخزن ({$item->current_balance} {$item->unit_of_measure}). يمكنك تعطيل الصنف بدلاً من الحذف.",
+            ], 422);
+        }
+
+        if ($item->transactions()->exists()) {
+            return response()->json([
+                'error' => 'ItemHasTransactions',
+                'message' => 'لا يمكن حذف الصنف لوجود حركات سابقة مسجلة عليه في دفتر الأستاذ للحفاظ على سلامة القيود والتدقيق المالي.',
+            ], 422);
+        }
+
+        $item->delete();
+
+        return response()->json([
+            'message' => 'تم حذف كارت الصنف بنجاح.',
+        ]);
+    }
+
+    /**
+     * كارت الصنف المخزني التحليلي وحركات دفتر الأستاذ مع الأرصدة التراكمية
+     */
+    public function stockCard(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $item = InventoryItem::where('tenant_id', $tenantId)
+            ->with(['warehouse.branch', 'variant.garmentModel', 'variant.size', 'variant.color'])
+            ->findOrFail($id);
+
+        $transactions = InventoryTransaction::where('tenant_id', $tenantId)
+            ->where('inventory_item_id', $item->id)
+            ->with('user:id,name')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $totalIn = $transactions->where('direction', 'IN')->sum('quantity');
+        $totalOut = $transactions->where('direction', 'OUT')->sum('quantity');
+
+        return response()->json([
+            'item' => $item,
+            'summary' => [
+                'current_balance' => (float) $item->current_balance,
+                'unit_of_measure' => $item->unit_of_measure,
+                'average_cost' => (float) $item->average_cost,
+                'total_valuation' => round((float) $item->current_balance * (float) $item->average_cost, 2),
+                'total_in' => round((float) $totalIn, 4),
+                'total_out' => round((float) $totalOut, 4),
+                'reorder_level' => (float) $item->reorder_level,
+                'min_stock_level' => (float) $item->min_stock_level,
+                'is_low_stock' => (float) $item->current_balance <= (float) $item->reorder_level,
+            ],
+            'movements' => $transactions->map(fn($tx) => [
+                'id' => $tx->id,
+                'created_at' => $tx->created_at->format('Y-m-d H:i'),
+                'transaction_type' => $tx->transaction_type,
+                'direction' => $tx->direction,
+                'quantity' => (float) $tx->quantity,
+                'unit_cost' => (float) $tx->unit_cost,
+                'total_cost' => (float) $tx->total_cost,
+                'balance_before' => (float) $tx->balance_before,
+                'balance_after' => (float) $tx->balance_after,
+                'reference_type' => $tx->reference_type,
+                'reference_number' => $tx->reference_number,
+                'notes' => $tx->notes,
+                'user_name' => $tx->user?->name ?? 'النظام الآلي',
+            ]),
+        ]);
+    }
+
+    /**
+     * استرجاع قائمة وحدات القياس المتاحة للشركة
+     */
+    public function units(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $units = \App\Models\UnitOfMeasure::where(function ($q) use ($tenantId) {
+            $q->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
+        })->where('is_active', true)->orderBy('category')->orderBy('name')->get();
+
+        // إذا كانت القائمة فارغة، إنشاء الوحدات القياسية الافتراضية لصناعة الملابس
+        if ($units->isEmpty()) {
+            $presets = [
+                ['name' => 'متر طولي', 'symbol' => 'm', 'category' => 'length', 'base_unit' => 'm', 'conversion_factor' => 1.0],
+                ['name' => 'سنتيمتر', 'symbol' => 'cm', 'category' => 'length', 'base_unit' => 'm', 'conversion_factor' => 0.01],
+                ['name' => 'ياردا', 'symbol' => 'yd', 'category' => 'length', 'base_unit' => 'm', 'conversion_factor' => 0.9144],
+                ['name' => 'كيلوجرام', 'symbol' => 'kg', 'category' => 'weight', 'base_unit' => 'kg', 'conversion_factor' => 1.0],
+                ['name' => 'جرام', 'symbol' => 'g', 'category' => 'weight', 'base_unit' => 'kg', 'conversion_factor' => 0.001],
+                ['name' => 'قطعة', 'symbol' => 'pcs', 'category' => 'count', 'base_unit' => 'pcs', 'conversion_factor' => 1.0],
+                ['name' => 'دستة (12 قطعة)', 'symbol' => 'doz', 'category' => 'count', 'base_unit' => 'pcs', 'conversion_factor' => 12.0],
+                ['name' => 'ثوب / طاقة قماش', 'symbol' => 'roll', 'category' => 'packaging', 'base_unit' => 'm', 'conversion_factor' => 50.0],
+                ['name' => 'بكرة خيط', 'symbol' => 'spool', 'category' => 'count', 'base_unit' => 'pcs', 'conversion_factor' => 1.0],
+                ['name' => 'كونة خيط', 'symbol' => 'cone', 'category' => 'count', 'base_unit' => 'kg', 'conversion_factor' => 1.0],
+            ];
+
+            foreach ($presets as $p) {
+                \App\Models\UnitOfMeasure::create(array_merge($p, ['tenant_id' => $tenantId, 'is_active' => true]));
+            }
+
+            $units = \App\Models\UnitOfMeasure::where('tenant_id', $tenantId)->get();
+        }
+
+        return response()->json([
+            'units' => $units,
+        ]);
+    }
+
+    /**
+     * إضافة وحدة قياس مخصصة للشركة
+     */
+    public function storeUnit(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+            'symbol' => 'required|string|max:30',
+            'category' => 'required|string|in:length,weight,count,volume,packaging',
+            'base_unit' => 'nullable|string|max:30',
+            'conversion_factor' => 'nullable|numeric|min:0.000001',
+        ]);
+
+        $exists = \App\Models\UnitOfMeasure::where('tenant_id', $tenantId)
+            ->where('symbol', $validated['symbol'])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'error' => 'DuplicateUnitSymbol',
+                'message' => 'رمز وحدة القياس موجود مسبقاً في شركتك.',
+            ], 422);
+        }
+
+        $unit = \App\Models\UnitOfMeasure::create(array_merge($validated, [
+            'tenant_id' => $tenantId,
+            'is_active' => true,
+            'conversion_factor' => $validated['conversion_factor'] ?? 1.0,
+        ]));
+
+        return response()->json([
+            'message' => 'تم إنشاء وحدة القياس بنجاح.',
+            'unit' => $unit,
+        ], 201);
     }
 
     /**

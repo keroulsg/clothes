@@ -22,11 +22,16 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
 }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [classification, setClassification] = useState<'company' | 'individual'>('company');
+  const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [taxId, setTaxId] = useState('');
+  const [commercialRegistry, setCommercialRegistry] = useState('');
   const [address, setAddress] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
   const [creditLimit, setCreditLimit] = useState<number>(50000);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,21 +42,31 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       if (customerToEdit) {
         setCode(customerToEdit.code || '');
         setName(customerToEdit.name || '');
+        setClassification(customerToEdit.classification || 'company');
+        setCompanyName(customerToEdit.company_name || '');
         setContactPerson(customerToEdit.contact_person || '');
         setPhone(customerToEdit.phone || '');
         setEmail(customerToEdit.email || '');
         setTaxId(customerToEdit.tax_id || '');
+        setCommercialRegistry(customerToEdit.commercial_registry || '');
         setAddress(customerToEdit.address || '');
+        setDeliveryAddress(customerToEdit.delivery_address || '');
+        setPaymentTerms(customerToEdit.payment_terms || '');
         setCreditLimit(Number(customerToEdit.credit_limit || 50000));
         setNotes(customerToEdit.notes || '');
       } else {
         setCode('');
         setName('');
+        setClassification('company');
+        setCompanyName('');
         setContactPerson('');
         setPhone('');
         setEmail('');
         setTaxId('');
+        setCommercialRegistry('');
         setAddress('');
+        setDeliveryAddress('');
+        setPaymentTerms('');
         setCreditLimit(50000);
         setNotes('');
       }
@@ -72,11 +87,17 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       if (customerToEdit) {
         const res = await api.customers.updateCustomer(customerToEdit.id, {
           name: name.trim(),
+          classification,
+          company_name: companyName.trim() || undefined,
           contact_person: contactPerson.trim() || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
           tax_id: taxId.trim() || undefined,
+          commercial_registry: commercialRegistry.trim() || undefined,
           address: address.trim() || undefined,
+          delivery_address: deliveryAddress.trim() || undefined,
+          payment_terms: paymentTerms.trim() || undefined,
+          credit_limit: creditLimit ? Number(creditLimit) : undefined,
           notes: notes.trim() || undefined,
         });
         if (res.customer) {
@@ -87,11 +108,16 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
         const res = await api.customers.createCustomer({
           code: code.trim(),
           name: name.trim(),
+          classification,
+          company_name: companyName.trim() || undefined,
           contact_person: contactPerson.trim() || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
           tax_id: taxId.trim() || undefined,
+          commercial_registry: commercialRegistry.trim() || undefined,
           address: address.trim() || undefined,
+          delivery_address: deliveryAddress.trim() || undefined,
+          payment_terms: paymentTerms.trim() || undefined,
           notes: notes.trim() || undefined,
           credit_limit: creditLimit ? Number(creditLimit) : undefined,
         });

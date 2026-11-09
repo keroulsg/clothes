@@ -74,6 +74,7 @@ class DomainResolutionService
             }
         }
 
+    
         // 2. فحص النطاق المخصص المباشر (Custom Domain e.g. store.factory.com)
         if (!$subdomain && !$this->isPlatformBaseDomain($normalizedHost)) {
             $tenant = Tenant::withoutGlobalScopes()->where('custom_domain', $normalizedHost)->first();

@@ -39,6 +39,13 @@ class Attendance extends Model
         'is_payable' => 'boolean',
     ];
 
+    protected $appends = ['total_hours'];
+
+    public function getTotalHoursAttribute(): float
+    {
+        return (float) ($this->working_hours ?? 0);
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);

@@ -18,6 +18,10 @@ class EmployeeAdjustment extends Model
         'type',
         'amount',
         'currency',
+        'installments_count',
+        'installment_amount',
+        'paid_amount',
+        'remaining_balance',
         'adjustment_date',
         'payroll_period',
         'reason',
@@ -31,6 +35,10 @@ class EmployeeAdjustment extends Model
 
     protected $casts = [
         'amount' => 'decimal:4',
+        'installments_count' => 'integer',
+        'installment_amount' => 'decimal:4',
+        'paid_amount' => 'decimal:4',
+        'remaining_balance' => 'decimal:4',
         'adjustment_date' => 'date',
         'approved_at' => 'datetime',
     ];

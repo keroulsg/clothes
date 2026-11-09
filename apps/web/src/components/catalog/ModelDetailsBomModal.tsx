@@ -526,7 +526,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
               </Button>
             </div>
 
-            <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+            <div className="printable-sheet overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
               <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
                 <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                   <tr>

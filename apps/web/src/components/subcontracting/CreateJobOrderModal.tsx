@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import type { Customer, GarmentModel, JobOrder } from '../../types';
@@ -10,6 +10,7 @@ interface CreateJobOrderModalProps {
   onClose: () => void;
   customers: Customer[];
   models: GarmentModel[];
+  employees?: any[];
   onSuccess: (newJob: JobOrder) => void;
   isAr?: boolean;
 }
@@ -19,9 +20,12 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
   onClose,
   customers,
   models,
+  employees: propEmployees = [],
   onSuccess,
   isAr = true,
 }) => {
+  const [employeesList, setEmployeesList] = useState<any[]>(propEmployees);
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [serviceType, setServiceType] = useState<'contract_cutting' | 'cmt'>('contract_cutting');
@@ -42,6 +46,18 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (employeesList.length === 0) {
+      api.hr.getEmployees(1)
+        .then((res: any) => {
+          if (res?.data && Array.isArray(res.data)) {
+            setEmployeesList(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [employeesList]);
 
   const handleAddItem = () => {
     setItems([...items, { size_name: '', color_name: '', target_quantity: 50 }]);
@@ -77,6 +93,7 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
       customer_id: customerId && customerId.length > 20 && !customerId.startsWith('cust-') ? customerId : undefined,
       service_type: serviceType,
       garment_model_id: modelId && modelId.length > 20 && !modelId.startsWith('gm-') ? modelId : undefined,
+      assigned_employee_id: assignedEmployeeId || undefined,
       fabric_source: fabricSource,
       trims_responsibility: trimsResponsibility,
       pricing_basis: pricingBasis,
@@ -104,6 +121,8 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
         service_type: created.service_type || serviceType,
         status: created.status || 'draft',
         garment_model_id: created.garment_model_id,
+        assigned_employee_id: created.assigned_employee_id || assignedEmployeeId,
+        assigned_employee_name: created.assigned_employee?.name || employeesList.find(e => e.id === (created.assigned_employee_id || assignedEmployeeId))?.name,
         model_name: models.find((m) => m.id === created.garment_model_id)?.name,
         fabric_source: created.fabric_source || fabricSource,
         trims_responsibility: created.trims_responsibility || trimsResponsibility,
@@ -231,6 +250,24 @@ export const CreateJobOrderModal: React.FC<CreateJobOrderModalProps> = ({
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name} ({m.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الفني أو المشرف المسؤول (ربط العمال)' : 'Assigned Technician / Lead (HR Link)'}
+            </label>
+            <select
+              value={assignedEmployeeId}
+              onChange={(e) => setAssignedEmployeeId(e.target.value)}
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="">{isAr ? '-- اختياري: إسناد لفني مسؤول --' : '-- Optional: Assign Lead Technician --'}</option>
+              {employeesList.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.employee_code || emp.id.slice(0, 5)} - {emp.name} ({emp.job_title || emp.department})
                 </option>
               ))}
             </select>

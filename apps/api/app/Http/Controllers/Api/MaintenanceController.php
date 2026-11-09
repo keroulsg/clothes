@@ -79,6 +79,7 @@ class MaintenanceController extends Controller
     public function indexWorkOrders(): JsonResponse
     {
         $orders = MaintenanceWorkOrder::with(['machine', 'spareParts'])->latest()->paginate(20);
+        $orders = MaintenanceWorkOrder::with(['machine', 'spareParts', 'journalEntry'])->latest()->paginate(20);
 
         return response()->json($orders);
     }
@@ -127,6 +128,36 @@ class MaintenanceController extends Controller
         return response()->json([
             'message' => 'Spare part added successfully.',
             'spare_part' => $part,
+        ], 201);
+    }
+
+    public function indexSparePartsStock(): JsonResponse
+    {
+        $items = $this->maintenanceService->getSparePartsInventory();
+
+        return response()->json([
+            'spare_parts' => $items,
+        ]);
+    }
+
+    public function storeSparePartStock(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => 'nullable|string|max:50',
+            'warehouse_id' => 'nullable|uuid|exists:warehouses,id',
+            'unit_of_measure' => 'nullable|string|max:50',
+            'initial_balance' => 'nullable|numeric|min:0',
+            'unit_cost' => 'nullable|numeric|min:0',
+            'reorder_level' => 'nullable|numeric|min:0',
+            'description' => 'nullable|string',
+        ]);
+
+        $item = $this->maintenanceService->addSparePartToStock($validated);
+
+        return response()->json([
+            'message' => 'تم تسجيل قطعة الغيار في رصيد المستودع بنجاح.',
+            'item' => $item,
         ], 201);
     }
 

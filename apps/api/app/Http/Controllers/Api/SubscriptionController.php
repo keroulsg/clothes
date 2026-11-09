@@ -54,7 +54,8 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * ترقية باقة المصنع
+     * ترقية باقة المصنع (Stage C.4: Safe Deprecation of Unpaid Immediate Upgrade)
+     * يفرض تقديم إثبات السداد لمراجعتها واعتمادها يدوياً بواسطة Platform Admin
      */
     public function upgrade(Request $request): JsonResponse
     {
@@ -64,14 +65,20 @@ class SubscriptionController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
-        $cycle = $validated['billing_cycle'] ?? 'monthly';
-
-        $sub = $this->subscriptionService->upgradeSubscription($tenantId, $validated['plan_code'], $cycle);
+        $plan = SubscriptionPlan::where('code', $validated['plan_code'])->firstOrFail();
 
         return response()->json([
-            'message' => 'تمت ترقية باقة اشتراك المصنع بنجاح.',
-            'subscription' => $sub,
-        ]);
+            'status' => 'payment_required',
+            'action_required' => 'submit_payment_proof',
+            'message' => 'ترقية الباقة تتطلب تقديم إثبات سداد التحويل البنكي أو InstaPay لمراجعتها واعتمادها من إدارة المنصة (ManualPaymentApprovalRequired).',
+            'target_plan' => [
+                'code' => $plan->code,
+                'name' => $plan->name_ar,
+                'monthly_price' => $plan->monthly_price,
+                'annual_price' => $plan->annual_price,
+            ],
+            'payment_submission_endpoint' => '/api/v1/subscriptions/payment-requests',
+        ], 402);
     }
 
     /**

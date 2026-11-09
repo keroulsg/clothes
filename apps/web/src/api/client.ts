@@ -24,6 +24,8 @@ export interface ApiTenant {
   id: string;
   code: string;
   name: string;
+  subdomain?: string;
+  custom_domain?: string;
   status: string;
   plan_tier: string;
   is_paid?: boolean;
@@ -152,9 +154,12 @@ class ApiClient {
     
     const headers: Record<string, string> = {
       'Accept': 'application/json',
-      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string> || {}),
     };
+
+    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -279,6 +284,32 @@ class ApiClient {
       return res;
     },
 
+    registerRequester: async (payload: {
+      tenant_name: string;
+      brand_name?: string;
+      owner_name: string;
+      email: string;
+      phone: string;
+      password: string;
+      password_confirmation: string;
+      city?: string;
+    }): Promise<LoginResponse> => {
+      const res = await this.request<any>('/auth/register-requester', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (res.access_token && res.tenant?.id) {
+        this.setAuth(res.access_token, res.tenant.id);
+        try {
+          localStorage.setItem('garmentos_user_profile', JSON.stringify(res.user));
+          localStorage.setItem('garmentos_tenant_profile', JSON.stringify(res.tenant));
+        } catch {}
+      }
+
+      return res;
+    },
+
     getStoredUser: (): ApiUser | null => {
       try {
         const userStr = localStorage.getItem('garmentos_user_profile');
@@ -325,6 +356,17 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+
+    getTaxSettings: async (): Promise<{ tax_settings: { enabled: boolean; rate: number; tax_number?: string; tax_name?: string } }> => {
+      return this.request('/tenant/settings/tax');
+    },
+
+    updateTaxSettings: async (payload: { enabled: boolean; rate: number; tax_number?: string; tax_name?: string }): Promise<{ message: string; tax_settings: any }> => {
+      return this.request('/tenant/settings/tax', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
   };
 
   // --- Branches Endpoints ---
@@ -333,15 +375,64 @@ class ApiClient {
       return this.request<{ branches: any[] }>('/branches');
     },
 
-    createBranch: async (payload: { name: string; code: string; type: string; is_main?: boolean; address?: string; phone?: string }): Promise<{ message: string; branch: any }> => {
+    createBranch: async (payload: { name: string; code: string; type: string; is_main?: boolean; address?: string; phone?: string; manager_name?: string }): Promise<{ message: string; branch: any }> => {
       return this.request<{ message: string; branch: any }>('/branches', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
     },
+
+    updateBranch: async (id: string, payload: any): Promise<{ message: string; branch: any }> => {
+      return this.request<{ message: string; branch: any }>(`/branches/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteBranch: async (id: string): Promise<{ message: string }> => {
+      return this.request<{ message: string }>(`/branches/${id}`, {
+        method: 'DELETE',
+      });
+    },
   };
 
-  // --- Garment Models Endpoints ---
+  // --- Clothing Categories Endpoints (Batch 1) ---
+  public categories = {
+    getCategories: async (params: { search?: string; is_active?: boolean; root_only?: boolean } = {}): Promise<{ categories: any[] }> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      if (params.is_active !== undefined) query.append('is_active', String(params.is_active));
+      if (params.root_only) query.append('root_only', '1');
+      const qs = query.toString();
+      return this.request<{ categories: any[] }>(`/categories${qs ? `?${qs}` : ''}`);
+    },
+
+    createCategory: async (payload: { name_ar: string; name_en?: string; code?: string; parent_id?: string; description?: string; is_active?: boolean }): Promise<{ message: string; category: any }> => {
+      return this.request<{ message: string; category: any }>('/categories', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getCategory: async (id: string): Promise<{ category: any }> => {
+      return this.request<{ category: any }>(`/categories/${id}`);
+    },
+
+    updateCategory: async (id: string, payload: any): Promise<{ message: string; category: any }> => {
+      return this.request<{ message: string; category: any }>(`/categories/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteCategory: async (id: string): Promise<{ message: string; deleted?: boolean; deactivated?: boolean }> => {
+      return this.request<{ message: string; deleted?: boolean; deactivated?: boolean }>(`/categories/${id}`, {
+        method: 'DELETE',
+      });
+    },
+  };
+
+  // --- Garment Models & Sizing Endpoints ---
   public models = {
     getModels: async (params: { category?: string; search?: string; page?: number; per_page?: number } = {}): Promise<any> => {
       const query = new URLSearchParams();
@@ -353,6 +444,10 @@ class ApiClient {
       return this.request<any>(`/models${qs ? `?${qs}` : ''}`);
     },
 
+    getModel: async (id: string): Promise<{ model: any }> => {
+      return this.request<{ model: any }>(`/models/${id}`);
+    },
+
     createModel: async (payload: any): Promise<{ message: string; model: any; generated_variants_count: number }> => {
       return this.request<{ message: string; model: any; generated_variants_count: number }>('/models', {
         method: 'POST',
@@ -360,12 +455,209 @@ class ApiClient {
       });
     },
 
-    getSizes: async (): Promise<{ sizes: any[] }> => {
-      return this.request<{ sizes: any[] }>('/sizes');
+    updateModel: async (id: string, payload: any): Promise<{ message: string; model: any }> => {
+      return this.request<{ message: string; model: any }>(`/models/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
     },
 
-    getColors: async (): Promise<{ colors: any[] }> => {
-      return this.request<{ colors: any[] }>('/colors');
+    deleteModel: async (id: string): Promise<{ message: string; deleted: boolean }> => {
+      return this.request<{ message: string; deleted: boolean }>(`/models/${id}`, {
+        method: 'DELETE',
+      });
+    },
+
+    // --- Dynamic Size Guide & Size Categories ---
+    getSizeCategories: async (params: { search?: string; is_active?: boolean | string } = {}): Promise<{ categories: any[] }> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      if (params.is_active !== undefined) query.append('is_active', String(params.is_active));
+      const qs = query.toString();
+      return this.request<{ categories: any[] }>(`/size-categories${qs ? `?${qs}` : ''}`);
+    },
+
+    createSizeCategory: async (payload: { name: string; description?: string; sort_order?: number; is_active?: boolean }): Promise<{ message: string; category: any }> => {
+      return this.request<{ message: string; category: any }>('/size-categories', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getSizeCategory: async (id: string): Promise<{ category: any; is_used_in_production: boolean }> => {
+      return this.request<{ category: any; is_used_in_production: boolean }>(`/size-categories/${id}`);
+    },
+
+    updateSizeCategory: async (id: string, payload: any): Promise<{ message: string; category: any }> => {
+      return this.request<{ message: string; category: any }>(`/size-categories/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteSizeCategory: async (id: string): Promise<{ message: string; deleted: boolean }> => {
+      return this.request<{ message: string; deleted: boolean }>(`/size-categories/${id}`, {
+        method: 'DELETE',
+      });
+    },
+
+    getSizes: async (params: { size_category_id?: string; category?: string; search?: string; is_active?: boolean | string } = {}): Promise<{ sizes: any[] }> => {
+      const query = new URLSearchParams();
+      if (params.size_category_id && params.size_category_id !== 'all') query.append('size_category_id', params.size_category_id);
+      if (params.category && params.category !== 'all') query.append('category', params.category);
+      if (params.search) query.append('search', params.search);
+      if (params.is_active !== undefined) query.append('is_active', String(params.is_active));
+      const qs = query.toString();
+      return this.request<{ sizes: any[] }>(`/sizes${qs ? `?${qs}` : ''}`);
+    },
+
+    createSize: async (payload: { name: string; size_category_id?: string; category?: string; sort_order?: number; is_active?: boolean }): Promise<{ message: string; size: any }> => {
+      return this.request<{ message: string; size: any }>('/sizes', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    updateSize: async (id: string, payload: any): Promise<{ message: string; size: any }> => {
+      return this.request<{ message: string; size: any }>(`/sizes/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteSize: async (id: string): Promise<{ message: string; deleted: boolean }> => {
+      return this.request<{ message: string; deleted: boolean }>(`/sizes/${id}`, {
+        method: 'DELETE',
+      });
+    },
+
+    getColors: async (params: { search?: string } = {}): Promise<{ colors: any[] }> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      const qs = query.toString();
+      return this.request<{ colors: any[] }>(`/colors${qs ? `?${qs}` : ''}`);
+    },
+
+    createColor: async (payload: { name: string; color_code: string; pantone_ref?: string }): Promise<{ message: string; color: any }> => {
+      return this.request<{ message: string; color: any }>('/colors', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    updateColor: async (id: string, payload: any): Promise<{ message: string; color: any }> => {
+      return this.request<{ message: string; color: any }>(`/colors/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteColor: async (id: string): Promise<{ message: string; deleted: boolean }> => {
+      return this.request<{ message: string; deleted: boolean }>(`/colors/${id}`, {
+        method: 'DELETE',
+      });
+    },
+  };
+
+  // --- Approved Colors Catalog (Batch 1) ---
+  public colors = {
+    getColors: async (params: { search?: string } = {}): Promise<{ colors: any[] }> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      const qs = query.toString();
+      return this.request<{ colors: any[] }>(`/colors${qs ? `?${qs}` : ''}`);
+    },
+    createColor: async (payload: { name: string; color_code: string; pantone_ref?: string }): Promise<{ message: string; color: any }> => {
+      return this.request<{ message: string; color: any }>('/colors', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    updateColor: async (id: string, payload: any): Promise<{ message: string; color: any }> => {
+      return this.request<{ message: string; color: any }>(`/colors/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    deleteColor: async (id: string): Promise<{ message: string; deleted: boolean }> => {
+      return this.request<{ message: string; deleted: boolean }>(`/colors/${id}`, {
+        method: 'DELETE',
+      });
+    },
+  };
+
+  // --- Products Catalog Endpoints (Batch 1 WooCommerce-level) ---
+  public products = {
+    getProducts: async (params: { search?: string; category_id?: string; status?: string; stock_visibility?: string; page?: number; per_page?: number } = {}): Promise<any> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      if (params.category_id && params.category_id !== 'all') query.append('category_id', params.category_id);
+      if (params.status && params.status !== 'all') query.append('status', params.status);
+      if (params.stock_visibility && params.stock_visibility !== 'all') query.append('stock_visibility', params.stock_visibility);
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      const qs = query.toString();
+      return this.request<any>(`/products${qs ? `?${qs}` : ''}`);
+    },
+
+    createProduct: async (payload: any): Promise<{ message: string; product: any }> => {
+      return this.request<{ message: string; product: any }>('/products', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    uploadImage: async (file: File, productId?: string): Promise<{ message: string; url: string; path: string; filename: string }> => {
+      const formData = new FormData();
+      formData.append('image', file);
+      if (productId) formData.append('product_id', productId);
+      return this.request<{ message: string; url: string; path: string; filename: string }>('/products/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+
+    uploadImages: async (files: File[], productId?: string): Promise<{ message: string; images: Array<{ id: string; url: string; path: string; filename: string; is_primary: boolean; sort_order: number }>; url: string }> => {
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append('images[]', file);
+      });
+      if (productId) formData.append('product_id', productId);
+      return this.request<{ message: string; images: Array<{ id: string; url: string; path: string; filename: string; is_primary: boolean; sort_order: number }>; url: string }>('/products/upload-images', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+
+    deleteImage: async (payload: { url?: string; path?: string; product_id?: string }): Promise<{ message: string }> => {
+      return this.request<{ message: string }>('/products/delete-image', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getPosItems: async (params: { search?: string } = {}): Promise<{ items: any[]; total: number }> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      const qs = query.toString();
+      return this.request<{ items: any[]; total: number }>(`/products/pos-items${qs ? `?${qs}` : ''}`);
+    },
+
+    getProduct: async (id: string): Promise<{ product: any }> => {
+      return this.request<{ product: any }>(`/products/${id}`);
+    },
+
+    updateProduct: async (id: string, payload: any): Promise<{ message: string; product: any }> => {
+      return this.request<{ message: string; product: any }>(`/products/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteProduct: async (id: string): Promise<{ message: string; deleted?: boolean; action_taken?: string; archived?: boolean; product?: any }> => {
+      return this.request<{ message: string; deleted?: boolean; action_taken?: string; archived?: boolean; product?: any }>(`/products/${id}`, {
+        method: 'DELETE',
+      });
     },
   };
 
@@ -388,8 +680,58 @@ class ApiClient {
     },
 
     getSupplierStatement: async (id: string, params?: { from_date?: string; to_date?: string }): Promise<any> => {
-      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
-      return this.request(`/suppliers/${id}/statement${q ? `?${q}` : ''}`);
+      const q = new URLSearchParams();
+      if (params?.from_date && params.from_date !== 'undefined') q.append('from_date', params.from_date);
+      if (params?.to_date && params.to_date !== 'undefined') q.append('to_date', params.to_date);
+      const qs = q.toString();
+      return this.request(`/suppliers/${id}/statement${qs ? `?${qs}` : ''}`);
+    },
+
+    updateSupplier: async (id: string, payload: any): Promise<{ message: string; supplier: any }> => {
+      return this.request<{ message: string; supplier: any }>(`/suppliers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    recordPayment: async (id: string, payload: { amount: number; payment_method: string; voucher_date?: string; reference_number?: string; supplier_invoice_id?: string; notes?: string }): Promise<{ message: string; voucher: any; supplier_current_balance: number }> => {
+      return this.request<{ message: string; voucher: any; supplier_current_balance: number }>(`/suppliers/${id}/payments`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    updatePayment: async (supplierId: string, voucherId: string, payload: { amount: number; payment_method: string; voucher_date?: string; notes?: string }): Promise<{ message: string; voucher: any; supplier_current_balance: number }> => {
+      return this.request<{ message: string; voucher: any; supplier_current_balance: number }>(`/suppliers/${supplierId}/payments/${voucherId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deletePayment: async (supplierId: string, voucherId: string): Promise<{ message: string; supplier_current_balance: number }> => {
+      return this.request<{ message: string; supplier_current_balance: number }>(`/suppliers/${supplierId}/payments/${voucherId}`, {
+        method: 'DELETE',
+      });
+    },
+
+    recordInvoice: async (supplierId: string, payload: { invoice_number: string; total_amount: number; invoice_date?: string; due_date?: string; internal_reference?: string; notes?: string }): Promise<{ message: string; invoice: any; supplier_current_balance: number }> => {
+      return this.request<{ message: string; invoice: any; supplier_current_balance: number }>(`/suppliers/${supplierId}/invoices`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteInvoice: async (supplierId: string, invoiceId: string): Promise<{ message: string; supplier_current_balance: number }> => {
+      return this.request<{ message: string; supplier_current_balance: number }>(`/suppliers/${supplierId}/invoices/${invoiceId}`, {
+        method: 'DELETE',
+      });
+    },
+
+    recordDiscount: async (supplierId: string, payload: { amount: number; discount_type: string; discount_date?: string; notes?: string }): Promise<{ message: string; voucher: any; new_balance: number }> => {
+      return this.request<{ message: string; voucher: any; new_balance: number }>(`/suppliers/${supplierId}/discounts`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
     },
   };
 
@@ -403,6 +745,61 @@ class ApiClient {
       if (params.per_page) query.append('per_page', params.per_page.toString());
       const qs = query.toString();
       return this.request<any>(`/purchase-orders${qs ? `?${qs}` : ''}`);
+    },
+
+    getRequisitions: async (params: { status?: string; priority?: string; page?: number; per_page?: number } = {}): Promise<any> => {
+      const query = new URLSearchParams();
+      if (params.status && params.status !== 'all') query.append('status', params.status);
+      if (params.priority) query.append('priority', params.priority);
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      const qs = query.toString();
+      return this.request<any>(`/procurement/requisitions${qs ? `?${qs}` : ''}`);
+    },
+
+    getRequisition: async (id: string): Promise<any> => {
+      return this.request<any>(`/procurement/requisitions/${id}`);
+    },
+
+    createRequisition: async (payload: any): Promise<any> => {
+      return this.request<any>('/procurement/requisitions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    submitRequisition: async (id: string): Promise<any> => {
+      return this.request<any>(`/procurement/requisitions/${id}/submit`, {
+        method: 'POST',
+      });
+    },
+
+    approveRequisition: async (id: string, payload: any = {}): Promise<any> => {
+      return this.request<any>(`/procurement/requisitions/${id}/approve`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    rejectRequisition: async (id: string, reason: string): Promise<any> => {
+      return this.request<any>(`/procurement/requisitions/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+
+    convertRequisition: async (id: string, payload: any): Promise<any> => {
+      return this.request<any>(`/procurement/requisitions/${id}/convert`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    cancelRequisition: async (id: string, reason: string): Promise<any> => {
+      return this.request<any>(`/procurement/requisitions/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
     },
 
     createPurchaseOrder: async (payload: any): Promise<{ message: string; purchase_order: any }> => {
@@ -480,8 +877,30 @@ class ApiClient {
       });
     },
 
-    getCuttingOrders: async (): Promise<{ success: boolean; data: any[] }> => {
-      return this.request<{ success: boolean; data: any[] }>('/cutting-orders');
+    updateProductionOrder: async (id: string, payload: any): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/production-orders/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    cancelProductionOrder: async (id: string, cancellation_reason: string): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/production-orders/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ cancellation_reason }),
+      });
+    },
+
+    getCuttingOrders: async (params: { search?: string; status?: string; production_order_id?: string; fabric_source?: string; page?: number; per_page?: number } = {}): Promise<{ success: boolean; data: any[]; meta?: any }> => {
+      const query = new URLSearchParams();
+      if (params.search) query.append('search', params.search);
+      if (params.status && params.status !== 'all') query.append('status', params.status);
+      if (params.production_order_id && params.production_order_id !== 'all') query.append('production_order_id', params.production_order_id);
+      if (params.fabric_source && params.fabric_source !== 'all') query.append('fabric_source', params.fabric_source);
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      const qs = query.toString();
+      return this.request<{ success: boolean; data: any[]; meta?: any }>(`/cutting-orders${qs ? `?${qs}` : ''}`);
     },
 
     createCuttingOrder: async (payload: any): Promise<{ success: boolean; message: string; data: any }> => {
@@ -491,13 +910,40 @@ class ApiClient {
       });
     },
 
-    getBundles: async (params: { production_order_id?: string; current_stage_code?: string; status?: string } = {}): Promise<{ success: boolean; data: any[] }> => {
+    cancelCuttingOrder: async (id: string, cancellation_reason: string): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/cutting-orders/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ cancellation_reason }),
+      });
+    },
+
+    getBundles: async (params: { production_order_id?: string; cutting_order_id?: string; current_stage_code?: string; status?: string; assigned_employee_id?: string; search?: string; page?: number; per_page?: number } = {}): Promise<{ success: boolean; data: any[]; meta?: any }> => {
       const query = new URLSearchParams();
-      if (params.production_order_id) query.append('production_order_id', params.production_order_id);
-      if (params.current_stage_code) query.append('current_stage_code', params.current_stage_code);
-      if (params.status) query.append('status', params.status);
+      if (params.production_order_id && params.production_order_id !== 'all') query.append('production_order_id', params.production_order_id);
+      if (params.cutting_order_id && params.cutting_order_id !== 'all') query.append('cutting_order_id', params.cutting_order_id);
+      if (params.current_stage_code && params.current_stage_code !== 'all') query.append('current_stage_code', params.current_stage_code);
+      if (params.status && params.status !== 'all') query.append('status', params.status);
+      if (params.assigned_employee_id && params.assigned_employee_id !== 'all') query.append('assigned_employee_id', params.assigned_employee_id);
+      if (params.search) query.append('search', params.search);
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
       const qs = query.toString();
-      return this.request<{ success: boolean; data: any[] }>(`/bundles${qs ? `?${qs}` : ''}`);
+      return this.request<{ success: boolean; data: any[]; meta?: any }>(`/bundles${qs ? `?${qs}` : ''}`);
+    },
+
+    getBundle: async (id: string): Promise<{ success: boolean; data: any }> => {
+      return this.request<{ success: boolean; data: any }>(`/bundles/${id}`);
+    },
+
+    assignBundle: async (id: string, payload: { employee_id?: string; work_group?: string; issue_date?: string; due_date?: string }): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/bundles/${id}/assign`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getBundleHistory: async (id: string): Promise<{ success: boolean; data: { bundle: any; timeline: any[] } }> => {
+      return this.request<{ success: boolean; data: { bundle: any; timeline: any[] } }>(`/bundles/${id}/history`);
     },
 
     transferBundle: async (id: string, payload: any): Promise<{ success: boolean; message: string; data: any }> => {
@@ -724,6 +1170,13 @@ class ApiClient {
       return this.request<{ customer_materials: any[] }>('/inventory/customer-materials');
     },
 
+    consumeCustomerMaterial: async (id: string, payload: { consumed_meters: number; waste_meters?: number }): Promise<{ message: string; customer_material: any }> => {
+      return this.request<{ message: string; customer_material: any }>(`/inventory/customer-materials/${id}/consume`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
     getTransactions: async (params: { page?: number; per_page?: number } = {}): Promise<any> => {
       const query = new URLSearchParams();
       if (params.page) query.append('page', params.page.toString());
@@ -742,6 +1195,109 @@ class ApiClient {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+      });
+    },
+
+    updateWarehouse: async (id: string, payload: any): Promise<{ message: string; warehouse: any }> => {
+      return this.request<{ message: string; warehouse: any }>(`/warehouses/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteWarehouse: async (id: string): Promise<{ message: string }> => {
+      return this.request<{ message: string }>(`/warehouses/${id}`, {
+        method: 'DELETE',
+      });
+    },
+
+    getWarehouseTypes: async (): Promise<{ standard_types: any[]; custom_types: any[]; all_types: any[] }> => {
+      return this.request<{ standard_types: any[]; custom_types: any[]; all_types: any[] }>('/warehouse-types');
+    },
+
+    createWarehouseType: async (payload: { code: string; name: string; name_en?: string }): Promise<{ message: string; type: any }> => {
+      return this.request<{ message: string; type: any }>('/warehouse-types', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getUnits: async (): Promise<{ units: any[] }> => {
+      return this.request<{ units: any[] }>('/inventory/units');
+    },
+
+    createUnit: async (payload: { name: string; symbol: string; category: string; base_unit?: string; conversion_factor?: number }): Promise<{ message: string; unit: any }> => {
+      return this.request<{ message: string; unit: any }>('/inventory/units', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteItem: async (id: string): Promise<{ message: string }> => {
+      return this.request<{ message: string }>(`/inventory/items/${id}`, {
+        method: 'DELETE',
+      });
+    },
+
+    getStockCard: async (id: string): Promise<any> => {
+      return this.request(`/inventory/items/${id}/stock-card`);
+    },
+
+    getTransfers: async (params: { status?: string; page?: number; per_page?: number } = {}): Promise<any> => {
+      const query = new URLSearchParams();
+      if (params.status && params.status !== 'all') query.append('status', params.status);
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      const qs = query.toString();
+      return this.request<any>(`/inventory/transfers${qs ? `?${qs}` : ''}`);
+    },
+
+    createTransfer: async (payload: any): Promise<{ message: string; transfer: any }> => {
+      return this.request<{ message: string; transfer: any }>('/inventory/transfers', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    dispatchTransfer: async (id: string): Promise<{ message: string; transfer: any }> => {
+      return this.request<{ message: string; transfer: any }>(`/inventory/transfers/${id}/dispatch`, {
+        method: 'POST',
+      });
+    },
+
+    receiveTransfer: async (id: string): Promise<{ message: string; transfer: any }> => {
+      return this.request<{ message: string; transfer: any }>(`/inventory/transfers/${id}/receive`, {
+        method: 'POST',
+      });
+    },
+
+    getCounts: async (params: { status?: string; warehouse_id?: string; page?: number; per_page?: number } = {}): Promise<any> => {
+      const query = new URLSearchParams();
+      if (params.status && params.status !== 'all') query.append('status', params.status);
+      if (params.warehouse_id && params.warehouse_id !== 'all') query.append('warehouse_id', params.warehouse_id);
+      if (params.page) query.append('page', params.page.toString());
+      if (params.per_page) query.append('per_page', params.per_page.toString());
+      const qs = query.toString();
+      return this.request<any>(`/inventory/counts${qs ? `?${qs}` : ''}`);
+    },
+
+    createCount: async (payload: { warehouse_id: string; count_date?: string; notes?: string; category?: string }): Promise<{ message: string; stock_count: any }> => {
+      return this.request<{ message: string; stock_count: any }>('/inventory/counts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    recordCount: async (id: string, items: Array<{ item_id: string; physical_quantity: number; notes?: string }>): Promise<{ message: string; stock_count: any }> => {
+      return this.request<{ message: string; stock_count: any }>(`/inventory/counts/${id}/record`, {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      });
+    },
+
+    approveCount: async (id: string): Promise<{ message: string; stock_count: any }> => {
+      return this.request<{ message: string; stock_count: any }>(`/inventory/counts/${id}/approve`, {
+        method: 'POST',
       });
     },
   };
@@ -865,6 +1421,11 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+    convertQuotation: async (id: string): Promise<{ message: string; sales_order: any }> => {
+      return this.request(`/sales/quotations/${id}/convert`, {
+        method: 'POST',
+      });
+    },
     getOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/sales/orders?page=${page}`);
     },
@@ -872,6 +1433,12 @@ class ApiClient {
       return this.request('/sales/orders', {
         method: 'POST',
         body: JSON.stringify(payload),
+      });
+    },
+    cancelOrder: async (id: string, reason: string): Promise<{ message: string; sales_order: any }> => {
+      return this.request(`/sales/orders/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
       });
     },
     reserveOrderStock: async (id: string): Promise<{ message: string; order: any }> => {
@@ -884,11 +1451,50 @@ class ApiClient {
         method: 'POST',
       });
     },
+    deliverOrder: async (id: string, payload: any): Promise<{ message: string; delivery_note: any }> => {
+      return this.request(`/sales/orders/${id}/deliver`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    cancelDeliveryNote: async (id: string, reason: string): Promise<{ message: string; delivery_note: any }> => {
+      return this.request(`/sales/delivery-notes/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
     getInvoices: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/sales/invoices?page=${page}`);
     },
     getInvoice: async (id: string): Promise<{ invoice: any }> => {
       return this.request(`/sales/invoices/${id}`);
+    },
+    cancelInvoice: async (id: string, reason: string): Promise<{ message: string; sales_invoice: any }> => {
+      return this.request(`/sales/invoices/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    getPayments: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/payments?page=${page}`);
+    },
+    recordPayment: async (payload: { customer_id: string; amount: number; payment_method?: string; account_id?: string; sales_invoice_id?: string; allocations?: any[]; notes?: string }): Promise<{ message: string; payment_voucher: any }> => {
+      return this.request('/sales/payments', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    reversePayment: async (id: string, reason: string): Promise<{ message: string; payment_voucher: any }> => {
+      return this.request(`/sales/payments/${id}/reverse`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    getCreditNotes: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/sales/credit-notes?page=${page}`);
+    },
+    lookupBarcode: async (barcode: string): Promise<{ item: any }> => {
+      return this.request(`/sales/barcode/${barcode}`);
     },
     processPosSale: async (payload: any): Promise<{ message: string; invoice: any }> => {
       return this.request('/pos/sale', {
@@ -952,7 +1558,7 @@ class ApiClient {
     getCustomer: async (id: string): Promise<{ customer: Customer }> => {
       return this.request(`/customers/${id}`);
     },
-    createCustomer: async (payload: { code: string; name: string; contact_person?: string; phone?: string; email?: string; tax_id?: string; address?: string; notes?: string; credit_limit?: number }): Promise<{ message: string; customer: Customer }> => {
+    createCustomer: async (payload: Partial<Customer> & { code: string; name: string }): Promise<{ message: string; customer: Customer }> => {
       return this.request('/customers', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -968,6 +1574,9 @@ class ApiClient {
       const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
       return this.request(`/customers/${id}/statement${q ? `?${q}` : ''}`);
     },
+    getCustomerAging: async (id: string): Promise<any> => {
+      return this.request(`/customers/${id}/aging`);
+    },
   };
 
   // --- Accounting & Costing Endpoints ---
@@ -975,8 +1584,26 @@ class ApiClient {
     getAccounts: async (): Promise<any[]> => {
       return this.request('/accounting/accounts');
     },
-    createAccount: async (payload: { code: string; name: string; type: string; category: string }): Promise<{ message: string; account: any }> => {
+    initDefaultAccounts: async (): Promise<{ message: string; accounts: any[] }> => {
+      return this.request('/accounting/accounts/init-default', { method: 'POST' });
+    },
+    createAccount: async (payload: { code: string; name: string; name_en?: string; type: string; category: string; parent_id?: string; normal_balance?: string; is_control_account?: boolean; is_cash_bank?: boolean; is_postable?: boolean; notes?: string }): Promise<{ message: string; account: any }> => {
       return this.request('/accounting/accounts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    updateAccount: async (id: string, payload: Partial<{ name: string; name_en?: string; category: string; parent_id?: string; is_control_account?: boolean; is_cash_bank?: boolean; is_postable?: boolean; is_active?: boolean; notes?: string }>): Promise<{ message: string; account: any }> => {
+      return this.request(`/accounting/accounts/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    getMappings: async (): Promise<any[]> => {
+      return this.request('/accounting/mappings');
+    },
+    setMapping: async (payload: { mapping_key: string; account_id: string }): Promise<{ message: string; mapping: any }> => {
+      return this.request('/accounting/mappings', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -984,11 +1611,77 @@ class ApiClient {
     getJournalEntries: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/accounting/journal-entries?page=${page}`);
     },
-    createJournalEntry: async (payload: { description: string; entry_date?: string; reference_type?: string; lines: Array<{ account_id: string; debit: number; credit: number; description?: string }> }): Promise<{ message: string; entry: any }> => {
+    createJournalEntry: async (payload: { description: string; entry_date?: string; reference_type?: string; lines: Array<{ account_id: string; debit: number; credit: number; description?: string; cost_center_id?: string }> }): Promise<{ message: string; journal_entry: any }> => {
       return this.request('/accounting/journal-entries', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+    },
+    reverseJournalEntry: async (id: string, reversal_reason: string): Promise<{ message: string; reversal_entry: any }> => {
+      return this.request(`/accounting/journal-entries/${id}/reverse`, {
+        method: 'POST',
+        body: JSON.stringify({ reversal_reason }),
+      });
+    },
+    getFinancialAccounts: async (): Promise<any[]> => {
+      return this.request('/accounting/financial-accounts');
+    },
+    createFinancialAccount: async (payload: { chart_of_account_id: string; code: string; name: string; name_en?: string; type: string; account_number?: string; bank_name?: string; currency?: string; opening_balance?: number }): Promise<{ message: string; financial_account: any }> => {
+      return this.request('/accounting/financial-accounts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getTransfers: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/accounting/transfers?page=${page}`);
+    },
+    createTransfer: async (payload: { from_financial_account_id: string; to_financial_account_id: string; amount: number; transfer_date?: string; reference?: string; notes?: string }): Promise<{ message: string; transfer: any }> => {
+      return this.request('/accounting/transfers', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    reverseTransfer: async (id: string, reversal_reason: string): Promise<{ message: string; transfer: any }> => {
+      return this.request(`/accounting/transfers/${id}/reverse`, {
+        method: 'POST',
+        body: JSON.stringify({ reversal_reason }),
+      });
+    },
+    getCostCenters: async (): Promise<any[]> => {
+      return this.request('/accounting/cost-centers');
+    },
+    createCostCenter: async (payload: { code: string; name: string; name_en?: string; parent_id?: string; description?: string }): Promise<{ message: string; cost_center: any }> => {
+      return this.request('/accounting/cost-centers', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getFiscalYears: async (): Promise<any[]> => {
+      return this.request('/accounting/fiscal-years');
+    },
+    createFiscalYear: async (payload: { name: string; start_date: string; end_date: string; periods_count?: number }): Promise<{ message: string; fiscal_year: any }> => {
+      return this.request('/accounting/fiscal-years', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    closeFiscalPeriod: async (id: string): Promise<{ message: string; fiscal_period: any }> => {
+      return this.request(`/accounting/fiscal-periods/${id}/close`, { method: 'POST' });
+    },
+    reopenFiscalPeriod: async (id: string, reason: string): Promise<{ message: string; fiscal_period: any }> => {
+      return this.request(`/accounting/fiscal-periods/${id}/reopen`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    closeFiscalYear: async (id: string): Promise<{ message: string; fiscal_year: any }> => {
+      return this.request(`/accounting/fiscal-years/${id}/close`, { method: 'POST' });
+    },
+    reconcileAR: async (): Promise<any> => {
+      return this.request('/accounting/reconciliation/ar');
+    },
+    reconcileAP: async (): Promise<any> => {
+      return this.request('/accounting/reconciliation/ap');
     },
     getPaymentVouchers: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/accounting/payment-vouchers?page=${page}`);
@@ -1006,9 +1699,10 @@ class ApiClient {
       const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
       return this.request(`/accounting/accounts/${id}/statement${q ? `?${q}` : ''}`);
     },
-    calculateCost: async (productionOrderId: string): Promise<{ message: string; cost_sheet: any }> => {
+    calculateCost: async (productionOrderId: string, overrides?: any): Promise<{ message: string; cost_sheet: any }> => {
       return this.request(`/accounting/cost-sheets/${productionOrderId}/calculate`, {
         method: 'POST',
+        body: overrides ? JSON.stringify(overrides) : undefined,
       });
     },
     approveCostSheet: async (id: string): Promise<{ message: string; cost_sheet: any }> => {
@@ -1068,6 +1762,11 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+    deleteEmployee: async (id: string): Promise<{ message: string; deactivated?: boolean; deleted?: boolean }> => {
+      return this.request(`/hr/employees/${id}`, {
+        method: 'DELETE',
+      });
+    },
 
     // --- Attendances ---
     getAttendances: async (page = 1, params: { attendance_date?: string; employee_id?: string; status?: string } = {}): Promise<PaginatedResponse<any>> => {
@@ -1086,6 +1785,12 @@ class ApiClient {
     updateAttendance: async (id: string, payload: any): Promise<{ message: string; attendance: any }> => {
       return this.request(`/hr/attendances/${id}`, {
         method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    bulkAttendance: async (payload: { records: any[] }): Promise<{ success: boolean; message: string; created_count: number; errors_count: number; errors: any[]; attendances: any[] }> => {
+      return this.request('/hr/attendances/bulk', {
+        method: 'POST',
         body: JSON.stringify(payload),
       });
     },
@@ -1145,6 +1850,16 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+    recalculatePayroll: async (id: string): Promise<{ message: string; payroll: any }> => {
+      return this.request(`/hr/payrolls/${id}/recalculate`, {
+        method: 'POST',
+      });
+    },
+    deletePayroll: async (id: string): Promise<{ message: string }> => {
+      return this.request(`/hr/payrolls/${id}`, {
+        method: 'DELETE',
+      });
+    },
     approvePayroll: async (id: string): Promise<{ message: string; payroll: any }> => {
       return this.request(`/hr/payrolls/${id}/approve`, {
         method: 'POST',
@@ -1169,6 +1884,9 @@ class ApiClient {
     },
     getPayrollPayments: async (id: string): Promise<any[]> => {
       return this.request(`/hr/payrolls/${id}/payments`);
+    },
+    getPayslip: async (payrollId: string, itemId: string): Promise<{ success: boolean; data: any }> => {
+      return this.request(`/hr/payrolls/${payrollId}/items/${itemId}/payslip`);
     },
     approvePieceWorkLog: async (id: string): Promise<{ message: string; work_log: any }> => {
       return this.request(`/hr/piece-work-logs/${id}/approve`, {
@@ -1265,6 +1983,21 @@ class ApiClient {
     getDowntimeSummary: async (): Promise<any> => {
       return this.request('/maintenance/downtime-summary');
     },
+    getSparePartsStock: async (): Promise<{ spare_parts: any[] }> => {
+      return this.request('/maintenance/spare-parts/stock');
+    },
+    createSparePartStock: async (payload: any): Promise<{ message: string; item: any }> => {
+      return this.request('/maintenance/spare-parts/stock', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    addSparePart: async (workOrderId: string, payload: any): Promise<{ message: string; spare_part: any }> => {
+      return this.request(`/maintenance/work-orders/${workOrderId}/spare-parts`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
   };
 
   // --- Storefront Orders & Themes (ERP side) ---
@@ -1293,10 +2026,67 @@ class ApiClient {
         body: JSON.stringify({ approved, rejection_reason }),
       });
     },
+    getPendingPayments: async (page = 1): Promise<PaginatedResponse<any>> => {
+      return this.request(`/storefront/payments/pending?page=${page}`);
+    },
+    updateInstaPaySettings: async (data: {
+      instapay_identifier: string;
+      instapay_display_name: string;
+      instapay_enabled?: boolean;
+      instapay_instructions?: string;
+    }): Promise<any> => {
+      return this.request('/storefront/instapay-settings', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    approveSubmissionPayment: async (submissionId: string, notes?: string): Promise<any> => {
+      return this.request(`/storefront/payments/${submissionId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ approved: true, notes }),
+      });
+    },
+    rejectSubmissionPayment: async (submissionId: string, reason: string): Promise<any> => {
+      return this.request(`/storefront/payments/${submissionId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ approved: false, rejection_reason: reason }),
+      });
+    },
+    uploadReceipt: async (formData: FormData, tenantIdOrSlug?: string): Promise<any> => {
+      const endpoint = tenantIdOrSlug ? `/storefront/upload-receipt/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/upload-receipt';
+      return this.request(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+
+    // --- Batch 9: Storefront Design Studio & Self-Service Customizer ---
+    getDesignStudio: async (): Promise<any> => {
+      return this.request('/storefront/design');
+    },
+    saveDesignDraft: async (data: { theme_id?: string; theme_config?: any }): Promise<any> => {
+      return this.request('/storefront/design/draft', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    publishDesign: async (): Promise<any> => {
+      return this.request('/storefront/design/publish', {
+        method: 'POST',
+      });
+    },
+    rollbackDesign: async (): Promise<any> => {
+      return this.request('/storefront/design/rollback', {
+        method: 'POST',
+      });
+    },
 
     // Public Consumer Storefront API
-    getPublicStore: async (tenantIdOrSlug?: string): Promise<any> => {
-      const endpoint = tenantIdOrSlug ? `/storefront/public/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/public';
+    getPublicStore: async (tenantIdOrSlug?: string, preview?: boolean): Promise<any> => {
+      let endpoint = tenantIdOrSlug ? `/storefront/public/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/public';
+      if (preview) {
+        endpoint += `${endpoint.includes('?') ? '&' : '?'}preview=1`;
+      }
       return this.request(endpoint);
     },
     placePublicOrder: async (payload: any, tenantIdOrSlug?: string): Promise<{ message: string; order: any }> => {
@@ -1361,6 +2151,26 @@ class ApiClient {
 
   // --- Phase G: Waslat Worsh Integrated B2B Marketplace ---
   public waslatWorsh = {
+    // Stage C.1: Public Website & Marketplace Browsing
+    getPublicRfqs: async (params: { category?: string; search?: string; service_type?: string; page?: number; per_page?: number } = {}): Promise<{ data: any[]; meta: any }> => {
+      const q = new URLSearchParams();
+      if (params.category && params.category !== 'all') q.append('category', params.category);
+      if (params.search) q.append('search', params.search);
+      if (params.service_type && params.service_type !== 'all') q.append('service_type', params.service_type);
+      if (params.page) q.append('page', String(params.page));
+      if (params.per_page) q.append('per_page', String(params.per_page));
+      return this.request(`/waslat-worsh/public/rfqs?${q.toString()}`);
+    },
+    getPublicRfq: async (id: string): Promise<{ rfq: any }> => {
+      return this.request(`/waslat-worsh/public/rfqs/${id}`);
+    },
+    getPublicMetrics: async (): Promise<{ active_rfqs_count: number; total_target_pieces: number; governorates_count: number; categories_count: number; currency: string; updated_at: string }> => {
+      return this.request('/waslat-worsh/public/metrics');
+    },
+
+    getEligibility: async (): Promise<any> => {
+      return this.request('/waslat-worsh/eligibility');
+    },
     getWorkshops: async (params: { specialty_type?: string; governorate?: string; search?: string; page?: number } = {}): Promise<any> => {
       const q = new URLSearchParams();
       if (params.specialty_type) q.append('specialty_type', params.specialty_type);
@@ -1375,18 +2185,51 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
-    getRfqs: async (params: { status?: string; service_type?: string; search?: string; page?: number } = {}): Promise<any> => {
+    getRfqs: async (params: { status?: string; service_type?: string; search?: string; page?: number; my_history?: number | boolean } = {}): Promise<any> => {
       const q = new URLSearchParams();
       if (params.status) q.append('status', params.status);
       if (params.service_type) q.append('service_type', params.service_type);
       if (params.search) q.append('search', params.search);
       if (params.page) q.append('page', String(params.page));
+      if (params.my_history) q.append('my_history', '1');
       return this.request(`/waslat-worsh/rfqs?${q.toString()}`);
     },
     createRfq: async (payload: any): Promise<{ message: string; rfq: any }> => {
       return this.request('/waslat-worsh/rfqs', {
         method: 'POST',
         body: JSON.stringify(payload),
+      });
+    },
+    updateRfq: async (id: string, payload: any): Promise<{ message: string; rfq: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    publishRfq: async (id: string, payload: { accept_terms?: boolean } = {}): Promise<{ message: string; rfq: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${id}/publish`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    cancelRfq: async (id: string, reason?: string): Promise<{ message: string; rfq: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    uploadAttachment: async (id: string, file: File, fileType: string = 'tech_spec'): Promise<{ message: string; attachment: any }> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('file_type', fileType);
+      return this.request(`/waslat-worsh/rfqs/${id}/attachments`, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    deleteAttachment: async (id: string, attachmentId: string): Promise<{ message: string; rfq: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${id}/attachments/${attachmentId}`, {
+        method: 'DELETE',
       });
     },
     getRfq: async (id: string): Promise<any> => {
@@ -1408,6 +2251,189 @@ class ApiClient {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+    },
+    // Stage C.3 & C.4: باقات اشتراك وصلة ورش وتقديم إثباتات السداد وحالة الحصص
+    getSubscriptionPlans: async (): Promise<{ plans: any[]; payment_instructions: any }> => {
+      return this.request('/waslat-worsh/subscription-plans');
+    },
+    submitPaymentRequest: async (formData: FormData): Promise<{ message: string; payment_request: any }> => {
+      return this.request('/subscriptions/payment-requests', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    getMyLatestPaymentRequest: async (): Promise<{ latest_payment_request: any }> => {
+      return this.request('/subscriptions/payment-requests/my-latest');
+    },
+    getMySubscriptionStatus: async (): Promise<any> => {
+      return this.request('/subscriptions/my-status');
+    },
+    // P4: Factory Cutting Workspace Operations & Bids
+    getMyBids: async (): Promise<{ bids: any[]; total: number }> => {
+      return this.request('/waslat-worsh/my-bids');
+    },
+    withdrawBid: async (id: string): Promise<{ message: string }> => {
+      return this.request(`/waslat-worsh/bids/${id}/withdraw`, {
+        method: 'POST',
+      });
+    },
+    getMyOperations: async (): Promise<{ operations: any[]; total: number }> => {
+      return this.request('/waslat-worsh/my-operations');
+    },
+    updateOperationStatus: async (id: string, status: string, notes?: string): Promise<{ message: string; operation: any }> => {
+      return this.request(`/waslat-worsh/rfqs/${id}/operation-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, notes }),
+      });
+    },
+  };
+
+  // --- Stage C.4 & P2: لوحة المشرف العام لمراجعة واعتماد طلبات السداد وإدارة الباقات ---
+  public adminSubscriptions = {
+    getRequests: async (params: { status?: string; product_type?: string; page?: number; per_page?: number } = {}): Promise<any> => {
+      const q = new URLSearchParams();
+      if (params.status) q.append('status', params.status);
+      if (params.product_type) q.append('product_type', params.product_type);
+      if (params.page) q.append('page', String(params.page));
+      if (params.per_page) q.append('per_page', String(params.per_page));
+      return this.request(`/platform-admin/subscription-requests?${q.toString()}`);
+    },
+    approve: async (id: string): Promise<{ message: string; payment_request: any }> => {
+      return this.request(`/platform-admin/subscription-requests/${id}/approve`, {
+        method: 'POST',
+      });
+    },
+    reject: async (id: string, reason: string): Promise<{ message: string; payment_request: any }> => {
+      return this.request(`/platform-admin/subscription-requests/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ rejection_reason: reason }),
+      });
+    },
+    getReceiptBlobUrl: async (id: string): Promise<string> => {
+      const token = this.token;
+      const headers: HeadersInit = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${this.baseUrl}/platform-admin/subscription-requests/${id}/receipt`, {
+        headers,
+      });
+      if (!res.ok) {
+        throw new Error('فشل تحميل ملف الإيصال');
+      }
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
+    // P2: Platform Admin Waslat Worsh Packages Management
+    getPackages: async (params?: { is_active?: boolean }): Promise<{ packages: any[]; total: number }> => {
+      const q = new URLSearchParams();
+      if (params?.is_active !== undefined) q.append('is_active', String(params.is_active));
+      return this.request(`/platform-admin/packages?${q.toString()}`);
+    },
+    createPackage: async (data: any): Promise<{ message: string; package: any }> => {
+      return this.request('/platform-admin/packages', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    updatePackage: async (id: string, data: any): Promise<{ message: string; package: any }> => {
+      return this.request(`/platform-admin/packages/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    togglePackageActive: async (id: string): Promise<{ message: string; package: any }> => {
+      return this.request(`/platform-admin/packages/${id}/toggle-active`, {
+        method: 'PATCH',
+      });
+    },
+  };
+
+  // Unified SaaS Package, Feature & Entitlement Management
+  saas = {
+    getPackages: async (params?: { category?: string; is_active?: boolean; is_public?: boolean; is_archived?: boolean }): Promise<{ packages: any[]; total: number; erp_count: number; waslat_count: number }> => {
+      const q = new URLSearchParams();
+      if (params?.category) q.append('category', params.category);
+      if (params?.is_active !== undefined) q.append('is_active', String(params.is_active));
+      if (params?.is_public !== undefined) q.append('is_public', String(params.is_public));
+      if (params?.is_archived !== undefined) q.append('is_archived', String(params.is_archived));
+      return this.request(`/platform-admin/saas/packages?${q.toString()}`);
+    },
+    createPackage: async (data: any): Promise<{ message: string; package: any }> => {
+      return this.request('/platform-admin/saas/packages', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    updatePackage: async (id: string, data: any): Promise<{ message: string; package: any }> => {
+      return this.request(`/platform-admin/saas/packages/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    duplicatePackage: async (id: string): Promise<{ message: string; package: any }> => {
+      return this.request(`/platform-admin/saas/packages/${id}/duplicate`, {
+        method: 'POST',
+      });
+    },
+    togglePackageActive: async (id: string): Promise<{ message: string; is_active: boolean }> => {
+      return this.request(`/platform-admin/saas/packages/${id}/toggle-active`, {
+        method: 'PATCH',
+      });
+    },
+    togglePackagePublic: async (id: string): Promise<{ message: string; is_public: boolean }> => {
+      return this.request(`/platform-admin/saas/packages/${id}/toggle-public`, {
+        method: 'PATCH',
+      });
+    },
+    archivePackage: async (id: string): Promise<{ message: string; package: any }> => {
+      return this.request(`/platform-admin/saas/packages/${id}/archive`, {
+        method: 'POST',
+      });
+    },
+    getPackageSubscribers: async (id: string): Promise<{ package: any; subscribers_count: number; subscribers: any[] }> => {
+      return this.request(`/platform-admin/saas/packages/${id}/subscribers`);
+    },
+    getFeatures: async (params?: { category?: string }): Promise<{ features: any[]; total: number }> => {
+      const q = new URLSearchParams();
+      if (params?.category) q.append('category', params.category);
+      return this.request(`/platform-admin/saas/features?${q.toString()}`);
+    },
+    createFeature: async (data: any): Promise<{ message: string; feature: any }> => {
+      return this.request('/platform-admin/saas/features', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    updateFeature: async (id: string, data: any): Promise<{ message: string; feature: any }> => {
+      return this.request(`/platform-admin/saas/features/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    toggleFeatureActive: async (id: string): Promise<{ message: string; is_active: boolean }> => {
+      return this.request(`/platform-admin/saas/features/${id}/toggle-active`, {
+        method: 'PATCH',
+      });
+    },
+    toggleFeaturePublic: async (id: string): Promise<{ message: string; is_public: boolean }> => {
+      return this.request(`/platform-admin/saas/features/${id}/toggle-public`, {
+        method: 'PATCH',
+      });
+    },
+    getMetrics: async (): Promise<{
+      overview: { total_tenants: number; erp_tenants: number; requester_tenants: number; active_subscriptions: number };
+      packages: { erp_active_packages: number; waslat_active_packages: number; archived_packages: number };
+      features: { total_features: number; active_features: number };
+      financials: { total_gross_payments: number; pending_requests_count: number; pending_requests_amount: number };
+    }> => {
+      return this.request('/platform-admin/saas/metrics');
+    },
+    getPublicPlans: async (category: 'erp' | 'waslat_worsh'): Promise<{
+      category: string;
+      plans: any[];
+      features_catalog: any[];
+      payment_instructions: any;
+    }> => {
+      return this.request(`/subscription/public-plans?category=${category}`);
     },
   };
 }

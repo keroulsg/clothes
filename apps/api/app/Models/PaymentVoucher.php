@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentVoucher extends Model
 {
@@ -42,5 +43,10 @@ class PaymentVoucher extends Model
     public function salesReturn(): BelongsTo
     {
         return $this->belongsTo(SalesReturn::class, 'sales_return_id');
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentVoucherAllocation::class);
     }
 }

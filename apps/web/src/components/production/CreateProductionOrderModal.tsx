@@ -25,6 +25,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
   const [targetDeliveryDate, setTargetDeliveryDate] = useState(
     new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]
   );
+  const [responsiblePerson, setResponsiblePerson] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sizesList, setSizesList] = useState<any[]>([]);
@@ -109,6 +110,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         planned_start_date: new Date().toISOString().split('T')[0],
         target_delivery_date: targetDeliveryDate,
         priority,
+        responsible_person: responsiblePerson || undefined,
         notes: notes || undefined,
         items: items.map(it => ({
           color_id: it.color_id.startsWith('col-') && colorsList[0]?.id ? colorsList[0].id : it.color_id,
@@ -176,19 +178,34 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            {isAr ? 'موعد التسليم والجاهزية المستهدف' : 'Target Delivery & Completion Date'}
-          </label>
-          <div className="relative">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'موعد التسليم والجاهزية المستهدف' : 'Target Delivery & Completion Date'}
+            </label>
+            <div className="relative">
+              <input
+                type="date"
+                required
+                value={targetDeliveryDate}
+                onChange={(e) => setTargetDeliveryDate(e.target.value)}
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              />
+              <Calendar className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'left-3' : 'right-3'} top-3 pointer-events-none`} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'المسؤول عن أمر التشغيل' : 'Responsible Person'}
+            </label>
             <input
-              type="date"
-              required
-              value={targetDeliveryDate}
-              onChange={(e) => setTargetDeliveryDate(e.target.value)}
-              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+              type="text"
+              placeholder={isAr ? 'مثال: المهندس مصطفى كامل' : 'e.g. Eng. Mostafa'}
+              value={responsiblePerson}
+              onChange={(e) => setResponsiblePerson(e.target.value)}
+              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
             />
-            <Calendar className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'left-3' : 'right-3'} top-3 pointer-events-none`} />
           </div>
         </div>
 

@@ -179,10 +179,6 @@ class PayrollService
                 })
                 ->first();
 
-            if ($existing) {
-                throw new InvalidArgumentException("تم تسجيل حضور العامل {$employee->name} مسبقاً لتاريخ {$formattedDate}. يرجى استخدام أمر التعديل إذا كنت بحاجة لتصحيحه.");
-            }
-
             $checkIn = $data['check_in'] ?? null;
             $checkOut = $data['check_out'] ?? null;
             $workingHours = isset($data['working_hours']) ? (float)$data['working_hours'] : 0.0;
@@ -194,16 +190,16 @@ class PayrollService
                 try {
                     $in = Carbon::parse($checkIn);
                     $out = Carbon::parse($checkOut);
-                    if ($out->greaterThan($in)) {
-                        $diffMinutes = $out->diffInMinutes($in);
-                        $totalHours = round($diffMinutes / 60, 2);
-                        // معيار الوردية الأساسية: 8 ساعات وما زاد يعتبر إضافي
-                        if ($totalHours > 8) {
-                            $workingHours = 8.0;
+                    $diffMinutes = abs($out->diffInMinutes($in, false));
+                    $totalHours = round($diffMinutes / 60, 2);
+                    // معيار الوردية الأساسية: 8 ساعات وما زاد يعتبر إضافي
+                    if ($totalHours > 8) {
+                        $workingHours = 8.0;
+                        if ($overtimeHours <= 0) {
                             $overtimeHours = round($totalHours - 8.0, 2);
-                        } else {
-                            $workingHours = $totalHours;
                         }
+                    } else {
+                        $workingHours = $totalHours;
                     }
                 } catch (Exception $e) {
                     // fallback to provided values
@@ -213,6 +209,25 @@ class PayrollService
             $isPayable = in_array($status, ['present', 'late', 'half_day', 'excused_leave'], true);
             if (isset($data['is_payable'])) {
                 $isPayable = (bool)$data['is_payable'];
+            }
+
+            // إذا كان مسجلاً بالفعل، يتم التحديث الفوري (Upsert) بدلاً من إلقاء خطأ لمنع تعطيل المستخدم
+            if ($existing) {
+                $existing->update([
+                    'branch_id' => $data['branch_id'] ?? $existing->branch_id ?? $employee->branch_id,
+                    'check_in' => $checkIn ?? $existing->check_in,
+                    'check_out' => $checkOut ?? $existing->check_out,
+                    'status' => $status,
+                    'working_hours' => $workingHours >= 0 ? $workingHours : $existing->working_hours,
+                    'overtime_hours' => $overtimeHours >= 0 ? $overtimeHours : $existing->overtime_hours,
+                    'late_minutes' => isset($data['late_minutes']) ? (int)$data['late_minutes'] : $existing->late_minutes,
+                    'early_departure_minutes' => isset($data['early_departure_minutes']) ? (int)$data['early_departure_minutes'] : $existing->early_departure_minutes,
+                    'is_payable' => $isPayable,
+                    'notes' => $data['notes'] ?? $existing->notes,
+                    'created_by' => $userId,
+                ]);
+
+                return $existing->fresh();
             }
 
             return Attendance::create([
@@ -251,7 +266,29 @@ class PayrollService
             if (isset($data['status'])) $attendance->status = $data['status'];
             if (isset($data['check_in'])) $attendance->check_in = $data['check_in'];
             if (isset($data['check_out'])) $attendance->check_out = $data['check_out'];
-            if (isset($data['working_hours'])) $attendance->working_hours = (float)$data['working_hours'];
+
+            if (isset($data['working_hours'])) {
+                $attendance->working_hours = (float)$data['working_hours'];
+            } elseif ($attendance->check_in && $attendance->check_out) {
+                try {
+                    $in = Carbon::parse($attendance->check_in);
+                    $out = Carbon::parse($attendance->check_out);
+                    $diffMinutes = abs($out->diffInMinutes($in, false));
+                    $totalHours = round($diffMinutes / 60, 2);
+                    if ($totalHours > 8) {
+                        $attendance->working_hours = 8.0;
+                        if (!isset($data['overtime_hours'])) {
+                            $attendance->overtime_hours = round($totalHours - 8.0, 2);
+                        }
+                    } else {
+                        $attendance->working_hours = $totalHours;
+                        if (!isset($data['overtime_hours'])) {
+                            $attendance->overtime_hours = 0.0;
+                        }
+                    }
+                } catch (Exception $e) {}
+            }
+
             if (isset($data['overtime_hours'])) $attendance->overtime_hours = (float)$data['overtime_hours'];
             if (isset($data['late_minutes'])) $attendance->late_minutes = (int)$data['late_minutes'];
             if (isset($data['is_payable'])) $attendance->is_payable = (bool)$data['is_payable'];
@@ -277,12 +314,21 @@ class PayrollService
                 throw new InvalidArgumentException('مبلغ التعديل أو السلفة يجب أن يكون أكبر من الصفر.');
             }
 
+            $installmentsCount = max(1, (int)($data['installments_count'] ?? 1));
+            $installmentAmount = isset($data['installment_amount']) && (float)$data['installment_amount'] > 0
+                ? round((float)$data['installment_amount'], 4)
+                : round($amount / $installmentsCount, 4);
+
             return EmployeeAdjustment::create([
                 'tenant_id' => $tenantId,
                 'employee_id' => $employee->id,
                 'type' => $data['type'], // advance, advance_repayment, allowance, bonus, deduction
                 'amount' => $amount,
                 'currency' => $data['currency'] ?? 'EGP',
+                'installments_count' => $installmentsCount,
+                'installment_amount' => $installmentAmount,
+                'paid_amount' => 0.0,
+                'remaining_balance' => $amount,
                 'adjustment_date' => $data['adjustment_date'] ?? now()->toDateString(),
                 'payroll_period' => $data['payroll_period'] ?? null,
                 'reason' => $data['reason'],
@@ -502,6 +548,57 @@ class PayrollService
     }
 
     /**
+     * إلغاء وفك تسويات الرواتب السابقة وإعادة السلف والخصومات لحالتها المعتمدة
+     */
+    public function rollbackPayrollSettlements(string $payrollId, string $tenantId): void
+    {
+        // 1. استرجاع السلف وتحديث رصيدها المتبقي والمدفوع
+        $payrollItems = PayrollItem::where('tenant_id', $tenantId)
+            ->where('payroll_id', $payrollId)
+            ->get();
+
+        foreach ($payrollItems as $pItem) {
+            $breakdown = $pItem->calculation_breakdown;
+            if (is_array($breakdown) && !empty($breakdown['advances_list'])) {
+                foreach ($breakdown['advances_list'] as $advEntry) {
+                    if (empty($advEntry['id'])) continue;
+                    $adv = EmployeeAdjustment::where('tenant_id', $tenantId)->find($advEntry['id']);
+                    if (!$adv) continue;
+
+                    $deductedInThisPayroll = (float)($advEntry['deducted_amount'] ?? $advEntry['amount'] ?? 0);
+                    $newPaid = max(0, round((float)($adv->paid_amount ?? 0) - $deductedInThisPayroll, 4));
+                    $newRemaining = min((float)$adv->amount, round((float)($adv->remaining_balance ?? 0) + $deductedInThisPayroll, 4));
+
+                    $adv->paid_amount = $newPaid;
+                    $adv->remaining_balance = $newRemaining;
+                    $adv->status = 'approved';
+                    if ($adv->settled_payroll_id === $payrollId) {
+                        $adv->settled_payroll_id = null;
+                    }
+                    $adv->save();
+                }
+            }
+        }
+
+        // 2. فك تسويات باقي التعديلات المالية المرتبطة بالمسير
+        EmployeeAdjustment::where('tenant_id', $tenantId)
+            ->where('settled_payroll_id', $payrollId)
+            ->update([
+                'status' => 'approved',
+                'settled_payroll_id' => null,
+            ]);
+
+        // 3. فك تسويات خصومات عيوب الجودة
+        QualityDefectAdjustment::where('tenant_id', $tenantId)
+            ->where('settled_payroll_id', $payrollId)
+            ->update([
+                'status' => 'approved',
+                'settled_payroll_id' => null,
+                'settled_payroll_item_id' => null,
+            ]);
+    }
+
+    /**
      * محرك احتساب مسير الرواتب الموحد (Payroll Engine)
      * يجمع أجور القطعة، والأجور اليومية، والساعات المعتمدة، والإضافي، والرواتب الثابتة، والبدلات، والسلف، وخصومات الجودة
      */
@@ -514,9 +611,14 @@ class PayrollService
                 ->where('payroll_period', $period)
                 ->first();
 
-            // قاعدة الحصانة التاريخية: المسيرات المقفلة والمدفوعة والمعتمدة لا يعاد احتسابها بصمت
-            if ($existing && in_array($existing->status, ['finalized', 'paid', 'partially_paid'], true)) {
-                throw new InvalidArgumentException("مسير الرواتب للفترة {$period} مقفل مالياً بحالة ({$existing->status}) مدفوع مسبقاً ولا يمكن تعديله أو إعادة احتسابه.");
+            // قاعدة الحصانة التاريخية: المسيرات المقفلة والمدفوعة نهائياً لا يعاد احتسابها
+            if ($existing) {
+                if (in_array($existing->status, ['finalized', 'paid'], true) || (float)$existing->total_paid > 0) {
+                    throw new InvalidArgumentException("مسير الرواتب للفترة {$period} مقفل مالياً بحالة ({$existing->status}) أو تم صرف دفعات منه ولا يمكن تعديله.");
+                }
+
+                // فك التسويات السابقة قبل إعادة الاحتساب
+                $this->rollbackPayrollSettlements($existing->id, $tenantId);
             }
 
             $payroll = Payroll::updateOrCreate(
@@ -565,18 +667,20 @@ class PayrollService
                 $payableDays = 0;
 
                 // 1. احتساب أجر القطعة (Piece-Rate Compensation)
-                if (in_array($payType, ['piece_rate', 'hybrid'], true)) {
-                    $pieceRateEarnings = (float) PieceWorkLog::where('tenant_id', $tenantId)
-                        ->where('employee_id', $employee->id)
-                        ->where(function ($q) use ($startDateStr, $endDateStr, $startOfDay, $endOfDay) {
-                            $q->whereBetween('work_date', [$startOfDay, $endOfDay])
-                              ->orWhere(function ($sub) use ($startDateStr, $endDateStr) {
-                                  $sub->whereDate('work_date', '>=', $startDateStr)
-                                      ->whereDate('work_date', '<=', $endDateStr);
-                              });
-                        })
-                        ->whereIn('status', ['verified', 'approved'])
-                        ->sum('total_amount');
+                $loggedPieceEarnings = (float) PieceWorkLog::where('tenant_id', $tenantId)
+                    ->where('employee_id', $employee->id)
+                    ->where(function ($q) use ($startDateStr, $endDateStr, $startOfDay, $endOfDay) {
+                        $q->whereBetween('work_date', [$startOfDay, $endOfDay])
+                          ->orWhere(function ($sub) use ($startDateStr, $endDateStr) {
+                              $sub->whereDate('work_date', '>=', $startDateStr)
+                                  ->whereDate('work_date', '<=', $endDateStr);
+                          });
+                    })
+                    ->whereIn('status', ['verified', 'approved'])
+                    ->sum('total_amount');
+
+                if (in_array($payType, ['piece_rate', 'hybrid'], true) || $loggedPieceEarnings > 0) {
+                    $pieceRateEarnings = $loggedPieceEarnings;
                 }
 
                 // 2. احتساب الأجر اليومي وساعات العمل من سجلات الحضور والانصراف المعتمدة (Attendance)
@@ -595,6 +699,16 @@ class PayrollService
                     $payableDays = $attendances->where('is_payable', true)->where('status', '!=', 'absent')->count();
                     $dailyRate = (float) ($employee->daily_rate > 0 ? $employee->daily_rate : ($baseSalary / 26));
                     $dailyEarnings = round($payableDays * $dailyRate, 4);
+                } elseif ($payType === 'shift_based') {
+                    $payableDays = $attendances->where('is_payable', true)->where('status', '!=', 'absent')->count();
+                    $shiftRate = (float) ($employee->shift_rate > 0 ? $employee->shift_rate : ($employee->daily_rate > 0 ? $employee->daily_rate : ($baseSalary / 26)));
+                    $dailyEarnings = round($payableDays * $shiftRate, 4);
+                } elseif ($payType === 'weekly') {
+                    $startC = Carbon::parse($startDate);
+                    $endC = Carbon::parse($endDate);
+                    $weeks = max(1, (int) ceil($startC->diffInDays($endC) / 7));
+                    $weeklyRate = (float) ($employee->weekly_rate > 0 ? $employee->weekly_rate : ($baseSalary / 4));
+                    $baseAmount = round($weeks * $weeklyRate, 4);
                 } elseif ($payType === 'hourly') {
                     $workingHours = (float) $attendances->where('is_payable', true)->sum('working_hours');
                     $overtimeHours = (float) $attendances->where('is_payable', true)->sum('overtime_hours');
@@ -611,35 +725,107 @@ class PayrollService
                     }
                 }
 
-                // الراتب الأساسي يطبق للموظف ذو الراتب الثابت أو الهجين أو كضمان أساسي
-                $baseAmount = in_array($payType, ['fixed_salary', 'hybrid', 'piece_rate'], true) ? (float) $baseSalary : 0.0;
+                // الراتب الأساسي يطبق للموظف ذو الراتب الثابت أو الهجين أو الأسبوعي أو كضمان أساسي
+                if ($payType !== 'weekly') {
+                    $baseAmount = in_array($payType, ['fixed_salary', 'hybrid', 'piece_rate'], true) ? (float) $baseSalary : 0.0;
+                }
 
                 // 3. احتساب البدلات والمكافآت المعتمدة (Allowances & Bonuses)
                 $approvedBonuses = EmployeeAdjustment::where('tenant_id', $tenantId)
                     ->where('employee_id', $employee->id)
                     ->whereIn('type', ['allowance', 'bonus'])
                     ->where('status', 'approved')
-                    ->whereNull('settled_payroll_id')
+                    ->where(function ($q) use ($payroll) {
+                        $q->whereNull('settled_payroll_id')
+                          ->orWhere('settled_payroll_id', $payroll->id);
+                    })
                     ->get();
 
                 $bonusesTotal = (float) $approvedBonuses->sum('amount');
 
-                // 4. احتساب سداد السلف والخصومات العامة المعتمدة (Advance Repayments & Deductions)
-                $approvedDeductions = EmployeeAdjustment::where('tenant_id', $tenantId)
+                // 4. احتساب سداد السلف والأقساط الشهرية المعتمدة (Advances & Installment Deductions)
+                $approvedAdvances = EmployeeAdjustment::where('tenant_id', $tenantId)
                     ->where('employee_id', $employee->id)
-                    ->whereIn('type', ['advance_repayment', 'deduction'])
+                    ->whereIn('type', ['advance', 'advance_repayment'])
                     ->where('status', 'approved')
-                    ->whereNull('settled_payroll_id')
+                    ->where(function ($q) use ($payroll) {
+                        $q->whereNull('settled_payroll_id')
+                          ->orWhere('settled_payroll_id', $payroll->id);
+                    })
+                    ->where(function ($q) {
+                        $q->where('remaining_balance', '>', 0)
+                          ->orWhereNull('remaining_balance');
+                    })
                     ->get();
 
-                $advancesRepaidTotal = (float) $approvedDeductions->where('type', 'advance_repayment')->sum('amount');
-                $generalDeductionsTotal = (float) $approvedDeductions->where('type', 'deduction')->sum('amount');
+                $advancesRepaidTotal = 0.0;
+                $advancesList = [];
+                $advancesToUpdate = [];
+
+                foreach ($approvedAdvances as $adv) {
+                    $totalAdv = (float)$adv->amount;
+                    $instCount = max(1, (int)($adv->installments_count ?? 1));
+                    $instAmount = (float)($adv->installment_amount > 0 ? $adv->installment_amount : round($totalAdv / $instCount, 4));
+                    $remBefore = (float)($adv->remaining_balance !== null ? $adv->remaining_balance : $totalAdv);
+                    $paidBefore = (float)($adv->paid_amount ?? 0);
+
+                    if ($remBefore <= 0.0001) {
+                        continue;
+                    }
+
+                    // الاستقطاع الشهري هو قيمة القسط أو الرصيد المتبقي أيهما أقل
+                    $deductAmount = round(min($instAmount, $remBefore), 4);
+                    $remAfter = round(max(0, $remBefore - $deductAmount), 4);
+                    $paidAfter = round($paidBefore + $deductAmount, 4);
+
+                    $advancesRepaidTotal += $deductAmount;
+
+                    $advancesList[] = [
+                        'id' => $adv->id,
+                        'type' => $adv->type,
+                        'total_amount' => $totalAdv,
+                        'amount' => $deductAmount,
+                        'deducted_amount' => $deductAmount,
+                        'installments_count' => $instCount,
+                        'installment_amount' => $instAmount,
+                        'paid_before' => $paidBefore,
+                        'paid_after' => $paidAfter,
+                        'remaining_before' => $remBefore,
+                        'remaining_after' => $remAfter,
+                        'is_final_installment' => ($remAfter <= 0.0001),
+                        'reason' => $adv->reason,
+                        'adjustment_date' => $adv->adjustment_date ? Carbon::parse($adv->adjustment_date)->toDateString() : null,
+                    ];
+
+                    $advancesToUpdate[] = [
+                        'model' => $adv,
+                        'paid_after' => $paidAfter,
+                        'remaining_after' => $remAfter,
+                        'is_settled' => ($remAfter <= 0.0001),
+                    ];
+                }
+
+                // 4b. الخصومات العامة المعتمدة (General Deductions)
+                $approvedDeductions = EmployeeAdjustment::where('tenant_id', $tenantId)
+                    ->where('employee_id', $employee->id)
+                    ->where('type', 'deduction')
+                    ->where('status', 'approved')
+                    ->where(function ($q) use ($payroll) {
+                        $q->whereNull('settled_payroll_id')
+                          ->orWhere('settled_payroll_id', $payroll->id);
+                    })
+                    ->get();
+
+                $generalDeductionsTotal = (float) $approvedDeductions->sum('amount');
 
                 // 5. احتساب خصومات عيوب الجودة المعتمدة حصراً وغير المسواة سابقاً
                 $approvedQualityAdjustments = QualityDefectAdjustment::where('tenant_id', $tenantId)
                     ->where('employee_id', $employee->id)
                     ->where('status', 'approved')
-                    ->whereNull('settled_payroll_id')
+                    ->where(function ($q) use ($payroll) {
+                        $q->whereNull('settled_payroll_id')
+                          ->orWhere('settled_payroll_id', $payroll->id);
+                    })
                     ->get();
 
                 $defectDeductions = (float) $approvedQualityAdjustments->sum('proposed_penalty_amount');
@@ -648,6 +834,27 @@ class PayrollService
                 $gross = round($baseAmount + $pieceRateEarnings + $dailyEarnings + $hourlyEarnings + $overtimeEarnings + $bonusesTotal, 4);
                 $totalEmpDeductions = round(max(0, $advancesRepaidTotal + $generalDeductionsTotal + $defectDeductions), 4);
                 $net = round(max(0, $gross - $totalEmpDeductions), 4);
+
+                // قوائم تفصيلية للبدلات والخصومات
+                $bonusesList = $approvedBonuses->map(function ($a) {
+                    return [
+                        'id' => $a->id,
+                        'type' => $a->type,
+                        'amount' => (float)$a->amount,
+                        'reason' => $a->reason,
+                        'adjustment_date' => $a->adjustment_date ? Carbon::parse($a->adjustment_date)->toDateString() : null,
+                    ];
+                })->values()->toArray();
+
+                $deductionsList = $approvedDeductions->map(function ($a) {
+                    return [
+                        'id' => $a->id,
+                        'type' => $a->type,
+                        'amount' => (float)$a->amount,
+                        'reason' => $a->reason,
+                        'adjustment_date' => $a->adjustment_date ? Carbon::parse($a->adjustment_date)->toDateString() : null,
+                    ];
+                })->values()->toArray();
 
                 // تفصيل احتساب شفاف (Calculation Breakdown) لضمان الشفافية
                 $breakdown = [
@@ -667,6 +874,9 @@ class PayrollService
                     'gross_amount' => $gross,
                     'total_deductions' => $totalEmpDeductions,
                     'net_salary' => $net,
+                    'advances_list' => $advancesList,
+                    'bonuses_list' => $bonusesList,
+                    'deductions_list' => $deductionsList,
                 ];
 
                 $payrollItem = PayrollItem::create([
@@ -691,7 +901,21 @@ class PayrollService
                     'is_paid' => false,
                 ]);
 
-                // ربط البدلات والسلف المسواة بالمسير لمنع تكرار خصمها
+                // تحديث السلف وأرصدتها المتبقية
+                foreach ($advancesToUpdate as $advData) {
+                    $m = $advData['model'];
+                    $m->paid_amount = $advData['paid_after'];
+                    $m->remaining_balance = $advData['remaining_after'];
+                    if ($advData['is_settled']) {
+                        $m->status = 'settled';
+                        $m->settled_payroll_id = $payroll->id;
+                    } else {
+                        $m->status = 'approved';
+                    }
+                    $m->save();
+                }
+
+                // ربط البدلات والخصومات العامة المسواة بالمسير
                 foreach ($approvedBonuses as $adj) {
                     $adj->update(['settled_payroll_id' => $payroll->id, 'status' => 'settled']);
                 }
@@ -921,6 +1145,52 @@ class PayrollService
                 ->update(['status' => 'paid']);
 
             return $payroll->load('items.employee');
+        });
+    }
+
+    /**
+     * إعادة احتساب مسير الرواتب وتحديث كافة بنوده والسلف والأقساط المستحقة
+     */
+    public function recalculatePayroll(string $payrollId): Payroll
+    {
+        $tenantId = app('current_tenant_id');
+
+        return DB::transaction(function () use ($payrollId, $tenantId) {
+            $payroll = Payroll::where('tenant_id', $tenantId)->findOrFail($payrollId);
+
+            if (in_array($payroll->status, ['finalized', 'paid'], true) || (float)$payroll->total_paid > 0) {
+                throw new InvalidArgumentException('لا يمكن إعادة احتساب مسير تم صرفه أو قفله نهائياً.');
+            }
+
+            $period = $payroll->payroll_period;
+            $startDate = Carbon::parse($payroll->period_start)->toDateString();
+            $endDate = Carbon::parse($payroll->period_end)->toDateString();
+            $status = $payroll->status; // retain current status (e.g. draft or approved)
+
+            return $this->generatePayroll($tenantId, $period, $startDate, $endDate, $status);
+        });
+    }
+
+    /**
+     * حذف مسير رواتب مسودة أو معتمد وفك كافة تسويات السلف
+     */
+    public function destroyPayroll(string $payrollId): void
+    {
+        $tenantId = app('current_tenant_id');
+
+        DB::transaction(function () use ($payrollId, $tenantId) {
+            $payroll = Payroll::where('tenant_id', $tenantId)->findOrFail($payrollId);
+
+            if (in_array($payroll->status, ['finalized', 'paid', 'partially_paid'], true) || (float)$payroll->total_paid > 0) {
+                throw new InvalidArgumentException('لا يمكن حذف مسير مقفل أو تم تسجيل مدفوعات له.');
+            }
+
+            $this->rollbackPayrollSettlements($payrollId, $tenantId);
+
+            PayrollItem::where('tenant_id', $tenantId)->where('payroll_id', $payrollId)->delete();
+            PayrollPayment::where('tenant_id', $tenantId)->where('payroll_id', $payrollId)->delete();
+
+            $payroll->delete();
         });
     }
 }

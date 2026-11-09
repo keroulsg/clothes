@@ -30,7 +30,7 @@ class TenantController extends Controller
             'plan_tier' => 'nullable|string|in:starter,professional,enterprise',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        return DB::transaction(function () use ($validated, $request) {
             $tenantCode = 'MFG-' . strtoupper(Str::random(6));
             $planTier = $validated['plan_tier'] ?? 'professional';
 
@@ -65,50 +65,59 @@ class TenantController extends Controller
                 'phone' => $validated['phone'] ?? null,
             ]);
 
-            // إنشاء المخزن الرئيسي للمصنع بشكل حتمي غير مكرر (Idempotent Default Warehouse Provisioning)
-            \App\Models\Warehouse::withoutGlobalScopes()->firstOrCreate(
-                ['tenant_id' => $tenant->id, 'code' => 'WH-FAB-01'],
-                [
-                    'name' => 'مخزن الأقمشة الرئيسي',
-                    'type' => 'fabric',
-                    'allow_negative_stock' => false,
+            // إذا تم تفعيل خيار بيانات العرض التجريبية صراحة، يتم تهيئة بيانات نموذجية
+            if ($request->boolean('with_sample_data')) {
+                \App\Models\Warehouse::withoutGlobalScopes()->firstOrCreate(
+                    ['tenant_id' => $tenant->id, 'code' => 'WH-FAB-01'],
+                    [
+                        'name' => 'مخزن الأقمشة الرئيسي',
+                        'type' => 'fabric',
+                        'allow_negative_stock' => false,
+                        'is_active' => true,
+                    ]
+                );
+
+                // دليل المقاسات العامة عند طلب العينات صراحة (بدون افتراضات مقاسات أطفال)
+                $sampleCat = \App\Models\SizeCategory::withoutGlobalScopes()->create([
+                    'tenant_id' => $tenant->id,
+                    'name' => 'مقاسات قياسية عامة',
+                    'description' => 'دليل المقاسات المعيارية العامة',
+                    'sort_order' => 1,
                     'is_active' => true,
-                ]
-            );
-
-            // إنشاء المقاسات المعيارية للشركة
-            $defaultSizes = [
-                ['name' => 'حديثي ولادة (0-3M)', 'category' => 'infant', 'sort_order' => 1],
-                ['name' => 'رضّع (3-6M)', 'category' => 'infant', 'sort_order' => 2],
-                ['name' => 'أطفال (6-12M)', 'category' => 'infant', 'sort_order' => 3],
-                ['name' => 'دارجين (1-2Y)', 'category' => 'toddler', 'sort_order' => 4],
-                ['name' => 'أطفال (2-4Y)', 'category' => 'kids', 'sort_order' => 5],
-                ['name' => 'صغار (4-6Y)', 'category' => 'kids', 'sort_order' => 6],
-            ];
-            foreach ($defaultSizes as $sz) {
-                \App\Models\Size::withoutGlobalScopes()->create([
-                    'tenant_id' => $tenant->id,
-                    'name' => $sz['name'],
-                    'category' => $sz['category'],
-                    'sort_order' => $sz['sort_order'],
                 ]);
-            }
 
-            // إنشاء الألوان المعيارية للشركة
-            $defaultColors = [
-                ['name' => 'أزرق كحلي', 'color_code' => '#0f2744'],
-                ['name' => 'أبيض ناصع', 'color_code' => '#ffffff'],
-                ['name' => 'أحمر زاهي', 'color_code' => '#b91c1c'],
-                ['name' => 'وردي أطفال', 'color_code' => '#f472b6'],
-                ['name' => 'رمادي فضي', 'color_code' => '#94a3b8'],
-                ['name' => 'أسود', 'color_code' => '#000000'],
-            ];
-            foreach ($defaultColors as $clr) {
-                \App\Models\Color::withoutGlobalScopes()->create([
-                    'tenant_id' => $tenant->id,
-                    'name' => $clr['name'],
-                    'color_code' => $clr['color_code'],
-                ]);
+                $defaultSizes = [
+                    ['name' => 'S', 'order' => 1],
+                    ['name' => 'M', 'order' => 2],
+                    ['name' => 'L', 'order' => 3],
+                    ['name' => 'XL', 'order' => 4],
+                    ['name' => 'XXL', 'order' => 5],
+                ];
+                foreach ($defaultSizes as $sz) {
+                    \App\Models\Size::withoutGlobalScopes()->create([
+                        'tenant_id' => $tenant->id,
+                        'size_category_id' => $sampleCat->id,
+                        'name' => $sz['name'],
+                        'category' => 'general',
+                        'order' => $sz['order'],
+                        'is_active' => true,
+                    ]);
+                }
+
+                $defaultColors = [
+                    ['name' => 'أبيض', 'color_code' => '#ffffff'],
+                    ['name' => 'أسود', 'color_code' => '#000000'],
+                    ['name' => 'كحلي', 'color_code' => '#0f2744'],
+                    ['name' => 'رمادي', 'color_code' => '#94a3b8'],
+                    ['name' => 'أحمر', 'color_code' => '#b91c1c'],
+                ];
+                foreach ($defaultColors as $clr) {
+                    \App\Models\Color::withoutGlobalScopes()->create([
+                        'tenant_id' => $tenant->id,
+                        'name' => $clr['name'],
+                        'color_code' => $clr['color_code'],
+                    ]);
+                }
             }
 
             // إنشاء حساب مالك الشركة
@@ -127,6 +136,7 @@ class TenantController extends Controller
 
             return response()->json([
                 'message' => 'تم إنشاء حساب المصنع والشركة بنجاح (فترة تجريبية 14 يوماً).',
+                'token' => $token,
                 'access_token' => $token,
                 'token_type' => 'Bearer',
                 'tenant' => [
@@ -148,6 +158,88 @@ class TenantController extends Controller
                     'id' => $branch->id,
                     'name' => $branch->name,
                     'code' => $branch->code,
+                ],
+            ], 201);
+        });
+    }
+
+    /**
+     * تسجيل طالب خدمة مستقل جديد في منصة وصلة ورش (Stage C.2: Independent Requester Registration)
+     * يُنشئ هوية مستخدم موحدة وحاوية مستأجر دائمة بنوع marketplace_requester دون دخول لوحدات الـ ERP
+     */
+    public function registerRequester(Request $request): JsonResponse
+    {
+        if (!$request->has('name') && $request->has('owner_name')) {
+            $request->merge(['name' => $request->input('owner_name')]);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'password' => 'required|string|min:8',
+            'phone' => 'nullable|string|max:30',
+            'brand_name' => 'nullable|string|max:255',
+        ]);
+
+        return DB::transaction(function () use ($validated) {
+            $reqCode = 'REQ-' . strtoupper(Str::random(6));
+            $accountName = !empty($validated['brand_name']) ? $validated['brand_name'] : $validated['name'];
+
+            $tenant = Tenant::create([
+                'code' => $reqCode,
+                'name' => $accountName,
+                'subdomain' => 'req-' . strtolower(Str::slug($accountName)) . '-' . rand(100, 999),
+                'tenant_type' => 'marketplace_requester',
+                'status' => 'active',
+                'plan_tier' => 'none',
+                'currency' => 'EGP',
+                'timezone' => 'Africa/Cairo',
+                'settings' => [
+                    'account_type' => 'marketplace_requester',
+                    'registered_at' => now()->toIso8601String(),
+                ],
+            ]);
+
+            $user = User::create([
+                'tenant_id' => $tenant->id,
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'role' => 'company_owner',
+                'is_active' => true,
+                'password' => Hash::make($validated['password']),
+            ]);
+
+            // إنشاء سجل اشتراك أولي بانتظار سداد الباقة
+            \App\Models\MarketplaceRequesterSubscription::create([
+                'tenant_id' => $tenant->id,
+                'plan_code' => 'ww_starter_5',
+                'status' => 'pending_approval',
+                'allowed_rfq_count' => 0,
+                'consumed_rfq_count' => 0,
+            ]);
+
+            $token = $user->createToken('auth-token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'تم إنشاء حساب طالب الخدمة في وصلة ورش بنجاح. يرجى اختيار وتفعيل باقة طلبات القص.',
+                'token' => $token,
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'code' => $tenant->code,
+                    'name' => $tenant->name,
+                    'tenant_type' => $tenant->tenant_type,
+                    'status' => $tenant->status,
+                    'plan_tier' => 'none',
+                ],
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'tenant_id' => $user->tenant_id,
                 ],
             ], 201);
         });
@@ -221,6 +313,7 @@ class TenantController extends Controller
                 'id' => $tenant->id,
                 'code' => $tenant->code,
                 'name' => $tenant->name,
+                'tenant_type' => $tenant->tenant_type ?? 'factory',
                 'status' => $tenant->status,
                 'plan_tier' => $tenant->plan_tier,
                 'is_paid' => $tenant->settings['subscription']['is_paid'] ?? false,
@@ -459,5 +552,56 @@ class TenantController extends Controller
             'manufacturing_overhead_percentage' => round($newRate * 100, 2),
         ]);
     }
+
+    /**
+     * استرجاع إعدادات الضرائب الخاصة بالشركة (افتراضياً معطلة بنسبة 0% للشركات الجديدة)
+     */
+    public function getTaxSettings(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+        $tax = $tenant->settings['tax'] ?? [
+            'enabled' => false,
+            'rate' => 0.0,
+            'tax_number' => null,
+            'tax_name' => 'ضريبة القيمة المضافة',
+        ];
+
+        return response()->json([
+            'tax_settings' => $tax,
+        ]);
+    }
+
+    /**
+     * تحديث إعدادات الضرائب للمصنع
+     */
+    public function updateTaxSettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => 'required|boolean',
+            'rate' => 'required|numeric|min:0|max:100',
+            'tax_number' => 'nullable|string|max:100',
+            'tax_name' => 'nullable|string|max:100',
+        ]);
+
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        $settings = $tenant->settings ?? [];
+        $settings['tax'] = [
+            'enabled' => (bool) $validated['enabled'],
+            'rate' => round((float) $validated['rate'], 2),
+            'tax_number' => $validated['tax_number'] ?? null,
+            'tax_name' => $validated['tax_name'] ?? 'ضريبة القيمة المضافة',
+        ];
+        $tenant->settings = $settings;
+        $tenant->save();
+
+        return response()->json([
+            'message' => 'تم تحديث إعدادات الضريبة بنجاح.',
+            'tax_settings' => $settings['tax'],
+        ]);
+    }
 }
+
 

@@ -17,10 +17,13 @@ export interface Branch {
   tenant_id: string;
   name: string;
   code: string;
-  type: 'factory' | 'outlet' | 'warehouse' | 'head_office';
+  type: 'factory' | 'workshop' | 'outlet' | 'warehouse' | 'head_office' | string;
   is_main: boolean;
   address?: string;
   phone?: string;
+  manager_name?: string;
+  status?: string;
+  warehouses_count?: number;
 }
 
 export interface ProductionOrderItem {
@@ -55,6 +58,8 @@ export interface ProductionOrder {
   priority?: 'normal' | 'high' | 'urgent';
   due_date: string;
   target_delivery_date?: string;
+  created_at?: string;
+  updated_at?: string;
   items?: ProductionOrderItem[];
 }
 
@@ -82,6 +87,13 @@ export interface ProductVariant {
   color_code?: string;
   wholesale_price: number;
   retail_price: number;
+  pos_price?: number;
+  effective_pos_price?: number;
+  image?: string | null;
+  gallery?: any[];
+  name?: string;
+  stock_visibility?: string;
+  product?: any;
   garment_model?: GarmentModel;
   size?: { id: string; name: string };
   color?: { id: string; name: string };
@@ -92,11 +104,12 @@ export interface Warehouse {
   id: string;
   name: string;
   code: string;
-  type: 'fabric' | 'accessories' | 'wip' | 'finished_goods' | 'returns' | 'customer_deposits';
+  type: 'fabric' | 'accessories' | 'wip' | 'finished_goods' | 'returns' | 'customer_deposits' | string;
   allow_negative_stock: boolean;
   items_count?: number;
   address?: string;
   branch_id?: string;
+  branch?: Branch;
 }
 
 export interface InventoryItem {
@@ -140,7 +153,8 @@ export interface InventoryTransaction {
   item_code: string;
   item_name: string;
   warehouse_name: string;
-  transaction_type: 'goods_receipt' | 'material_issuance' | 'adjustment_positive' | 'adjustment_negative' | 'transfer_in' | 'transfer_out';
+  warehouse_id?: string;
+  transaction_type: 'goods_receipt' | 'material_issuance' | 'adjustment_positive' | 'adjustment_negative' | 'transfer_in' | 'transfer_out' | string;
   direction: 'IN' | 'OUT';
   quantity: number;
   unit_cost: number;
@@ -164,6 +178,8 @@ export interface CustomerMaterial {
   waste_meters: number;
   remaining_meters: number;
   warehouse_name: string;
+  warehouse_id?: string;
+  receipt_number?: string;
 }
 
 export interface FabricConversionResult {
@@ -200,6 +216,7 @@ export interface PurchaseOrderItem {
   remaining_quantity: number;
   unit_price: number;
   total_price: number;
+  item?: any;
 }
 
 export interface PurchaseOrder {
@@ -216,6 +233,9 @@ export interface PurchaseOrder {
   tax_amount: number;
   total_amount: number;
   items: PurchaseOrderItem[];
+  supplier?: Supplier;
+  warehouse?: Warehouse;
+  items_count?: number;
 }
 
 export interface GoodsReceiptNote {
@@ -230,12 +250,16 @@ export interface GoodsReceiptNote {
   accepted_quantity: number;
   rejected_quantity: number;
   rejection_reason?: string;
+  purchase_order?: any;
+  supplier?: any;
+  notes?: string;
 }
 
 export interface SupplierInvoice {
   id: string;
   invoice_number: string;
   internal_reference: string;
+  supplier_id?: string;
   supplier_name: string;
   po_number: string;
   invoice_date: string;
@@ -246,6 +270,9 @@ export interface SupplierInvoice {
   matching_status: 'matched' | 'price_variance' | 'quantity_variance';
   variance_notes?: string;
   payment_status: 'unpaid' | 'partially_paid' | 'paid';
+  paid_amount?: number;
+  supplier?: any;
+  purchase_order?: any;
 }
 
 export interface Pattern {
@@ -305,7 +332,10 @@ export interface CuttingOrder {
   theoretical_fabric_meters: number;
   end_loss_meters: number;
   total_cut_pieces: number;
+  total_expected_pieces?: number;
   status: 'planned' | 'spreading' | 'cut_completed';
+  assigned_cutter_name?: string;
+  assigned_cutter_id?: string;
   created_at?: string;
 }
 
@@ -320,6 +350,11 @@ export interface CuttingBundle {
   quantity: number;
   current_stage_code: 'cutting' | 'assembly' | 'sewing' | 'finishing' | 'ironing' | 'packing' | 'completed';
   status: 'active' | 'held_for_qc' | 'rework' | 'completed' | 'scrapped';
+  assigned_employee_id?: string;
+  assigned_employee_name?: string;
+  work_group?: string;
+  assignedEmployee?: any;
+  assigned_employee?: any;
   notes?: string;
 }
 
@@ -353,20 +388,30 @@ export interface Customer {
   id: string;
   code: string;
   name: string;
+  classification?: 'company' | 'individual';
+  company_name?: string;
   contact_person?: string;
   phone?: string;
   email?: string;
   tax_id?: string;
+  commercial_registry?: string;
   address?: string;
+  billing_address?: string;
+  delivery_address?: string;
   credit_limit?: number;
+  payment_terms?: string;
+  opening_balance?: number;
   notes?: string;
   is_active: boolean;
+  status?: 'active' | 'inactive';
   job_orders_count?: number;
   material_receipts_count?: number;
   sales_orders_count?: number;
   sales_invoices_count?: number;
+  payment_vouchers_count?: number;
   current_balance?: number;
   total_invoiced?: number;
+  total_paid?: number;
 }
 
 export interface CustomerStatementLine {
@@ -466,6 +511,10 @@ export interface JobOrder {
   target_delivery_date?: string;
   actual_start_date?: string;
   actual_completion_date?: string;
+  assigned_employee_id?: string;
+  assigned_employee_name?: string;
+  assigned_employee?: any;
+  assignedEmployee?: any;
   notes?: string;
   created_at: string;
   items?: JobOrderItem[];
@@ -508,6 +557,11 @@ export interface ExternalOperation {
   unit_rate: number;
   total_cost: number;
   status: 'dispatched' | 'partially_returned' | 'completed' | 'cancelled';
+  assigned_employee_id?: string;
+  assigned_employee_name?: string;
+  worker_unit_rate?: number;
+  assigned_employee?: any;
+  assignedEmployee?: any;
   dispatched_at?: string;
   returned_at?: string;
   notes?: string;
@@ -606,7 +660,7 @@ export interface Quotation {
   quotation_number: string;
   customer_name: string;
   customer_id?: string;
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
@@ -734,15 +788,115 @@ export interface PosSession {
   closed_at?: string;
 }
 
-// Phase 8: Financials, Accounting & Costing
+// Phase 8: Financials, Accounting & Costing (Batch 5 Enhanced)
 export interface ChartOfAccount {
   id: string;
   code: string;
   name: string;
+  name_en?: string;
   type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
   category: string;
+  parent_id?: string;
+  level?: number;
+  normal_balance?: 'debit' | 'credit';
+  is_control_account?: boolean;
+  is_cash_bank?: boolean;
+  is_postable?: boolean;
+  opening_balance?: number;
+  current_balance: number;
+  notes?: string;
+  is_active: boolean;
+  parent?: ChartOfAccount;
+  children?: ChartOfAccount[];
+}
+
+export interface TenantAccountMapping {
+  id: string;
+  mapping_key: string;
+  account_id: string;
+  account?: ChartOfAccount;
+}
+
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  name_en?: string;
+  parent_id?: string;
+  branch_id?: string;
+  description?: string;
+  is_active: boolean;
+  parent?: CostCenter;
+}
+
+export interface FinancialAccount {
+  id: string;
+  chart_of_account_id: string;
+  code: string;
+  name: string;
+  name_en?: string;
+  type: 'cash' | 'bank' | 'wallet';
+  account_number?: string;
+  bank_name?: string;
+  currency: string;
+  branch_id?: string;
+  opening_balance: number;
   current_balance: number;
   is_active: boolean;
+  chart_of_account?: ChartOfAccount;
+}
+
+export interface FinancialAccountTransfer {
+  id: string;
+  transfer_number: string;
+  from_financial_account_id: string;
+  to_financial_account_id: string;
+  amount: number;
+  transfer_date: string;
+  status: 'draft' | 'completed' | 'reversed';
+  reference?: string;
+  notes?: string;
+  journal_entry_id?: string;
+  reversal_reason?: string;
+  from_account?: FinancialAccount;
+  to_account?: FinancialAccount;
+  journal_entry?: JournalEntry;
+}
+
+export interface FiscalPeriod {
+  id: string;
+  fiscal_year_id: string;
+  period_number: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: 'open' | 'closed';
+  closed_at?: string;
+  reopened_at?: string;
+  reopening_reason?: string;
+}
+
+export interface FiscalYear {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: 'open' | 'closed';
+  periods?: FiscalPeriod[];
+}
+
+export interface ReconciliationResult {
+  tenant_id: string;
+  control_account: {
+    id: string;
+    code: string;
+    name: string;
+    gl_balance: number;
+  };
+  subledger_total: number;
+  variance: number;
+  is_matched: boolean;
+  reconciled_at: string;
 }
 
 export interface JournalEntryLine {
@@ -752,6 +906,9 @@ export interface JournalEntryLine {
   debit: number;
   credit: number;
   cost_center?: string;
+  cost_center_id?: string;
+  party_type?: string;
+  party_id?: string;
   account?: ChartOfAccount;
 }
 
@@ -760,10 +917,14 @@ export interface JournalEntry {
   entry_number: string;
   entry_date: string;
   reference_type?: string;
+  reference_id?: string;
   description: string;
   total_debit: number;
   total_credit: number;
-  status: 'draft' | 'posted' | 'void';
+  status: 'draft' | 'approved' | 'posted' | 'reversed' | 'void';
+  fiscal_period_id?: string;
+  reversed_entry_id?: string;
+  reversal_reason?: string;
   lines?: JournalEntryLine[];
 }
 
@@ -784,13 +945,24 @@ export interface ProductionCostSheet {
   id: string;
   production_order_id: string;
   garment_model_id: string;
+  costing_method?: string;
+  overhead_allocation_method?: string;
   total_produced_pieces: number;
   direct_materials_cost: number;
   direct_labor_cost: number;
   subcontracted_services_cost: number;
   allocated_overhead_cost: number;
+  applied_overhead_rate?: number;
   total_cost: number;
   cost_per_piece: number;
+  planned_materials_cost?: number;
+  planned_labor_cost?: number;
+  planned_total_cost?: number;
+  scrap_pieces?: number;
+  scrap_cost?: number;
+  variance_amount?: number;
+  variance_percentage?: number;
+  notes?: string;
   status: string;
 }
 
@@ -814,6 +986,7 @@ export interface Employee {
   national_id?: string;
   is_active: boolean;
   piece_work_logs_count?: number;
+  remaining_advances_balance?: number;
 }
 
 export interface Attendance {
@@ -825,6 +998,7 @@ export interface Attendance {
   check_in?: string;
   check_out?: string;
   total_hours: number;
+  hours_worked?: number;
   overtime_hours: number;
   late_minutes: number;
   early_leaving_minutes: number;
@@ -841,11 +1015,16 @@ export interface EmployeeAdjustment {
   id: string;
   tenant_id: string;
   employee_id: string;
-  type: 'advance' | 'bonus' | 'allowance' | 'deduction';
+  type: 'advance' | 'advance_repayment' | 'bonus' | 'allowance' | 'deduction';
   amount: number;
+  installments_count?: number;
+  installment_amount?: number;
+  paid_amount?: number;
+  remaining_balance?: number;
   effective_date: string;
+  adjustment_date?: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'applied';
+  status: 'pending' | 'pending_approval' | 'approved' | 'rejected' | 'applied' | 'settled';
   approved_by?: number;
   approved_at?: string;
   rejection_reason?: string;
@@ -877,6 +1056,8 @@ export interface PieceRate {
   operation_name: string;
   rate_per_piece: number;
   is_active: boolean;
+  garment_model_id?: string;
+  garment_model?: { id: string; name: string; code?: string };
 }
 
 export interface PieceWorkLog {
@@ -947,12 +1128,30 @@ export interface PayrollItem {
   calculation_breakdown?: {
     pay_type: string;
     base_salary?: number;
+    base_amount?: number;
+    piece_rate_earnings?: number;
+    daily_earnings?: number;
+    payable_days?: number;
+    hourly_earnings?: number;
+    working_hours?: number;
+    overtime_earnings?: number;
+    overtime_hours?: number;
+    allowances_and_bonuses?: number;
+    advances_repaid?: number;
+    defect_deductions?: any;
+    general_deductions?: number;
+    gross_amount?: number;
+    total_deductions?: number;
+    net_salary?: number;
+    advances_list?: any[];
+    bonuses_list?: any[];
+    deductions_list?: any[];
     piece_rate?: { count: number; total_amount: number };
     hourly?: { hours: number; rate: number; earnings: number; overtime_hours: number; overtime_earnings: number };
     daily?: { days: number; rate: number; earnings: number };
     adjustments?: { advances: number; bonuses_allowances: number; general_deductions: number };
-    defect_deductions?: { count: number; total: number; details: any[] };
-    summary: { gross: number; total_deductions: number; net: number };
+    summary?: { gross: number; total_deductions: number; net: number };
+    [key: string]: any;
   };
   employee?: Employee;
 }
@@ -980,8 +1179,33 @@ export interface Payroll {
   finalizer?: { id: number; name: string };
 }
 
-// Phase 10: E-Commerce Storefront & Theme Architecture
-export type StorefrontThemeId = 'modern_fashion' | 'kids_baby' | 'premium_brand' | 'wholesale_uniform';
+// Phase 10 & Batch 9: E-Commerce Storefront & 4 Distinct Templates Architecture
+export type StorefrontThemeId =
+  | 'fashion_boutique'
+  | 'modern_catalog'
+  | 'kids_family'
+  | 'premium_brand'
+  | 'modern_fashion'
+  | 'wholesale_uniform'
+  | 'kids_baby';
+
+export interface ThemeSectionConfig {
+  id: string;
+  enabled: boolean;
+  order: number;
+  title: string;
+  subtitle?: string;
+}
+
+export interface ThemeBannerConfig {
+  id: string;
+  title: string;
+  subtitle: string;
+  image_url?: string;
+  cta_text?: string;
+  cta_url?: string;
+  enabled: boolean;
+}
 
 export interface ThemeConfig {
   primary_color?: string;
@@ -992,6 +1216,29 @@ export interface ThemeConfig {
   direction?: 'rtl' | 'ltr';
   logo_url?: string;
   banner_image?: string;
+  announcement_bar_enabled?: boolean;
+  announcement_bar_text?: string;
+  sections?: ThemeSectionConfig[];
+  banners?: ThemeBannerConfig[];
+}
+
+export interface DesignStudioConfig {
+  tenant_id: string;
+  published: {
+    theme_id: StorefrontThemeId;
+    theme_config: ThemeConfig;
+    published_at?: string;
+    published_by?: number;
+  };
+  draft: {
+    theme_id: StorefrontThemeId;
+    theme_config: ThemeConfig;
+  };
+  has_draft_changes: boolean;
+  can_rollback: boolean;
+  previous_published_config?: any;
+  available_templates: StorefrontThemeMeta[];
+  store_settings: TenantStoreSetting;
 }
 
 export interface StorefrontThemeMeta {
@@ -1016,6 +1263,7 @@ export interface StoreOrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  item?: any;
 }
 
 export interface StoreOrder {
@@ -1051,6 +1299,11 @@ export interface TenantStoreSetting {
   store_name: string;
   theme_id: StorefrontThemeId;
   theme_config?: ThemeConfig;
+  draft_theme_id?: StorefrontThemeId;
+  draft_theme_config?: ThemeConfig;
+  previous_published_config?: any;
+  published_at?: string;
+  published_by?: number;
   subdomain?: string;
   is_store_enabled: boolean;
   allow_cod: boolean;
@@ -1059,11 +1312,88 @@ export interface TenantStoreSetting {
   instapay_account_name?: string;
   instapay_handle?: string;
   instapay_instructions?: string;
+  instapay_identifier?: string;
+  instapay_display_name?: string;
+  instapay_account_verified?: boolean;
   currency: string;
   direction?: 'rtl' | 'ltr';
   banner_title?: string;
   banner_subtitle?: string;
   contact_whatsapp?: string;
+}
+
+export interface PaymentSubmission {
+  id: string;
+  tenant_id: string;
+  store_order_id?: string;
+  sales_order_id?: string;
+  channel: 'storefront' | 'manual';
+  payment_method: 'instapay' | 'bank_transfer' | 'vodafone_cash';
+  amount: number;
+  currency: string;
+  customer_name?: string;
+  customer_phone?: string;
+  sender_instapay_identifier?: string;
+  transfer_reference?: string;
+  transfer_time?: string;
+  receipt_disk?: string;
+  receipt_path?: string;
+  receipt_original_name?: string;
+  receipt_mime_type?: string;
+  status: 'pending_review' | 'approved' | 'rejected';
+  rejection_reason?: string;
+  reviewed_by?: number;
+  reviewed_at?: string;
+  created_at: string;
+  updated_at: string;
+  storeOrder?: StoreOrder;
+  salesOrder?: any;
+}
+
+export interface PurchaseRequisitionItem {
+  id: string;
+  tenant_id: string;
+  purchase_requisition_id: string;
+  inventory_item_id?: string;
+  item_name: string;
+  requested_quantity: number;
+  approved_quantity: number;
+  unit_of_measure: string;
+  estimated_unit_price: number;
+  estimated_total_price: number;
+  specifications?: string;
+  notes?: string;
+  inventoryItem?: InventoryItem;
+}
+
+export interface PurchaseRequisition {
+  id: string;
+  tenant_id: string;
+  requisition_number: string;
+  branch_id?: string;
+  department?: string;
+  requested_by?: number;
+  requisition_date: string;
+  required_date?: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'converted' | 'cancelled';
+  estimated_total_cost: number;
+  reason?: string;
+  notes?: string;
+  approved_by?: number;
+  approved_at?: string;
+  rejected_by?: number;
+  rejected_at?: string;
+  rejection_reason?: string;
+  converted_purchase_order_id?: string;
+  converted_at?: string;
+  created_at: string;
+  updated_at: string;
+  items?: PurchaseRequisitionItem[];
+  requester?: { id: number; name: string; email: string };
+  approver?: { id: number; name: string; email: string };
+  convertedPurchaseOrder?: any;
+  branch?: any;
 }
 
 // Phase 12: Machine & Asset Maintenance
@@ -1238,8 +1568,71 @@ export interface Rfq {
   expected_delivery_date: string;
   max_budget_per_piece?: number;
   fabric_responsibility: 'seeker_provided' | 'workshop_sourced';
-  status: 'open' | 'awarded' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'draft' | 'open' | 'published' | 'awarded' | 'offer_selected' | 'in_progress' | 'delivered' | 'completed' | 'cancelled';
   awarded_bid_id?: string;
+  fabric_type?: string;
+  delivery_target_date?: string;
+  bids_count?: number;
+  selected_bid?: any;
+  selected_at?: string;
+  delivered_at?: string;
+  completed_at?: string;
+  workshop?: WorkshopProfile;
+  model_name?: string;
+  garment_model_id?: string;
+  garment_category?: 'men' | 'women' | 'kids' | 'uniform' | 'other';
+  priority?: 'normal' | 'urgent';
+  fabric_details?: {
+    fabric_type?: string;
+    fabric_width_cm?: number;
+    fabric_weight_gsm?: number;
+    fabric_composition?: string;
+    fabric_quantity?: number;
+    fabric_unit?: string;
+    fabric_supplied_by_requester?: boolean;
+    fabric_notes?: string;
+    [key: string]: any;
+  };
+  production_details?: {
+    cutting_machine_preference?: string;
+    layers_per_spread?: number;
+    marker_provided?: boolean;
+    sample_approved?: boolean;
+    size_breakdown?: Record<string, number>;
+    color_breakdown?: Record<string, number>;
+    special_cutting_instructions?: string;
+    [key: string]: any;
+  };
+  logistics?: {
+    pickup_governorate?: string;
+    pickup_city?: string;
+    pickup_address_private?: string;
+    delivery_governorate?: string;
+    delivery_city?: string;
+    delivery_address_private?: string;
+    transport_responsibility?: 'requester' | 'provider' | 'shared';
+    [key: string]: any;
+  };
+  attachments?: Array<{
+    id: string;
+    file_name: string;
+    file_type: string;
+    file_size: number;
+    mime_type?: string;
+    created_at?: string;
+    url?: string;
+  }>;
+  published_at?: string;
+  terms_accepted_at?: string;
+  terms_version?: string;
+  is_owner?: boolean;
+  requester_masked?: {
+    governorate?: string;
+    city?: string;
+    rating?: number;
+    completed_rfqs_count?: number;
+    masked_code?: string;
+  };
   created_at: string;
   tenant?: any;
   bids?: RfqBid[];

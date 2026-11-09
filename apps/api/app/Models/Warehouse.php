@@ -22,6 +22,7 @@ class Warehouse extends Model
         'allow_negative_stock',
         'is_active',
         'address',
+        'manager_name',
     ];
 
     protected $casts = [

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
@@ -29,22 +29,48 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
   const [expectedDate, setExpectedDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [taxRate, setTaxRate] = useState<number>(0);
+  const [isTaxEnabled, setIsTaxEnabled] = useState<boolean>(false);
   const [poItems, setPoItems] = useState([
     {
       inventory_item_id: items[0]?.id || '',
-      ordered_quantity: 500,
+      ordered_quantity: 10,
       unit_price: 100,
     },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  useEffect(() => {
+    if (isOpen) {
+      if (suppliers.length > 0 && !supplierId) setSupplierId(suppliers[0].id);
+      if (warehouses.length > 0 && !warehouseId) setWarehouseId(warehouses[0].id);
+      if (items.length > 0 && (!poItems[0] || !poItems[0].inventory_item_id)) {
+        setPoItems([{ inventory_item_id: items[0].id, ordered_quantity: 10, unit_price: 100 }]);
+      }
+
+      // Load tenant tax settings dynamically
+      api.tenant.getTaxSettings()
+        .then((res: any) => {
+          if (res && res.tax) {
+            setIsTaxEnabled(Boolean(res.tax.is_tax_enabled));
+            setTaxRate(res.tax.is_tax_enabled ? Number(res.tax.default_tax_rate || 0) : 0);
+          }
+        })
+        .catch(() => {
+          // Default to 0% if tenant tax settings not fetched or disabled
+          setTaxRate(0);
+          setIsTaxEnabled(false);
+        });
+    }
+  }, [isOpen, suppliers, warehouses, items]);
+
   const addItemRow = () => {
     setPoItems([
       ...poItems,
       {
         inventory_item_id: items[0]?.id || '',
-        ordered_quantity: 100,
+        ordered_quantity: 10,
         unit_price: 50,
       },
     ]);
@@ -61,7 +87,8 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
   };
 
   const subtotal = poItems.reduce((acc, curr) => acc + (curr.ordered_quantity * curr.unit_price), 0);
-  const taxAmount = subtotal * 0.14;
+  const effectiveTaxRate = isTaxEnabled ? taxRate : 0;
+  const taxAmount = (subtotal * effectiveTaxRate) / 100;
   const totalAmount = subtotal + taxAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,7 +108,7 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
           inventory_item_id: it.inventory_item_id,
           ordered_quantity: Number(it.ordered_quantity),
           unit_price: Number(it.unit_price),
-          tax_rate: 14.0,
+          tax_rate: effectiveTaxRate,
         })),
       });
 
@@ -182,56 +209,76 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
             </Button>
           </div>
 
+          {/* Header Row */}
+          <div className="grid grid-cols-12 gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+            <div className="col-span-4">{isAr ? 'الصنف والمواصفات' : 'Item Description'}</div>
+            <div className="col-span-2 text-center">{isAr ? 'الكمية' : 'Qty'}</div>
+            <div className="col-span-2 text-center">{isAr ? 'سعر الوحدة' : 'Unit Price'}</div>
+            <div className="col-span-3 text-center">{isAr ? 'إجمالي البند (الكمية × السعر)' : 'Line Total (Qty × Price)'}</div>
+            <div className="col-span-1 text-center">{isAr ? 'حذف' : 'Del'}</div>
+          </div>
+
           <div className="space-y-2">
-            {poItems.map((row, index) => (
-              <div key={index} className="grid grid-cols-12 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 items-center">
-                <div className="col-span-5">
-                  <select
-                    value={row.inventory_item_id}
-                    onChange={(e) => updateItemRow(index, 'inventory_item_id', e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  >
-                    {items.map(it => (
-                      <option key={it.id} value={it.id}>{it.name} ({it.unit_of_measure})</option>
-                    ))}
-                  </select>
-                </div>
+            {poItems.map((row, index) => {
+              const lineTotal = Number(row.ordered_quantity || 0) * Number(row.unit_price || 0);
+              return (
+                <div key={index} className="grid grid-cols-12 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 items-center">
+                  <div className="col-span-4">
+                    <select
+                      value={row.inventory_item_id}
+                      onChange={(e) => updateItemRow(index, 'inventory_item_id', e.target.value)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                    >
+                      {items.map(it => (
+                        <option key={it.id} value={it.id}>{it.name} ({it.unit_of_measure})</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="col-span-3">
-                  <input
-                    type="number"
-                    step="any"
-                    min="0.1"
-                    placeholder={isAr ? 'الكمية' : 'Quantity'}
-                    value={row.ordered_quantity}
-                    onChange={(e) => updateItemRow(index, 'ordered_quantity', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-mono text-center focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.1"
+                      placeholder={isAr ? 'الكمية' : 'Qty'}
+                      value={row.ordered_quantity}
+                      onChange={(e) => updateItemRow(index, 'ordered_quantity', parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-mono text-center focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
 
-                <div className="col-span-3">
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder={isAr ? 'سعر الوحدة' : 'Unit Price'}
-                    value={row.unit_price}
-                    onChange={(e) => updateItemRow(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-mono text-center focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder={isAr ? 'السعر' : 'Price'}
+                      value={row.unit_price}
+                      onChange={(e) => updateItemRow(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-mono text-center focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
 
-                <div className="col-span-1 text-center">
-                  <button
-                    type="button"
-                    onClick={() => removeItemRow(index)}
-                    disabled={poItems.length === 1}
-                    className="p-1.5 text-slate-400 hover:text-rose-500 disabled:opacity-30 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="col-span-3 text-center px-2 py-1.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/50">
+                    <span className="font-mono font-bold text-xs text-indigo-700 dark:text-indigo-300 block">
+                      {lineTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+                    </span>
+                  </div>
+
+                  <div className="col-span-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => removeItemRow(index)}
+                      disabled={poItems.length === 1}
+                      title={isAr ? 'حذف هذا البند' : 'Remove line'}
+                      className="p-1.5 text-slate-400 hover:text-rose-500 disabled:opacity-30 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -255,8 +302,8 @@ export const CreatePurchaseOrderModal: React.FC<CreatePurchaseOrderModalProps> =
             <span className="font-mono text-slate-900 dark:text-slate-200">{subtotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
           </div>
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>{isAr ? 'ضريبة القيمة المضافة (14%):' : 'VAT (14%):'}</span>
-            <span className="font-mono text-slate-900 dark:text-slate-200">{taxAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
+            <span>{isAr ? `ضريبة القيمة المضافة (${effectiveTaxRate}%):` : `VAT (${effectiveTaxRate}%):`}</span>
+            <span className="font-mono text-slate-900 dark:text-slate-200">{taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}</span>
           </div>
           <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 pt-1.5 border-t border-slate-200 dark:border-slate-800">
             <span>{isAr ? 'إجمالي أمر الشراء المستهدف:' : 'Total Purchase Order Amount:'}</span>

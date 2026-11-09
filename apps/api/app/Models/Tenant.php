@@ -18,6 +18,7 @@ class Tenant extends Model
         'subdomain',
         'custom_domain',
         'status',
+        'tenant_type',
         'plan_tier',
         'currency',
         'timezone',
@@ -27,6 +28,21 @@ class Tenant extends Model
     protected $casts = [
         'settings' => 'array',
     ];
+
+    public function isMarketplaceRequester(): bool
+    {
+        return ($this->tenant_type ?? 'factory') === 'marketplace_requester';
+    }
+
+    public function isFactory(): bool
+    {
+        return ($this->tenant_type ?? 'factory') === 'factory';
+    }
+
+    public function requesterSubscriptions(): HasMany
+    {
+        return $this->hasMany(MarketplaceRequesterSubscription::class);
+    }
 
     public function users(): HasMany
     {

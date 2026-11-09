@@ -22,7 +22,7 @@ class PurchaseOrderController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = PurchaseOrder::with(['supplier', 'warehouse'])->withCount('items');
+        $query = PurchaseOrder::with(['supplier', 'warehouse', 'items.item'])->withCount('items');
 
         if ($request->has('status') && $request->status !== 'all') {
             $query->where('status', $request->status);

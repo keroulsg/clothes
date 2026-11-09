@@ -22,7 +22,9 @@ class FactorySubscription extends Model
         'current_period_end',
         'canceled_at',
         'auto_renew',
+        'is_trial',
         'custom_quotas',
+        'plan_snapshot',
     ];
 
     protected $casts = [
@@ -31,7 +33,9 @@ class FactorySubscription extends Model
         'current_period_end' => 'datetime',
         'canceled_at' => 'datetime',
         'auto_renew' => 'boolean',
+        'is_trial' => 'boolean',
         'custom_quotas' => 'array',
+        'plan_snapshot' => 'array',
     ];
 
     public function plan(): BelongsTo

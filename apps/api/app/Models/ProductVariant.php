@@ -15,6 +15,7 @@ class ProductVariant extends Model
 
     protected $fillable = [
         'tenant_id',
+        'product_id',
         'garment_model_id',
         'size_id',
         'color_id',
@@ -28,6 +29,24 @@ class ProductVariant extends Model
         'wholesale_price' => 'decimal:4',
         'retail_price' => 'decimal:4',
     ];
+
+    public function getEffectivePosPriceAttribute(): float
+    {
+        if ($this->product && $this->product->pos_price !== null && (float) $this->product->pos_price > 0) {
+            return (float) $this->product->pos_price;
+        }
+
+        if ($this->product && (float) $this->product->selling_price > 0) {
+            return (float) $this->product->selling_price;
+        }
+
+        return (float) ($this->retail_price > 0 ? $this->retail_price : $this->wholesale_price);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
 
     public function garmentModel(): BelongsTo
     {

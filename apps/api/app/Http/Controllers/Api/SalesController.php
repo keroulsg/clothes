@@ -61,6 +61,23 @@ class SalesController extends Controller
 
     public function storeSalesOrder(Request $request): JsonResponse
     {
+        if ($request->has('customer_id') && !$request->has('customer_name')) {
+            $cust = \App\Models\Customer::find($request->input('customer_id'));
+            if ($cust) {
+                $request->merge(['customer_name' => $cust->name]);
+            }
+        }
+
+        if ($request->has('items') && is_array($request->input('items'))) {
+            $items = array_map(function ($item) {
+                if (is_array($item) && isset($item['quantity']) && !isset($item['ordered_quantity'])) {
+                    $item['ordered_quantity'] = $item['quantity'];
+                }
+                return $item;
+            }, $request->input('items'));
+            $request->merge(['items' => $items]);
+        }
+
         $validated = $request->validate([
             'customer_name' => 'required|string|max:255',
             'customer_id' => 'nullable|uuid',
@@ -68,7 +85,7 @@ class SalesController extends Controller
             'warehouse_id' => 'nullable|uuid',
             'order_type' => 'nullable|string|in:wholesale,retail,outlet,custom',
             'items' => 'required|array|min:1',
-            'items.*.variant_id' => 'required|uuid',
+            'items.*.variant_id' => 'required|uuid|exists:product_variants,id',
             'items.*.ordered_quantity' => 'required|numeric|min:0.0001',
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.tax_rate' => 'nullable|numeric|min:0',
@@ -82,6 +99,7 @@ class SalesController extends Controller
         return response()->json([
             'message' => 'تم تسجيل أمر البيع بنجاح',
             'order' => $order,
+            'sales_order' => $order,
         ], 201);
     }
 
@@ -388,6 +406,224 @@ class SalesController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * تحويل عرض سعر إلى أمر بيع رسمي
+     */
+    public function convertQuotation(string $id): JsonResponse
+    {
+        try {
+            $order = $this->salesService->convertQuotationToOrder($id);
+
+            return response()->json([
+                'message' => 'تم تحويل عرض السعر إلى أمر بيع بنجاح',
+                'sales_order' => $order,
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'QuotationConversionError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * إلغاء أمر بيع مع فك حجز المخزون
+     */
+    public function cancelSalesOrder(string $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        try {
+            $order = $this->salesService->cancelSalesOrder($id, $validated['reason']);
+
+            return response()->json([
+                'message' => 'تم إلغاء أمر البيع وفك حجز المخزون بنجاح',
+                'sales_order' => $order,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'SalesOrderCancellationError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * إلغاء فاتورة مبيعات غير مسددة
+     */
+    public function cancelSalesInvoice(string $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        try {
+            $invoice = $this->salesService->cancelSalesInvoice($id, $validated['reason']);
+
+            return response()->json([
+                'message' => 'تم إلغاء فاتورة المبيعات بنجاح',
+                'sales_invoice' => $invoice,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvoiceCancellationError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * تسليم أمر البيع وصرف البضاعة التامة (دعم التسليم الجزئي والكامل)
+     */
+    public function deliverOrder(string $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'warehouse_id' => 'nullable|uuid|exists:warehouses,id',
+            'delivery_date' => 'nullable|date',
+            'shipping_carrier' => 'nullable|string|max:100',
+            'tracking_number' => 'nullable|string|max:100',
+            'recipient_name' => 'nullable|string|max:255',
+            'notes' => 'nullable|string|max:500',
+            'items' => 'nullable|array',
+            'items.*.sales_order_item_id' => 'nullable|uuid',
+            'items.*.variant_id' => 'nullable|uuid',
+            'items.*.quantity' => 'required_with:items|numeric|min:0.0001',
+        ]);
+
+        try {
+            $deliveryNote = $this->salesService->deliverOrder($id, $validated);
+
+            return response()->json([
+                'message' => 'تم تسجيل إذن التسليم وصرف البضاعة التامة بنجاح',
+                'delivery_note' => $deliveryNote,
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'DeliveryExecutionError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * إلغاء إذن التسليم واسترجاع الكميات للمخزن
+     */
+    public function cancelDeliveryNote(string $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        try {
+            $deliveryNote = $this->salesService->cancelDeliveryNote($id, $validated['reason']);
+
+            return response()->json([
+                'message' => 'تم إلغاء إذن التسليم واسترجاع الكميات للمخزن بنجاح',
+                'delivery_note' => $deliveryNote,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'DeliveryCancellationError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * قائمة سندات القبض ودفعات العملاء
+     */
+    public function payments(): JsonResponse
+    {
+        $payments = $this->salesService->getPayments();
+        return response()->json($payments);
+    }
+
+    /**
+     * تسجيل سند قبض مالي من العميل وتخصيصه على الفواتير
+     */
+    public function storePayment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => 'required|uuid|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
+            'payment_method' => 'nullable|string|in:cash,card,bank_transfer,wallet,check',
+            'account_id' => 'nullable|uuid|exists:chart_of_accounts,id',
+            'voucher_date' => 'nullable|date',
+            'notes' => 'nullable|string|max:500',
+            'idempotency_key' => 'nullable|string|max:100',
+            'sales_invoice_id' => 'nullable|uuid|exists:sales_invoices,id',
+            'allocations' => 'nullable|array',
+            'allocations.*.sales_invoice_id' => 'required_with:allocations|uuid|exists:sales_invoices,id',
+            'allocations.*.amount' => 'required_with:allocations|numeric|min:0.01',
+        ]);
+
+        try {
+            $voucher = $this->salesService->recordCustomerPayment($validated);
+
+            return response()->json([
+                'message' => 'تم تسجيل سند القبض المالي وتخصيصه بنجاح',
+                'payment_voucher' => $voucher,
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'PaymentRecordingError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * إلغاء وعكس سند القبض
+     */
+    public function reversePayment(string $id, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        try {
+            $voucher = $this->salesService->reverseCustomerPayment($id, $validated['reason']);
+
+            return response()->json([
+                'message' => 'تم إلغاء وعكس سند القبض المالي بنجاح',
+                'payment_voucher' => $voucher,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'PaymentReversalError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * قائمة الإشعارات الدائنة
+     */
+    public function creditNotes(): JsonResponse
+    {
+        $notes = $this->salesService->getCreditNotes();
+        return response()->json($notes);
+    }
+
+    /**
+     * فحص باركود فوري للـ POS
+     */
+    public function barcodeLookup(string $barcode): JsonResponse
+    {
+        $item = $this->salesService->barcodeLookup($barcode);
+
+        if (!$item) {
+            return response()->json([
+                'error' => 'BarcodeNotFound',
+                'message' => 'الباركود غير موجود في سجل الأصناف والمتغيرات المسجلة.',
+            ], 404);
+        }
+
+        return response()->json(['item' => $item]);
     }
 }
 

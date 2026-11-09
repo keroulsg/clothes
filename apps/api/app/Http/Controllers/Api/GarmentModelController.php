@@ -21,7 +21,7 @@ class GarmentModelController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = GarmentModel::withCount('variants');
+        $query = GarmentModel::withCount('variants')->with(['variants.size', 'variants.color', 'variants.product']);
 
         if ($request->has('search')) {
             $search = $request->input('search');
@@ -179,10 +179,72 @@ class GarmentModelController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $model = GarmentModel::with(['variants.size', 'variants.color'])->findOrFail($id);
+        $model = GarmentModel::with(['variants.size', 'variants.color', 'clothingCategory'])->findOrFail($id);
 
         return response()->json([
             'model' => $model,
+        ]);
+    }
+
+    /**
+     * تحديث بيانات الموديل
+     */
+    public function update(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $model = GarmentModel::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'clothing_category_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('clothing_categories', 'id')->where('tenant_id', $tenantId),
+            ],
+            'category' => 'nullable|string|max:100',
+            'season' => 'nullable|string|max:50',
+            'description' => 'nullable|string',
+            'target_cost' => 'nullable|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
+            'retail_price' => 'nullable|numeric|min:0',
+            'technical_specs' => 'nullable|array',
+            'status' => 'nullable|string|in:draft,active,discontinued',
+        ]);
+
+        $model->update($validated);
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات الموديل بنجاح.',
+            'model' => $model->fresh(['variants.size', 'variants.color', 'clothingCategory']),
+        ]);
+    }
+
+    /**
+     * حذف أو أرشفة الموديل
+     */
+    public function destroy(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $model = GarmentModel::where('tenant_id', $tenantId)->findOrFail($id);
+
+        // Check if production orders exist
+        $hasActiveProdOrders = \App\Models\ProductionOrder::where('tenant_id', $tenantId)
+            ->where('garment_model_id', $model->id)
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->exists();
+
+        if ($hasActiveProdOrders) {
+            return response()->json([
+                'message' => 'تعذر حذف الموديل نظراً لوجود أوامر تشغيل جارية مرتبطة به في صالة الإنتاج.',
+                'errors' => ['model' => ['Model has active production orders.']],
+            ], 422);
+        }
+
+        $model->delete();
+
+        return response()->json([
+            'message' => 'تم حذف الموديل بنجاح.',
+            'deleted' => true,
         ]);
     }
 

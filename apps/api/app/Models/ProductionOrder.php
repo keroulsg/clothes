@@ -18,6 +18,8 @@ class ProductionOrder extends Model
         'garment_model_id',
         'bill_of_material_id',
         'branch_id',
+        'customer_id',
+        'sales_order_id',
         'planned_start_date',
         'target_delivery_date',
         'actual_start_date',
@@ -29,7 +31,10 @@ class ProductionOrder extends Model
         'total_rework_quantity',
         'status',
         'priority',
+        'responsible_person',
         'notes',
+        'cancelled_at',
+        'cancellation_reason',
         'idempotency_key',
     ];
 
@@ -43,7 +48,18 @@ class ProductionOrder extends Model
         'target_delivery_date' => 'date',
         'actual_start_date' => 'date',
         'actual_completion_date' => 'date',
+        'cancelled_at' => 'datetime',
     ];
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function salesOrder(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class);
+    }
 
     public function garmentModel(): BelongsTo
     {

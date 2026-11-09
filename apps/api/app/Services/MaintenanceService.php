@@ -7,6 +7,7 @@ use App\Models\InventoryItem;
 use App\Models\Machine;
 use App\Models\MaintenanceWorkOrder;
 use App\Models\MaintenanceSparePart;
+use App\Models\Warehouse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,7 +15,8 @@ use Illuminate\Support\Str;
 class MaintenanceService
 {
     public function __construct(
-        protected InventoryService $inventoryService
+        protected InventoryService $inventoryService,
+        protected AccountingService $accountingService
     ) {}
 
     /**
@@ -118,6 +120,9 @@ class MaintenanceService
 
             $quantity = (float) ($data['quantity'] ?? 1);
             $unitCost = (float) ($data['unit_cost'] ?? 0);
+            $partName = trim($data['part_name'] ?? '');
+            $partNumber = !empty($data['part_number']) ? trim($data['part_number']) : null;
+            $invItem = null;
 
             if (!empty($data['inventory_item_id'])) {
                 $invItem = InventoryItem::where('tenant_id', $workOrder->tenant_id)
@@ -127,7 +132,26 @@ class MaintenanceService
                 if ($unitCost <= 0) {
                     $unitCost = (float)$invItem->average_cost;
                 }
+                if (empty($partName)) {
+                    $partName = $invItem->name;
+                }
+                if (empty($partNumber)) {
+                    $partNumber = $invItem->code;
+                }
+            }
 
+            // حماية صارمة لمنع تكرار الصرف في حال الضغط المزدوج (Debounce duplicate prevention within 6 seconds)
+            $recent = MaintenanceSparePart::where('work_order_id', $workOrder->id)
+                ->where('part_name', $partName)
+                ->where('quantity', $quantity)
+                ->where('created_at', '>=', now()->subSeconds(6))
+                ->first();
+            if ($recent) {
+                return $recent;
+            }
+
+            if ($invItem) {
+                // خصم الكمية المنصرفة آلياً من رصيد المستودع
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $workOrder->tenant_id,
                     'inventory_item_id' => $invItem->id,
@@ -138,7 +162,7 @@ class MaintenanceService
                     'unit_cost' => $unitCost,
                     'reference_type' => 'maintenance_work_orders',
                     'reference_id' => $workOrder->id,
-                    'idempotency_key' => 'MNT-SPARE-' . $workOrder->id . '-' . md5(($data['part_name'] ?? 'part') . $quantity . uniqid()),
+                    'idempotency_key' => 'MNT-SPARE-' . $workOrder->id . '-' . md5($partName . $quantity . uniqid()),
                 ]);
             }
 
@@ -147,8 +171,8 @@ class MaintenanceService
             $part = MaintenanceSparePart::create([
                 'work_order_id' => $workOrder->id,
                 'inventory_item_id' => $data['inventory_item_id'] ?? null,
-                'part_name' => $data['part_name'],
-                'part_number' => $data['part_number'] ?? null,
+                'part_name' => $partName,
+                'part_number' => $partNumber,
                 'quantity' => $quantity,
                 'unit_cost' => $unitCost,
                 'total_cost' => $totalCost,
@@ -199,7 +223,83 @@ class MaintenanceService
                 'next_maintenance_date' => Carbon::today()->addDays($intervalDays)->format('Y-m-d'),
             ]);
 
-            return $workOrder->fresh(['machine', 'spareParts']);
+            // ترحيل قيد المصروفات آلياً إلى حساب المصروفات الصناعية غير المباشرة (حساب 6010)
+            try {
+                $this->accountingService->postMaintenanceExpense($workOrder->tenant_id, $workOrder);
+            } catch (\Throwable $e) {
+                // Keep order completion intact if accounting period is closed or needs manual intervention
+                \Illuminate\Support\Facades\Log::warning("Could not post maintenance expense journal entry: " . $e->getMessage());
+            }
+
+            return $workOrder->fresh(['machine', 'spareParts', 'journalEntry']);
+        });
+    }
+
+    /**
+     * جلب مخزون قطع الغيار المتوفرة بالمستودعات
+     */
+    public function getSparePartsInventory(): \Illuminate\Database\Eloquent\Collection
+    {
+        $tenantId = app('current_tenant_id');
+        return InventoryItem::where('tenant_id', $tenantId)
+            ->where(function ($q) {
+                $q->where('item_type', 'spare_part')
+                  ->orWhere('code', 'like', 'SP-%')
+                  ->orWhere('code', 'like', 'PART-%');
+            })
+            ->with('warehouse')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * إضافة صنف قطعة غيار جديدة إلى رصيد المخزن مباشرة
+     */
+    public function addSparePartToStock(array $data): InventoryItem
+    {
+        return DB::transaction(function () use ($data) {
+            $tenantId = app('current_tenant_id');
+            $code = !empty($data['code']) ? trim($data['code']) : 'SP-' . strtoupper(Str::random(6));
+
+            $warehouseId = $data['warehouse_id'] ?? null;
+            if (empty($warehouseId)) {
+                $wh = Warehouse::where('tenant_id', $tenantId)->first();
+                $warehouseId = $wh ? $wh->id : null;
+            }
+
+            $initialBalance = (float)($data['initial_balance'] ?? $data['quantity'] ?? 0);
+            $avgCost = (float)($data['unit_cost'] ?? $data['average_cost'] ?? 0);
+
+            $item = InventoryItem::create([
+                'tenant_id' => $tenantId,
+                'warehouse_id' => $warehouseId,
+                'item_type' => 'spare_part',
+                'code' => $code,
+                'name' => trim($data['name']),
+                'unit_of_measure' => $data['unit_of_measure'] ?? 'pcs',
+                'reorder_level' => $data['reorder_level'] ?? 2,
+                'current_balance' => $initialBalance,
+                'average_cost' => $avgCost,
+                'is_active' => true,
+                'description' => $data['description'] ?? null,
+            ]);
+
+            if ($initialBalance > 0 && $warehouseId) {
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $tenantId,
+                    'inventory_item_id' => $item->id,
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => $initialBalance,
+                    'direction' => 'IN',
+                    'transaction_type' => 'opening_balance',
+                    'unit_cost' => $avgCost,
+                    'reference_type' => 'inventory_items',
+                    'reference_id' => $item->id,
+                    'idempotency_key' => 'OPENING-SPARE-' . $item->id,
+                ]);
+            }
+
+            return $item->fresh(['warehouse']);
         });
     }
 

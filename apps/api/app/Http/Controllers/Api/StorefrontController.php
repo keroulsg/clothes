@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PaymentSubmission;
 use App\Models\StoreOrder;
 use App\Services\DomainResolutionService;
 use App\Services\StorefrontService;
@@ -41,7 +42,8 @@ class StorefrontController extends Controller
 
         app()->instance('current_tenant_id', $tenant->id);
 
-        $details = $this->storefrontService->getStoreDetails($tenant->id);
+        $preview = $request->boolean('preview') || $request->query('preview') === '1';
+        $details = $this->storefrontService->getStoreDetails($tenant->id, $preview);
 
         if (isset($details['store_settings']) && !$details['store_settings']->is_store_enabled) {
             return response()->json([
@@ -138,7 +140,7 @@ class StorefrontController extends Controller
 
         $validated = $request->validate([
             'store_name' => 'nullable|string|max:255',
-            'theme_id' => 'nullable|string|in:modern_fashion,kids_baby,premium_brand,wholesale_uniform',
+            'theme_id' => 'nullable|string|in:fashion_boutique,modern_catalog,kids_family,premium_brand,modern_fashion,kids_baby,wholesale_uniform',
             'theme_config' => 'nullable|array',
             'is_store_enabled' => 'nullable|boolean',
             'allow_cod' => 'nullable|boolean',
@@ -164,6 +166,81 @@ class StorefrontController extends Controller
         } catch (InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'InvalidSettings',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * تكوين استوديو التصميم (القوالب، المسودة الحالية، والإعدادات المنشورة)
+     */
+    public function designStudio(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $data = $this->storefrontService->getDesignStudioConfig($tenantId);
+
+        return response()->json($data);
+    }
+
+    /**
+     * حفظ مسودة تعديلات التصميم (بدون التأثير على المتجر المنشور)
+     */
+    public function saveDraft(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'theme_id' => 'nullable|string|in:fashion_boutique,modern_catalog,kids_family,premium_brand,modern_fashion,kids_baby,wholesale_uniform',
+            'theme_config' => 'nullable|array',
+        ]);
+
+        try {
+            $updated = $this->storefrontService->saveDesignDraft($tenantId, $validated);
+
+            return response()->json([
+                'message' => 'تم حفظ مسودة التصميم بنجاح.',
+                'store_settings' => $updated,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'InvalidTheme',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * نشر تعديلات المسودة ذرياً للمتجر الحي مع أرشفة النسخة السابقة
+     */
+    public function publishDraft(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $updated = $this->storefrontService->publishDesign($tenantId, $request->user()?->id);
+
+        return response()->json([
+            'message' => 'تم نشر التعديلات بنجاح إلى المتجر الإلكتروني الحي.',
+            'store_settings' => $updated,
+        ]);
+    }
+
+    /**
+     * استرجاع النسخة المنشورة السابقة
+     */
+    public function rollback(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        try {
+            $updated = $this->storefrontService->rollbackDesign($tenantId);
+
+            return response()->json([
+                'message' => 'تم استرجاع النسخة المنشورة السابقة بنجاح.',
+                'store_settings' => $updated,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'CannotRollback',
                 'message' => $e->getMessage(),
             ], 422);
         }
@@ -233,23 +310,40 @@ class StorefrontController extends Controller
     {
         $tenantId = app('current_tenant_id');
 
-        $validated = $request->validate([
-            'approved' => 'required|boolean',
-            'rejection_reason' => 'nullable|string|max:255',
-        ]);
+        $isRejectRoute = str_ends_with($request->path(), '/reject');
+        $isApproveRoute = str_ends_with($request->path(), '/approve');
+
+        $approved = $isRejectRoute ? false : ($isApproveRoute ? true : (bool) $request->input('approved', false));
+
+        $rules = [
+            'approved' => 'nullable|boolean',
+            'notes' => 'nullable|string|max:255',
+        ];
+
+        if (!$approved) {
+            $rules['rejection_reason'] = 'required|string|min:3|max:255';
+        } else {
+            $rules['rejection_reason'] = 'nullable|string|max:255';
+        }
+
+        $validated = $request->validate($rules);
+
+        // Check if $id belongs to a PaymentSubmission or a StoreOrder
+        $submission = PaymentSubmission::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($id);
+        $orderId = $submission ? $submission->store_order_id : $id;
 
         try {
             $order = $this->storefrontService->verifyInstaPayPayment(
                 $tenantId,
-                $id,
+                $orderId,
                 $request->user()->id,
-                (bool)$validated['approved'],
-                $validated['rejection_reason'] ?? null
+                $approved,
+                $validated['rejection_reason'] ?? $validated['notes'] ?? null
             );
 
             return response()->json([
-                'message' => $validated['approved']
-                    ? 'تم اعتماد تحويل InstaPay بنجاح وتوثيق العملية في سجل التدقيق'
+                'message' => $approved
+                    ? 'تم اعتماد تحويل InstaPay بنجاح وإصدار سند القبض المحاسبي وتوثيق العملية في سجل التدقيق'
                     : 'تم رفض تحويل InstaPay وتسجيل سبب الرفض بنجاح',
                 'order' => $order,
             ]);
@@ -259,6 +353,101 @@ class StorefrontController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * استعراض قائمة التحويلات البنكية المعلقة بانتظار المراجعة والتدقيق المالي
+     */
+    public function pendingPayments(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId);
+
+        return response()->json([
+            'submissions' => $submissions,
+            'total_pending' => $submissions->count(),
+        ]);
+    }
+
+    /**
+     * تحديث إعدادات إنستاباي الخاصة بصاحب المصنع
+     */
+    public function updateInstaPaySettings(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'instapay_enabled' => 'nullable|boolean',
+            'allow_instapay' => 'nullable|boolean',
+            'instapay_identifier' => 'nullable|string|max:100',
+            'instapay_display_name' => 'nullable|string|max:255',
+            'instapay_instructions' => 'nullable|string',
+            'instapay_account_verified' => 'nullable|boolean',
+        ]);
+
+        $settings = $this->storefrontService->updateInstaPaySettings($tenantId, $validated, $request->user()?->id);
+
+        return response()->json([
+            'message' => 'تم حفظ وتحديث إعدادات حساب InstaPay للمصنع بنجاح',
+            'settings' => $settings,
+        ]);
+    }
+
+    /**
+     * رفع ملف إيصال تحويل InstaPay وحفظه في التخزين الخاص المشفر
+     */
+    public function uploadReceipt(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'receipt' => 'required|file|mimes:jpeg,png,jpg,webp,pdf|max:5120', // Max 5MB
+            'order_number' => 'nullable|string|max:100',
+            'customer_phone' => 'nullable|string|max:50',
+            'instapay_reference' => 'nullable|string|max:100',
+        ]);
+
+        $file = $request->file('receipt');
+        $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : 'public';
+
+        $fileName = 'receipt_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $file->getClientOriginalExtension();
+        $path = $file->storeAs("private/receipts/{$tenantId}", $fileName);
+
+        // If order credentials provided, update submission directly
+        if (!empty($validated['order_number']) && !empty($validated['customer_phone']) && !empty($validated['instapay_reference'])) {
+            $this->storefrontService->submitCustomerReceipt(
+                $validated['order_number'],
+                $validated['customer_phone'],
+                $validated['instapay_reference'],
+                $path,
+                $tenantId !== 'public' ? $tenantId : null
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم رفع ملف الإيصال بنجاح',
+            'receipt_path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+        ]);
+    }
+
+    /**
+     * استعراض ملف الإيصال الخاص للمستخدمين المصرح لهم داخل المصنع
+     */
+    public function viewReceiptFile(Request $request, string $submissionId): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $submission = \App\Models\PaymentSubmission::where('tenant_id', $tenantId)->findOrFail($submissionId);
+
+        if (!$submission->receipt_file_path || !\Illuminate\Support\Facades\Storage::exists($submission->receipt_file_path)) {
+            return response()->json([
+                'error' => 'ReceiptNotFound',
+                'message' => 'ملف الإيصال غير متوفر على الخادم.',
+            ], 404);
+        }
+
+        $fullPath = \Illuminate\Support\Facades\Storage::path($submission->receipt_file_path);
+        return response()->file($fullPath);
     }
 
     /**
@@ -321,6 +510,8 @@ class StorefrontController extends Controller
             'store_info' => [
                 'store_name' => $settings['store_settings']->store_name ?? 'Garment Store',
                 'currency' => $order->tenant?->currency ?? 'EGP',
+                'instapay_identifier' => $settings['store_settings']->instapay_identifier ?? ($settings['store_settings']->instapay_handle ?? ''),
+                'instapay_display_name' => $settings['store_settings']->instapay_display_name ?? ($settings['store_settings']->instapay_account_name ?? ''),
                 'instapay_account_name' => $settings['store_settings']->instapay_account_name ?? '',
                 'instapay_handle' => $settings['store_settings']->instapay_handle ?? '',
                 'instapay_instructions' => $settings['store_settings']->instapay_instructions ?? '',

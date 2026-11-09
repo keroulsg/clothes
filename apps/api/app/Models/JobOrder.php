@@ -20,6 +20,7 @@ class JobOrder extends Model
         'customer_name',
         'service_type',
         'garment_model_id',
+        'assigned_employee_id',
         'production_order_id',
         'fabric_source',
         'trims_responsibility',
@@ -64,6 +65,11 @@ class JobOrder extends Model
     public function garmentModel(): BelongsTo
     {
         return $this->belongsTo(GarmentModel::class);
+    }
+
+    public function assignedEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'assigned_employee_id');
     }
 
     public function productionOrder(): BelongsTo

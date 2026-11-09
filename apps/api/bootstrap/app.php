@@ -13,9 +13,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(\App\Http\Middleware\AssignCorrelationId::class);
+
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureRole::class,
             'quota' => \App\Http\Middleware\EnsureTenantWithinUsageLimit::class,
+            'marketplace.entitled' => \App\Http\Middleware\EnsureTenantHasMarketplaceEntitlement::class,
+            'feature' => \App\Http\Middleware\EnsureFeatureEntitlement::class,
         ]);
 
         // منع إعادة توجيه طلبات الـ API إلى صفحة ويب غير موجودة

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\CuttingBundle;
 use App\Models\Employee;
 use App\Models\EmployeeAdjustment;
 use App\Models\Payroll;
@@ -61,10 +62,84 @@ class HrController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $employee = Employee::where('tenant_id', $tenantId)
-            ->with(['branch', 'pieceWorkLogs' => fn($q) => $q->latest()->limit(10), 'attendances' => fn($q) => $q->latest()->limit(10)])
+            ->with([
+                'branch',
+                'assignedBundles.cuttingOrder',
+                'assignedBundles.productionOrder',
+                'pieceWorkLogs' => fn($q) => $q->latest('work_date')->limit(60),
+                'attendances' => fn($q) => $q->latest('attendance_date')->limit(60),
+                'adjustments' => fn($q) => $q->latest('adjustment_date')->limit(60),
+                'payrollItems.payroll' => fn($q) => $q->latest()->limit(20),
+            ])
             ->findOrFail($id);
 
-        return response()->json($employee);
+        $totalPiecesCompleted = (int) PieceWorkLog::where('tenant_id', $tenantId)
+            ->where('employee_id', $employee->id)
+            ->where('status', '!=', 'rejected')
+            ->sum('completed_quantity');
+
+        $totalPieceEarnings = (float) PieceWorkLog::where('tenant_id', $tenantId)
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', ['approved', 'verified', 'paid'])
+            ->sum('total_amount');
+
+        $activeBundlesCount = CuttingBundle::where('tenant_id', $tenantId)
+            ->where('assigned_employee_id', $employee->id)
+            ->whereIn('status', ['active', 'rework', 'held_for_qc'])
+            ->count();
+
+        $attendancesCount = Attendance::where('tenant_id', $tenantId)
+            ->where('employee_id', $employee->id)
+            ->count();
+
+        $advancesQuery = EmployeeAdjustment::where('tenant_id', $tenantId)
+            ->where('employee_id', $employee->id)
+            ->whereIn('type', ['advance', 'advance_repayment']);
+
+        $totalAdvancesTaken = (float) (clone $advancesQuery)
+            ->whereIn('status', ['approved', 'settled'])
+            ->sum('amount');
+
+        $totalAdvancesPaid = (float) (clone $advancesQuery)
+            ->whereIn('status', ['approved', 'settled'])
+            ->sum('paid_amount');
+
+        $remainingAdvancesBalance = (float) (clone $advancesQuery)
+            ->where('status', 'approved')
+            ->where(function ($q) {
+                $q->where('remaining_balance', '>', 0)
+                  ->orWhereNull('remaining_balance');
+            })
+            ->sum('remaining_balance');
+
+        // البحث عن أوامر صالة القص وأوامر التشغيل للغير المرتبطة بهذا الفني/العامل
+        $cuttingOrders = \App\Models\CuttingOrder::where('tenant_id', $tenantId)
+            ->where(function ($q) use ($employee) {
+                $q->whereHas('bundles', function ($bQ) use ($employee) {
+                    $bQ->where('assigned_employee_id', $employee->id);
+                })
+                ->orWhere('notes', 'like', "%{$employee->name}%")
+                ->orWhere('notes', 'like', "%{$employee->employee_code}%");
+            })
+            ->with(['fabricColor', 'customerMaterial', 'productionOrder', 'jobOrder'])
+            ->latest()
+            ->limit(30)
+            ->get();
+
+        return response()->json([
+            'employee' => $employee,
+            'cutting_orders' => $cuttingOrders,
+            'statistics' => [
+                'total_pieces_completed' => $totalPiecesCompleted,
+                'total_piece_earnings' => round($totalPieceEarnings, 2),
+                'active_bundles_count' => $activeBundlesCount,
+                'attendances_count' => $attendancesCount,
+                'total_advances_taken' => round($totalAdvancesTaken, 2),
+                'total_advances_paid' => round($totalAdvancesPaid, 2),
+                'remaining_advances_balance' => round($remainingAdvancesBalance, 2),
+                'assigned_cutting_orders_count' => $cuttingOrders->count(),
+            ],
+        ]);
     }
 
     public function storeEmployee(Request $request): JsonResponse
@@ -74,10 +149,13 @@ class HrController extends Controller
             'name' => 'required|string|max:255',
             'department' => 'required|string|max:50',
             'job_title' => 'required|string|max:100',
-            'pay_type' => 'required|string|in:piece_rate,fixed_salary,hourly,daily,hybrid',
+            'pay_type' => 'required|string|in:piece_rate,fixed_salary,hourly,daily,weekly,shift_based,hybrid',
             'base_salary' => 'nullable|numeric|min:0',
             'hourly_rate' => 'nullable|numeric|min:0',
             'daily_rate' => 'nullable|numeric|min:0',
+            'weekly_rate' => 'nullable|numeric|min:0',
+            'shift_rate' => 'nullable|numeric|min:0',
+            'skills' => 'nullable|array',
             'shift_name' => 'nullable|string|max:50',
             'hire_date' => 'nullable|date',
             'branch_id' => 'nullable|uuid',
@@ -108,6 +186,9 @@ class HrController extends Controller
             'base_salary' => $validated['base_salary'] ?? 0,
             'hourly_rate' => $validated['hourly_rate'] ?? 0,
             'daily_rate' => $validated['daily_rate'] ?? 0,
+            'weekly_rate' => $validated['weekly_rate'] ?? 0,
+            'shift_rate' => $validated['shift_rate'] ?? 0,
+            'skills' => $validated['skills'] ?? null,
             'shift_name' => $validated['shift_name'] ?? 'morning',
             'hire_date' => $validated['hire_date'] ?? now()->toDateString(),
             'phone' => $validated['phone'] ?? null,
@@ -131,10 +212,13 @@ class HrController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'department' => 'sometimes|required|string|max:50',
             'job_title' => 'sometimes|required|string|max:100',
-            'pay_type' => 'sometimes|required|string|in:piece_rate,fixed_salary,hourly,daily,hybrid',
+            'pay_type' => 'sometimes|required|string|in:piece_rate,fixed_salary,hourly,daily,weekly,shift_based,hybrid',
             'base_salary' => 'nullable|numeric|min:0',
             'hourly_rate' => 'nullable|numeric|min:0',
             'daily_rate' => 'nullable|numeric|min:0',
+            'weekly_rate' => 'nullable|numeric|min:0',
+            'shift_rate' => 'nullable|numeric|min:0',
+            'skills' => 'nullable|array',
             'shift_name' => 'nullable|string|max:50',
             'hire_date' => 'nullable|date',
             'termination_date' => 'nullable|date',
@@ -165,6 +249,38 @@ class HrController extends Controller
         ]);
     }
 
+    public function destroyEmployee(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $employee = Employee::where('tenant_id', $tenantId)->findOrFail($id);
+
+        // فحص ما إذا كان للموظف مسيرات رواتب أو بنود مالية معتمدة سابقة
+        $hasPayrollHistory = \App\Models\PayrollItem::where('employee_id', $employee->id)->exists();
+
+        if ($hasPayrollHistory) {
+            // أرشفة وتعطيل بأمان لحماية النزاهة المحاسبية
+            $employee->update(['is_active' => false]);
+            return response()->json([
+                'message' => "تم أرشفة وتعطيل حساب العامل ({$employee->name}) بأمان، حيث ترتبط به مسيرات مالية سابقة لا يمكن حذفها تجنباً لخلل الدفاتر.",
+                'deactivated' => true,
+                'deleted' => false,
+            ]);
+        }
+
+        // في حال عدم وجود مسيرات، يمكن حذف السجلات المرتبطة ثم حذف العامل
+        Attendance::where('employee_id', $employee->id)->delete();
+        PieceWorkLog::where('employee_id', $employee->id)->delete();
+        EmployeeAdjustment::where('employee_id', $employee->id)->delete();
+        CuttingBundle::where('assigned_employee_id', $employee->id)->update(['assigned_employee_id' => null]);
+        $employee->delete();
+
+        return response()->json([
+            'message' => "تم حذف سجل العامل ({$employee->name}) وبياناته بنجاح.",
+            'deleted' => true,
+            'deactivated' => false,
+        ]);
+    }
+
     // ==========================================
     // 2. الحضور والانصراف (Attendance & Working Time)
     // ==========================================
@@ -174,35 +290,44 @@ class HrController extends Controller
         $tenantId = app('current_tenant_id');
         $query = Attendance::where('tenant_id', $tenantId)->with(['employee', 'branch']);
 
-        if ($request->has('employee_id')) {
+        if ($request->has('employee_id') && !empty($request->query('employee_id')) && $request->query('employee_id') !== 'all') {
             $query->where('employee_id', $request->query('employee_id'));
         }
 
-        if ($request->has('attendance_date')) {
-            $query->where('attendance_date', $request->query('attendance_date'));
+        if ($request->has('attendance_date') && !empty($request->query('attendance_date')) && $request->query('attendance_date') !== 'all') {
+            $date = $request->query('attendance_date');
+            $query->where(function ($q) use ($date) {
+                $q->whereDate('attendance_date', $date)
+                  ->orWhere('attendance_date', 'like', "{$date}%");
+            });
         }
 
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->whereBetween('attendance_date', [$request->query('start_date'), $request->query('end_date')]);
         }
 
-        if ($request->has('status') && $request->query('status') !== 'all') {
+        if ($request->has('status') && !empty($request->query('status')) && $request->query('status') !== 'all') {
             $query->where('status', $request->query('status'));
         }
 
-        $attendances = $query->latest('attendance_date')->paginate(25);
+        $perPage = (int) $request->query('per_page', 50);
+        $attendances = $query->latest('attendance_date')->latest('created_at')->paginate($perPage);
 
         return response()->json($attendances);
     }
 
     public function storeAttendance(Request $request): JsonResponse
     {
+        if ($request->input('status') === 'leave') {
+            $request->merge(['status' => 'excused_leave']);
+        }
+
         $validated = $request->validate([
             'employee_id' => 'required|uuid',
             'attendance_date' => 'required|date',
             'check_in' => 'nullable|string',
             'check_out' => 'nullable|string',
-            'status' => 'required|string|in:present,absent,late,excused_leave,unexcused_leave,half_day',
+            'status' => 'required|string|in:present,absent,late,leave,excused_leave,unexcused_leave,half_day',
             'working_hours' => 'nullable|numeric|min:0',
             'overtime_hours' => 'nullable|numeric|min:0',
             'late_minutes' => 'nullable|integer|min:0',
@@ -211,8 +336,13 @@ class HrController extends Controller
             'branch_id' => 'nullable|uuid',
         ]);
 
+        if ($validated['status'] === 'leave') {
+            $validated['status'] = 'excused_leave';
+        }
+
         try {
-            $attendance = $this->payrollService->recordAttendance($validated, $request->user()->id);
+            $userId = $request->user()?->id ?? 'system';
+            $attendance = $this->payrollService->recordAttendance($validated, $userId);
 
             return response()->json([
                 'message' => 'تم تسجيل حضور وانصراف العامل بنجاح',
@@ -228,8 +358,12 @@ class HrController extends Controller
 
     public function updateAttendance(Request $request, string $id): JsonResponse
     {
+        if ($request->input('status') === 'leave') {
+            $request->merge(['status' => 'excused_leave']);
+        }
+
         $validated = $request->validate([
-            'status' => 'sometimes|required|string|in:present,absent,late,excused_leave,unexcused_leave,half_day',
+            'status' => 'sometimes|required|string|in:present,absent,late,leave,excused_leave,unexcused_leave,half_day',
             'check_in' => 'nullable|string',
             'check_out' => 'nullable|string',
             'working_hours' => 'nullable|numeric|min:0',
@@ -239,11 +373,59 @@ class HrController extends Controller
             'correction_reason' => 'required|string|max:255',
         ]);
 
-        $attendance = $this->payrollService->updateAttendance($id, $validated, $request->user()->id);
+        if (isset($validated['status']) && $validated['status'] === 'leave') {
+            $validated['status'] = 'excused_leave';
+        }
+
+        $userId = $request->user()?->id ?? 'system';
+        $attendance = $this->payrollService->updateAttendance($id, $validated, $userId);
 
         return response()->json([
             'message' => 'تم تصحيح سجل الحضور وتوثيق سبب التعديل بنجاح',
             'attendance' => $attendance,
+        ]);
+    }
+
+    public function bulkAttendance(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'records' => 'required|array|min:1',
+            'records.*.employee_id' => 'required|uuid',
+            'records.*.attendance_date' => 'required|date',
+            'records.*.status' => 'required|string|in:present,absent,late,excused_leave,unexcused_leave,half_day',
+            'records.*.check_in' => 'nullable|string',
+            'records.*.check_out' => 'nullable|string',
+            'records.*.working_hours' => 'nullable|numeric|min:0',
+            'records.*.overtime_hours' => 'nullable|numeric|min:0',
+            'records.*.late_minutes' => 'nullable|integer|min:0',
+            'records.*.is_payable' => 'nullable|boolean',
+            'records.*.notes' => 'nullable|string|max:255',
+        ]);
+
+        $userId = $request->user()?->id ?: 1;
+        $created = [];
+        $errors = [];
+
+        foreach ($validated['records'] as $index => $row) {
+            try {
+                $created[] = $this->payrollService->recordAttendance($row, $userId);
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'index' => $index,
+                    'employee_id' => $row['employee_id'],
+                    'date' => $row['attendance_date'],
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تمت معالجة تسجيل الحضور الجماعي بنجاح.',
+            'created_count' => count($created),
+            'errors_count' => count($errors),
+            'errors' => $errors,
+            'attendances' => $created,
         ]);
     }
 
@@ -275,18 +457,25 @@ class HrController extends Controller
 
     public function storeAdjustment(Request $request): JsonResponse
     {
+        if (!$request->has('adjustment_date') && $request->has('effective_date')) {
+            $request->merge(['adjustment_date' => $request->input('effective_date')]);
+        }
+
         $validated = $request->validate([
             'employee_id' => 'required|uuid',
             'type' => 'required|string|in:advance,advance_repayment,allowance,bonus,deduction',
             'amount' => 'required|numeric|min:0.01',
             'currency' => 'nullable|string|max:10',
+            'installments_count' => 'nullable|integer|min:1|max:60',
+            'installment_amount' => 'nullable|numeric|min:0.01',
             'adjustment_date' => 'required|date',
             'payroll_period' => 'nullable|string|max:50',
             'reason' => 'required|string|max:255',
             'notes' => 'nullable|string',
         ]);
 
-        $adj = $this->payrollService->createEmployeeAdjustment($validated, $request->user()->id);
+        $userId = $request->user()?->id ?? 'system';
+        $adj = $this->payrollService->createEmployeeAdjustment($validated, $userId);
 
         return response()->json([
             'message' => 'تم تسجيل طلب التسوية/السلفة بنجاح وهو بانتظار الاعتماد',
@@ -296,7 +485,8 @@ class HrController extends Controller
 
     public function approveAdjustment(Request $request, string $id): JsonResponse
     {
-        $adj = $this->payrollService->approveEmployeeAdjustment($id, $request->user()->id);
+        $userId = $request->user()?->id ?? 'system';
+        $adj = $this->payrollService->approveEmployeeAdjustment($id, $userId);
 
         return response()->json([
             'message' => 'تم اعتماد السلفة/التسوية المالية بنجاح وستدرج في المسير',
@@ -310,7 +500,8 @@ class HrController extends Controller
             'reason' => 'required|string|max:255',
         ]);
 
-        $adj = $this->payrollService->rejectEmployeeAdjustment($id, $request->user()->id, $validated['reason']);
+        $userId = $request->user()?->id ?? 'system';
+        $adj = $this->payrollService->rejectEmployeeAdjustment($id, $userId, $validated['reason']);
 
         return response()->json([
             'message' => 'تم رفض السلفة/التعديل المالي بنجاح',
@@ -390,7 +581,8 @@ class HrController extends Controller
 
     public function approvePieceWorkLog(Request $request, string $id): JsonResponse
     {
-        $log = $this->payrollService->approvePieceWorkLog($id, $request->user()->id);
+        $userId = $request->user()?->id ?? 'system';
+        $log = $this->payrollService->approvePieceWorkLog($id, $userId);
 
         return response()->json([
             'message' => 'تم اعتماد سجل إنتاجية العامل بنجاح',
@@ -404,7 +596,8 @@ class HrController extends Controller
             'rejection_reason' => 'required|string|max:255',
         ]);
 
-        $log = $this->payrollService->rejectPieceWorkLog($id, $request->user()->id, $validated['rejection_reason']);
+        $userId = $request->user()?->id ?? 'system';
+        $log = $this->payrollService->rejectPieceWorkLog($id, $userId, $validated['rejection_reason']);
 
         return response()->json([
             'message' => 'تم رفض سجل الإنتاجية وتوثيق سبب الرفض بنجاح',
@@ -604,6 +797,25 @@ class HrController extends Controller
         ]);
     }
 
+    public function recalculatePayroll(Request $request, string $id): JsonResponse
+    {
+        $payroll = $this->payrollService->recalculatePayroll($id);
+
+        return response()->json([
+            'message' => 'تمت إعادة احتساب مسير الرواتب وتحديث كافة السلف والخصومات بنجاح',
+            'payroll' => $payroll,
+        ]);
+    }
+
+    public function destroyPayroll(string $id): JsonResponse
+    {
+        $this->payrollService->destroyPayroll($id);
+
+        return response()->json([
+            'message' => 'تم حذف مسير الرواتب وإلغاء تسوياته وإعادة السلف للحالة المعتمدة بنجاح',
+        ]);
+    }
+
     public function recordPayment(Request $request, string $id): JsonResponse
     {
         $validated = $request->validate([
@@ -672,5 +884,79 @@ class HrController extends Controller
             ->get();
 
         return response()->json($payments);
+    }
+
+    public function payslip(string $id, string $itemId): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $payroll = Payroll::where('tenant_id', $tenantId)->findOrFail($id);
+        $item = \App\Models\PayrollItem::where('tenant_id', $tenantId)
+            ->where('payroll_id', $payroll->id)
+            ->with(['employee.branch'])
+            ->findOrFail($itemId);
+
+        $employee = $item->employee;
+
+        // إحصائيات حضور وانصراف الموظف خلال فترة المسير
+        $attendances = Attendance::where('tenant_id', $tenantId)
+            ->where('employee_id', $employee->id)
+            ->whereBetween('attendance_date', [$payroll->period_start, $payroll->period_end])
+            ->get();
+
+        // سجلات القطعة المنجزة للفترة
+        $pieceWorkLogs = PieceWorkLog::where('tenant_id', $tenantId)
+            ->where('employee_id', $employee->id)
+            ->whereBetween('work_date', [$payroll->period_start, $payroll->period_end])
+            ->whereIn('status', ['verified', 'approved', 'paid'])
+            ->with(['bundle', 'pieceRate'])
+            ->get();
+
+        // السلف والتسويات المرتبطة
+        $adjustments = EmployeeAdjustment::where('tenant_id', $tenantId)
+            ->where('settled_payroll_id', $payroll->id)
+            ->where('employee_id', $employee->id)
+            ->get();
+
+        // خصومات الجودة المرتبطة
+        $defectAdjustments = QualityDefectAdjustment::where('tenant_id', $tenantId)
+            ->where('settled_payroll_id', $payroll->id)
+            ->where('employee_id', $employee->id)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'payroll' => [
+                    'id' => $payroll->id,
+                    'period' => $payroll->payroll_period,
+                    'period_start' => $payroll->period_start,
+                    'period_end' => $payroll->period_end,
+                    'status' => $payroll->status,
+                ],
+                'employee' => [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'code' => $employee->employee_code,
+                    'job_title' => $employee->job_title,
+                    'department' => $employee->department,
+                    'pay_type' => $employee->pay_type,
+                    'branch_name' => $employee->branch?->name,
+                ],
+                'item' => $item,
+                'calculation_breakdown' => $item->calculation_breakdown,
+                'attendances_summary' => [
+                    'total_days' => $attendances->count(),
+                    'payable_days' => $attendances->where('is_payable', true)->where('status', '!=', 'absent')->count(),
+                    'total_working_hours' => (float)$attendances->sum('working_hours'),
+                    'total_overtime_hours' => (float)$attendances->sum('overtime_hours'),
+                ],
+                'piecework_summary' => [
+                    'total_pieces' => (int)$pieceWorkLogs->sum('completed_quantity'),
+                    'total_amount' => (float)$pieceWorkLogs->sum('total_amount'),
+                ],
+                'adjustments' => $adjustments,
+                'defect_adjustments' => $defectAdjustments,
+            ],
+        ]);
     }
 }

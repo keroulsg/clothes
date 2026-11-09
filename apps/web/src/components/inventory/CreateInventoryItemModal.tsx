@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { api } from '../../api/client';
@@ -23,43 +23,60 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
   isAr = true,
 }) => {
   const [targetCategory, setTargetCategory] = useState<'raw_materials' | 'finished_goods'>(defaultCategory);
-  const [warehouseId, setWarehouseId] = useState<string>(warehouses[0]?.id || '');
+  const [warehouseId, setWarehouseId] = useState<string>('');
   const [itemType, setItemType] = useState<string>(defaultCategory === 'raw_materials' ? 'fabric_raw' : 'finished_good');
   const [code, setCode] = useState<string>('');
   const [name, setName] = useState<string>('');
   const [unitOfMeasure, setUnitOfMeasure] = useState<string>(defaultCategory === 'raw_materials' ? 'kg' : 'piece');
-  const [initialBalance, setInitialBalance] = useState<number>(0);
-  const [averageCost, setAverageCost] = useState<number>(0);
-  const [reorderLevel, setReorderLevel] = useState<number>(10);
+  const [initialBalance, setInitialBalance] = useState<string>('');
+  const [averageCost, setAverageCost] = useState<string>('');
+  const [reorderLevel, setReorderLevel] = useState<string>('');
   
-  // Storage location
-  const [storageZone, setStorageZone] = useState<string>(isAr ? 'منطقة أ' : 'Zone A');
-  const [rackLocation, setRackLocation] = useState<string>('R-01');
-  const [shelfBinLocation, setShelfBinLocation] = useState<string>('BIN-01');
+  // Storage location (empty by default)
+  const [storageZone, setStorageZone] = useState<string>('');
+  const [rackLocation, setRackLocation] = useState<string>('');
+  const [shelfBinLocation, setShelfBinLocation] = useState<string>('');
 
-  // Specs
-  const [gsm, setGsm] = useState<number>(180);
-  const [usableWidth, setUsableWidth] = useState<number>(1.65);
-  const [rollCount, setRollCount] = useState<number>(1);
+  // Specs (empty by default)
+  const [gsm, setGsm] = useState<string>('');
+  const [usableWidth, setUsableWidth] = useState<string>('');
+  const [rollCount, setRollCount] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Reset fields to empty whenever modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setTargetCategory(defaultCategory);
+      setWarehouseId(warehouses[0]?.id || '');
+      setItemType(defaultCategory === 'raw_materials' ? 'fabric_raw' : 'finished_good');
+      setCode('');
+      setName('');
+      setUnitOfMeasure(defaultCategory === 'raw_materials' ? (isAr ? 'كجم' : 'kg') : (isAr ? 'قطعة' : 'piece'));
+      setInitialBalance('');
+      setAverageCost('');
+      setReorderLevel('');
+      setStorageZone('');
+      setRackLocation('');
+      setShelfBinLocation('');
+      setGsm('');
+      setUsableWidth('');
+      setRollCount('');
+      setErrorMsg(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen, defaultCategory, warehouses, isAr]);
+
   const handleCategorySwitch = (cat: 'raw_materials' | 'finished_goods') => {
     setTargetCategory(cat);
     if (cat === 'raw_materials') {
       setItemType('fabric_raw');
-      setUnitOfMeasure('kg');
-      if (!code.startsWith('FAB-') && !code.startsWith('ACC-')) {
-        setCode(`FAB-${Math.floor(1000 + Math.random() * 9000)}`);
-      }
+      setUnitOfMeasure(isAr ? 'كجم' : 'kg');
     } else {
       setItemType('finished_good');
-      setUnitOfMeasure('piece');
-      if (!code.startsWith('FG-')) {
-        setCode(`FG-${Math.floor(1000 + Math.random() * 9000)}`);
-      }
+      setUnitOfMeasure(isAr ? 'قطعة' : 'piece');
     }
   };
 
@@ -80,15 +97,15 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
 
     try {
       const technical_specs: Record<string, any> = {
-        storage_zone: storageZone,
-        rack_location: rackLocation,
-        shelf_bin_location: shelfBinLocation,
+        storage_zone: storageZone.trim() || undefined,
+        rack_location: rackLocation.trim() || undefined,
+        shelf_bin_location: shelfBinLocation.trim() || undefined,
       };
 
       if (targetCategory === 'raw_materials') {
-        technical_specs.gsm = Number(gsm);
-        technical_specs.usable_width_meters = Number(usableWidth);
-        technical_specs.roll_count = Number(rollCount);
+        if (gsm) technical_specs.gsm = Number(gsm);
+        if (usableWidth) technical_specs.usable_width_meters = Number(usableWidth);
+        if (rollCount) technical_specs.roll_count = Number(rollCount);
       }
 
       const res = await api.inventory.createItem({
@@ -96,13 +113,13 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
         item_type: itemType,
         code: code.trim(),
         name: name.trim(),
-        unit_of_measure: unitOfMeasure,
-        reorder_level: Number(reorderLevel),
-        average_cost: Number(averageCost),
-        initial_balance: Number(initialBalance),
-        storage_zone: storageZone,
-        rack_location: rackLocation,
-        shelf_bin_location: shelfBinLocation,
+        unit_of_measure: unitOfMeasure.trim() || (targetCategory === 'raw_materials' ? 'kg' : 'piece'),
+        reorder_level: Number(reorderLevel) || 0,
+        average_cost: Number(averageCost) || 0,
+        initial_balance: Number(initialBalance) || 0,
+        storage_zone: storageZone.trim() || undefined,
+        rack_location: rackLocation.trim() || undefined,
+        shelf_bin_location: shelfBinLocation.trim() || undefined,
         technical_specs,
       });
 
@@ -121,7 +138,16 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isAr ? 'تعريف كارت صنف مخزني وموضع التخزين' : 'New Inventory Item & Bin Location'} maxWidth="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        isAr
+          ? (targetCategory === 'raw_materials' ? 'إضافة خامة أو مستلزم إنتاج جديد' : 'إضافة منتج تام الصنع للرصيد المخزني')
+          : (targetCategory === 'raw_materials' ? 'New Raw Material / Trim' : 'New Finished Good Stock Card')
+      }
+      maxWidth="lg"
+    >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {/* Category Tabs */}
         <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
@@ -258,7 +284,7 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="text"
                 value={storageZone}
                 onChange={(e) => setStorageZone(e.target.value)}
-                placeholder={isAr ? 'منطقة أ' : 'Zone A'}
+                placeholder={isAr ? 'مثال: صالة أ / قسم الأقمشة' : 'e.g. Zone A'}
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -270,7 +296,7 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="text"
                 value={rackLocation}
                 onChange={(e) => setRackLocation(e.target.value)}
-                placeholder="RACK-04"
+                placeholder="مثال: R-01"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -282,7 +308,7 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="text"
                 value={shelfBinLocation}
                 onChange={(e) => setShelfBinLocation(e.target.value)}
-                placeholder="BIN-18"
+                placeholder="مثال: BIN-01"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -299,6 +325,7 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
               type="text"
               value={unitOfMeasure}
               onChange={(e) => setUnitOfMeasure(e.target.value)}
+              placeholder={targetCategory === 'raw_materials' ? 'كجم / متر' : 'قطعة'}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-slate-100"
             />
           </div>
@@ -312,7 +339,8 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
               step="any"
               min="0"
               value={initialBalance}
-              onChange={(e) => setInitialBalance(Number(e.target.value))}
+              onChange={(e) => setInitialBalance(e.target.value)}
+              placeholder="0"
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-slate-100 font-mono"
             />
           </div>
@@ -326,7 +354,8 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
               step="any"
               min="0"
               value={averageCost}
-              onChange={(e) => setAverageCost(Number(e.target.value))}
+              onChange={(e) => setAverageCost(e.target.value)}
+              placeholder="0.00"
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-slate-100 font-mono"
             />
           </div>
@@ -340,7 +369,8 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
               step="any"
               min="0"
               value={reorderLevel}
-              onChange={(e) => setReorderLevel(Number(e.target.value))}
+              onChange={(e) => setReorderLevel(e.target.value)}
+              placeholder="10"
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-slate-900 dark:text-slate-100 font-mono"
             />
           </div>
@@ -357,7 +387,8 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="number"
                 step="any"
                 value={gsm}
-                onChange={(e) => setGsm(Number(e.target.value))}
+                onChange={(e) => setGsm(e.target.value)}
+                placeholder="مثال: 180"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100 font-mono"
               />
             </div>
@@ -369,7 +400,8 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="number"
                 step="any"
                 value={usableWidth}
-                onChange={(e) => setUsableWidth(Number(e.target.value))}
+                onChange={(e) => setUsableWidth(e.target.value)}
+                placeholder="مثال: 1.65"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100 font-mono"
               />
             </div>
@@ -381,7 +413,8 @@ export const CreateInventoryItemModal: React.FC<CreateInventoryItemModalProps> =
                 type="number"
                 min="1"
                 value={rollCount}
-                onChange={(e) => setRollCount(Number(e.target.value))}
+                onChange={(e) => setRollCount(e.target.value)}
+                placeholder="مثال: 1"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 text-xs text-slate-900 dark:text-slate-100 font-mono"
               />
             </div>

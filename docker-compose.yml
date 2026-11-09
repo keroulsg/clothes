@@ -1,0 +1,194 @@
+# ==============================================================================
+# GarmentOS Cloud — Production-Like Docker Compose Orchestration
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database Service (Postgres 16 Alpine)
+  # Isolated to internal Docker network; no public port exposure
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: garmentos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-garmentos}
+      POSTGRES_USER: ${DB_USERNAME:-garmentos_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+    volumes:
+      - garmentos_pg_data:/var/lib/postgresql/data
+    networks:
+      - garmentos-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-garmentos_user} -d ${DB_DATABASE:-garmentos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # Redis Cache, Queue & Session Broker (Redis 7 Alpine)
+  # Protected by password; isolated to internal Docker network
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: garmentos-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-garmentos_redis_secret}"]
+    volumes:
+      - garmentos_redis_data:/data
+    networks:
+      - garmentos-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-garmentos_redis_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Laravel 13 API Runtime (PHP 8.4-FPM)
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: garmentos-api
+    restart: unless-stopped
+    environment:
+      APP_NAME: "${APP_NAME:-GarmentOS Cloud}"
+      APP_ENV: "${APP_ENV:-production}"
+      APP_KEY: "${APP_KEY:-base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      APP_URL: "${APP_URL:-http://localhost}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-garmentos}
+      DB_USERNAME: ${DB_USERNAME:-garmentos_user}
+      DB_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-garmentos_redis_secret}
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      FILESYSTEM_DISK: local
+      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"
+    volumes:
+      - garmentos_storage:/var/www/html/storage
+    networks:
+      - garmentos-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # Background Queue Worker Service
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: garmentos-worker
+    restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "redis", "--queue=high,default,notifications", "--sleep=3", "--tries=3", "--max-time=3600", "--memory=256"]
+    environment:
+      APP_NAME: "${APP_NAME:-GarmentOS Cloud}"
+      APP_ENV: "${APP_ENV:-production}"
+      APP_KEY: "${APP_KEY:-base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-garmentos}
+      DB_USERNAME: ${DB_USERNAME:-garmentos_user}
+      DB_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-garmentos_redis_secret}
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+    volumes:
+      - garmentos_storage:/var/www/html/storage
+    networks:
+      - garmentos-internal
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # Laravel Task Scheduler (Distributed Lock Safe)
+  # ----------------------------------------------------------------------------
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: garmentos-scheduler
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      APP_NAME: "${APP_NAME:-GarmentOS Cloud}"
+      APP_ENV: "${APP_ENV:-production}"
+      APP_KEY: "${APP_KEY:-base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-garmentos}
+      DB_USERNAME: ${DB_USERNAME:-garmentos_user}
+      DB_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-garmentos_redis_secret}
+      CACHE_STORE: redis
+    volumes:
+      - garmentos_storage:/var/www/html/storage
+    networks:
+      - garmentos-internal
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # Web Reverse Proxy & Frontend (Nginx + React SPA)
+  # Only service exposed to host port 80 / 8080
+  # ----------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_APP_NAME: "GarmentOS Cloud"
+    container_name: garmentos-web
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:80"
+    volumes:
+      - garmentos_storage:/var/www/html/storage:ro
+    networks:
+      - garmentos-internal
+    depends_on:
+      api:
+        condition: service_started
+
+networks:
+  garmentos-internal:
+    driver: bridge
+
+volumes:
+  garmentos_pg_data:
+  garmentos_redis_data:
+  garmentos_storage:
+

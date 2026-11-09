@@ -8,6 +8,8 @@ use App\Models\GoodsReceiptNoteItem;
 use App\Models\InventoryItem;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseRequisition;
+use App\Models\PurchaseRequisitionItem;
 use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnItem;
 use App\Models\Supplier;
@@ -66,6 +68,11 @@ class ProcurementService
         return DB::transaction(function () use ($data, $tenantId, $supplier, $warehouse) {
             $poNumber = $data['po_number'] ?? ('PO-' . date('Ymd') . '-' . rand(100, 999));
 
+            // استرجاع إعدادات الضريبة من الشركة: افتراضياً معطلة (0.0%) للشركات الجديدة
+            $tenant = \App\Models\Tenant::find($tenantId);
+            $taxSettings = $tenant?->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+            $defaultTaxRate = (!empty($taxSettings['enabled']) && isset($taxSettings['rate'])) ? (float) $taxSettings['rate'] : 0.0;
+
             $subtotal = 0;
             $taxTotal = 0;
 
@@ -73,7 +80,7 @@ class ProcurementService
                 $qty = (float) $itemData['ordered_quantity'];
                 $price = (float) $itemData['unit_price'];
                 $lineSubtotal = $qty * $price;
-                $taxRate = isset($itemData['tax_rate']) ? (float) $itemData['tax_rate'] : 14.0;
+                $taxRate = isset($itemData['tax_rate']) ? (float) $itemData['tax_rate'] : (isset($data['tax_rate']) ? (float)$data['tax_rate'] : $defaultTaxRate);
                 $lineTax = ($lineSubtotal * $taxRate) / 100.0;
 
                 $subtotal += $lineSubtotal;
@@ -82,6 +89,7 @@ class ProcurementService
 
             $discountAmount = isset($data['discount_amount']) ? (float) $data['discount_amount'] : 0.0;
             $totalAmount = ($subtotal - $discountAmount) + $taxTotal;
+            $effectiveTaxRate = $subtotal > 0 ? round(($taxTotal / $subtotal) * 100, 2) : $defaultTaxRate;
 
             $po = PurchaseOrder::create([
                 'tenant_id' => $tenantId,
@@ -93,7 +101,7 @@ class ProcurementService
                 'status' => 'draft',
                 'subtotal' => round($subtotal, 4),
                 'discount_amount' => round($discountAmount, 4),
-                'tax_rate' => 14.0,
+                'tax_rate' => $effectiveTaxRate,
                 'tax_amount' => round($taxTotal, 4),
                 'total_amount' => round($totalAmount, 4),
                 'notes' => $data['notes'] ?? null,
@@ -103,7 +111,7 @@ class ProcurementService
             foreach ($data['items'] as $itemData) {
                 $qty = (float) $itemData['ordered_quantity'];
                 $price = (float) $itemData['unit_price'];
-                $taxRate = isset($itemData['tax_rate']) ? (float) $itemData['tax_rate'] : 14.0;
+                $taxRate = isset($itemData['tax_rate']) ? (float) $itemData['tax_rate'] : (isset($data['tax_rate']) ? (float)$data['tax_rate'] : $defaultTaxRate);
                 $lineTotal = ($qty * $price) + (($qty * $price * $taxRate) / 100.0);
 
                 PurchaseOrderItem::create([
@@ -192,7 +200,13 @@ class ProcurementService
                     throw new Exception("لا يمكن الاستلام على أمر شراء بح حالة [{$po->status}]. يجب أن يكون معتمداً أو مستلماً جزئياً.");
                 }
 
-                $grnNumber = $data['grn_number'] ?? ('GRN-' . date('Ymd') . '-' . rand(100, 999));
+                $grnNumber = $data['grn_number'] ?? null;
+                if (!$grnNumber) {
+                    do {
+                        $candidateGrn = 'GRN-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+                    } while (GoodsReceiptNote::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('grn_number', $candidateGrn)->exists());
+                    $grnNumber = $candidateGrn;
+                }
 
                 try {
                     $grn = GoodsReceiptNote::create([
@@ -324,8 +338,12 @@ class ProcurementService
         $tenantId = $contextTenantId;
         $idempotencyKey = $data['idempotency_key'] ?? null;
 
+        $tenant = \App\Models\Tenant::find($tenantId);
+        $taxSettings = $tenant?->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+        $defaultTaxRate = (!empty($taxSettings['enabled']) && isset($taxSettings['rate'])) ? (float) $taxSettings['rate'] : 0.0;
+
         $invoiceSubtotal = (float) $data['subtotal'];
-        $invoiceTax = isset($data['tax_amount']) ? (float) $data['tax_amount'] : ($invoiceSubtotal * 0.14);
+        $invoiceTax = isset($data['tax_amount']) ? (float) $data['tax_amount'] : round(($invoiceSubtotal * $defaultTaxRate) / 100.0, 4);
         $invoiceTotal = isset($data['total_amount']) ? (float) $data['total_amount'] : ($invoiceSubtotal + $invoiceTax);
         $grnId = $data['goods_receipt_note_id'] ?? null;
 
@@ -375,9 +393,13 @@ class ProcurementService
                     }
                 }
 
+                $tenantRecord = \App\Models\Tenant::find($tenantId);
+                $tenantTax = $tenantRecord?->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+                $configuredRate = (!empty($tenantTax['enabled']) && isset($tenantTax['rate'])) ? (float) $tenantTax['rate'] : 0.0;
+
                 $invoiceSubtotal = (float) $data['subtotal'];
-                $invoiceTax = isset($data['tax_amount']) ? (float) $data['tax_amount'] : ($invoiceSubtotal * 0.14);
-                $invoiceTotal = $invoiceSubtotal + $invoiceTax;
+                $invoiceTax = isset($data['tax_amount']) ? (float) $data['tax_amount'] : round(($invoiceSubtotal * $configuredRate) / 100.0, 4);
+                $invoiceTotal = isset($data['total_amount']) ? (float) $data['total_amount'] : ($invoiceSubtotal + $invoiceTax);
 
                 // كشف فروق المطابقة الثلاثية
                 $matchingStatus = 'matched';
@@ -638,5 +660,322 @@ class ProcurementService
         }
 
         return true;
+    }
+
+    /**
+     * قائمة طلبات الشراء
+     */
+    public function getPurchaseRequisitions(array $filters = [])
+    {
+        $tenantId = app('current_tenant_id');
+        $query = PurchaseRequisition::where('tenant_id', $tenantId)
+            ->with(['requester:id,name,email', 'approver:id,name,email', 'items.inventoryItem', 'branch', 'convertedPurchaseOrder']);
+
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (!empty($filters['priority'])) {
+            $query->where('priority', $filters['priority']);
+        }
+        if (!empty($filters['search'])) {
+            $s = $filters['search'];
+            $query->where(function ($q) use ($s) {
+                $q->where('requisition_number', 'like', "%{$s}%")
+                  ->orWhere('department', 'like', "%{$s}%")
+                  ->orWhere('reason', 'like', "%{$s}%");
+            });
+        }
+
+        return $query->latest()->paginate($filters['per_page'] ?? 20);
+    }
+
+    /**
+     * عرض تفاصيل طلب شراء محدد
+     */
+    public function getPurchaseRequisition(string $id): PurchaseRequisition
+    {
+        $tenantId = app('current_tenant_id');
+        return PurchaseRequisition::where('tenant_id', $tenantId)
+            ->with(['requester:id,name,email', 'approver:id,name,email', 'items.inventoryItem', 'branch', 'convertedPurchaseOrder'])
+            ->findOrFail($id);
+    }
+
+    /**
+     * إنشاء طلب شراء جديد
+     */
+    public function createPurchaseRequisition(array $data): PurchaseRequisition
+    {
+        $tenantId = app('current_tenant_id');
+        if (empty($tenantId)) {
+            throw new InvalidArgumentException('سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($data, $tenantId) {
+            $reqNumber = $data['requisition_number'] ?? ('PR-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
+            $estimatedTotal = 0;
+
+            if (empty($data['items']) || !is_array($data['items'])) {
+                throw new InvalidArgumentException('يجب إضافة صنف واحد على الأقل في طلب الشراء.');
+            }
+
+            foreach ($data['items'] as $item) {
+                $qty = (float)($item['requested_quantity'] ?? $item['quantity'] ?? 1);
+                $price = (float)($item['estimated_unit_price'] ?? $item['unit_price'] ?? 0);
+                $estimatedTotal += round($qty * $price, 4);
+            }
+
+            $requisition = PurchaseRequisition::create([
+                'tenant_id' => $tenantId,
+                'requisition_number' => $reqNumber,
+                'branch_id' => $data['branch_id'] ?? null,
+                'department' => $data['department'] ?? 'Purchasing',
+                'requested_by' => auth()->id() ?? $data['requested_by'] ?? null,
+                'requisition_date' => $data['requisition_date'] ?? now()->toDateString(),
+                'required_date' => $data['required_date'] ?? null,
+                'priority' => $data['priority'] ?? 'medium',
+                'status' => 'draft',
+                'estimated_total_cost' => round($estimatedTotal, 4),
+                'reason' => $data['reason'] ?? null,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            foreach ($data['items'] as $item) {
+                $qty = (float)($item['requested_quantity'] ?? $item['quantity'] ?? 1);
+                $price = (float)($item['estimated_unit_price'] ?? $item['unit_price'] ?? 0);
+                $lineTotal = round($qty * $price, 4);
+
+                PurchaseRequisitionItem::create([
+                    'tenant_id' => $tenantId,
+                    'purchase_requisition_id' => $requisition->id,
+                    'inventory_item_id' => $item['inventory_item_id'] ?? null,
+                    'item_name' => $item['item_name'] ?? 'مادة خام / مستلزم إنتاج',
+                    'requested_quantity' => $qty,
+                    'approved_quantity' => $qty,
+                    'unit_of_measure' => $item['unit_of_measure'] ?? 'pcs',
+                    'estimated_unit_price' => $price,
+                    'estimated_total_price' => $lineTotal,
+                    'specifications' => $item['specifications'] ?? null,
+                    'notes' => $item['notes'] ?? null,
+                ]);
+            }
+
+            return $requisition->load('items.inventoryItem');
+        });
+    }
+
+    /**
+     * إرسال طلب الشراء للاعتماد
+     */
+    public function submitPurchaseRequisition(string $id): PurchaseRequisition
+    {
+        $tenantId = app('current_tenant_id');
+        $requisition = PurchaseRequisition::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if ($requisition->status !== 'draft') {
+            throw new InvalidArgumentException("لا يمكن إرسال طلب شراء حالته الحالية ليست مسودة ({$requisition->status}).");
+        }
+
+        $requisition->status = 'submitted';
+        $requisition->save();
+
+        return $requisition->load('items.inventoryItem');
+    }
+
+    /**
+     * اعتماد طلب الشراء
+     */
+    public function approvePurchaseRequisition(string $id, array $data = []): PurchaseRequisition
+    {
+        $tenantId = app('current_tenant_id');
+        $requisition = PurchaseRequisition::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if (!in_array($requisition->status, ['draft', 'submitted'])) {
+            throw new InvalidArgumentException("لا يمكن اعتماد طلب شراء حالته ({$requisition->status}).");
+        }
+
+        return DB::transaction(function () use ($requisition, $data, $tenantId) {
+            // تحديث الكميات المعتمدة للبند إن وجدت
+            if (!empty($data['items']) && is_array($data['items'])) {
+                foreach ($data['items'] as $itemUpdate) {
+                    if (!empty($itemUpdate['id'])) {
+                        $item = PurchaseRequisitionItem::where('tenant_id', $tenantId)
+                            ->where('purchase_requisition_id', $requisition->id)
+                            ->where('id', $itemUpdate['id'])
+                            ->first();
+
+                        if ($item && isset($itemUpdate['approved_quantity'])) {
+                            $item->approved_quantity = (float)$itemUpdate['approved_quantity'];
+                            $item->estimated_total_price = round($item->approved_quantity * (float)$item->estimated_unit_price, 4);
+                            $item->save();
+                        }
+                    }
+                }
+            }
+
+            $requisition->status = 'approved';
+            $requisition->approved_by = auth()->id() ?? $data['approved_by'] ?? null;
+            $requisition->approved_at = now();
+            if (!empty($data['notes'])) {
+                $requisition->notes = ($requisition->notes ? $requisition->notes . "\n" : '') . $data['notes'];
+            }
+            $requisition->save();
+
+            return $requisition->load('items.inventoryItem');
+        });
+    }
+
+    /**
+     * رفض طلب الشراء
+     */
+    public function rejectPurchaseRequisition(string $id, string $reason): PurchaseRequisition
+    {
+        if (empty(trim($reason))) {
+            throw new InvalidArgumentException("سبب رفض طلب الشراء إلزامي ومطلوب.");
+        }
+
+        $tenantId = app('current_tenant_id');
+        $requisition = PurchaseRequisition::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if (in_array($requisition->status, ['converted', 'rejected', 'cancelled'])) {
+            throw new InvalidArgumentException("لا يمكن رفض طلب شراء في حالته الحالية ({$requisition->status}).");
+        }
+
+        $requisition->status = 'rejected';
+        $requisition->rejected_by = auth()->id();
+        $requisition->rejected_at = now();
+        $requisition->rejection_reason = $reason;
+        $requisition->save();
+
+        return $requisition->load('items.inventoryItem');
+    }
+
+    /**
+     * تحويل طلب الشراء المعتمد إلى أمر شراء رسمي (PO)
+     */
+    public function convertRequisitionToPurchaseOrder(string $id, array $poData = []): PurchaseOrder
+    {
+        $tenantId = app('current_tenant_id');
+        $requisition = PurchaseRequisition::where('tenant_id', $tenantId)
+            ->with('items.inventoryItem')
+            ->findOrFail($id);
+
+        if ($requisition->status !== 'approved') {
+            throw new InvalidArgumentException("فقط طلبات الشراء المعتمدة (Approved) يمكن تحويلها إلى أمر شراء. الحالة الحالية: {$requisition->status}");
+        }
+
+        if ($requisition->converted_purchase_order_id) {
+            throw new InvalidArgumentException("تم تحويل طلب الشراء هذا مسبقاً إلى أمر الشراء رقم: {$requisition->convertedPurchaseOrder?->po_number}");
+        }
+
+        $supplierId = $poData['supplier_id'] ?? null;
+        $warehouseId = $poData['warehouse_id'] ?? null;
+
+        if (empty($supplierId)) {
+            throw new InvalidArgumentException("المورد مطلوب ومحدد عند تحويل طلب الشراء إلى أمر شراء.");
+        }
+
+        if (empty($warehouseId)) {
+            // نأخذ أول مستودع افتراضي للشركة إذا لم يحدد
+            $warehouse = Warehouse::where('tenant_id', $tenantId)->where('is_active', true)->first();
+            if (!$warehouse) {
+                throw new InvalidArgumentException("المستودع مطلوب لتحويل طلب الشراء.");
+            }
+            $warehouseId = $warehouse->id;
+        }
+
+        return DB::transaction(function () use ($requisition, $poData, $supplierId, $warehouseId, $tenantId) {
+            $poItems = [];
+
+            foreach ($requisition->items as $reqItem) {
+                $qty = (float)($reqItem->approved_quantity > 0 ? $reqItem->approved_quantity : $reqItem->requested_quantity);
+                if ($qty <= 0) {
+                    continue;
+                }
+
+                $invItemId = $reqItem->inventory_item_id;
+
+                // إذا لم يكن الصنف مرتبطاً بصنف مخزني مسبقاً، نبحث عنه أو ننشئه في المستودع المحدد
+                if (empty($invItemId)) {
+                    $invItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('warehouse_id', $warehouseId)
+                        ->where('name', $reqItem->item_name)
+                        ->first();
+
+                    if (!$invItem) {
+                        $invCode = 'RAW-' . strtoupper(substr(uniqid(), -6));
+                        $invItem = InventoryItem::create([
+                            'tenant_id' => $tenantId,
+                            'warehouse_id' => $warehouseId,
+                            'code' => $invCode,
+                            'name' => $reqItem->item_name,
+                            'item_type' => 'raw_material',
+                            'unit_of_measure' => $reqItem->unit_of_measure ?? 'pcs',
+                            'current_balance' => 0,
+                            'reserved_balance' => 0,
+                            'average_cost' => (float)$reqItem->estimated_unit_price,
+                            'is_customer_owned' => false,
+                        ]);
+                    }
+                    $invItemId = $invItem->id;
+                    $reqItem->inventory_item_id = $invItemId;
+                    $reqItem->save();
+                }
+
+                $unitPrice = (float)($poData['items'][$reqItem->id]['unit_price'] ?? $reqItem->estimated_unit_price ?? 0);
+                if ($unitPrice <= 0 && $reqItem->inventoryItem) {
+                    $unitPrice = (float)$reqItem->inventoryItem->average_cost;
+                }
+
+                $poItems[] = [
+                    'inventory_item_id' => $invItemId,
+                    'ordered_quantity' => $qty,
+                    'unit_price' => $unitPrice,
+                    'discount_percent' => 0,
+                    'tax_rate' => $poData['tax_rate'] ?? 0,
+                ];
+            }
+
+            if (empty($poItems)) {
+                throw new InvalidArgumentException("لا توجد أصناف صالحة للتحويل في طلب الشراء.");
+            }
+
+            $orderData = [
+                'tenant_id' => $tenantId,
+                'supplier_id' => $supplierId,
+                'warehouse_id' => $warehouseId,
+                'order_date' => $poData['order_date'] ?? now()->toDateString(),
+                'expected_delivery_date' => $poData['expected_delivery_date'] ?? $requisition->required_date,
+                'notes' => "محول تلقائياً من طلب الشراء رقم: {$requisition->requisition_number}. " . ($poData['notes'] ?? ''),
+                'items' => $poItems,
+            ];
+
+            $purchaseOrder = $this->createPurchaseOrder($orderData);
+
+            $requisition->status = 'converted';
+            $requisition->converted_purchase_order_id = $purchaseOrder->id;
+            $requisition->converted_at = now();
+            $requisition->save();
+
+            return $purchaseOrder;
+        });
+    }
+
+    /**
+     * إلغاء طلب الشراء
+     */
+    public function cancelPurchaseRequisition(string $id, string $reason): PurchaseRequisition
+    {
+        $tenantId = app('current_tenant_id');
+        $requisition = PurchaseRequisition::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if ($requisition->status === 'converted') {
+            throw new InvalidArgumentException("لا يمكن إلغاء طلب شراء تم تحويله بالفعل إلى أمر شراء.");
+        }
+
+        $requisition->status = 'cancelled';
+        $requisition->notes = ($requisition->notes ? $requisition->notes . "\n" : '') . "تم الإلغاء: " . $reason;
+        $requisition->save();
+
+        return $requisition->load('items.inventoryItem');
     }
 }

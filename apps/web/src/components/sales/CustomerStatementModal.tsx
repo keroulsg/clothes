@@ -26,6 +26,8 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
   isAr = true,
 }) => {
   const [statement, setStatement] = useState<CustomerStatement | null>(null);
+  const [agingData, setAgingData] = useState<any | null>(null);
+  const [activeView, setActiveView] = useState<'statement' | 'aging'>('statement');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState('');
@@ -49,14 +51,33 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
     }
   };
 
+  const fetchAging = async () => {
+    if (!customerId) return;
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.customers.getCustomerAging(customerId);
+      setAgingData(res);
+    } catch (err: any) {
+      setErrorMsg(err.message || (isAr ? 'تعذر جلب تقرير أعمار الديون' : 'Failed to fetch customer aging report'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen && customerId) {
-      fetchStatement();
+      if (activeView === 'statement') {
+        fetchStatement();
+      } else {
+        fetchAging();
+      }
     } else {
       setStatement(null);
+      setAgingData(null);
       setErrorMsg(null);
     }
-  }, [isOpen, customerId]);
+  }, [isOpen, customerId, activeView]);
 
   const handleExportCsv = () => {
     if (!statement || !statement.lines.length) return;
@@ -115,12 +136,12 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
       onClose={onClose}
       title={
         isAr
-          ? `كشف حساب العميل: ${activeCust?.name || ''} (${activeCust?.code || ''})`
-          : `Customer Statement: ${activeCust?.name || ''} (${activeCust?.code || ''})`
+          ? `حساب ومديونية العميل: ${activeCust?.name || ''} (${activeCust?.code || ''})`
+          : `Customer Account & Aging: ${activeCust?.name || ''} (${activeCust?.code || ''})`
       }
       maxWidth="xl"
     >
-      <div className="space-y-4">
+      <div className="space-y-4 printable-sheet">
         {/* Customer Header Info */}
         {activeCust && (
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -157,7 +178,111 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
           </div>
         )}
 
-        {/* Financial KPI Summary Cards */}
+        {/* View Switcher */}
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 no-print">
+          <button
+            type="button"
+            onClick={() => setActiveView('statement')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              activeView === 'statement'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'كشف الحساب وحركات الفواتير' : 'Statement Ledger'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('aging')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              activeView === 'aging'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'تحليل أعمار الديون (Aging Report)' : 'Aging Report'}
+          </button>
+        </div>
+
+        {activeView === 'aging' ? (
+          <div>
+            {isLoading ? (
+              <div className="p-4 space-y-2">
+                <LoadingSkeleton count={4} />
+              </div>
+            ) : errorMsg ? (
+              <ErrorState
+                title={isAr ? 'خطأ في جلب تقرير أعمار الديون' : 'Error Loading Aging Report'}
+                message={errorMsg}
+                onRetry={fetchAging}
+              />
+            ) : !agingData ? (
+              <EmptyState
+                icon={<User className="w-10 h-10 text-slate-400" />}
+                title={isAr ? 'لا توجد بيانات متاحة' : 'No Data Available'}
+                description={isAr ? 'لم يتم العثور على فواتير مستحقة للتحليل.' : 'No outstanding balances found.'}
+              />
+            ) : (
+              <div className="space-y-4">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {isAr ? 'تاريخ الاستحقاق حتى اليوم:' : 'Aging as of:'} <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{agingData.as_of_date}</span>
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {isAr ? 'إجمالي الديون القائمة:' : 'Total Outstanding:'}{' '}
+                    <span className="font-mono text-primary text-sm">
+                      {Number(agingData.total_outstanding).toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+                    </span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/5">
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 block">
+                      {isAr ? '0 - 30 يوماً (سارية)' : '0 - 30 Days (Current)'}
+                    </span>
+                    <span className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-1 block">
+                      {Number(agingData.buckets?.['0_30'] || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 dark:bg-blue-500/5">
+                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 block">
+                      {isAr ? '31 - 60 يوماً' : '31 - 60 Days'}
+                    </span>
+                    <span className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-1 block">
+                      {Number(agingData.buckets?.['31_60'] || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/5">
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 block">
+                      {isAr ? '61 - 90 يوماً' : '61 - 90 Days'}
+                    </span>
+                    <span className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-1 block">
+                      {Number(agingData.buckets?.['61_90'] || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 dark:bg-rose-500/5">
+                    <span className="text-xs font-semibold text-rose-700 dark:text-rose-400 block">
+                      {isAr ? 'أكثر من 90 يوماً (متعثر)' : '91+ Days (Overdue)'}
+                    </span>
+                    <span className="text-lg font-bold font-mono text-slate-900 dark:text-white mt-1 block">
+                      {Number(agingData.buckets?.['91_plus'] || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Financial KPI Summary Cards */}
         {statement && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
@@ -198,7 +323,7 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
         )}
 
         {/* Filters and Actions Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs no-print">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -347,6 +472,8 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
 
         <div className="pt-2 flex justify-end">

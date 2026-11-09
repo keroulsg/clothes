@@ -19,13 +19,24 @@ class Rfq extends Model
         'tenant_id',
         'rfq_number',
         'title',
+        'model_name',
+        'garment_model_id',
+        'garment_category',
         'service_type',
+        'priority',
         'specifications',
         'target_quantity',
         'expected_delivery_date',
         'max_budget_per_piece',
         'fabric_responsibility',
+        'fabric_details',
+        'production_details',
+        'logistics',
+        'attachments',
         'status',
+        'published_at',
+        'terms_accepted_at',
+        'terms_version',
         'awarded_bid_id',
     ];
 
@@ -33,7 +44,18 @@ class Rfq extends Model
         'target_quantity' => 'integer',
         'expected_delivery_date' => 'date',
         'max_budget_per_piece' => 'decimal:4',
+        'fabric_details' => 'array',
+        'production_details' => 'array',
+        'logistics' => 'array',
+        'attachments' => 'array',
+        'published_at' => 'datetime',
+        'terms_accepted_at' => 'datetime',
     ];
+
+    public function garmentModel(): BelongsTo
+    {
+        return $this->belongsTo(GarmentModel::class, 'garment_model_id');
+    }
 
     public function tenant(): BelongsTo
     {

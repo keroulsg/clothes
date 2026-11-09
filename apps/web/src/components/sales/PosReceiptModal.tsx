@@ -118,7 +118,7 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
         <div className="flex justify-center p-2 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-x-auto">
           <div
             id="pos-thermal-receipt-print"
-            className="w-[80mm] max-w-full bg-white text-black p-4 rounded-lg border border-slate-300 shadow-md font-mono text-xs leading-relaxed select-none"
+            className="printable-voucher w-[80mm] max-w-full bg-white text-black p-4 rounded-lg border border-slate-300 shadow-md font-mono text-xs leading-relaxed select-none"
             style={{ width: '80mm', minHeight: '120mm' }}
             dir={isAr ? 'rtl' : 'ltr'}
           >

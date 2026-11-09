@@ -19,6 +19,7 @@ class ExternalOperation extends Model
         'production_order_id',
         'cutting_bundle_id',
         'subcontractor_name',
+        'assigned_employee_id',
         'operation_type',
         'sent_quantity',
         'received_accepted_quantity',
@@ -57,5 +58,10 @@ class ExternalOperation extends Model
     public function bundle(): BelongsTo
     {
         return $this->belongsTo(CuttingBundle::class, 'cutting_bundle_id');
+    }
+
+    public function assignedEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'assigned_employee_id');
     }
 }

@@ -117,7 +117,7 @@ export const ItemBarcodeLabelModal: React.FC<ItemBarcodeLabelModalProps> = ({
           <div
             ref={printRef}
             id="printable-barcode-label"
-            className={`bg-white text-black p-3 rounded-lg border-2 border-dashed border-slate-400 shadow-md flex flex-col justify-between font-sans ${
+            className={`printable-voucher bg-white text-black p-3 rounded-lg border-2 border-dashed border-slate-400 shadow-md flex flex-col justify-between font-sans ${
               labelFormat === 'thermal_80x50' ? 'w-[320px] min-h-[200px]' : 'w-[250px] min-h-[140px]'
             }`}
             style={{ color: '#000000', backgroundColor: '#ffffff' }}

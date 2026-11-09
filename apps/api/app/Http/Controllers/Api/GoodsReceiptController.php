@@ -22,7 +22,7 @@ class GoodsReceiptController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = GoodsReceiptNote::with(['supplier', 'warehouse', 'purchaseOrder'])->withCount('items');
+        $query = GoodsReceiptNote::with(['supplier', 'warehouse', 'purchaseOrder', 'items.inventoryItem'])->withCount('items');
 
         if ($request->has('purchase_order_id')) {
             $query->where('purchase_order_id', $request->purchase_order_id);

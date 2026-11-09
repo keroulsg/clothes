@@ -60,8 +60,13 @@ class SalesReturn extends Model
         return $this->hasMany(SalesReturnItem::class);
     }
 
-    public function refundVouchers(): HasMany
+    public function paymentVouchers(): HasMany
     {
         return $this->hasMany(PaymentVoucher::class, 'sales_return_id');
+    }
+
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
     }
 }

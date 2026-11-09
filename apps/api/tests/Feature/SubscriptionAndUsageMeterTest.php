@@ -32,6 +32,7 @@ class SubscriptionAndUsageMeterTest extends TestCase
             'name' => 'El-Nasr Apparel Co.',
             'domain' => 'elnasr.garmentos.test',
             'status' => 'active',
+            'plan_tier' => 'starter',
         ]);
 
         $this->tenantB = Tenant::create([
@@ -69,7 +70,7 @@ class SubscriptionAndUsageMeterTest extends TestCase
     {
         $this->service->seedDefaultPlans();
 
-        $plans = SubscriptionPlan::with('meters')->get();
+        $plans = SubscriptionPlan::where('product_category', 'erp')->with('meters')->get();
         $this->assertCount(3, $plans);
 
         $starter = $plans->where('code', 'starter')->first();
@@ -246,15 +247,20 @@ class SubscriptionAndUsageMeterTest extends TestCase
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->service->seedDefaultPlans();
 
+        // 1. طلب الترقية عبر API يفرض تقديم إثبات السداد (Stage C.4 / ADR-029)
         $response = $this->actingAs($this->ownerA, 'sanctum')
             ->postJson('/api/v1/subscription/upgrade', [
                 'plan_code' => 'pro',
                 'billing_cycle' => 'annual',
             ]);
 
-        $response->assertStatus(200);
-        $this->assertEquals('pro', $response->json('subscription.plan.code'));
-        $this->assertEquals('annual', $response->json('subscription.billing_cycle'));
+        $response->assertStatus(402);
+        $this->assertEquals('payment_required', $response->json('status'));
+
+        // 2. ترقية وتفعيل الباقة عبر الخدمة المركزية
+        $sub = $this->service->upgradeSubscription($this->tenantA->id, 'pro', 'annual');
+        $this->assertEquals('pro', $sub->plan->code);
+        $this->assertEquals('annual', $sub->billing_cycle);
 
         // فحص السعة بعد الترقية: مستخدمي Pro = 10
         $quotaCheck = $this->service->checkQuota($this->tenantA->id, 'active_users', 1);

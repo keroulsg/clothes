@@ -282,3 +282,126 @@ input:focus, select:focus, textarea:focus {
   background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+
+/* ───── Nano-Glow & Specular Glass Aesthetics (World-Class CoreUI / Nano-Design) ───── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04), inset 0 1px 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.gem-pod {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 14px -2px var(--gem-shadow, rgba(0,0,0,0.15)), inset 0 1px 1px 0 rgba(255, 255, 255, 0.55);
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gem-pod::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ───── Isolated Document Printing Engine (Universal Across ERP) ───── */
+@media print {
+  @page {
+    margin: 10mm 12mm;
+    size: A4 portrait;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* 1. When an isolated printable container (sheet, voucher, receipt, invoice) is present */
+  body:has(.printable-sheet, .printable-voucher, .printable-area) * {
+    visibility: hidden !important;
+  }
+
+  body:has(.printable-sheet, .printable-voucher, .printable-area) .printable-sheet,
+  body:has(.printable-sheet, .printable-voucher, .printable-area) .printable-sheet *,
+  body:has(.printable-sheet, .printable-voucher, .printable-area) .printable-voucher,
+  body:has(.printable-sheet, .printable-voucher, .printable-area) .printable-voucher *,
+  body:has(.printable-sheet, .printable-voucher, .printable-area) .printable-area,
+  body:has(.printable-sheet, .printable-voucher, .printable-area) .printable-area * {
+    visibility: visible !important;
+  }
+
+  .printable-sheet,
+  .printable-voucher,
+  .printable-area {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    z-index: 9999999 !important;
+    overflow: visible !important;
+  }
+
+  /* 2. Suppress application chrome, sidebars, headers, toolbars, and buttons */
+  header,
+  nav,
+  aside,
+  .sidebar,
+  .app-header,
+  button,
+  .no-print,
+  .no-print *,
+  .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 3. Universal high-contrast table formatting for crisp physical printing */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #475569 !important;
+    color: #000000 !important;
+    padding: 6px 10px !important;
+  }
+
+  thead th {
+    background-color: #f1f5f9 !important;
+    color: #000000 !important;
+    font-weight: bold !important;
+  }
+}
+

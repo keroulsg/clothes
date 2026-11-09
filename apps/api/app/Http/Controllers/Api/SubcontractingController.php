@@ -71,7 +71,7 @@ class SubcontractingController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $query = JobOrder::where('tenant_id', $tenantId)
-            ->with(['customer', 'garmentModel', 'items', 'invoices', 'deliveryNotes', 'materialReceipts', 'externalOperations'])
+            ->with(['customer', 'garmentModel', 'assignedEmployee', 'items', 'invoices', 'deliveryNotes', 'materialReceipts', 'externalOperations.assignedEmployee'])
             ->orderBy('created_at', 'desc');
 
         if ($request->has('status') && $request->status !== '') {
@@ -80,6 +80,22 @@ class SubcontractingController extends Controller
 
         if ($request->has('service_type') && $request->service_type !== '') {
             $query->where('service_type', $request->service_type);
+        }
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $perPage = (int) $request->query('per_page', 15);
+            $paginated = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $paginated->items(),
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                ],
+            ]);
         }
 
         return response()->json([
@@ -96,6 +112,7 @@ class SubcontractingController extends Controller
             'customer_id' => 'nullable|uuid',
             'service_type' => 'required|string|in:contract_cutting,cmt',
             'garment_model_id' => 'nullable|uuid',
+            'assigned_employee_id' => 'nullable|uuid',
             'production_order_id' => 'nullable|uuid',
             'fabric_source' => 'nullable|string|in:customer_supplied,factory_supplied,mixed',
             'trims_responsibility' => 'nullable|string|in:customer_supplied,factory_supplied,mixed',
@@ -327,14 +344,29 @@ class SubcontractingController extends Controller
     public function externalOperations(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $operations = ExternalOperation::where('tenant_id', $tenantId)
-            ->with(['jobOrder', 'productionOrder', 'bundle'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = ExternalOperation::where('tenant_id', $tenantId)
+            ->with(['jobOrder.customer', 'productionOrder', 'bundle', 'assignedEmployee'])
+            ->orderBy('created_at', 'desc');
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $perPage = (int) $request->query('per_page', 15);
+            $paginated = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $paginated->items(),
+                'meta' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                ],
+            ]);
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $operations,
+            'data' => $query->get(),
         ]);
     }
 
@@ -345,6 +377,7 @@ class SubcontractingController extends Controller
             'job_order_id' => 'nullable|uuid',
             'production_order_id' => 'nullable|uuid',
             'cutting_bundle_id' => 'nullable|uuid',
+            'assigned_employee_id' => 'nullable|uuid',
             'subcontractor_name' => 'required|string|max:255',
             'operation_type' => 'required|string|max:50',
             'sent_quantity' => 'required|integer|min:1',
@@ -418,6 +451,8 @@ class SubcontractingController extends Controller
             'received_accepted_quantity' => 'required|integer|min:0',
             'received_rejected_quantity' => 'nullable|integer|min:0',
             'scrap_quantity' => 'nullable|integer|min:0',
+            'assigned_employee_id' => 'nullable|uuid',
+            'worker_unit_rate' => 'nullable|numeric|min:0',
         ]);
 
         try {

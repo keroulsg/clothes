@@ -43,6 +43,18 @@ class PurchaseOrder extends Model
         'total_amount' => 'decimal:4',
     ];
 
+    protected $appends = ['supplier_name', 'warehouse_name'];
+
+    public function getSupplierNameAttribute(): ?string
+    {
+        return $this->supplier?->name;
+    }
+
+    public function getWarehouseNameAttribute(): ?string
+    {
+        return $this->warehouse?->name;
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);

@@ -12,10 +12,14 @@ import {
   Calculator,
   Printer,
   Eye,
-  BookOpen,
   RotateCw,
   CheckCircle2,
   Clock,
+  ArrowRightLeft,
+  Lock,
+  Unlock,
+  ShieldCheck,
+  FolderTree,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -27,7 +31,19 @@ import { api } from '../../api/client';
 import { FinancialReportsView } from './FinancialReportsView';
 import { AccountStatementModal } from './AccountStatementModal';
 import { CalculateCostModal } from './CalculateCostModal';
-import type { Language, ChartOfAccount, JournalEntry, ProductionCostSheet, PaymentVoucher } from '../../types';
+import type {
+  Language,
+  ChartOfAccount,
+  JournalEntry,
+  ProductionCostSheet,
+  PaymentVoucher,
+  FinancialAccount,
+  FinancialAccountTransfer,
+  CostCenter,
+  FiscalYear,
+  FiscalPeriod,
+  ReconciliationResult,
+} from '../../types';
 
 interface AccountingTabProps {
   lang: Language;
@@ -35,21 +51,45 @@ interface AccountingTabProps {
 
 export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const isAr = lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'journals' | 'vouchers' | 'costing' | 'reports'>('accounts');
+  const [activeSubTab, setActiveSubTab] = useState<
+    'accounts' | 'journals' | 'financial_accounts' | 'reconciliation' | 'cost_centers' | 'fiscal_periods' | 'vouchers' | 'costing' | 'reports'
+  >('accounts');
+
+  // Modals visibility
   const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [isCalcCostModalOpen, setIsCalcCostModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [isFinancialAccModalOpen, setIsFinancialAccModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isCostCenterModalOpen, setIsCostCenterModalOpen] = useState(false);
+  const [isFiscalYearModalOpen, setIsFiscalYearModalOpen] = useState(false);
+  const [isReversalModalOpen, setIsReversalModalOpen] = useState(false);
+  const [isPeriodReopenModalOpen, setIsPeriodReopenModalOpen] = useState(false);
+
   const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+  const [reversalTarget, setReversalTarget] = useState<{ type: 'journal' | 'transfer'; id: string; number: string } | null>(null);
+  const [reversalReason, setReversalReason] = useState('');
+  const [selectedPeriodForReopen, setSelectedPeriodForReopen] = useState<FiscalPeriod | null>(null);
+  const [periodReopenReason, setPeriodReopenReason] = useState('');
+
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Core Data Lists
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [journals, setJournals] = useState<JournalEntry[]>([]);
   const [vouchers, setVouchers] = useState<PaymentVoucher[]>([]);
   const [costSheets, setCostSheets] = useState<ProductionCostSheet[]>([]);
+  const [financialAccounts, setFinancialAccounts] = useState<FinancialAccount[]>([]);
+  const [transfers, setTransfers] = useState<FinancialAccountTransfer[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+  const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
+  const [arReconciliation, setArReconciliation] = useState<ReconciliationResult | null>(null);
+  const [apReconciliation, setApReconciliation] = useState<ReconciliationResult | null>(null);
 
   // Load accounting data from server
   const loadAccountingData = async () => {
@@ -82,20 +122,64 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
     }
   };
 
+  const loadFinancialAccounts = async () => {
+    try {
+      const [accs, trfs] = await Promise.all([
+        api.accounting.getFinancialAccounts(),
+        api.accounting.getTransfers(1),
+      ]);
+      if (Array.isArray(accs)) setFinancialAccounts(accs);
+      if (trfs?.data) setTransfers(trfs.data);
+    } catch (err) {}
+  };
+
+  const loadCostCenters = async () => {
+    try {
+      const res = await api.accounting.getCostCenters();
+      if (Array.isArray(res)) setCostCenters(res);
+    } catch (err) {}
+  };
+
+  const loadFiscalYears = async () => {
+    try {
+      const res = await api.accounting.getFiscalYears();
+      if (Array.isArray(res)) setFiscalYears(res);
+    } catch (err) {}
+  };
+
+  const loadReconciliation = async () => {
+    try {
+      const [ar, ap] = await Promise.all([
+        api.accounting.reconcileAR(),
+        api.accounting.reconcileAP(),
+      ]);
+      setArReconciliation(ar);
+      setApReconciliation(ap);
+    } catch (err) {}
+  };
+
   useEffect(() => {
     loadAccountingData();
   }, []);
+
+  useEffect(() => {
+    if (activeSubTab === 'financial_accounts') loadFinancialAccounts();
+    if (activeSubTab === 'cost_centers') loadCostCenters();
+    if (activeSubTab === 'fiscal_periods') loadFiscalYears();
+    if (activeSubTab === 'reconciliation') loadReconciliation();
+  }, [activeSubTab]);
 
   // Modal State for New Balanced Journal Entry
   const [newDesc, setNewDesc] = useState('');
   const [debitAcc, setDebitAcc] = useState('');
   const [creditAcc, setCreditAcc] = useState('');
   const [entryAmount, setEntryAmount] = useState<number>(5000);
+  const [entryCostCenter, setEntryCostCenter] = useState<string>('');
 
   useEffect(() => {
     if (accounts.length > 1 && !debitAcc) {
-      const assetAcc = accounts.find((a) => a.type === 'asset');
-      const revOrLiabAcc = accounts.find((a) => a.type === 'revenue' || a.type === 'liability');
+      const assetAcc = accounts.find((a) => a.type === 'asset' && a.is_postable !== false);
+      const revOrLiabAcc = accounts.find((a) => (a.type === 'revenue' || a.type === 'liability') && a.is_postable !== false);
       setDebitAcc(assetAcc ? assetAcc.id : accounts[0].id);
       setCreditAcc(revOrLiabAcc ? revOrLiabAcc.id : accounts[1].id);
     }
@@ -110,6 +194,39 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [voucherMethod, setVoucherMethod] = useState<'cash' | 'bank_transfer' | 'card' | 'check'>('cash');
   const [voucherNotes, setVoucherNotes] = useState('');
 
+  // Modal State for New Account
+  const [newAccCode, setNewAccCode] = useState('');
+  const [newAccName, setNewAccName] = useState('');
+  const [newAccNameEn, setNewAccNameEn] = useState('');
+  const [newAccType, setNewAccType] = useState<'asset' | 'liability' | 'equity' | 'revenue' | 'expense'>('asset');
+  const [newAccCategory, setNewAccCategory] = useState('current_asset');
+  const [newAccParentId, setNewAccParentId] = useState('');
+  const [newAccIsPostable, setNewAccIsPostable] = useState(true);
+
+  // Modal State for Financial Account (Vault/Bank)
+  const [finAccCode, setFinAccCode] = useState('');
+  const [finAccName, setFinAccName] = useState('');
+  const [finAccType, setFinAccType] = useState<'cash' | 'bank' | 'wallet'>('cash');
+  const [finAccCoaId, setFinAccCoaId] = useState('');
+  const [finAccBankName, setFinAccBankName] = useState('');
+  const [finAccNumber, setFinAccNumber] = useState('');
+  const [finAccOpeningBal, setFinAccOpeningBal] = useState(0);
+
+  // Modal State for Transfer
+  const [trfFromAccId, setTrfFromAccId] = useState('');
+  const [trfToAccId, setTrfToAccId] = useState('');
+  const [trfAmount, setTrfAmount] = useState<number>(1000);
+  const [trfNotes, setTrfNotes] = useState('');
+
+  // Modal State for Cost Center
+  const [ccCode, setCcCode] = useState('');
+  const [ccName, setCcName] = useState('');
+  const [ccDesc, setCcDesc] = useState('');
+
+  // Modal State for Fiscal Year
+  const [fyName, setFyName] = useState('السنة المالية ' + new Date().getFullYear());
+  const [fyStart, setFyStart] = useState(`${new Date().getFullYear()}-01-01`);
+  const [fyEnd, setFyEnd] = useState(`${new Date().getFullYear()}-12-31`);
 
   const handleCreateJournal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,13 +239,13 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         description: newDesc || (isAr ? 'قيد تسوية عام' : 'General Adjustment Entry'),
         entry_date: new Date().toISOString().split('T')[0],
         lines: [
-          { account_id: debitAcc, debit: entryAmount, credit: 0, description: newDesc },
+          { account_id: debitAcc, debit: entryAmount, credit: 0, description: newDesc, cost_center_id: entryCostCenter || undefined },
           { account_id: creditAcc, debit: 0, credit: entryAmount, description: newDesc },
         ],
       });
 
-      if (res?.entry) {
-        setJournals((prev) => [res.entry, ...prev]);
+      if (res?.journal_entry) {
+        setJournals((prev) => [res.journal_entry, ...prev]);
       } else {
         await loadAccountingData();
       }
@@ -137,7 +254,6 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setSuccessMsg(isAr ? 'تم ترحيل قيد اليومية بنجاح وتحديث أرصدة الحسابات' : 'Journal entry posted successfully');
       setTimeout(() => setSuccessMsg(null), 4000);
 
-      // Reload accounts balances
       api.accounting.getAccounts().then((accs) => {
         if (Array.isArray(accs)) setAccounts(accs);
       }).catch(() => {});
@@ -148,11 +264,227 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
     }
   };
 
+  const handleReverseAction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reversalTarget || !reversalReason.trim()) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      if (reversalTarget.type === 'journal') {
+        await api.accounting.reverseJournalEntry(reversalTarget.id, reversalReason);
+        setSuccessMsg(isAr ? 'تم عكس القيد المحاسبي بنجاح' : 'Journal entry reversed successfully');
+        await loadAccountingData();
+      } else {
+        await api.accounting.reverseTransfer(reversalTarget.id, reversalReason);
+        setSuccessMsg(isAr ? 'تم عكس التحويل المالي وإلغاء أثره بنجاح' : 'Transfer reversed successfully');
+        await loadFinancialAccounts();
+      }
+      setIsReversalModalOpen(false);
+      setReversalReason('');
+      setReversalTarget(null);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إجراء العكس' : 'Reversal failed'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAccCode || !newAccName) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await api.accounting.createAccount({
+        code: newAccCode,
+        name: newAccName,
+        name_en: newAccNameEn || undefined,
+        type: newAccType,
+        category: newAccCategory,
+        parent_id: newAccParentId || undefined,
+        is_postable: newAccIsPostable,
+      });
+
+      setSuccessMsg(isAr ? 'تمت إضافة الحساب في دليل الحسابات بنجاح' : 'Account created successfully');
+      setIsAccountModalOpen(false);
+      setNewAccCode('');
+      setNewAccName('');
+      setNewAccNameEn('');
+      await loadAccountingData();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إنشاء الحساب' : 'Failed to create account'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInitDefaultCOA = async () => {
+    if (!window.confirm(isAr ? 'هل تريد بالتأكيد تهيئة شجرة الحسابات الافتراضية وحسابات الربط لمصنع الملابس؟' : 'Initialize default standard Chart of Accounts?')) {
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await api.accounting.initDefaultAccounts();
+      await loadAccountingData();
+      setSuccessMsg(isAr ? 'تمت تهيئة دليل الحسابات بنجاح' : 'Chart of accounts initialized successfully');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to initialize accounts');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateFinancialAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!finAccCode || !finAccName || !finAccCoaId) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await api.accounting.createFinancialAccount({
+        chart_of_account_id: finAccCoaId,
+        code: finAccCode,
+        name: finAccName,
+        type: finAccType,
+        bank_name: finAccBankName || undefined,
+        account_number: finAccNumber || undefined,
+        opening_balance: Number(finAccOpeningBal) || 0,
+      });
+
+      setSuccessMsg(isAr ? 'تم إنشاء الحساب المالي (خزينة/بنك) بنجاح' : 'Financial account created successfully');
+      setIsFinancialAccModalOpen(false);
+      setFinAccCode('');
+      setFinAccName('');
+      await loadFinancialAccounts();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إنشاء الحساب المالي' : 'Failed to create financial account'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trfFromAccId || !trfToAccId || trfAmount <= 0) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await api.accounting.createTransfer({
+        from_financial_account_id: trfFromAccId,
+        to_financial_account_id: trfToAccId,
+        amount: Number(trfAmount),
+        notes: trfNotes || undefined,
+      });
+
+      setSuccessMsg(isAr ? 'تم التحويل المالي الداخلي وترحيل القيد آلياً بنجاح' : 'Transfer completed and posted successfully');
+      setIsTransferModalOpen(false);
+      setTrfNotes('');
+      await loadFinancialAccounts();
+      await loadAccountingData();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل التحويل المالي' : 'Transfer failed'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateCostCenter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ccCode || !ccName) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await api.accounting.createCostCenter({
+        code: ccCode,
+        name: ccName,
+        description: ccDesc || undefined,
+      });
+
+      setSuccessMsg(isAr ? 'تم إنشاء مركز التكلفة بنجاح' : 'Cost center created successfully');
+      setIsCostCenterModalOpen(false);
+      setCcCode('');
+      setCcName('');
+      setCcDesc('');
+      await loadCostCenters();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إنشاء مركز التكلفة' : 'Failed to create cost center'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateFiscalYear = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fyName || !fyStart || !fyEnd) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await api.accounting.createFiscalYear({
+        name: fyName,
+        start_date: fyStart,
+        end_date: fyEnd,
+        periods_count: 12,
+      });
+
+      setSuccessMsg(isAr ? 'تم إنشاء السنة المالية والفترات الشهرية بنجاح' : 'Fiscal year created successfully');
+      setIsFiscalYearModalOpen(false);
+      await loadFiscalYears();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إنشاء السنة المالية' : 'Failed to create fiscal year'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClosePeriod = async (id: string) => {
+    if (!window.confirm(isAr ? 'هل تريد إغلاق هذه الفترة المحاسبية ومنع الترحيل فيها؟' : 'Close this fiscal period?')) return;
+    try {
+      await api.accounting.closeFiscalPeriod(id);
+      await loadFiscalYears();
+      setSuccessMsg(isAr ? 'تم إغلاق الفترة المالية' : 'Period closed');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to close period');
+    }
+  };
+
+  const handleReopenPeriodSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPeriodForReopen || !periodReopenReason.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      await api.accounting.reopenFiscalPeriod(selectedPeriodForReopen.id, periodReopenReason);
+      setSuccessMsg(isAr ? 'تمت إعادة فتح الفترة المالية وتسجيل التدقيق' : 'Period reopened successfully');
+      setIsPeriodReopenModalOpen(false);
+      setSelectedPeriodForReopen(null);
+      setPeriodReopenReason('');
+      await loadFiscalYears();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to reopen period');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCreateVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!voucherPartyName || voucherAmount <= 0) return;
 
-    const targetAccId = voucherAccountId || accounts.find((a) => a.type === 'asset')?.id || accounts[0]?.id;
+    const targetAccId = voucherAccountId || accounts.find((a) => a.type === 'asset' && a.is_postable !== false)?.id || accounts[0]?.id;
     if (!targetAccId) return;
 
     setIsSubmitting(true);
@@ -177,10 +509,9 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setIsVoucherModalOpen(false);
       setVoucherPartyName('');
       setVoucherNotes('');
-      setSuccessMsg(isAr ? 'تم إصدار السند المالي بنجاح' : 'Payment voucher issued successfully');
+      setSuccessMsg(isAr ? 'تم إصدار السند المالي وترحيل القيد بنجاح' : 'Payment voucher issued and posted successfully');
       setTimeout(() => setSuccessMsg(null), 4000);
 
-      // Reload accounts balances
       api.accounting.getAccounts().then((accs) => {
         if (Array.isArray(accs)) setAccounts(accs);
       }).catch(() => {});
@@ -190,7 +521,6 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setIsSubmitting(false);
     }
   };
-
 
   // Real server-backed dynamic calculations
   const totalAssets = accounts
@@ -213,30 +543,38 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       <PageHeader
         title={isAr ? 'الإدارة المالية والتكاليف الصناعية' : 'Financial Accounting & Industrial Costing'}
         subtitle={isAr
-          ? 'دليل الحسابات، قيود اليومية، سندات القبض والصرف، وتكلفة أوامر الإنتاج الفعلية.'
-          : 'Chart of accounts, journal entries, vouchers, and actual production cost sheets.'}
+          ? 'دليل الحسابات، الأستاذ العام، الخزائن والبنوك، التحويلات، المطابقة، ومراكز التكلفة.'
+          : 'Chart of accounts, general ledger, cash/banks, transfers, reconciliation, and costing.'}
         icon={<Receipt className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
         breadcrumbs={[
           { label: isAr ? 'الرئيسية' : 'Home' },
           { label: isAr ? 'المالية والتكاليف' : 'Finance & Costing' },
         ]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="primary"
               size="sm"
               onClick={() => setIsJournalModalOpen(true)}
               icon={<Plus className="w-4 h-4" />}
             >
-              {isAr ? '+ قيد يومية جديد' : '+ Journal Entry'}
+              {isAr ? '+ قيد يومية متوازن' : '+ Journal Entry'}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsVoucherModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
+              icon={<FileCheck className="w-4 h-4" />}
             >
               {isAr ? '+ سند مالي' : '+ Voucher'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsTransferModalOpen(true)}
+              icon={<ArrowRightLeft className="w-4 h-4" />}
+            >
+              {isAr ? 'تحويل مالي' : 'Transfer'}
             </Button>
             <Button
               variant="outline"
@@ -249,6 +587,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
           </div>
         }
       />
+
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -282,13 +621,13 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                {isAr ? 'إجمالي الأصول المتداولة والنقدية' : 'Total Current Assets & Cash'}
+                {isAr ? 'إجمالي الأصول والنقدية' : 'Total Assets & Cash'}
               </p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                 {totalAssets.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                {accounts.filter((a) => a.type === 'asset').length} {isAr ? 'حسابات أصول نشطة' : 'active asset accounts'}
+                {accounts.filter((a) => a.type === 'asset').length} {isAr ? 'حسابات أصول' : 'asset accounts'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
@@ -307,7 +646,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 {totalRevenues.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
               <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                {isAr ? 'أرصدة قيود الإيرادات الدفترية' : 'Ledger revenue accounts'}
+                {isAr ? 'أرصدة قيود الإيرادات' : 'Ledger revenue accounts'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -320,7 +659,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                {isAr ? 'التكاليف والمصروفات المباشرة' : 'Direct Expenses & Cost'}
+                {isAr ? 'التكاليف والمصروفات' : 'Direct Expenses & Cost'}
               </p>
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
                 {directExpenses.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
@@ -357,90 +696,148 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
       {/* Sub-tabs Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setActiveSubTab('accounts')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeSubTab === 'accounts'
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {isAr ? 'شجرة الحسابات (COA)' : 'Chart of Accounts'}
+            {isAr ? 'دليل الحسابات (COA)' : 'Chart of Accounts'}
           </button>
           <button
             onClick={() => setActiveSubTab('journals')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeSubTab === 'journals'
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {isAr ? 'قيود اليومية العامة (Double-Entry)' : 'Journal Entries'}
+            {isAr ? 'قيود اليومية العامة' : 'Journal Entries'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('financial_accounts')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSubTab === 'financial_accounts'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'الخزائن والبنوك والتحويلات' : 'Cash & Banks'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('reconciliation')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSubTab === 'reconciliation'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'مطابقة الأستاذ العام (Reconciliation)' : 'Reconciliation'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('cost_centers')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSubTab === 'cost_centers'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'مراكز التكلفة' : 'Cost Centers'}
+          </button>
+          <button
+            onClick={() => setActiveSubTab('fiscal_periods')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSubTab === 'fiscal_periods'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'السنوات والفترات المالية' : 'Fiscal Periods'}
           </button>
           <button
             onClick={() => setActiveSubTab('vouchers')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeSubTab === 'vouchers'
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {isAr ? 'سندات الصرف والقبض' : 'Payment Vouchers'}
+            {isAr ? 'سندات القبض والصرف' : 'Payment Vouchers'}
           </button>
           <button
             onClick={() => setActiveSubTab('costing')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeSubTab === 'costing'
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {isAr ? 'بطاقات التكلفة الصناعية للقطعة' : 'Cost Sheets'}
+            {isAr ? 'بطاقات التكلفة الصناعية' : 'Cost Sheets'}
           </button>
           <button
             onClick={() => setActiveSubTab('reports')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeSubTab === 'reports'
                 ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            {isAr ? 'القوائم والتقارير الختامية المتقدمة' : 'Financial Reports'}
+            {isAr ? 'التقارير والقوائم الختامية' : 'Financial Reports'}
           </button>
         </div>
 
         <div className="flex items-center gap-2">
-          {activeSubTab === 'journals' && (
-            <Button size="sm" onClick={() => setIsJournalModalOpen(true)}>
+          {activeSubTab === 'accounts' && (
+            <>
+              <Button size="sm" variant="outline" onClick={handleInitDefaultCOA}>
+                <FolderTree className="w-4 h-4 me-1" />
+                {isAr ? 'تهيئة الدليل الافتراضي' : 'Init Default COA'}
+              </Button>
+              <Button size="sm" onClick={() => setIsAccountModalOpen(true)}>
+                <Plus className="w-4 h-4 me-1" />
+                {isAr ? '+ حساب جديد' : '+ New Account'}
+              </Button>
+            </>
+          )}
+          {activeSubTab === 'financial_accounts' && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setIsFinancialAccModalOpen(true)}>
+                <Plus className="w-4 h-4 me-1" />
+                {isAr ? '+ خزينة / بنك' : '+ Cash/Bank'}
+              </Button>
+              <Button size="sm" onClick={() => setIsTransferModalOpen(true)}>
+                <ArrowRightLeft className="w-4 h-4 me-1" />
+                {isAr ? 'تحويل مالي داخلي' : 'Internal Transfer'}
+              </Button>
+            </>
+          )}
+          {activeSubTab === 'cost_centers' && (
+            <Button size="sm" onClick={() => setIsCostCenterModalOpen(true)}>
               <Plus className="w-4 h-4 me-1" />
-              {isAr ? 'إضافة قيد يومية متوازن' : 'New Journal Entry'}
+              {isAr ? '+ مركز تكلفة جديد' : '+ Cost Center'}
             </Button>
           )}
-          {activeSubTab === 'vouchers' && (
-            <Button size="sm" onClick={() => setIsVoucherModalOpen(true)}>
-              <FileCheck className="w-4 h-4 me-1" />
-              {isAr ? 'إصدار سند مالي' : 'New Voucher'}
-            </Button>
-          )}
-          {activeSubTab === 'costing' && (
-            <Button size="sm" onClick={() => setIsCalcCostModalOpen(true)}>
-              <Calculator className="w-4 h-4 me-1" />
-              {isAr ? 'احتساب تكلفة أمر إنتاج' : 'Calculate Cost'}
+          {activeSubTab === 'fiscal_periods' && (
+            <Button size="sm" onClick={() => setIsFiscalYearModalOpen(true)}>
+              <Plus className="w-4 h-4 me-1" />
+              {isAr ? '+ سنة مالية جديدة' : '+ Fiscal Year'}
             </Button>
           )}
         </div>
       </div>
 
-      {/* CHART OF ACCOUNTS VIEW */}
+      {/* 1. CHART OF ACCOUNTS VIEW */}
       {activeSubTab === 'accounts' && (
         <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'شجرة الحسابات المعتمدة لمصنع الملابس والتشغيل' : 'Apparel Manufacturing Chart of Accounts'}
+              {isAr ? 'شجرة الحسابات الهرمية لمصنع الملابس والتشغيل' : 'Apparel Manufacturing Hierarchical Chart of Accounts'}
             </h3>
             <span className="text-xs text-slate-500 font-mono">
-              {accounts.length} {isAr ? 'حساب معتمد' : 'Accounts Configured'}
+              {accounts.length} {isAr ? 'حساب مسجل' : 'Accounts'}
             </span>
           </div>
 
@@ -448,10 +845,11 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
             <table className="w-full text-start text-sm">
               <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <tr>
-                  <th className="p-3 text-start">{isAr ? 'كود الحساب' : 'Account Code'}</th>
+                  <th className="p-3 text-start">{isAr ? 'كود الحساب' : 'Code'}</th>
                   <th className="p-3 text-start">{isAr ? 'اسم الحساب' : 'Account Name'}</th>
+                  <th className="p-3 text-start">{isAr ? 'المستوى' : 'Level'}</th>
                   <th className="p-3 text-start">{isAr ? 'النوع الرئيسي' : 'Type'}</th>
-                  <th className="p-3 text-start">{isAr ? 'التصنيف الصناعي' : 'Category'}</th>
+                  <th className="p-3 text-start">{isAr ? 'قابلية الترحيل' : 'Postable'}</th>
                   <th className="p-3 text-end">{isAr ? 'الرصيد الدفتري الحالي' : 'Balance'}</th>
                   <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
@@ -460,19 +858,41 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 {accounts.map((acc) => (
                   <tr key={acc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="p-3 font-mono font-bold text-primary">{acc.code}</td>
-                    <td className="p-3 font-semibold text-slate-900 dark:text-white">{acc.name}</td>
-                    <td className="p-3 capitalize">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                        acc.type === 'asset' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' :
-                        acc.type === 'liability' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' :
-                        acc.type === 'revenue' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
-                        'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300'
-                      }`}>
-                        {acc.type}
-                      </span>
+                    <td className="p-3 font-semibold text-slate-900 dark:text-white" style={{ paddingInlineStart: `${((acc.level || 1) - 1) * 20 + 12}px` }}>
+                      {(acc.level || 1) > 1 && <span className="text-slate-400 me-1.5">└─</span>}
+                      {acc.name}
+                      {acc.name_en && <span className="text-xs text-slate-400 block font-normal">{acc.name_en}</span>}
                     </td>
-                    <td className="p-3 text-xs text-slate-500 dark:text-slate-400">{acc.category.replace('_', ' ')}</td>
-                    <td className="p-3 text-end font-bold text-slate-900 dark:text-white">
+                    <td className="p-3 font-mono text-xs">{acc.level || 1}</td>
+                    <td className="p-3 capitalize">
+                      <Badge
+                        variant={
+                          acc.type === 'asset'
+                            ? 'success'
+                            : acc.type === 'liability'
+                            ? 'warning'
+                            : acc.type === 'equity'
+                            ? 'info'
+                            : acc.type === 'revenue'
+                            ? 'success'
+                            : 'danger'
+                        }
+                      >
+                        {acc.type}
+                      </Badge>
+                    </td>
+                    <td className="p-3">
+                      {acc.is_postable !== false ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5" /> {isAr ? 'يقبل الترحيل' : 'Postable'}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs font-semibold flex items-center gap-1">
+                          <Lock className="w-3.5 h-3.5" /> {isAr ? 'حساب تجميعي' : 'Header'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-end font-mono font-bold">
                       {Number(acc.current_balance).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                     </td>
                     <td className="p-3 text-center">
@@ -481,22 +901,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                         align={isAr ? 'left' : 'right'}
                         items={[
                           {
-                            id: 'ledger',
-                            label: isAr ? 'كشف حركة الحساب' : 'Account Ledger',
-                            icon: <BookOpen className="w-3.5 h-3.5 text-blue-500" />,
+                            id: 'stmt',
+                            label: isAr ? 'كشف حساب الأستاذ العام' : 'Account Statement',
+                            icon: <Eye className="w-3.5 h-3.5 text-primary" />,
                             onClick: () => {
                               setSelectedAccountForStatement(acc);
                               setIsStatementModalOpen(true);
-                            },
-                          },
-                          {
-                            id: 'adj',
-                            label: isAr ? 'إجراء قيد تسوية' : 'Adjustment Entry',
-                            icon: <Scale className="w-3.5 h-3.5 text-primary" />,
-                            onClick: () => {
-                              setDebitAcc(acc.id);
-                              setNewDesc(isAr ? `قيد تسوية لحساب ${acc.name}` : `Adjustment entry for ${acc.name}`);
-                              setIsJournalModalOpen(true);
                             },
                           },
                         ]}
@@ -510,7 +920,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         </Card>
       )}
 
-      {/* JOURNALS VIEW */}
+      {/* 2. JOURNALS VIEW */}
       {activeSubTab === 'journals' && (
         <div className="space-y-4">
           {journals.length === 0 ? (
@@ -524,7 +934,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-bold text-primary text-sm">{j.entry_number}</span>
                     <span className="text-xs text-slate-400">{j.entry_date}</span>
-                    <Badge variant="success">{j.status.toUpperCase()}</Badge>
+                    <Badge variant={j.status === 'reversed' ? 'danger' : 'success'}>
+                      {j.status === 'reversed' ? (isAr ? 'معكوس ملغي' : 'REVERSED') : (isAr ? 'مرحل نهائي' : 'POSTED')}
+                    </Badge>
+                    {j.reversal_reason && (
+                      <span className="text-xs text-rose-500 font-medium">({j.reversal_reason})</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-900 dark:text-white">
                     <span>{isAr ? 'المدين:' : 'Debit:'} {Number(j.total_debit).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
@@ -541,16 +956,19 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                           icon: <Printer className="w-3.5 h-3.5 text-primary" />,
                           onClick: () => window.print(),
                         },
-                        {
-                          id: 'copy-num',
-                          label: isAr ? 'نسخ رقم القيد' : 'Copy Entry #',
-                          icon: <Eye className="w-3.5 h-3.5 text-slate-500" />,
-                          onClick: () => {
-                            navigator.clipboard?.writeText(j.entry_number);
-                            setSuccessMsg(isAr ? `تم نسخ رقم القيد: ${j.entry_number}` : `Copied entry #${j.entry_number}`);
-                            setTimeout(() => setSuccessMsg(null), 3000);
-                          },
-                        },
+                        ...(j.status === 'posted' && !j.reversed_entry_id
+                          ? [
+                              {
+                                id: 'reverse-journal',
+                                label: isAr ? 'عكس القيد المحاسبي' : 'Reverse Journal Entry',
+                                icon: <RotateCw className="w-3.5 h-3.5 text-rose-500" />,
+                                onClick: () => {
+                                  setReversalTarget({ type: 'journal', id: j.id, number: j.entry_number });
+                                  setIsReversalModalOpen(true);
+                                },
+                              },
+                            ]
+                          : []),
                       ]}
                     />
                   </div>
@@ -561,6 +979,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                     <div key={idx} className="py-1.5 flex items-center justify-between">
                       <span className="text-slate-600 dark:text-slate-300">
                         {line.account ? `${line.account.code} - ${line.account.name}` : line.description || 'Account line'}
+                        {line.cost_center_id && <span className="text-primary font-mono text-[11px] ms-2">[مركز تكلفة]</span>}
                       </span>
                       <div className="flex items-center gap-6">
                         <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
@@ -579,8 +998,299 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         </div>
       )}
 
+      {/* 3. FINANCIAL ACCOUNTS (CASH & BANKS & TRANSFERS) */}
+      {activeSubTab === 'financial_accounts' && (
+        <div className="space-y-6">
+          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+            <h3 className="font-bold text-slate-900 dark:text-white mb-3">
+              {isAr ? 'حسابات الخزائن والبنوك والمحافظ الإلكترونية' : 'Cash Desks & Bank Accounts'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {financialAccounts.map((fa) => (
+                <div key={fa.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-primary">{fa.code}</span>
+                      <Badge variant={fa.type === 'cash' ? 'success' : 'info'}>{fa.type.toUpperCase()}</Badge>
+                    </div>
+                    <p className="font-bold text-slate-900 dark:text-white mt-1">{fa.name}</p>
+                    {fa.bank_name && <p className="text-xs text-slate-400">{fa.bank_name} {fa.account_number ? `(${fa.account_number})` : ''}</p>}
+                  </div>
+                  <div className="text-end">
+                    <p className="text-xs text-slate-400">{isAr ? 'الرصيد الفعلي' : 'Current Balance'}</p>
+                    <p className="font-mono font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                      {Number(fa.current_balance).toLocaleString()} {fa.currency}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
 
-      {/* VOUCHERS VIEW */}
+          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 dark:text-white">
+                {isAr ? 'سجل التحويلات المالية الداخلية بين الخزائن والبنوك' : 'Internal Funds Transfers Log'}
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-start text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="p-3 text-start">{isAr ? 'رقم التحويل' : 'Transfer #'}</th>
+                    <th className="p-3 text-start">{isAr ? 'من حساب' : 'From Account'}</th>
+                    <th className="p-3 text-start">{isAr ? 'إلى حساب' : 'To Account'}</th>
+                    <th className="p-3 text-end">{isAr ? 'المبلغ المحول' : 'Amount'}</th>
+                    <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
+                    <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                  {transfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400">
+                        {isAr ? 'لا توجد تحويلات مالية مسجلة' : 'No transfers recorded'}
+                      </td>
+                    </tr>
+                  ) : (
+                    transfers.map((t) => (
+                      <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-3 font-mono font-bold text-primary">{t.transfer_number}</td>
+                        <td className="p-3 font-semibold">{t.from_account?.name || t.from_financial_account_id}</td>
+                        <td className="p-3 font-semibold">{t.to_account?.name || t.to_financial_account_id}</td>
+                        <td className="p-3 text-end font-mono font-bold text-slate-900 dark:text-white">
+                          {Number(t.amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                        </td>
+                        <td className="p-3 text-xs text-slate-400">{t.transfer_date}</td>
+                        <td className="p-3 text-center">
+                          <Badge variant={t.status === 'completed' ? 'success' : 'danger'}>
+                            {t.status === 'completed' ? (isAr ? 'مكتمل ومرحل' : 'Completed') : (isAr ? 'ملغي معكوس' : 'Reversed')}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-center">
+                          {t.status === 'completed' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-rose-500 hover:text-rose-600 text-xs py-1"
+                              onClick={() => {
+                                setReversalTarget({ type: 'transfer', id: t.id, number: t.transfer_number });
+                                setIsReversalModalOpen(true);
+                              }}
+                            >
+                              <RotateCw className="w-3.5 h-3.5 me-1" />
+                              {isAr ? 'عكس التحويل' : 'Reverse'}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 4. GENERAL LEDGER RECONCILIATION VIEW */}
+      {activeSubTab === 'reconciliation' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* AR Reconciliation */}
+            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                  <h4 className="font-bold text-slate-900 dark:text-white">
+                    {isAr ? 'مطابقة مراقبة العملاء (AR Reconciliation)' : 'Accounts Receivable Reconciliation'}
+                  </h4>
+                </div>
+                {arReconciliation && (
+                  <Badge variant={arReconciliation.is_matched ? 'success' : 'danger'}>
+                    {arReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
+                  </Badge>
+                )}
+              </div>
+
+              {arReconciliation && (
+                <div className="mt-4 space-y-3 text-sm">
+                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-500">{isAr ? 'رصيد حساب المراقبة بالأستاذ (1110):' : 'GL Control Balance (1110):'}</span>
+                    <span className="font-mono font-bold">{Number(arReconciliation.control_account.gl_balance).toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-500">{isAr ? 'إجمالي كشوف العملاء الفرعية:' : 'Subledger Total:'}</span>
+                    <span className="font-mono font-bold">{Number(arReconciliation.subledger_total).toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5">
+                    <span className="text-slate-500 font-semibold">{isAr ? 'قيمة الفرق والانحراف:' : 'Variance Amount:'}</span>
+                    <span className={`font-mono font-bold ${Math.abs(arReconciliation.variance) < 0.001 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {Number(arReconciliation.variance).toLocaleString()} ج.م
+                    </span>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* AP Reconciliation */}
+            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-amber-500" />
+                  <h4 className="font-bold text-slate-900 dark:text-white">
+                    {isAr ? 'مطابقة مراقبة الموردين (AP Reconciliation)' : 'Accounts Payable Reconciliation'}
+                  </h4>
+                </div>
+                {apReconciliation && (
+                  <Badge variant={apReconciliation.is_matched ? 'success' : 'danger'}>
+                    {apReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
+                  </Badge>
+                )}
+              </div>
+
+              {apReconciliation && (
+                <div className="mt-4 space-y-3 text-sm">
+                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-500">{isAr ? 'رصيد حساب المراقبة بالأستاذ (2010):' : 'GL Control Balance (2010):'}</span>
+                    <span className="font-mono font-bold">{Number(apReconciliation.control_account.gl_balance).toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-500">{isAr ? 'إجمالي كشوف الموردين الفرعية:' : 'Subledger Total:'}</span>
+                    <span className="font-mono font-bold">{Number(apReconciliation.subledger_total).toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5">
+                    <span className="text-slate-500 font-semibold">{isAr ? 'قيمة الفرق والانحراف:' : 'Variance Amount:'}</span>
+                    <span className={`font-mono font-bold ${Math.abs(apReconciliation.variance) < 0.001 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {Number(apReconciliation.variance).toLocaleString()} ج.م
+                    </span>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* 5. COST CENTERS VIEW */}
+      {activeSubTab === 'cost_centers' && (
+        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 dark:text-white">
+              {isAr ? 'دليل مراكز التكلفة التحليلية للمصنع' : 'Analytical Cost Centers'}
+            </h3>
+            <span className="text-xs text-slate-500 font-mono">{costCenters.length} {isAr ? 'مركز' : 'Centers'}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-start text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="p-3 text-start">{isAr ? 'كود المركز' : 'Code'}</th>
+                  <th className="p-3 text-start">{isAr ? 'اسم مركز التكلفة' : 'Name'}</th>
+                  <th className="p-3 text-start">{isAr ? 'الوصف والنشاط' : 'Description'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {costCenters.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-slate-400">
+                      {isAr ? 'لا توجد مراكز تكلفة مسجلة' : 'No cost centers recorded'}
+                    </td>
+                  </tr>
+                ) : (
+                  costCenters.map((cc) => (
+                    <tr key={cc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <td className="p-3 font-mono font-bold text-primary">{cc.code}</td>
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{cc.name}</td>
+                      <td className="p-3 text-xs text-slate-400">{cc.description || '—'}</td>
+                      <td className="p-3 text-center">
+                        <Badge variant="success">{isAr ? 'نشط' : 'Active'}</Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* 6. FISCAL YEARS & PERIODS VIEW */}
+      {activeSubTab === 'fiscal_periods' && (
+        <div className="space-y-6">
+          {fiscalYears.map((fy) => (
+            <Card key={fy.id} className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-white text-base">{fy.name}</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">{fy.start_date} ── {fy.end_date}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={fy.status === 'open' ? 'success' : 'danger'}>
+                    {fy.status === 'open' ? (isAr ? 'سنة مالية مفتوحة' : 'OPEN') : (isAr ? 'سنة مقفلة نهائياً' : 'CLOSED')}
+                  </Badge>
+                  {fy.status === 'open' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs text-rose-500 hover:text-rose-600 py-1"
+                      onClick={async () => {
+                        if (window.confirm(isAr ? 'هل تريد إغلاق السنة المالية وترحيل الأرباح والخسائر إلى الأرباح المحتجزة؟' : 'Close fiscal year?')) {
+                          await api.accounting.closeFiscalYear(fy.id);
+                          await loadFiscalYears();
+                        }
+                      }}
+                    >
+                      <Lock className="w-3.5 h-3.5 me-1" />
+                      {isAr ? 'إقفال السنة السنوي' : 'Close Year'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
+                {fy.periods?.map((p) => (
+                  <div key={p.id} className={`p-3 rounded-lg border ${p.status === 'open' ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20' : 'border-slate-200 dark:border-slate-800 bg-slate-50/30'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">{p.name}</span>
+                      <Badge variant={p.status === 'open' ? 'success' : 'danger'}>
+                        {p.status === 'open' ? (isAr ? 'مفتوحة' : 'Open') : (isAr ? 'مقفلة' : 'Closed')}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">{p.start_date} إلى {p.end_date}</p>
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                      {p.status === 'open' ? (
+                        <button
+                          onClick={() => handleClosePeriod(p.id)}
+                          className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1"
+                        >
+                          <Lock className="w-3 h-3" />
+                          {isAr ? 'إغلاق الفترة' : 'Close'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setSelectedPeriodForReopen(p);
+                            setIsPeriodReopenModalOpen(true);
+                          }}
+                          className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
+                        >
+                          <Unlock className="w-3 h-3" />
+                          {isAr ? 'إعادة الفتح' : 'Reopen'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* 7. VOUCHERS VIEW */}
       {activeSubTab === 'vouchers' && (
         <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800">
@@ -599,19 +1309,18 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                   <th className="p-3 text-start">{isAr ? 'المبلغ' : 'Amount'}</th>
                   <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
                   <th className="p-3 text-start">{isAr ? 'البيان' : 'Notes'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {vouchers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
                       {isAr ? 'لا توجد سندات مالية مسجلة' : 'No payment vouchers found'}
                     </td>
                   </tr>
                 ) : (
                   vouchers.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <tr key={v.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-semibold text-slate-900 dark:text-white">{v.voucher_number}</td>
                       <td className="p-3">
                         <Badge variant={v.voucher_type === 'receipt' ? 'success' : 'warning'}>
@@ -628,20 +1337,6 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                       </td>
                       <td className="p-3 text-slate-500">{v.voucher_date}</td>
                       <td className="p-3 text-slate-500 text-xs">{v.notes || '—'}</td>
-                      <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-voucher',
-                              label: isAr ? 'طباعة السند المالي' : 'Print Voucher',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                          ]}
-                        />
-                      </td>
                     </tr>
                   ))
                 )}
@@ -651,7 +1346,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         </Card>
       )}
 
-      {/* COSTING VIEW */}
+      {/* 8. COSTING VIEW */}
       {activeSubTab === 'costing' && (
         <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800">
@@ -728,34 +1423,10 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                                         setIsLoading(true);
                                         await api.accounting.approveCostSheet(cs.id);
                                         await loadAccountingData();
-                                        setSuccessMsg(
-                                          isAr
-                                            ? 'تم اعتماد بطاقة التكلفة الصناعية بنجاح وأصبحت نهائية وغير قابلة للتعديل'
-                                            : 'Cost sheet approved and locked successfully'
-                                        );
+                                        setSuccessMsg(isAr ? 'تم اعتماد بطاقة التكلفة الصناعية بنجاح' : 'Cost sheet approved successfully');
                                         setTimeout(() => setSuccessMsg(null), 3500);
                                       } catch (e: any) {
-                                        setErrorMsg(e?.message || (isAr ? 'فشل الاعتماد' : 'Approval failed'));
-                                      } finally {
-                                        setIsLoading(false);
-                                      }
-                                    },
-                                  },
-                                  {
-                                    id: 'recalc',
-                                    label: isAr ? 'إعادة احتساب التكلفة' : 'Recalculate Cost',
-                                    icon: <RotateCw className="w-3.5 h-3.5 text-blue-500" />,
-                                    onClick: async () => {
-                                      try {
-                                        setIsLoading(true);
-                                        await api.accounting.calculateCost(cs.production_order_id);
-                                        await loadAccountingData();
-                                        setSuccessMsg(
-                                          isAr ? 'تمت إعادة احتساب التكلفة بنجاح' : 'Cost recalculated successfully'
-                                        );
-                                        setTimeout(() => setSuccessMsg(null), 3000);
-                                      } catch (e: any) {
-                                        setErrorMsg(e?.message || 'Calculation failed');
+                                        setErrorMsg(e?.message || 'Approval failed');
                                       } finally {
                                         setIsLoading(false);
                                       }
@@ -775,10 +1446,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         </Card>
       )}
 
-      {/* ADVANCED FINANCIAL REPORTS & INDUSTRIAL COSTING VIEW */}
+      {/* 9. FINANCIAL REPORTS VIEW */}
       {activeSubTab === 'reports' && (
         <FinancialReportsView lang={lang} />
       )}
+
+      {/* MODALS */}
 
       {/* Balanced Journal Entry Modal */}
       <Modal
@@ -811,7 +1484,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 onChange={(e) => setDebitAcc(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                {accounts.map((a) => (
+                {accounts.filter((a) => a.is_postable !== false).map((a) => (
                   <option key={a.id} value={a.id}>{a.code} - {a.name} ({a.type})</option>
                 ))}
               </select>
@@ -826,25 +1499,43 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 onChange={(e) => setCreditAcc(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                {accounts.map((a) => (
+                {accounts.filter((a) => a.is_postable !== false).map((a) => (
                   <option key={a.id} value={a.id}>{a.code} - {a.name} ({a.type})</option>
                 ))}
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {isAr ? 'المبلغ (جنيه مصري)' : 'Amount (EGP)'}
-            </label>
-            <input
-              type="number"
-              min="1"
-              required
-              value={entryAmount}
-              onChange={(e) => setEntryAmount(Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'المبلغ (جنيه مصري)' : 'Amount (EGP)'}
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                value={entryAmount}
+                onChange={(e) => setEntryAmount(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'مركز التكلفة (اختياري)' : 'Cost Center (Optional)'}
+              </label>
+              <select
+                value={entryCostCenter}
+                onChange={(e) => setEntryCostCenter(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              >
+                <option value="">{isAr ? '-- بدون مركز تكلفة --' : '-- None --'}</option>
+                {costCenters.map((cc) => (
+                  <option key={cc.id} value={cc.id}>{cc.code} - {cc.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg text-xs text-slate-500 flex items-center justify-between">
@@ -859,14 +1550,486 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
-                  {isAr ? 'جاري الترحيل...' : 'Posting...'}
-                </>
-              ) : (
-                isAr ? 'ترحيل القيد' : 'Post Journal'
-              )}
+              {isSubmitting ? (isAr ? 'جاري الترحيل...' : 'Posting...') : (isAr ? 'ترحيل القيد' : 'Post Journal')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Reversal Reason Modal */}
+      <Modal
+        isOpen={isReversalModalOpen}
+        onClose={() => setIsReversalModalOpen(false)}
+        title={isAr ? `عكس وإلغاء: ${reversalTarget?.number || ''}` : `Reverse Transaction: ${reversalTarget?.number || ''}`}
+      >
+        <form onSubmit={handleReverseAction} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'سبب العكس والإلغاء (مطلوب لأغراض الرقابة المالية) *' : 'Reversal Reason *'}
+            </label>
+            <textarea
+              required
+              rows={3}
+              value={reversalReason}
+              onChange={(e) => setReversalReason(e.target.value)}
+              placeholder={isAr ? 'مثال: خطأ في تحديد قيمة الإيداع أو إدخال مكرر...' : 'e.g. Incorrect amount entered...'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setIsReversalModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" variant="primary" className="bg-rose-600 hover:bg-rose-700" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري العكس...' : 'Reversing...') : (isAr ? 'تأكيد العكس والتسوية' : 'Confirm Reversal')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Internal Transfer Modal */}
+      <Modal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        title={isAr ? 'تحويل مالي داخلي بين الخزائن والبنوك' : 'Internal Funds Transfer'}
+      >
+        <form onSubmit={handleCreateTransfer} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'من الحساب المالي (المرسل) *' : 'From Financial Account *'}
+            </label>
+            <select
+              required
+              value={trfFromAccId}
+              onChange={(e) => setTrfFromAccId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            >
+              <option value="">{isAr ? '-- اختر الحساب المرسل --' : '-- Select From Account --'}</option>
+              {financialAccounts.map((fa) => (
+                <option key={fa.id} value={fa.id}>{fa.code} - {fa.name} (رصيد: {Number(fa.current_balance).toLocaleString()} {fa.currency})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'إلى الحساب المالي (المستلم) *' : 'To Financial Account *'}
+            </label>
+            <select
+              required
+              value={trfToAccId}
+              onChange={(e) => setTrfToAccId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            >
+              <option value="">{isAr ? '-- اختر الحساب المستلم --' : '-- Select To Account --'}</option>
+              {financialAccounts.filter((fa) => fa.id !== trfFromAccId).map((fa) => (
+                <option key={fa.id} value={fa.id}>{fa.code} - {fa.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'مبلغ التحويل (جنيه مصري) *' : 'Transfer Amount (EGP) *'}
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+              value={trfAmount}
+              onChange={(e) => setTrfAmount(Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'البيان والملاحظات' : 'Notes'}
+            </label>
+            <input
+              type="text"
+              value={trfNotes}
+              onChange={(e) => setTrfNotes(e.target.value)}
+              placeholder={isAr ? 'مثال: تغذية خزينة المعرض من البنك...' : 'e.g. Cash withdrawal to vault...'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setIsTransferModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري التحويل...' : 'Transferring...') : (isAr ? 'تنفيذ التحويل وترحيل القيد' : 'Execute Transfer')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* New Account Modal */}
+      <Modal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        title={isAr ? 'إضافة حساب جديد إلى دليل الحسابات' : 'Create Account'}
+      >
+        <form onSubmit={handleCreateAccount} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'كود الحساب *' : 'Code *'}
+              </label>
+              <input
+                type="text"
+                required
+                value={newAccCode}
+                onChange={(e) => setNewAccCode(e.target.value)}
+                placeholder="1011"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الحساب الرئيسي الأب' : 'Parent Account'}
+              </label>
+              <select
+                value={newAccParentId}
+                onChange={(e) => setNewAccParentId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              >
+                <option value="">{isAr ? '-- بدون أب (مستوى رئيسي) --' : '-- Top Level --'}</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم الحساب بالعربية *' : 'Account Name (AR) *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={newAccName}
+              onChange={(e) => setNewAccName(e.target.value)}
+              placeholder={isAr ? 'مثال: خزينة منفذ البيع' : 'e.g. Retail Outlet Cash'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'نوع الحساب *' : 'Type *'}
+              </label>
+              <select
+                value={newAccType}
+                onChange={(e) => setNewAccType(e.target.value as any)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              >
+                <option value="asset">{isAr ? 'أصول (Assets)' : 'Asset'}</option>
+                <option value="liability">{isAr ? 'خصوم / التزامات (Liabilities)' : 'Liability'}</option>
+                <option value="equity">{isAr ? 'حقوق ملكية (Equity)' : 'Equity'}</option>
+                <option value="revenue">{isAr ? 'إيرادات (Revenue)' : 'Revenue'}</option>
+                <option value="expense">{isAr ? 'مصروفات (Expense)' : 'Expense'}</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'التصنيف' : 'Category'}
+              </label>
+              <input
+                type="text"
+                value={newAccCategory}
+                onChange={(e) => setNewAccCategory(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="is_postable_chk"
+              checked={newAccIsPostable}
+              onChange={(e) => setNewAccIsPostable(e.target.checked)}
+              className="w-4 h-4 rounded text-primary border-slate-300"
+            />
+            <label htmlFor="is_postable_chk" className="text-xs text-slate-700 dark:text-slate-300">
+              {isAr ? 'حساب نهائي يقبل الترحيل المباشر (Leaf Postable Account)' : 'Postable Leaf Account'}
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setIsAccountModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ الحساب' : 'Save Account')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* New Financial Account Modal */}
+      <Modal
+        isOpen={isFinancialAccModalOpen}
+        onClose={() => setIsFinancialAccModalOpen(false)}
+        title={isAr ? 'إضافة خزينة أو حساب بنكي جديد' : 'New Cash Desk / Bank Account'}
+      >
+        <form onSubmit={handleCreateFinancialAccount} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الكود التعريفي *' : 'Code *'}
+              </label>
+              <input
+                type="text"
+                required
+                value={finAccCode}
+                onChange={(e) => setFinAccCode(e.target.value)}
+                placeholder="VLT-02"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'النوع *' : 'Type *'}
+              </label>
+              <select
+                value={finAccType}
+                onChange={(e) => setFinAccType(e.target.value as any)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              >
+                <option value="cash">{isAr ? 'خزينة نقدية (Cash Vault)' : 'Cash Vault'}</option>
+                <option value="bank">{isAr ? 'حساب بنكي جاري (Bank Account)' : 'Bank Account'}</option>
+                <option value="wallet">{isAr ? 'محفظة إلكترونية (Digital Wallet)' : 'Digital Wallet'}</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم الخزينة / الحساب *' : 'Account Name *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={finAccName}
+              onChange={(e) => setFinAccName(e.target.value)}
+              placeholder={isAr ? 'مثال: خزينة صالة الإنتاج' : 'e.g. Production Floor Vault'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الحساب المحاسبي المرتبط في الدليل *' : 'Linked GL Account *'}
+            </label>
+            <select
+              required
+              value={finAccCoaId}
+              onChange={(e) => setFinAccCoaId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            >
+              <option value="">{isAr ? '-- اختر حساب النقدية / البنك --' : '-- Select GL Account --'}</option>
+              {accounts.filter((a) => a.is_cash_bank || a.code.startsWith('10')).map((a) => (
+                <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {finAccType === 'bank' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'اسم البنك' : 'Bank Name'}
+                </label>
+                <input
+                  type="text"
+                  value={finAccBankName}
+                  onChange={(e) => setFinAccBankName(e.target.value)}
+                  placeholder="CIB Egypt"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'رقم الحساب البنكي' : 'Account #'}
+                </label>
+                <input
+                  type="text"
+                  value={finAccNumber}
+                  onChange={(e) => setFinAccNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الرصيد الافتتاحي (جنيه مصري)' : 'Opening Balance (EGP)'}
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={finAccOpeningBal}
+              onChange={(e) => setFinAccOpeningBal(Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setIsFinancialAccModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ الحساب المالي' : 'Save Account')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* New Cost Center Modal */}
+      <Modal
+        isOpen={isCostCenterModalOpen}
+        onClose={() => setIsCostCenterModalOpen(false)}
+        title={isAr ? 'إضافة مركز تكلفة تحليلي جديد' : 'New Cost Center'}
+      >
+        <form onSubmit={handleCreateCostCenter} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'كود المركز *' : 'Code *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={ccCode}
+              onChange={(e) => setCcCode(e.target.value)}
+              placeholder="CC-SEW"
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم مركز التكلفة *' : 'Name *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={ccName}
+              onChange={(e) => setCcName(e.target.value)}
+              placeholder={isAr ? 'قسم الخياطة والتجميع' : 'Sewing Line'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'الوصف' : 'Description'}
+            </label>
+            <textarea
+              rows={2}
+              value={ccDesc}
+              onChange={(e) => setCcDesc(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setIsCostCenterModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ مركز التكلفة' : 'Save Center')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* New Fiscal Year Modal */}
+      <Modal
+        isOpen={isFiscalYearModalOpen}
+        onClose={() => setIsFiscalYearModalOpen(false)}
+        title={isAr ? 'إنشاء سنة مالية وفترات محاسبية جديدة' : 'New Fiscal Year'}
+      >
+        <form onSubmit={handleCreateFiscalYear} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم السنة المالية *' : 'Fiscal Year Name *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={fyName}
+              onChange={(e) => setFyName(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تاريخ البداية *' : 'Start Date *'}
+              </label>
+              <input
+                type="date"
+                required
+                value={fyStart}
+                onChange={(e) => setFyStart(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تاريخ النهاية *' : 'End Date *'}
+              </label>
+              <input
+                type="date"
+                required
+                value={fyEnd}
+                onChange={(e) => setFyEnd(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setIsFiscalYearModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري الإنشاء...' : 'Creating...') : (isAr ? 'إنشاء السنة والفترات' : 'Create Year')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Reopen Fiscal Period Modal */}
+      <Modal
+        isOpen={isPeriodReopenModalOpen}
+        onClose={() => setIsPeriodReopenModalOpen(false)}
+        title={isAr ? `إعادة فتح الفترة المالية: ${selectedPeriodForReopen?.name || ''}` : `Reopen Fiscal Period: ${selectedPeriodForReopen?.name || ''}`}
+      >
+        <form onSubmit={handleReopenPeriodSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'سبب إعادة الفتح (مطلوب للتدقيق الرقابي) *' : 'Reopening Reason *'}
+            </label>
+            <textarea
+              required
+              rows={3}
+              value={periodReopenReason}
+              onChange={(e) => setPeriodReopenReason(e.target.value)}
+              placeholder={isAr ? 'مثال: تسوية فواتير المبيعات المتأخرة بموافقة الإدارة المالية...' : 'e.g. Late adjustments authorized by management...'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setIsPeriodReopenModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري الفتح...' : 'Reopening...') : (isAr ? 'تأكيد إعادة الفتح' : 'Confirm Reopen')}
             </Button>
           </div>
         </form>
@@ -935,7 +2098,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                 onChange={(e) => setVoucherAccountId(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                {accounts.filter((a) => a.type === 'asset').map((a) => (
+                {accounts.filter((a) => a.type === 'asset' && a.is_postable !== false).map((a) => (
                   <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
                 ))}
               </select>
@@ -991,14 +2154,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
-                  {isAr ? 'جاري الإصدار...' : 'Issuing...'}
-                </>
-              ) : (
-                isAr ? 'إصدار السند وترحيله' : 'Issue Voucher'
-              )}
+              {isSubmitting ? (isAr ? 'جاري الإصدار...' : 'Issuing...') : (isAr ? 'إصدار السند وترحيله' : 'Issue Voucher')}
             </Button>
           </div>
         </form>
@@ -1011,11 +2167,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         isAr={isAr}
         onSuccess={(newSheet) => {
           setCostSheets((prev) => [newSheet, ...prev.filter((s) => s.id !== newSheet.id)]);
-          setSuccessMsg(
-            isAr
-              ? 'تم احتساب التكلفة الفعلية وترحيل بطاقة التكلفة بنجاح'
-              : 'Actual production cost sheet calculated and recorded successfully'
-          );
+          setSuccessMsg(isAr ? 'تم احتساب التكلفة الفعلية وترحيل بطاقة التكلفة بنجاح' : 'Actual production cost sheet calculated successfully');
           setTimeout(() => setSuccessMsg(null), 4000);
         }}
       />

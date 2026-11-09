@@ -45,6 +45,18 @@ class SupplierInvoice extends Model
         'posted_at' => 'datetime',
     ];
 
+    protected $appends = ['supplier_name', 'po_number'];
+
+    public function getSupplierNameAttribute(): ?string
+    {
+        return $this->supplier?->name;
+    }
+
+    public function getPoNumberAttribute(): ?string
+    {
+        return $this->purchaseOrder?->po_number;
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);

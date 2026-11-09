@@ -14,6 +14,7 @@ class StoreOrder extends Model
 
     protected $fillable = [
         'tenant_id',
+        'sales_order_id',
         'order_number',
         'customer_name',
         'customer_phone',
@@ -49,5 +50,15 @@ class StoreOrder extends Model
     public function paymentReviewer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(User::class, 'payment_reviewed_by');
+    }
+
+    public function salesOrder(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class, 'sales_order_id');
+    }
+
+    public function paymentSubmissions(): HasMany
+    {
+        return $this->hasMany(PaymentSubmission::class);
     }
 }

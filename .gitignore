@@ -14,7 +14,8 @@ vendor/
 *.sqlite3
 *.db
 
-# Builds and distribution
+# Temporary scratch scripts
+scratch/
 dist/
 build/
 *.log

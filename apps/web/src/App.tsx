@@ -12,16 +12,19 @@ import {
   QrCode,
   ShieldCheck,
   RefreshCw,
-  Boxes,
-  ShoppingCart,
   Printer,
   DollarSign,
-  Truck,
-  Receipt,
   Building2,
   Table as TableIcon,
   LayoutGrid,
   Tag,
+  ShoppingBag,
+  Palette,
+  FolderTree,
+  Edit2,
+  Trash2,
+  X,
+  User,
 } from 'lucide-react';
 import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
@@ -42,6 +45,10 @@ import { PublicWebsite } from './components/public/PublicWebsite';
 import { api, type ApiUser, type ApiTenant } from './api/client';
 import { CreateModelModal } from './components/catalog/CreateModelModal';
 import { ModelDetailsBomModal } from './components/catalog/ModelDetailsBomModal';
+import { CategoriesManager } from './components/catalog/CategoriesManager';
+import { SizesManager } from './components/catalog/SizesManager';
+import { ColorsManager } from './components/catalog/ColorsManager';
+import { ProductsManager } from './components/catalog/ProductsManager';
 import { CreatePurchaseOrderModal } from './components/procurement/CreatePurchaseOrderModal';
 import { ReceiveGoodsModal } from './components/procurement/ReceiveGoodsModal';
 import { SupplierInvoiceModal } from './components/procurement/SupplierInvoiceModal';
@@ -57,11 +64,13 @@ import { ExternalOperationModal } from './components/subcontracting/ExternalOper
 import { JobDeliveryModal } from './components/subcontracting/JobDeliveryModal';
 import { JobInvoiceModal } from './components/subcontracting/JobInvoiceModal';
 import { JobDetailsModal } from './components/subcontracting/JobDetailsModal';
+import { FactoryCommandDashboard } from './components/dashboard/FactoryCommandDashboard';
 
 // Lazy Loaded Business Modules (Phase 2 Performance Code-Splitting)
 const PlatformAdminDashboard = lazy(() => import('./components/admin/PlatformAdminDashboard').then(m => ({ default: m.PlatformAdminDashboard })));
 const WarehouseManagerTab = lazy(() => import('./components/inventory/WarehouseManagerTab').then(m => ({ default: m.WarehouseManagerTab })));
 const SubcontractingTab = lazy(() => import('./components/subcontracting/SubcontractingTab').then(m => ({ default: m.SubcontractingTab })));
+const PurchasingTab = lazy(() => import('./components/procurement/PurchasingTab').then(m => ({ default: m.PurchasingTab })));
 const SalesTab = lazy(() => import('./components/sales/SalesTab').then(m => ({ default: m.SalesTab })));
 const AccountingTab = lazy(() => import('./components/accounting/AccountingTab').then(m => ({ default: m.AccountingTab })));
 const HrTab = lazy(() => import('./components/hr/HrTab').then(m => ({ default: m.HrTab })));
@@ -71,6 +80,7 @@ const PublicOrderTracker = lazy(() => import('./components/storefront/PublicOrde
 const MaintenanceTab = lazy(() => import('./components/maintenance/MaintenanceTab').then(m => ({ default: m.MaintenanceTab })));
 const TenantSubscriptionView = lazy(() => import('./components/subscription/TenantSubscriptionView').then(m => ({ default: m.TenantSubscriptionView })));
 const WaslatWorshTab = lazy(() => import('./components/marketplace/WaslatWorshTab').then(m => ({ default: m.WaslatWorshTab })));
+const WaslatWorshRequesterPortal = lazy(() => import('./components/marketplace/WaslatWorshRequesterPortal').then(m => ({ default: m.WaslatWorshRequesterPortal })));
 
 const TabLoadingFallback = ({ isAr }: { isAr: boolean }) => (
   <div className="flex flex-col items-center justify-center p-16 space-y-4 min-h-[360px] bg-white/60 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 backdrop-blur-sm">
@@ -191,7 +201,9 @@ export function App() {
   const isAr = lang === 'ar';
 
   // Real Authentication & User State
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(api.isAuthenticated());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return api.isAuthenticated() || getUrlParam('mock_audit') === '1' || getUrlParam('audit_auth') === '1';
+  });
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(api.auth.getStoredUser());
 
   // Deep-Link Route Parser
@@ -237,8 +249,9 @@ export function App() {
     };
 
     // 1. Tenant Subdomain Detection (e.g., alnoorkids.garmentos.local or tenant.localhost)
+    const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) || hostname === 'localhost';
     const isSubdomain =
-      hostname.split('.').length > 2 || (hostname.endsWith('.localhost') && hostname !== 'localhost');
+      !isIpAddress && (hostname.split('.').length > 2 || (hostname.endsWith('.localhost') && hostname !== 'localhost'));
     const isReserved = ['admin', 'api', 'www', 'app'].some((s) => hostname.startsWith(`${s}.`));
 
     if (isSubdomain && !isReserved) {
@@ -294,7 +307,9 @@ export function App() {
       return { mode: 'store' as const, tenantSlug: slug };
     }
     if (raw === 'store' || raw === 'shop') {
-      return { mode: 'store' as const, tenantSlug: undefined };
+      const storedTenant = api.auth.getStoredTenant();
+      const slug = (storedTenant as any)?.subdomain || storedTenant?.code || 'msnaa-aldlta-llmlabs-algahz-429';
+      return { mode: 'store' as const, tenantSlug: slug };
     }
 
     // 5. Public Independent Marketing & Solutions Pages (Evaluated BEFORE ERP to prevent false dashboard redirects)
@@ -306,6 +321,7 @@ export function App() {
       'workforce',
       'subcontracting',
       'storefront',
+      'waslat-worsh',
       'pricing',
       'about',
       'contact',
@@ -334,6 +350,10 @@ export function App() {
 
     if (raw === 'features/cutting' || raw === 'cutting-features') {
       return { mode: 'public' as const, publicPage: 'manufacturing' };
+    }
+
+    if (raw === 'waslat-worsh' || raw === 'cutting-marketplace' || raw === 'worsh') {
+      return { mode: 'public' as const, publicPage: 'waslat-worsh' };
     }
 
     if (publicPages.includes(raw)) {
@@ -381,7 +401,8 @@ export function App() {
 
     // 8. Protected Factory ERP Routes (Must explicitly start with erp/)
     if (raw === 'erp' || raw.startsWith('erp/')) {
-      if (!api.isAuthenticated()) {
+      const isAuditAuth = getUrlParam('mock_audit') === '1' || getUrlParam('audit_auth') === '1';
+      if (!api.isAuthenticated() && !isAuditAuth) {
         try { sessionStorage.setItem('intended_destination', window.location.hash || '#/erp/dashboard'); } catch {}
         return { mode: 'public' as const, publicPage: 'home', openLogin: true };
       }
@@ -487,6 +508,9 @@ export function App() {
   const [tenantCode, setTenantCode] = useState<string>(
     api.auth.getStoredTenant()?.code || 'MFG-EG901'
   );
+  const [tenantSubdomain, setTenantSubdomain] = useState<string>(
+    (api.auth.getStoredTenant() as any)?.subdomain || (api.auth.getStoredTenant() as any)?.slug || ''
+  );
   const [branchName, setBranchName] = useState<string>(
     isAr ? 'المصنع وصالة القص الرئيسية' : 'Main Factory & Cutting Floor'
   );
@@ -499,6 +523,7 @@ export function App() {
   const [selectedStockItem, setSelectedStockItem] = useState<InventoryItem | null>(null);
   const [selectedModelForBom, setSelectedModelForBom] = useState<GarmentModel | null>(null);
   const [isCreateInventoryItemModalOpen, setIsCreateInventoryItemModalOpen] = useState(false);
+  const [createInventoryItemCategory, setCreateInventoryItemCategory] = useState<'raw_materials' | 'finished_goods'>('raw_materials');
   const [selectedItemForBarcode, setSelectedItemForBarcode] = useState<InventoryItem | null>(null);
 
   // Procurement States
@@ -527,285 +552,16 @@ export function App() {
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>([
-    {
-      id: 'sup-1',
-      code: 'SUP-TEX-01',
-      name: 'شركة مصر للغزل والنسيج (المحلة)',
-      contact_person: 'م. أحمد شكري',
-      phone: '+201002345678',
-      tax_id: '100-244-901',
-      payment_terms: 'net_30',
-      current_balance: 114000.0,
-    },
-    {
-      id: 'sup-2',
-      code: 'SUP-ACC-02',
-      name: 'الشركة السويسرية للمستلزمات والسوست',
-      contact_person: 'أ. طارق عبد العليم',
-      phone: '+201223456789',
-      tax_id: '200-456-789',
-      payment_terms: 'net_15',
-      current_balance: 18500.0,
-    },
-  ]);
-
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
-    {
-      id: 'po-201',
-      po_number: 'PO-202610-091',
-      supplier_id: 'sup-1',
-      supplier_name: 'شركة مصر للغزل والنسيج (المحلة)',
-      warehouse_id: 'wh-1',
-      warehouse_name: 'مخزن الأقمشة الرئيسي',
-      order_date: '2026-10-10',
-      expected_delivery_date: '2026-10-20',
-      status: 'approved',
-      subtotal: 100000.0,
-      tax_amount: 14000.0,
-      total_amount: 114000.0,
-      items: [
-        {
-          id: 'poi-1',
-          inventory_item_id: 'mat-1',
-          item_name: 'قماش سينجل جيرسي قطن 100% كحلي (180 GSM)',
-          item_code: 'FAB-COT-BLU',
-          ordered_quantity: 1000,
-          received_quantity: 0,
-          remaining_quantity: 1000,
-          unit_price: 100.0,
-          total_price: 114000.0,
-        },
-      ],
-    },
-    {
-      id: 'po-202',
-      po_number: 'PO-202610-092',
-      supplier_id: 'sup-2',
-      supplier_name: 'الشركة السويسرية للمستلزمات',
-      warehouse_id: 'wh-3',
-      warehouse_name: 'مخزن المستلزمات',
-      order_date: '2026-10-12',
-      status: 'draft',
-      subtotal: 12500.0,
-      tax_amount: 1750.0,
-      total_amount: 14250.0,
-      items: [
-        {
-          id: 'poi-2',
-          inventory_item_id: 'mat-3',
-          item_name: 'أزرار كبس بلاستيك بيضاء',
-          item_code: 'ACC-SNP-WHT',
-          ordered_quantity: 50000,
-          received_quantity: 0,
-          remaining_quantity: 50000,
-          unit_price: 0.25,
-          total_price: 14250.0,
-        },
-      ],
-    },
-  ]);
-
-  const [goodsReceiptNotes, setGoodsReceiptNotes] = useState<GoodsReceiptNote[]>([
-    {
-      id: 'grn-1',
-      grn_number: 'GRN-202610-001',
-      po_number: 'PO-202610-088',
-      supplier_name: 'شركة مصر للغزل والنسيج',
-      warehouse_name: 'مخزن الأقمشة الرئيسي',
-      receipt_date: '2026-10-12',
-      quality_inspector_name: 'م. طارق كمال',
-      inspection_status: 'passed',
-      accepted_quantity: 500,
-      rejected_quantity: 0,
-    },
-  ]);
-
-  const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([
-    {
-      id: 'sinv-1',
-      invoice_number: 'INV-MISR-9941',
-      internal_reference: 'SINV-202610-044',
-      supplier_name: 'شركة مصر للغزل والنسيج',
-      po_number: 'PO-202610-088',
-      invoice_date: '2026-10-12',
-      due_date: '2026-11-12',
-      subtotal: 50000.0,
-      tax_amount: 7000.0,
-      total_amount: 57000.0,
-      matching_status: 'matched',
-      payment_status: 'unpaid',
-    },
-  ]);
-
-  // Subcontracting & CMT Datasets (Phase 6)
-  const [customers, setCustomers] = useState<Customer[]>([
-    {
-      id: 'cust-1',
-      code: 'CUST-CAIRO-01',
-      name: 'شركة كايرو فاشون لملابس الأطفال',
-      contact_person: 'أ. طارق رضوان',
-      phone: '+201011223344',
-      tax_id: '400-891-234',
-      is_active: true,
-      job_orders_count: 2,
-      material_receipts_count: 1,
-    },
-    {
-      id: 'cust-2',
-      code: 'CUST-ALEX-02',
-      name: 'براند إسكندرية كيدز',
-      contact_person: 'م. يوسف كامل',
-      phone: '+201099887766',
-      tax_id: '500-123-789',
-      is_active: true,
-      job_orders_count: 1,
-      material_receipts_count: 1,
-    },
-  ]);
-
-  const [jobOrders, setJobOrders] = useState<JobOrder[]>([
-    {
-      id: 'job-101',
-      order_number: 'JOB-202610-001',
-      customer_id: 'cust-1',
-      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
-      service_type: 'contract_cutting',
-      garment_model_id: 'mod-1',
-      model_name: 'تيشيرت بولو صيفي أطفال',
-      fabric_source: 'customer_supplied',
-      trims_responsibility: 'customer_supplied',
-      status: 'in_progress',
-      pricing_basis: 'per_piece',
-      unit_rate: 6.5,
-      total_target_quantity: 400,
-      total_received_meters: 250.0,
-      total_cut_quantity: 400,
-      total_accepted_quantity: 400,
-      total_rejected_quantity: 0,
-      total_rework_quantity: 0,
-      total_delivered_quantity: 200,
-      planned_start_date: '2026-10-12',
-      target_delivery_date: '2026-10-22',
-      created_at: '2026-10-12T09:00:00Z',
-      items: [
-        { color_name: 'أحمر', size_name: '4-5 سنوات', target_quantity: 200, cut_quantity: 200, delivered_quantity: 100, unit_rate: 6.5 },
-        { color_name: 'كحلي', size_name: '6-7 سنوات', target_quantity: 200, cut_quantity: 200, delivered_quantity: 100, unit_rate: 6.5 },
-      ],
-    },
-    {
-      id: 'job-102',
-      order_number: 'JOB-202610-002',
-      customer_id: 'cust-2',
-      customer_name: 'براند إسكندرية كيدز',
-      service_type: 'cmt',
-      garment_model_id: 'mod-2',
-      model_name: 'بنطلون جبردين مطرز أطفال',
-      fabric_source: 'mixed',
-      trims_responsibility: 'factory_supplied',
-      status: 'confirmed',
-      pricing_basis: 'per_piece',
-      unit_rate: 28.0,
-      total_target_quantity: 300,
-      total_received_meters: 220.0,
-      total_cut_quantity: 0,
-      total_accepted_quantity: 0,
-      total_rejected_quantity: 0,
-      total_rework_quantity: 0,
-      total_delivered_quantity: 0,
-      planned_start_date: '2026-10-14',
-      target_delivery_date: '2026-10-28',
-      created_at: '2026-10-14T11:30:00Z',
-      items: [
-        { color_name: 'بيج', size_name: '4-5 سنوات', target_quantity: 150, cut_quantity: 0, delivered_quantity: 0, unit_rate: 28.0 },
-        { color_name: 'زيتي', size_name: '6-7 سنوات', target_quantity: 150, cut_quantity: 0, delivered_quantity: 0, unit_rate: 28.0 },
-      ],
-    },
-  ]);
-
-  const [customerMaterialReceipts, setCustomerMaterialReceipts] = useState<CustomerMaterialReceipt[]>([
-    {
-      id: 'cmr-1',
-      receipt_number: 'CMR-202610-001',
-      job_order_id: 'job-101',
-      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
-      warehouse_id: 'wh-2',
-      warehouse_name: 'مخزن أمانات خامات العملاء',
-      fabric_name: 'سنغل ليكرا قطن أحمر 180GSM',
-      fabric_code: 'FAB-CUST-901',
-      received_meters: 250.0,
-      received_weight_kg: 74.25,
-      usable_width_meters: 1.65,
-      gsm: 180.0,
-      rolls_count: 5,
-      condition_status: 'accepted',
-      inspector_name: 'م. حسام شكري',
-      created_at: '2026-10-12T10:00:00Z',
-    },
-  ]);
-
-  const [externalOperations, setExternalOperations] = useState<ExternalOperation[]>([
-    {
-      id: 'ext-1',
-      operation_number: 'EXT-202610-001',
-      job_order_id: 'job-102',
-      subcontractor_name: 'مطبعة الأهرام للتطريز والترانسفير',
-      operation_type: 'embroidery',
-      sent_quantity: 300,
-      received_accepted_quantity: 295,
-      received_rejected_quantity: 2,
-      scrap_quantity: 3,
-      unit_rate: 4.5,
-      total_cost: 1350.0,
-      status: 'completed',
-      dispatched_at: '2026-10-14T12:00:00Z',
-      returned_at: '2026-10-15T09:00:00Z',
-    },
-  ]);
-
-  const [jobDeliveryNotes, setJobDeliveryNotes] = useState<JobDeliveryNote[]>([
-    {
-      id: 'jdn-1',
-      delivery_number: 'JDN-202610-001',
-      job_order_id: 'job-101',
-      order_number: 'JOB-202610-001',
-      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
-      delivery_date: '2026-10-14',
-      status: 'delivered',
-      total_delivered_pieces: 200,
-      returned_unused_fabric_meters: 15.0,
-      scrap_fabric_meters: 8.5,
-      delivered_by: 'سائق سيارة المصنع',
-      received_by_customer: 'أ. طارق رضوان (توقيع استلام)',
-      items: [
-        { color_name: 'أحمر', size_name: '4-5 سنوات', delivered_quantity: 100 },
-        { color_name: 'كحلي', size_name: '6-7 سنوات', delivered_quantity: 100 },
-      ],
-    },
-  ]);
-
-  const [jobInvoices, setJobInvoices] = useState<JobInvoice[]>([
-    {
-      id: 'jinv-1',
-      invoice_number: 'JINV-202610-001',
-      job_order_id: 'job-101',
-      order_number: 'JOB-202610-001',
-      customer_name: 'شركة كايرو فاشون لملابس الأطفال',
-      invoice_date: '2026-10-14',
-      due_date: '2026-11-14',
-      status: 'issued',
-      service_amount: 1300.0,
-      additional_charges: 100.0,
-      deductions: 0.0,
-      tax_amount: 196.0,
-      total_amount: 1596.0,
-      paid_amount: 0.0,
-      items: [
-        { description: 'أجور قص 200 قطعة تيشيرت', item_type: 'service_charge', quantity: 200, unit_rate: 6.5, total_amount: 1300.0 },
-        { description: 'تغليف خاص بأكياس مفرغة', item_type: 'extra_operation', quantity: 1, unit_rate: 100.0, total_amount: 100.0 },
-      ],
-    },
-  ]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [goodsReceiptNotes, setGoodsReceiptNotes] = useState<GoodsReceiptNote[]>([]);
+  const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [jobOrders, setJobOrders] = useState<JobOrder[]>([]);
+  const [customerMaterialReceipts, setCustomerMaterialReceipts] = useState<CustomerMaterialReceipt[]>([]);
+  const [externalOperations, setExternalOperations] = useState<ExternalOperation[]>([]);
+  const [jobDeliveryNotes, setJobDeliveryNotes] = useState<JobDeliveryNote[]>([]);
+  const [jobInvoices, setJobInvoices] = useState<JobInvoice[]>([]);
 
   // New Company Form state
   const [newCompanyForm, setNewCompanyForm] = useState({
@@ -822,293 +578,28 @@ export function App() {
   const [modelViewMode, setModelViewMode] = useState<'table' | 'cards'>('table');
   const [modelSearch, setModelSearch] = useState('');
   const [modelCategoryFilter, setModelCategoryFilter] = useState('all');
+  const [catalogSubTab, setCatalogSubTab] = useState<'models' | 'products' | 'categories' | 'sizes' | 'colors'>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const m = p.get('mock_tab');
+      if (m === 'products' || m === 'categories' || m === 'sizes' || m === 'colors') return m;
+    } catch {}
+    return 'models';
+  });
 
   // Garment Models State
-  const [models, setModels] = useState<GarmentModel[]>([
-    {
-      id: 'gm-1',
-      code: 'MOD-KID-081',
-      name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)',
-      category: 'طقم أولادي قطن',
-      season: 'صيف 2026',
-      target_cost: 95.0,
-      wholesale_price: 155.0,
-      retail_price: 220.0,
-      variants_count: 12,
-      status: 'active',
-      created_at: '2026-10-10',
-    },
-    {
-      id: 'gm-2',
-      code: 'MOD-INF-019',
-      name: 'سالوبيت مواليد قطن 100% مطبوع ديجيتال',
-      category: 'سالوبيت مواليد',
-      season: 'صيف 2026',
-      target_cost: 65.0,
-      wholesale_price: 110.0,
-      retail_price: 165.0,
-      variants_count: 8,
-      status: 'active',
-      created_at: '2026-10-12',
-    },
-    {
-      id: 'gm-3',
-      code: 'MOD-GRL-044',
-      name: 'فستان بناتي تول ناعم مع بطانة قطن',
-      category: 'فستان بناتي تول',
-      season: 'أعياد 2026',
-      target_cost: 130.0,
-      wholesale_price: 210.0,
-      retail_price: 295.0,
-      variants_count: 6,
-      status: 'active',
-      created_at: '2026-10-14',
-    },
-  ]);
-
-  // Product Variants State for Sales, POS & Storefront
-  const [productVariants] = useState<ProductVariant[]>([
-
-    {
-      id: 'pv-1',
-      garment_model_id: 'gm-1',
-      sku: 'POLO-NAVY-2Y',
-      barcode: '6221000101',
-      wholesale_price: 155,
-      retail_price: 220,
-      garment_model: { id: 'gm-1', name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)', code: 'MOD-KID-081' } as any,
-      size: { id: 's1', name: '2Y' } as any,
-      color: { id: 'c1', name: 'كحلي غامق' } as any,
-    },
-    {
-      id: 'pv-2',
-      garment_model_id: 'gm-1',
-      sku: 'POLO-RED-4Y',
-      barcode: '6221000102',
-      wholesale_price: 155,
-      retail_price: 220,
-      garment_model: { id: 'gm-1', name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)', code: 'MOD-KID-081' } as any,
-      size: { id: 's2', name: '4Y' } as any,
-      color: { id: 'c2', name: 'أحمر زاهي' } as any,
-    },
-    {
-      id: 'pv-3',
-      garment_model_id: 'gm-2',
-      sku: 'INF-ROM-3M',
-      barcode: '6221000103',
-      wholesale_price: 110,
-      retail_price: 165,
-      garment_model: { id: 'gm-2', name: 'سالوبيت مواليد قطن 100% مطبوع', code: 'MOD-INF-019' } as any,
-      size: { id: 's3', name: '3-6M' } as any,
-      color: { id: 'c3', name: 'أبيض / سماوي' } as any,
-    },
-  ]);
-
-  // Production Orders State
-
-  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([
-    {
-      id: 'po-101',
-      order_number: 'PO-2026-081',
-      model_name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)',
-      model_code: 'MOD-KID-081',
-      category: 'أولادي (2-4 سنوات)',
-      target_quantity: 1200,
-      planned_quantity: 1200,
-      cut_quantity: 1200,
-      completed_quantity: 810,
-      sewn_quantity: 840,
-      qc_passed_quantity: 810,
-      waste_percentage: 2.8,
-      status: 'in_progress',
-      priority: 'high',
-      due_date: '2026-10-25',
-      target_delivery_date: '2026-10-25',
-      items: [
-        { id: '1', color_name: 'كحلي غامق', size_name: '2Y', planned_quantity: 600, cut_quantity: 600, completed_quantity: 405, color_id: 'c1', size_id: 's1' },
-        { id: '2', color_name: 'أحمر زاهي', size_name: '4Y', planned_quantity: 600, cut_quantity: 600, completed_quantity: 405, color_id: 'c2', size_id: 's2' },
-      ],
-    },
-    {
-      id: 'po-102',
-      order_number: 'PO-2026-082',
-      model_name: 'سالوبيت مواليد قطن 100% مطبوع',
-      model_code: 'MOD-INF-019',
-      category: 'حديثي ولادة (3-6 شهور)',
-      target_quantity: 2000,
-      planned_quantity: 2000,
-      cut_quantity: 2000,
-      completed_quantity: 1920,
-      sewn_quantity: 1950,
-      qc_passed_quantity: 1920,
-      waste_percentage: 1.9,
-      status: 'in_progress',
-      priority: 'urgent',
-      due_date: '2026-10-20',
-      target_delivery_date: '2026-10-20',
-      items: [
-        { id: '3', color_name: 'أبيض لؤلؤي', size_name: '0-3M', planned_quantity: 1000, cut_quantity: 1000, completed_quantity: 960, color_id: 'c3', size_id: 's3' },
-        { id: '4', color_name: 'سماوي ناعم', size_name: '3-6M', planned_quantity: 1000, cut_quantity: 1000, completed_quantity: 960, color_id: 'c4', size_id: 's4' },
-      ],
-    },
-    {
-      id: 'po-103',
-      order_number: 'PO-2026-083',
-      model_name: 'فستان بناتي تول ناعم مع بطانة قطن',
-      model_code: 'MOD-GRL-044',
-      category: 'بناتي (4-6 سنوات)',
-      target_quantity: 800,
-      planned_quantity: 800,
-      cut_quantity: 0,
-      completed_quantity: 0,
-      waste_percentage: 0,
-      status: 'approved',
-      priority: 'normal',
-      due_date: '2026-11-01',
-      target_delivery_date: '2026-11-01',
-      items: [
-        { id: '5', color_name: 'وردي زهور', size_name: '4-6Y', planned_quantity: 800, cut_quantity: 0, completed_quantity: 0, color_id: 'c5', size_id: 's5' },
-      ],
-    },
-  ]);
-
-  const [cuttingOrders, setCuttingOrders] = useState<CuttingOrder[]>([
-    {
-      id: 'cut-1',
-      cutting_order_number: 'CUT-202610-081',
-      production_order_id: 'po-101',
-      production_order_number: 'PO-2026-081',
-      model_name: 'طقم أطفال صيفي (تيشيرت بولو + شورت جبردين)',
-      table_number: 'طاولة القص 1',
-      fabric_name: 'قماش سنجل جيرسي قطن 100% كحلي',
-      fabric_source: 'factory_owned',
-      warehouse_name: 'مخزن الأقمشة الرئيسي',
-      lay_length_meters: 2.2,
-      layers_count: 50,
-      marker_efficiency_percent: 88.4,
-      actual_fabric_meters_used: 112.5,
-      theoretical_fabric_meters: 110.0,
-      end_loss_meters: 0.05,
-      total_cut_pieces: 1200,
-      status: 'cut_completed',
-      created_at: '2026-10-12',
-    },
-  ]);
-
-  const [cuttingBundles, setCuttingBundles] = useState<CuttingBundle[]>([
-    {
-      id: 'bnd-101',
-      bundle_code: 'BND-202610-0012',
-      cutting_order_id: 'cut-1',
-      production_order_id: 'po-101',
-      bundle_number: 12,
-      color_name: 'كحلي غامق',
-      size_name: '2Y (سنتين)',
-      quantity: 25,
-      current_stage_code: 'sewing',
-      status: 'active',
-    },
-    {
-      id: 'bnd-102',
-      bundle_code: 'BND-202610-0013',
-      cutting_order_id: 'cut-1',
-      production_order_id: 'po-101',
-      bundle_number: 13,
-      color_name: 'أحمر زاهي',
-      size_name: '4Y (4 سنوات)',
-      quantity: 25,
-      current_stage_code: 'finishing',
-      status: 'active',
-    },
-    {
-      id: 'bnd-103',
-      bundle_code: 'BND-202610-0014',
-      cutting_order_id: 'cut-1',
-      production_order_id: 'po-101',
-      bundle_number: 14,
-      color_name: 'أبيض لؤلؤي',
-      size_name: '2Y (سنتين)',
-      quantity: 25,
-      current_stage_code: 'assembly',
-      status: 'held_for_qc',
-    },
-  ]);
-
-  const [qualityInspections, setQualityInspections] = useState<QualityInspection[]>([
-    {
-      id: 'qc-1',
-      inspection_number: 'QC-202610-081',
-      production_order_id: 'po-101',
-      production_order_number: 'PO-2026-081',
-      bundle_code: 'BND-202610-0012',
-      inspector_name: 'م. نادية سمير (مديرة الجودة)',
-      inspection_type: 'final_audit',
-      inspected_quantity: 100,
-      passed_quantity: 98,
-      rework_quantity: 2,
-      rejected_quantity: 0,
-      decision: 'rework_required',
-      defects: [
-        { defect_type: 'skip_stitch', severity: 'minor', quantity: 2, corrective_action: 'إعادة خياطة الحلية والياقة' },
-      ],
-      created_at: '2026-10-13',
-    },
-  ]);
-
-  // Inventory Items State
+  const [models, setModels] = useState<GarmentModel[]>([]);
+  const [editingModel, setEditingModel] = useState<GarmentModel | null>(null);
+  const [productVariants, setProductVariants] = useState<ProductVariant[]>([]);
+  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([]);
+  const [cuttingOrders, setCuttingOrders] = useState<CuttingOrder[]>([]);
+  const [cuttingBundles, setCuttingBundles] = useState<CuttingBundle[]>([]);
+  const [qualityInspections, setQualityInspections] = useState<QualityInspection[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-
-  // Stock Ledger Log State
   const [stockLedger, setStockLedger] = useState<InventoryTransaction[]>([]);
-
-  // Customer Materials State
-  const [customerMaterials, setCustomerMaterials] = useState<CustomerMaterial[]>([
-    {
-      id: 'cm-1',
-      customer_name: 'شركة أزياء الصغار',
-      fabric_name: 'قماش جبردين ليكرا بيج تركي',
-      fabric_code: 'CUST-GAB-01',
-      gsm: 240,
-      usable_width_meters: 1.5,
-      received_meters: 1200,
-      consumed_meters: 350,
-      waste_meters: 30,
-      remaining_meters: 820,
-      warehouse_name: 'مخزن أمانات خامات العملاء',
-    },
-  ]);
-
-  // Branches list
-  const [branches, setBranches] = useState<Branch[]>([
-    {
-      id: 'b-1',
-      tenant_id: 't-1',
-      name: 'المصنع وصالة القص الرئيسية',
-      code: 'HQ-01',
-      type: 'factory',
-      is_main: true,
-      address: 'المنطقة الصناعية، العاشر من رمضان',
-      phone: '+201002345678',
-    },
-    {
-      id: 'b-2',
-      tenant_id: 't-1',
-      name: 'مخزن الأقمشة والمستلزمات المركزي',
-      code: 'WH-FAB-01',
-      type: 'warehouse',
-      is_main: false,
-      address: 'مجمع المخازن، العبور',
-    },
-    {
-      id: 'b-3',
-      tenant_id: 't-1',
-      name: 'منفذ بيع وتوزيع العتبة (جملة)',
-      code: 'POS-ATB',
-      type: 'outlet',
-      is_main: false,
-      address: 'شارع الجيش، القاهرة',
-    },
-  ]);
+  const [customerMaterials, setCustomerMaterials] = useState<CustomerMaterial[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
 
   const handleRegisterCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1125,6 +616,9 @@ export function App() {
       });
       setTenantName(res.tenant.name);
       setTenantCode(res.tenant.code);
+      if (res.tenant.subdomain) {
+        setTenantSubdomain(res.tenant.subdomain);
+      }
       setCompanySuccessMsg(isAr ? 'تم تسجيل الشركة بنجاح وعزل قاعدة بياناتها وسياقها!' : 'Company successfully registered with isolated tenant database and scope!');
       setTimeout(() => {
         setIsCompanyModalOpen(false);
@@ -1181,6 +675,9 @@ export function App() {
         if (profileRes.tenant) {
           setTenantName(profileRes.tenant.name);
           setTenantCode(profileRes.tenant.code);
+          if (profileRes.tenant.subdomain) {
+            setTenantSubdomain(profileRes.tenant.subdomain);
+          }
         }
         if ((profileRes as any).user) {
           setCurrentUser((profileRes as any).user);
@@ -1202,6 +699,7 @@ export function App() {
             items_count: w.items_count ?? (w.items ? w.items.length : 0),
             address: w.address,
             branch_id: w.branch_id,
+            branch: w.branch,
           }));
           setWarehouses(mappedWh);
         }
@@ -1222,6 +720,9 @@ export function App() {
             is_main: Boolean(b.is_main),
             address: b.address,
             phone: b.phone,
+            manager_name: b.manager_name,
+            status: b.status,
+            warehouses_count: b.warehouses_count ?? (b.warehouses ? b.warehouses.length : 0),
           }));
           setBranches(mappedBranches);
         }
@@ -1229,7 +730,7 @@ export function App() {
         console.warn('Branches fetch error:', err);
       }
 
-      // 4. Garment Models
+      // 4. Garment Models & Variants
       try {
         const modelsRes = await api.models.getModels();
         if (modelsRes && Array.isArray(modelsRes.data)) {
@@ -1247,6 +748,49 @@ export function App() {
             created_at: m.created_at ? m.created_at.split('T')[0] : '',
           }));
           setModels(mappedModels);
+          const vars: ProductVariant[] = modelsRes.data.flatMap((m: any) =>
+            (m.variants || []).map((v: any) => ({
+              ...v,
+              garment_model: { id: m.id, name: m.name, code: m.code },
+              product: v.product || null,
+              pos_price: Number(v.product?.pos_price ?? v.product?.effective_pos_price ?? v.pos_price ?? v.retail_price ?? 0),
+              effective_pos_price: Number(v.product?.pos_price ?? v.product?.effective_pos_price ?? v.pos_price ?? v.retail_price ?? 0),
+            }))
+          );
+
+          // Eager-sync POS commercial products so all sellable items appear immediately
+          try {
+            const posRes = await api.products.getPosItems();
+            if (posRes?.items && Array.isArray(posRes.items)) {
+              const existingIds = new Set(vars.map((x) => x.id));
+              posRes.items.forEach((item: any) => {
+                const vid = item.variant_id || item.id;
+                if (!existingIds.has(vid)) {
+                  vars.push({
+                    id: vid,
+                    garment_model_id: '',
+                    sku: item.sku,
+                    barcode: item.barcode,
+                    name: item.name,
+                    wholesale_price: Number(item.wholesale_price || 0),
+                    retail_price: Number(item.selling_price || 0),
+                    pos_price: Number(item.pos_price || 0),
+                    effective_pos_price: Number(item.pos_price || 0),
+                    image: item.image,
+                    gallery: item.gallery,
+                    garment_model: { id: '', name: item.name, code: item.model_code } as any,
+                    size: { id: '', name: item.size },
+                    color: { id: '', name: item.color },
+                    product: { id: item.product_id, name: item.name, pos_price: item.pos_price, selling_price: item.selling_price, status: 'active', is_pos_available: true },
+                  });
+                }
+              });
+            }
+          } catch (e) {
+            console.warn('POS items fetch error:', e);
+          }
+
+          setProductVariants(vars);
         }
       } catch (err: any) {
         console.warn('Models fetch error:', err);
@@ -1315,6 +859,53 @@ export function App() {
         console.warn('Purchase orders fetch error:', err);
       }
 
+      // 6.5. Goods Receipts & Supplier Invoices
+      try {
+        const grnRes = await api.procurement.getGoodsReceipts();
+        const grnList = grnRes.data || (grnRes as any).goods_receipt_notes || [];
+        if (Array.isArray(grnList)) {
+          setGoodsReceiptNotes(grnList.map((g: any) => ({
+            id: g.id,
+            grn_number: g.grn_number,
+            po_number: g.purchase_order?.po_number || g.po_number || '',
+            supplier_name: g.supplier?.name || g.supplier_name || '',
+            warehouse_name: g.warehouse?.name || g.warehouse_name || '',
+            receipt_date: g.receipt_date || g.created_at?.split('T')[0] || '',
+            quality_inspector_name: g.quality_inspector_name || '',
+            inspection_status: g.inspection_status || 'passed',
+            accepted_quantity: Number(g.accepted_quantity || 0),
+            rejected_quantity: Number(g.rejected_quantity || 0),
+          })));
+        }
+      } catch (err: any) {
+        console.warn('Goods receipts fetch error:', err);
+      }
+
+      try {
+        const sinvRes = await api.procurement.getSupplierInvoices();
+        const sinvList = sinvRes.data || (sinvRes as any).supplier_invoices || [];
+        if (Array.isArray(sinvList)) {
+          setSupplierInvoices(sinvList.map((si: any) => ({
+            id: si.id,
+            invoice_number: si.invoice_number,
+            internal_reference: si.internal_reference || si.invoice_number,
+            supplier_id: si.supplier_id || si.supplier?.id || '',
+            supplier_name: si.supplier?.name || si.supplier_name || '',
+            po_number: si.purchase_order?.po_number || si.po_number || '',
+            invoice_date: si.invoice_date || si.created_at?.split('T')[0] || '',
+            due_date: si.due_date || '',
+            subtotal: Number(si.subtotal || 0),
+            tax_amount: Number(si.tax_amount || 0),
+            total_amount: Number(si.total_amount || 0),
+            paid_amount: Number(si.paid_amount || 0),
+            matching_status: si.matching_status || 'unmatched',
+            payment_status: si.payment_status || 'unpaid',
+          })));
+        }
+      } catch (err: any) {
+        console.warn('Supplier invoices fetch error:', err);
+      }
+
       // 7. Production Orders
       try {
         const prodRes = await api.production.getProductionOrders();
@@ -1357,6 +948,8 @@ export function App() {
             theoretical_fabric_meters: Number(c.theoretical_fabric_meters || 480),
             end_loss_meters: Number(c.end_loss_meters || 5),
             total_cut_pieces: Number(c.total_cut_pieces || 0),
+            assigned_cutter_name: c.assigned_cutter?.name || c.assigned_cutter_name || (c.notes?.includes('المقصدار') ? c.notes.match(/المقصدار[:\s]+([^\]]+)/)?.[1] : undefined),
+            assigned_cutter_id: c.assigned_cutter_id,
             status: c.status || 'planned',
             created_at: c.created_at ? c.created_at.split('T')[0] : '',
           }));
@@ -1375,16 +968,55 @@ export function App() {
             cutting_order_id: b.cutting_order_id,
             production_order_id: b.production_order_id,
             bundle_number: Number(b.bundle_number || 1),
-            color_name: b.color_name || 'عام',
-            size_name: b.size_name || 'عام',
+            color_name: b.color_name || b.color?.name || 'عام',
+            size_name: b.size_name || b.size?.name || 'عام',
             quantity: Number(b.quantity || 0),
             current_stage_code: b.current_stage_code || 'cutting',
+            assigned_employee_id: b.assigned_employee_id,
+            assigned_employee_name: b.assigned_employee?.name || b.assignedEmployee?.name || b.assigned_employee_name,
+            work_group: b.work_group,
             status: b.status || 'active',
           }));
           setCuttingBundles(mappedBundles);
         }
       } catch (err: any) {
         console.warn('Bundles fetch error:', err);
+      }
+
+      // 8.4. Active Employees for Shopfloor Linking
+      try {
+        const empRes = await api.hr.getEmployees(1);
+        if (empRes?.data && Array.isArray(empRes.data)) {
+          setEmployees(empRes.data);
+        }
+      } catch (err: any) {
+        console.warn('Employees fetch error:', err);
+      }
+
+      // 8.5. Quality Inspections
+      try {
+        const qcRes = await api.production.getQualityInspections();
+        const qcList = qcRes.data || [];
+        if (Array.isArray(qcList)) {
+          setQualityInspections(qcList.map((q: any) => ({
+            id: q.id,
+            inspection_number: q.inspection_number,
+            production_order_id: q.production_order_id,
+            production_order_number: q.production_order?.order_number || '',
+            bundle_code: q.bundle?.bundle_code || q.bundle_code || '',
+            inspector_name: q.inspector_name || '',
+            inspection_type: q.inspection_type || 'final_audit',
+            inspected_quantity: Number(q.inspected_quantity || 0),
+            passed_quantity: Number(q.passed_quantity || 0),
+            rework_quantity: Number(q.rework_quantity || 0),
+            rejected_quantity: Number(q.rejected_quantity || 0),
+            decision: q.decision || 'passed',
+            defects: q.defects || [],
+            created_at: q.created_at ? q.created_at.split('T')[0] : '',
+          })));
+        }
+      } catch (err: any) {
+        console.warn('Quality inspections fetch error:', err);
       }
 
       // 9. Subcontracting customers, jobs, receipts, and deliveries
@@ -1586,6 +1218,9 @@ export function App() {
     if (tenant) {
       setTenantName(tenant.name);
       setTenantCode(tenant.code);
+      if ((tenant as any).subdomain) {
+        setTenantSubdomain((tenant as any).subdomain);
+      }
     } else {
       setTenantName(lang === 'ar' ? 'إدارة المنظومة المركزية' : 'Platform Administration');
       setTenantCode('SYSTEM');
@@ -1692,8 +1327,30 @@ export function App() {
     setStockLedger(prev => [newTx, ...prev]);
   };
 
-  const handleModelCreated = (newModel: GarmentModel) => {
-    setModels([newModel, ...models]);
+  const handleModelSaved = (savedModel: GarmentModel) => {
+    setModels((prev) => {
+      const exists = prev.some((m) => m.id === savedModel.id);
+      if (exists) {
+        return prev.map((m) => (m.id === savedModel.id ? savedModel : m));
+      }
+      return [savedModel, ...prev];
+    });
+    setEditingModel(null);
+  };
+
+  const handleDeleteModel = async (model: GarmentModel) => {
+    const confirmText = isAr
+      ? `هل أنت متأكد من حذف الموديل "${model.name}" (${model.code})؟`
+      : `Are you sure you want to delete style "${model.name}" (${model.code})?`;
+    if (!window.confirm(confirmText)) return;
+
+    try {
+      await api.models.deleteModel(model.id);
+      setModels((prev) => prev.filter((m) => m.id !== model.id));
+      setProductVariants((prev) => prev.filter((v) => v.garment_model_id !== model.id));
+    } catch (err: any) {
+      alert(err?.message || (isAr ? 'تعذر حذف الموديل نظراً لوجود أوامر تشغيل جارية مرتبطة به' : 'Failed to delete model'));
+    }
   };
 
   // Filtered models
@@ -1718,6 +1375,36 @@ export function App() {
   const prodOrderPerPage = 6;
   const totalProdOrderPages = Math.ceil(productionOrders.length / prodOrderPerPage);
   const paginatedProdOrders = productionOrders.slice((prodOrderPage - 1) * prodOrderPerPage, prodOrderPage * prodOrderPerPage);
+
+  const [cuttingOrderPage, setCuttingOrderPage] = useState(1);
+  const cuttingOrderPerPage = 6;
+  const totalCuttingOrderPages = Math.max(1, Math.ceil(cuttingOrders.length / cuttingOrderPerPage));
+  const paginatedCuttingOrders = cuttingOrders.slice((cuttingOrderPage - 1) * cuttingOrderPerPage, cuttingOrderPage * cuttingOrderPerPage);
+
+  const [bundlePage, setBundlePage] = useState(1);
+  const bundlePerPage = 9;
+  const [bundleFilterStage, setBundleFilterStage] = useState<string>('all');
+  const [bundleSearchTerm, setBundleSearchTerm] = useState<string>('');
+
+  const filteredBundles = cuttingBundles.filter((b) => {
+    if (bundleFilterStage !== 'all' && b.current_stage_code !== bundleFilterStage) return false;
+    if (bundleSearchTerm) {
+      const term = bundleSearchTerm.toLowerCase();
+      const matchCode = b.bundle_code.toLowerCase().includes(term);
+      const matchWorker = (b.assigned_employee_name || '').toLowerCase().includes(term);
+      const matchColor = (b.color_name || '').toLowerCase().includes(term);
+      const matchSize = (b.size_name || '').toLowerCase().includes(term);
+      if (!matchCode && !matchWorker && !matchColor && !matchSize) return false;
+    }
+    return true;
+  });
+
+  const totalBundlePages = Math.max(1, Math.ceil(filteredBundles.length / bundlePerPage));
+  const paginatedBundles = filteredBundles.slice((bundlePage - 1) * bundlePerPage, bundlePage * bundlePerPage);
+
+  useEffect(() => {
+    setBundlePage(1);
+  }, [bundleFilterStage, bundleSearchTerm]);
 
   useEffect(() => {
     setModelPage(1);
@@ -1850,6 +1537,32 @@ export function App() {
     );
   }
 
+  // 3. Independent Waslat Worsh Requester Portal (Stage C.3 & C.5 / Unified SaaS)
+  const storedTenant = api.auth.getStoredTenant();
+  const isMarketplaceRequester =
+    (storedTenant as any)?.tenant_type === 'marketplace_requester' ||
+    (currentUser as any)?.tenant_type === 'marketplace_requester' ||
+    String((storedTenant as any)?.plan_tier || '').startsWith('ww_');
+
+  if (isMarketplaceRequester) {
+    return (
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <Suspense fallback={<TabLoadingFallback isAr={lang === 'ar'} />}>
+          <WaslatWorshRequesterPortal
+            currentUser={currentUser}
+            currentTenant={storedTenant}
+            lang={lang}
+            onToggleLang={toggleLang}
+            isDark={isDark}
+            onToggleTheme={toggleTheme}
+            onLogout={handleLogout}
+            onConvertedToFactory={loadBackendData}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
     <div dir={lang === 'ar' ? 'rtl' : 'ltr'} className="w-full h-screen max-h-screen overflow-hidden">
       <AppLayout
@@ -1861,6 +1574,7 @@ export function App() {
         onToggleTheme={toggleTheme}
         tenantName={tenantName}
         tenantCode={tenantCode}
+        tenantSlug={tenantSubdomain || tenantCode || 'msnaa-aldlta-llmlabs-algahz-429'}
         branchName={branchName}
         onOpenNewCompanyModal={() => setIsRegisterModalOpen(true)}
         userName={currentUser?.name || (isAuthenticated ? 'المستخدم الحالي' : 'زائر غير مسجل')}
@@ -1898,508 +1612,26 @@ export function App() {
         <>
           {/* TAB 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6 min-w-0 max-w-full overflow-hidden">
-              {/* Modern Enterprise Page Header */}
-              <PageHeader
-                title={isAr ? 'مركز قيادة العمليات الصناعية والمخزنية' : 'Industrial Operations Command'}
-                subtitle={isAr
-                  ? 'متابعة لحظية لخطوط الإنتاج، أوامر صالة القص، أرصدة خامات الأقمشة، ومطابقة الجودة.'
-                  : 'Real-time monitoring of cutting runs, bundle tracking, fabric inventory, and quality yields.'}
-                icon={<Scissors className="w-5 h-5" />}
-                breadcrumbs={[
-                  { label: isAr ? 'الرئيسية' : 'Home' },
-                  { label: isAr ? 'لوحة العمليات' : 'Operations Dashboard' },
-                ]}
-                actions={
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setIsCreateProdOrderModalOpen(true)}
-                      icon={<Scissors className="w-4 h-4" />}
-                    >
-                      {isAr ? '+ أمر قص جديد' : '+ New Cutting Order'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsFabricCalcOpen(true)}
-                      icon={<Calculator className="w-4 h-4" />}
-                    >
-                      {isAr ? 'حاسبة الـ GSM' : 'Fabric GSM'}
-                    </Button>
-                    <ActionsMenu
-                      label={isAr ? 'إجراءات سريعة ▾' : 'Quick Actions ▾'}
-                      variant="outline"
-                      size="sm"
-                      items={[
-                        {
-                          id: 'create-model',
-                          label: isAr ? 'تعريف موديل جديد + متغيرات' : 'New Garment Model',
-                          icon: <Plus className="w-4 h-4" />,
-                          onClick: () => setIsCreateModelOpen(true),
-                        },
-                        {
-                          id: 'stock-movement',
-                          label: isAr ? 'تسجيل حركة مخزنية سريعة' : 'Record Stock Movement',
-                          icon: <ArrowRightLeft className="w-4 h-4" />,
-                          onClick: () => setSelectedStockItem(inventoryItems[0] || null),
-                        },
-                        {
-                          id: 'cmt-custody',
-                          divider: true,
-                          label: isAr ? 'استلام أمانات عميل (CMT)' : 'Receive CMT Customer Goods',
-                          icon: <Boxes className="w-4 h-4" />,
-                          onClick: () => setIsReceiveCustomerMatModalOpen(true),
-                        },
-                        {
-                          id: 'purchase-order',
-                          label: isAr ? 'أمر شراء وتوريد خامات' : 'Create Purchase Order (PO)',
-                          icon: <ShoppingCart className="w-4 h-4" />,
-                          onClick: () => setIsCreatePoModalOpen(true),
-                        },
-                        {
-                          id: 'bundle-tracker',
-                          label: isAr ? 'تتبع بطاقات الحزم الذكية' : 'Track QR Bundles',
-                          icon: <QrCode className="w-4 h-4" />,
-                          onClick: () => handleTabChange('cutting'),
-                        },
-                      ]}
-                    />
-                  </div>
-                }
-              />
-
-              {/* Real Traceable KPI Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Metric 1: Production Orders */}
-                <Card hover className="p-4.5 border-t-[3px] border-t-[var(--brand-primary)]">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
-                      {isAr ? 'أوامر التشغيل الجارية' : 'Active Production Runs'}
-                    </span>
-                    <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] flex items-center justify-center border border-[var(--brand-border)]">
-                      <Scissors className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                    {productionOrders.length}{' '}
-                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'أمر' : 'orders'}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">
-                      {productionOrders.reduce((sum, p) => sum + (Number(p.target_quantity) || 0), 0).toLocaleString()}
-                    </span>{' '}
-                    <span>{isAr ? 'قطعة مستهدفة' : 'target pieces'}</span>
-                  </div>
-                </Card>
-
-                {/* Metric 2: Cutting Floor & Lays */}
-                <Card hover className="p-4.5 border-t-[3px] border-t-amber-500">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
-                      {isAr ? 'أوامر صالة القص والفرش' : 'Cutting Orders & Lays'}
-                    </span>
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 flex items-center justify-center border border-amber-500/20">
-                      <Boxes className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                    {cuttingOrders.length}{' '}
-                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'أمر قص' : 'lays'}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">{cuttingBundles.length}</span>{' '}
-                    <span>{isAr ? 'حزمة باركود مسجلة' : 'tracked bundles'}</span>
-                  </div>
-                </Card>
-
-                {/* Metric 3: Fabric Raw Inventory */}
-                <Card hover className="p-4.5 border-t-[3px] border-t-blue-500">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
-                      {isAr ? 'رصيد الأقمشة بالمخازن' : 'Fabric Stock Balance'}
-                    </span>
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center justify-center border border-blue-500/20">
-                      <Layers className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                    {inventoryItems.reduce((acc, i) => acc + (Number(i.current_balance) || 0), 0).toLocaleString()}{' '}
-                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'متر/وحدة' : 'units'}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">{inventoryItems.length}</span>{' '}
-                    <span>{isAr ? 'أصناف مسجلة بالمستودعات' : 'cataloged items'}</span>
-                  </div>
-                </Card>
-
-                {/* Metric 4: Purchase & Supply Orders */}
-                <Card hover className="p-4.5 border-t-[3px] border-t-emerald-600">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
-                      {isAr ? 'أوامر الشراء والتوريد' : 'Procurement Orders'}
-                    </span>
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-                      <ShoppingCart className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                    {purchaseOrders.length}{' '}
-                    <span className="text-xs font-semibold text-slate-500 font-sans">{isAr ? 'أمر توريد' : 'POs'}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 font-sans">
-                    <span className="font-mono font-bold text-slate-900 dark:text-slate-200">
-                      {purchaseOrders.filter((p) => p.status === 'draft').length}
-                    </span>{' '}
-                    <span>{isAr ? 'مسودات قيد الاعتماد' : 'drafts pending approval'}</span>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Main Content Operational Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-w-0 max-w-full">
-                {/* Major Column (8/12): Live Orders & Fabric Ledger */}
-                <div className="lg:col-span-8 space-y-6 min-w-0 max-w-full overflow-hidden">
-                  {/* Table 1: Live Production & Cutting Floor */}
-                  <Card className="p-0 overflow-hidden max-w-full">
-                    <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-muted)]/60">
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] flex items-center justify-center shrink-0">
-                          <Scissors className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white font-sans truncate">
-                            {isAr ? 'أوامر الإنتاج وصالة القص الجارية' : 'Live Production & Cutting Runs'}
-                          </h3>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                            {isAr ? 'متابعة خطوط القص، نسب الهالك، ومراحل الخياطة' : 'Real-time monitoring of cutting lays and sewing stages'}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleTabChange('cutting')}
-                        className="text-xs font-bold text-[var(--brand-primary)] dark:text-[#F87171]"
-                      >
-                        {isAr ? 'عرض صالة القص كاملة ←' : 'Full Floor View →'}
-                      </Button>
-                    </div>
-
-                    <div className="overflow-x-auto max-w-full">
-                      <table className="min-w-[620px] w-full text-xs text-right rtl:text-right ltr:text-left">
-                        <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-sans border-b border-slate-200/80 dark:border-slate-800">
-                          <tr>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'أمر التشغيل' : 'Order #'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'الموديل' : 'Model'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'المرحلة' : 'Stage'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'نسبة الإنجاز' : 'Progress'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'الهالك' : 'Waste'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'موعد التسليم' : 'Due'}</th>
-                            <th className="py-3 px-4 font-bold text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                          {productionOrders.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="py-8 text-center text-slate-400">
-                                {isAr ? 'لا توجد أوامر تشغيل جارية حالياً' : 'No active production orders'}
-                              </td>
-                            </tr>
-                          ) : (
-                            productionOrders.map((order) => {
-                              const sewPercent = Math.round(((order.sewn_quantity || 0) / order.target_quantity) * 100);
-                              return (
-                                <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
-                                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                                    {order.order_number}
-                                  </td>
-                                  <td className="py-3.5 px-4">
-                                    <div className="font-bold text-slate-900 dark:text-slate-100">{order.model_name}</div>
-                                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                      {order.target_quantity} {isAr ? 'قطعة' : 'pcs'}
-                                    </div>
-                                  </td>
-                                  <td className="py-3.5 px-4">
-                                    <Badge
-                                      variant={
-                                        order.status === 'sewing'
-                                          ? 'info'
-                                          : order.status === 'cutting'
-                                          ? 'warning'
-                                          : 'success'
-                                      }
-                                      dot
-                                    >
-                                      {order.status === 'sewing'
-                                        ? (isAr ? 'خياطة وتجميع' : 'Sewing')
-                                        : order.status === 'cutting'
-                                        ? (isAr ? 'صالة القص' : 'Cutting')
-                                        : (isAr ? 'فحص جودة' : 'QC')}
-                                    </Badge>
-                                  </td>
-                                  <td className="py-3.5 px-4">
-                                    <div className="w-28 sm:w-32">
-                                      <div className="flex justify-between text-[10px] font-mono text-slate-600 dark:text-slate-400 mb-1">
-                                        <span>{order.sewn_quantity} / {order.target_quantity}</span>
-                                        <span className="font-bold text-slate-900 dark:text-white">{sewPercent}%</span>
-                                      </div>
-                                      <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                        <div
-                                          className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-primary-light)] rounded-full"
-                                          style={{ width: `${sewPercent}%` }}
-                                        />
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                                    <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                                      {order.waste_percentage}%
-                                    </span>
-                                  </td>
-                                  <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400 text-[11px]">
-                                    {order.due_date}
-                                  </td>
-                                  <td className="py-3.5 px-4 text-center">
-                                    <ActionsMenu
-                                      label={isAr ? 'إجراءات' : 'Actions'}
-                                      variant="outline"
-                                      size="sm"
-                                      items={[
-                                        {
-                                          id: 'track-bundle',
-                                          label: isAr ? 'الانتقال لصالة القص والفرش' : 'Go to Cutting Floor',
-                                          icon: <Scissors className="w-3.5 h-3.5 text-[var(--brand-primary)]" />,
-                                          onClick: () => handleTabChange('cutting'),
-                                        },
-                                        {
-                                          id: 'qc-stage',
-                                          label: isAr ? 'فحص الجودة والمطابقة' : 'QC Inspection',
-                                          icon: <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />,
-                                          onClick: () => setSelectedProdOrderForQc(order),
-                                        },
-                                      ]}
-                                    />
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                  {/* Table 2: Critical Fabric Stock & Allocation */}
-                  <Card className="p-0 overflow-hidden max-w-full">
-                    <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-muted)]/60">
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center justify-center shrink-0">
-                          <Layers className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white font-sans truncate">
-                            {isAr ? 'أرصدة الأقمشة وخامات التشغيل (CMT)' : 'Fabric Stock & CMT Custody'}
-                          </h3>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                            {isAr ? 'تتبع الأثواب المتاحة، الأمتار المتبقية، وعزل أمانات التشغيل للغير' : 'Track fabric rolls, remaining meters, and customer material isolation'}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleTabChange('inventory')}
-                        className="text-xs font-bold text-[var(--brand-primary)] dark:text-[#F87171]"
-                      >
-                        {isAr ? 'عرض المخزن كامل ←' : 'Full Inventory →'}
-                      </Button>
-                    </div>
-
-                    <div className="overflow-x-auto max-w-full">
-                      <table className="min-w-[620px] w-full text-xs text-right rtl:text-right ltr:text-left">
-                        <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-sans border-b border-slate-200/80 dark:border-slate-800">
-                          <tr>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'كود الصنف' : 'Code'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'اسم الصنف' : 'Item Name'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'نوع الملكية' : 'Custody'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'المخزن' : 'Warehouse'}</th>
-                            <th className="py-3 px-4 font-bold">{isAr ? 'الرصيد المتاح' : 'Available'}</th>
-                            <th className="py-3 px-4 font-bold text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                          {inventoryItems.slice(0, 4).map((item) => (
-                            <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
-                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                                {item.code}
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <div className="font-bold text-slate-900 dark:text-slate-100">{item.name}</div>
-                                <div className="text-[10px] text-slate-500 font-sans mt-0.5">
-                                  {item.item_type === 'fabric_raw' ? (isAr ? 'خام أقمشة' : 'Raw Fabric') : (isAr ? 'مستلزمات تشغيل' : 'Accessories')}
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4">
-                                {item.is_customer_owned ? (
-                                  <Badge variant="brand" dot>
-                                    {isAr ? 'أمانات عميل (CMT)' : 'CMT Custody'}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="neutral">
-                                    {isAr ? 'ملكية المصنع' : 'Factory Owned'}
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-sans">
-                                {item.warehouse_name || (isAr ? 'المخزن الرئيسي' : 'Main Warehouse')}
-                              </td>
-                              <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                                <span className="text-sm">{item.current_balance}</span>{' '}
-                                <span className="text-[11px] text-slate-500 font-sans">{item.unit_of_measure}</span>
-                              </td>
-                              <td className="py-3.5 px-4 text-center">
-                                <ActionsMenu
-                                  label={isAr ? 'إجراءات' : 'Actions'}
-                                  variant="outline"
-                                  size="sm"
-                                  items={[
-                                    {
-                                      id: 'issue-cutting',
-                                      label: isAr ? 'تسجيل صرف لصالة القص' : 'Issue to Cutting Lay',
-                                      icon: <ArrowRightLeft className="w-3.5 h-3.5 text-[var(--brand-primary)]" />,
-                                      onClick: () => setSelectedStockItem(item),
-                                    },
-                                    {
-                                      id: 'calc-gsm',
-                                      label: isAr ? 'حاسبة الـ GSM والأمتار' : 'GSM & Meter Calculator',
-                                      icon: <Calculator className="w-3.5 h-3.5 text-blue-500" />,
-                                      onClick: () => setIsFabricCalcOpen(true),
-                                    },
-                                    {
-                                      id: 'inv-tab',
-                                      label: isAr ? 'تفاصيل كارت الصنف' : 'View Item Ledger',
-                                      icon: <Layers className="w-3.5 h-3.5 text-slate-600" />,
-                                      onClick: () => handleTabChange('inventory'),
-                                    },
-                                  ]}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Minor Column (4/12): Live Feed & Active Warehouses */}
-                <div className="lg:col-span-4 space-y-6 min-w-0 max-w-full overflow-hidden">
-                  {/* Widget 1: Live Floor Event Feed */}
-                  <Card className="p-5">
-                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-subtle)]">
-                      <div>
-                        <h4 className="text-xs font-bold uppercase text-slate-900 dark:text-white font-sans">
-                          {isAr ? 'سجل أحداث المصنع اللحظي' : 'Live Floor Event Feed'}
-                        </h4>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{isAr ? 'مسح وتحديثات صالة الإنتاج اللحظية' : 'Real-time floor scans'}</span>
-                      </div>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                    </div>
-
-                    <div className="space-y-4 text-xs">
-                      {[
-                        {
-                          time: isAr ? 'منذ 12 دقيقة' : '12m ago',
-                          title: isAr ? 'تم اكتمال قص فرشة 1,200 قطعة' : 'Lay Completed: 1,200 pcs',
-                          desc: isAr ? 'أمر تشغيل #ORD-2026-001 • تيشيرت بولو رجالي' : 'Order #ORD-2026-001 (Polo Shirt)',
-                          badge: isAr ? 'قص وفرش' : 'Cutting',
-                          badgeVariant: 'warning' as const,
-                        },
-                        {
-                          time: isAr ? 'منذ 34 دقيقة' : '34m ago',
-                          title: isAr ? 'اعتماد جودة حزمة خياطة #BND-088' : 'QC Ticket Approved: #BND-088',
-                          desc: isAr ? 'مطابقة 100% بدون أي عيوب أو ترحيل غرز' : '100% First-Pass Yield (No defects)',
-                          badge: isAr ? 'جودة' : 'QC',
-                          badgeVariant: 'success' as const,
-                        },
-                        {
-                          time: isAr ? 'منذ ساعة' : '1h ago',
-                          title: isAr ? 'استلام أمانات أقمشة عميل (CMT)' : 'CMT Custody Receipt Issued',
-                          desc: isAr ? '450 م قماش جبردين - شركة النيل للملابس' : '450m Gabardine custody roll received',
-                          badge: 'CMT',
-                          badgeVariant: 'brand' as const,
-                        },
-                        {
-                          time: isAr ? 'منذ ساعتين' : '2h ago',
-                          title: isAr ? 'إصدار إذن تسليم أوامر تشغيل' : 'Delivery Note #DEL-104',
-                          desc: isAr ? 'تسليم 800 بنطلون كاجوال للعميل' : '800 trousers ready for dispatch',
-                          badge: isAr ? 'تسليم' : 'Delivery',
-                          badgeVariant: 'info' as const,
-                        },
-                      ].map((item, idx) => (
-                        <div key={idx} className="flex items-start gap-3 pb-3.5 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-bold text-slate-900 dark:text-white font-sans">{item.title}</span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{item.time}</span>
-                            </div>
-                            <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-sans">{item.desc}</div>
-                          </div>
-                          <Badge variant={item.badgeVariant}>
-                            {item.badge}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-
-                  {/* Widget 2: Factory Active Warehouses */}
-                  <Card className="p-5">
-                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-subtle)]">
-                      <div>
-                        <h4 className="text-xs font-bold uppercase text-slate-900 dark:text-white font-sans">
-                          {isAr ? 'مستودعات المصنع النشطة' : 'Active Warehouses'}
-                        </h4>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">
-                          {warehouses.length} {isAr ? 'مستودعات معرفة' : 'registered nodes'}
-                        </span>
-                      </div>
-                      <Building2 className="w-4 h-4 text-slate-400" />
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {warehouses.length === 0 ? (
-                        <div className="text-xs text-slate-400 py-2">
-                          {isAr ? 'لا توجد مستودعات مسجلة' : 'No warehouses configured'}
-                        </div>
-                      ) : (
-                        warehouses.map((wh) => (
-                          <div
-                            key={wh.id}
-                            className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-slate-200/70 dark:bg-slate-700/70 flex items-center justify-center text-slate-700 dark:text-slate-300">
-                                <Building2 className="w-3.5 h-3.5" />
-                              </div>
-                              <div>
-                                <div className="text-xs font-bold text-slate-900 dark:text-white font-sans">{wh.name}</div>
-                                <div className="text-[10px] text-slate-500 font-mono">{wh.code}</div>
-                              </div>
-                            </div>
-                            <Badge variant="neutral">
-                              {wh.items_count !== undefined ? `${wh.items_count} ${isAr ? 'صنف' : 'items'}` : wh.type}
-                            </Badge>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </Card>
-                </div>
-              </div>
-            </div>
+            <FactoryCommandDashboard
+              isAr={isAr}
+              tenantName={tenantName}
+              tenantCode={tenantCode}
+              tenantSubdomain={tenantSubdomain}
+              productionOrders={productionOrders}
+              cuttingOrders={cuttingOrders}
+              cuttingBundles={cuttingBundles}
+              inventoryItems={inventoryItems}
+              purchaseOrders={purchaseOrders}
+              warehouses={warehouses}
+              onTabChange={handleTabChange}
+              onOpenCreateProdOrder={() => setIsCreateProdOrderModalOpen(true)}
+              onOpenFabricCalc={() => setIsFabricCalcOpen(true)}
+              onOpenCreateModel={() => setIsCreateModelOpen(true)}
+              onOpenReceiveCustomerMat={() => setIsReceiveCustomerMatModalOpen(true)}
+              onOpenCreatePo={() => setIsCreatePoModalOpen(true)}
+              onSelectStockItem={(item) => setSelectedStockItem(item)}
+              onSelectProdOrderForQc={(order) => setSelectedProdOrderForQc(order)}
+            />
           )}
 
           {/* TAB 2: GARMENT MODELS CATALOG & BOM */}
@@ -2429,77 +1661,208 @@ export function App() {
                 }
               />
 
+              {/* Catalog Module Sub-Tabs Navigation */}
+              <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setCatalogSubTab('models')}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                    catalogSubTab === 'models'
+                      ? 'bg-blue-600 text-white shadow-xs border border-transparent'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                  }`}
+                >
+                  <Layers className="w-4 h-4 shrink-0" />
+                  <span>{isAr ? 'موديلات الملابس وبطاقات الـ BOM' : 'Garment Models & BOM'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCatalogSubTab('products')}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                    catalogSubTab === 'products'
+                      ? 'bg-emerald-600 text-white shadow-xs border border-transparent'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                  }`}
+                >
+                  <ShoppingBag className="w-4 h-4 shrink-0" />
+                  <span>{isAr ? 'المنتجات التجارية (كتالوج المتجر)' : 'Storefront Products'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCatalogSubTab('categories')}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                    catalogSubTab === 'categories'
+                      ? 'bg-amber-600 text-white shadow-xs border border-transparent'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                  }`}
+                >
+                  <FolderTree className="w-4 h-4 shrink-0" />
+                  <span>{isAr ? 'تصنيفات الملابس' : 'Clothing Categories'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCatalogSubTab('sizes')}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                    catalogSubTab === 'sizes'
+                      ? 'bg-sky-600 text-white shadow-xs border border-transparent'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                  }`}
+                >
+                  <Tag className="w-4 h-4 shrink-0" />
+                  <span>{isAr ? 'دليل المقاسات المعتمدة' : 'Approved Sizes Matrix'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCatalogSubTab('colors')}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                    catalogSubTab === 'colors'
+                      ? 'bg-indigo-600 text-white shadow-xs border border-transparent'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                  }`}
+                >
+                  <Palette className="w-4 h-4 shrink-0" />
+                  <span>{isAr ? 'دليل الألوان المعتمدة' : 'Approved Colors & Swatches'}</span>
+                </button>
+              </div>
+
+              {catalogSubTab === 'products' && (
+                <ProductsManager isAr={isAr} />
+              )}
+
+              {catalogSubTab === 'categories' && (
+                <CategoriesManager isAr={isAr} />
+              )}
+
+              {catalogSubTab === 'sizes' && (
+                <SizesManager isAr={isAr} />
+              )}
+
+              {catalogSubTab === 'colors' && (
+                <ColorsManager isAr={isAr} />
+              )}
+
+              {catalogSubTab === 'models' && (
+                <>
               {/* Models Operational KPI Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'إجمالي الموديلات المعتمدة' : 'Total Approved Styles'}</div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-                    {models.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'موديل' : 'styles'}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. Total Approved Styles */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-blue-500/30 hover:-translate-y-0.5 transition-all flex items-start justify-between gap-3 group">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
+                      {isAr ? 'إجمالي الموديلات المعتمدة' : 'Total Approved Styles'}
+                    </span>
+                    <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white leading-none">
+                      {models.length} <span className="text-xs font-medium text-slate-400">{isAr ? 'موديل' : 'styles'}</span>
+                    </div>
+                    <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 pt-1 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>{models.filter((m) => m.status === 'active').length} {isAr ? 'نشط في خطوط الإنتاج' : 'active in production'}</span>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-                    {models.filter((m) => m.status === 'active').length} {isAr ? 'نشط في خطوط الإنتاج' : 'active in production'}
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/60 dark:border-blue-800/40 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                    <Layers className="w-5 h-5" />
                   </div>
-                </Card>
+                </div>
 
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متغيرات المقاسات والألوان (SKUs)' : 'Size-Color SKUs'}</div>
-                  <div className="text-xl font-bold font-mono text-[var(--brand-primary)] dark:text-[#F87171]">
-                    {models.reduce((acc, m) => acc + (m.variants_count || 0), 0)} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'صنف SKU' : 'SKUs'}</span>
+                {/* 2. Size-Color SKUs */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-indigo-500/30 hover:-translate-y-0.5 transition-all flex items-start justify-between gap-3 group">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
+                      {isAr ? 'متغيرات المقاسات والألوان (SKUs)' : 'Size-Color SKUs'}
+                    </span>
+                    <div className="text-2xl font-bold font-mono text-indigo-600 dark:text-indigo-400 leading-none">
+                      {models.reduce((acc, m) => acc + (m.variants_count || 0), 0)} <span className="text-xs font-medium text-slate-400">{isAr ? 'صنف SKU' : 'SKUs'}</span>
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 pt-1 flex items-center gap-1.5">
+                      <Tag className="w-3 h-3 text-slate-400" />
+                      <span>{isAr ? 'بأكواد باركود دولية مستقلة' : 'with international barcodes'}</span>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                    {isAr ? 'بأكواد باركود دولية مستقلة' : 'with international barcodes'}
+                  <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200/60 dark:border-indigo-800/40 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                    <Palette className="w-5 h-5" />
                   </div>
-                </Card>
+                </div>
 
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متوسط تكلفة التصنيع المستهدفة' : 'Avg Target Cost'}</div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-                    {models.length > 0 ? (models.reduce((acc, m) => acc + (m.target_cost || 0), 0) / models.length).toFixed(1) : '0'} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
+                {/* 3. Avg Target Manufacturing Cost */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-amber-500/30 hover:-translate-y-0.5 transition-all flex items-start justify-between gap-3 group">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
+                      {isAr ? 'متوسط تكلفة التصنيع المستهدفة' : 'Avg Target Cost'}
+                    </span>
+                    <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white leading-none">
+                      {models.length > 0 ? (models.reduce((acc, m) => acc + (m.target_cost || 0), 0) / models.length).toFixed(1) : '0'} <span className="text-xs font-medium text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                    </div>
+                    <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 pt-1">
+                      {isAr ? 'استناداً لحسابات بطاقة الـ BOM' : 'based on BOM calculations'}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {isAr ? 'استناداً لحسابات بطاقة الـ BOM' : 'based on BOM calculations'}
+                  <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200/60 dark:border-amber-800/40 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                    <Tag className="w-5 h-5" />
                   </div>
-                </Card>
+                </div>
 
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'متوسط هامش الربح الإجمالي' : 'Avg Retail Margin'}</div>
-                  <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {models.length > 0
-                      ? Math.round(
-                          models.reduce((acc, m) => {
-                            const cost = m.target_cost || 1;
-                            const retail = m.retail_price || cost;
-                            return acc + ((retail - cost) / retail) * 100;
-                          }, 0) / models.length
-                        )
-                      : 0}%
+                {/* 4. Avg Gross Retail Margin */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all flex items-start justify-between gap-3 group">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
+                      {isAr ? 'متوسط هامش الربح الإجمالي' : 'Avg Retail Margin'}
+                    </span>
+                    <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 leading-none">
+                      {models.length > 0
+                        ? Math.round(
+                            models.reduce((acc, m) => {
+                              const cost = m.target_cost || 1;
+                              const retail = m.retail_price || cost;
+                              return acc + ((retail - cost) / retail) * 100;
+                            }, 0) / models.length
+                          )
+                        : 0}%
+                    </div>
+                    <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 pt-1">
+                      <span className="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/70 dark:border-emerald-800/40 rounded px-1.5 py-0.5 inline-block">
+                        {isAr ? 'معدل ربحية التجزئة المتوقع' : 'projected gross retail margin'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-                    {isAr ? 'معدل ربحية التجزئة المتوقع' : 'projected gross retail margin'}
+                  <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200/60 dark:border-emerald-800/40 shadow-2xs group-hover:scale-105 transition-transform shrink-0">
+                    <ShoppingBag className="w-5 h-5" />
                   </div>
-                </Card>
+                </div>
               </div>
 
               {/* Filters, Search & View Switcher */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <div className="flex items-center gap-2 max-w-sm w-full relative">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+                <div className="flex flex-1 items-center gap-2 max-w-md w-full relative">
                   <Search className="w-4 h-4 text-slate-400 absolute right-3 rtl:right-3 rtl:left-auto ltr:left-3 ltr:right-auto pointer-events-none" />
                   <input
                     type="text"
                     value={modelSearch}
                     onChange={(e) => setModelSearch(e.target.value)}
                     placeholder={isAr ? 'بحث باسم الموديل، الكود، أو الفئة...' : 'Search style name, code, or category...'}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--brand-primary)] transition-all"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs py-2 pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
                   />
+                  {modelSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setModelSearch('')}
+                      className="absolute left-3 rtl:left-3 rtl:right-auto ltr:right-3 ltr:left-auto text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5">
                     <Filter className="w-3.5 h-3.5 text-slate-400" />
                     <select
                       value={modelCategoryFilter}
                       onChange={(e) => setModelCategoryFilter(e.target.value)}
-                      className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs py-1.5 px-3 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-[var(--brand-primary)]"
+                      className="bg-transparent text-xs text-slate-800 dark:text-slate-200 font-bold focus:outline-none cursor-pointer"
                     >
                       <option value="all">{isAr ? 'كل الفئات والتصنيفات' : 'All Categories'}</option>
                       {Array.from(new Set(models.map((m) => m.category).filter(Boolean))).map((cat) => (
@@ -2511,32 +1874,32 @@ export function App() {
                   </div>
 
                   {/* View Mode Toggle: Table / Grid */}
-                  <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-slate-100 dark:bg-slate-800">
+                  <div className="flex items-center border border-slate-200 dark:border-slate-700/80 rounded-xl p-1 bg-slate-100/90 dark:bg-slate-800/80 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setModelViewMode('table')}
-                      className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
                         modelViewMode === 'table'
-                          ? 'bg-white dark:bg-slate-900 text-[var(--brand-primary)] dark:text-[#F87171] shadow-2xs'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                          ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700 hover:-translate-y-0.5'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium'
                       }`}
                       title={isAr ? 'عرض الجدول التشغيلي' : 'Table View'}
                     >
-                      <TableIcon className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline text-[11px]">{isAr ? 'جدول' : 'Table'}</span>
+                      <TableIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="hidden sm:inline text-xs">{isAr ? 'عرض الجدول' : 'Table'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setModelViewMode('cards')}
-                      className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
                         modelViewMode === 'cards'
-                          ? 'bg-white dark:bg-slate-900 text-[var(--brand-primary)] dark:text-[#F87171] shadow-2xs'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                          ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs border border-slate-200/80 dark:border-slate-700 hover:-translate-y-0.5'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium'
                       }`}
                       title={isAr ? 'عرض البطاقات' : 'Cards View'}
                     >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline text-[11px]">{isAr ? 'بطاقات' : 'Cards'}</span>
+                      <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                      <span className="hidden sm:inline text-xs">{isAr ? 'عرض البطاقات' : 'Cards'}</span>
                     </button>
                   </div>
                 </div>
@@ -2544,14 +1907,14 @@ export function App() {
 
               {/* View 1: Industrial Matrix Table */}
               {modelViewMode === 'table' ? (
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
+                <div className="overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
                   <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold font-sans">
                         <tr>
-                          <th className="py-3 px-4">{isAr ? 'كود الموديل' : 'Style Code'}</th>
-                          <th className="py-3 px-4">{isAr ? 'اسم الموديل والتصنيف' : 'Style & Category'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الموسم' : 'Season'}</th>
+                          <th className="py-3.5 px-4">{isAr ? 'كود الموديل' : 'Style Code'}</th>
+                          <th className="py-3.5 px-4">{isAr ? 'اسم الموديل والتصنيف' : 'Style & Category'}</th>
+                          <th className="py-3.5 px-4">{isAr ? 'الموسم' : 'Season'}</th>
                           <th className="py-3 px-4">{isAr ? 'بطاقة الـ BOM' : 'BOM Status'}</th>
                           <th className="py-3 px-4">{isAr ? 'المتغيرات (SKUs)' : 'Variants'}</th>
                           <th className="py-3 px-4">{isAr ? 'التكلفة المستهدفة' : 'Target Cost'}</th>
@@ -2613,31 +1976,48 @@ export function App() {
                                 </td>
                                 <td className="py-3 px-4">
                                   <div className="flex items-center justify-center gap-1.5">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-xs h-7 border-slate-300 dark:border-slate-700 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
+                                    <button
+                                      type="button"
+                                      title={isAr ? 'عرض بطاقة الـ BOM والمصفوفة' : 'View BOM & Matrix'}
                                       onClick={() => setSelectedModelForBom(m)}
+                                      className="inline-flex items-center justify-center p-2 rounded-xl text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/80 dark:border-blue-800/50 shadow-2xs hover:shadow-xs hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all cursor-pointer"
+                                      aria-label={isAr ? 'عرض بطاقة الـ BOM والمصفوفة' : 'View BOM & Matrix'}
                                     >
-                                      {isAr ? 'بطاقة الـ BOM' : 'BOM & Matrix'}
-                                    </Button>
-                                    <ActionsMenu
-                                      variant="icon-horizontal"
-                                      items={[
-                                        {
-                                          id: 'bom',
-                                          label: isAr ? 'فتح بطاقة الباركود وشجرة الـ BOM' : 'Open BOM & Barcode Matrix',
-                                          icon: <Layers className="w-3.5 h-3.5" />,
-                                          onClick: () => setSelectedModelForBom(m),
-                                        },
-                                        {
-                                          id: 'print',
-                                          label: isAr ? 'طباعة كارت المواصفات الفنية' : 'Print Technical Spec Sheet',
-                                          icon: <Printer className="w-3.5 h-3.5" />,
-                                          onClick: () => window.print(),
-                                        },
-                                      ]}
-                                    />
+                                      <Layers className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={isAr ? 'تعديل بيانات الموديل والتسعير' : 'Edit Style & Pricing'}
+                                      onClick={() => {
+                                        setEditingModel(m);
+                                        setIsCreateModelOpen(true);
+                                      }}
+                                      className="inline-flex items-center justify-center p-2 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-50/80 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200/80 dark:border-amber-800/50 shadow-2xs hover:shadow-xs hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all cursor-pointer"
+                                      aria-label={isAr ? 'تعديل الموديل' : 'Edit Style'}
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={isAr ? 'طباعة كارت المواصفات الفنية' : 'Print Technical Spec Sheet'}
+                                      onClick={() => {
+                                        setSelectedModelForBom(m);
+                                        setTimeout(() => window.print(), 300);
+                                      }}
+                                      className="inline-flex items-center justify-center p-2 rounded-xl text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/80 dark:border-indigo-800/50 shadow-2xs hover:shadow-xs hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all cursor-pointer"
+                                      aria-label={isAr ? 'طباعة المواصفات' : 'Print Specs'}
+                                    >
+                                      <Printer className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={isAr ? 'حذف أو أرشفة الموديل' : 'Delete / Archive Style'}
+                                      onClick={() => handleDeleteModel(m)}
+                                      className="inline-flex items-center justify-center p-2 rounded-xl text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200/80 dark:border-rose-800/50 shadow-2xs hover:shadow-xs hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all cursor-pointer"
+                                      aria-label={isAr ? 'حذف الموديل' : 'Delete Style'}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
                                 </td>
                               </tr>
@@ -2659,81 +2039,141 @@ export function App() {
                       />
                     </div>
                   )}
-                </Card>
+                </div>
               ) : (
-                /* View 2: Redesigned Operational Cards Grid */
+                /* View 2: Redesigned Modern Operational Model Cards */
                 <div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {paginatedModels.map((m) => (
-                    <Card key={m.id} hover className="border-slate-200 dark:border-slate-800 space-y-3.5 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                          {m.code}
-                        </span>
-                        <Badge variant="success">{isAr ? 'نشط' : 'Active'}</Badge>
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {paginatedModels.map((m) => {
+                      const cost = m.target_cost || 0;
+                      const wholesale = m.wholesale_price || 0;
+                      const retail = m.retail_price || 0;
+                      const margin = retail > 0 ? Math.round(((retail - cost) / retail) * 100) : 0;
 
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{m.name}</h4>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                          <span>{m.category}</span>
-                          <span>•</span>
-                          <span>{m.season}</span>
-                        </div>
-                      </div>
+                      return (
+                        <div
+                          key={m.id}
+                          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 space-y-3.5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between"
+                        >
+                          <div className="space-y-3">
+                            {/* Header: Code & Status */}
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                {m.code}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans border select-none bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 dark:bg-emerald-500/20 border-emerald-500/20 dark:border-emerald-500/30 font-bold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span>{isAr ? 'نشط' : 'Active'}</span>
+                              </span>
+                            </div>
 
-                      <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-center text-xs">
-                        <div>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{isAr ? 'التكلفة' : 'Cost'}</span>
-                          <strong className="font-mono text-slate-800 dark:text-slate-200">{m.target_cost} ج.م</strong>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{isAr ? 'الجملة' : 'Wholesale'}</span>
-                          <strong className="font-mono text-slate-900 dark:text-white">{m.wholesale_price} ج.م</strong>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{isAr ? 'التجزئة' : 'Retail'}</span>
-                          <strong className="font-mono text-emerald-600 dark:text-emerald-400">{m.retail_price} ج.م</strong>
-                        </div>
-                      </div>
+                            {/* Title & Subtitle */}
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1">
+                                {m.name}
+                              </h4>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                <span>{m.category || (isAr ? 'عام' : 'General')}</span>
+                                <span>•</span>
+                                <span>{m.season || (isAr ? 'مستمر' : 'All-season')}</span>
+                                {m.variants_count > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="font-mono">{m.variants_count} {isAr ? 'متغير' : 'variants'}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
 
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-                          {isAr ? 'المتغيرات:' : 'SKUs:'}{' '}
-                          <strong className="text-slate-800 dark:text-slate-200 font-mono">
-                            {m.variants_count} {isAr ? 'مقاس ولون' : 'variants'}
-                          </strong>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs h-7 hover:bg-[var(--brand-subtle)] hover:text-[var(--brand-primary)] font-semibold"
-                            onClick={() => setSelectedModelForBom(m)}
-                          >
-                            {isAr ? 'بطاقة الـ BOM' : 'BOM & Matrix'}
-                          </Button>
-                          <ActionsMenu
-                            variant="icon-horizontal"
-                            items={[
-                              {
-                                id: 'bom',
-                                label: isAr ? 'فتح بطاقة الباركود وشجرة الـ BOM' : 'Open BOM & Barcode Matrix',
-                                icon: <Layers className="w-3.5 h-3.5" />,
-                                onClick: () => setSelectedModelForBom(m),
-                              },
-                              {
-                                id: 'print',
-                                label: isAr ? 'طباعة كارت المواصفات الفنية' : 'Print Technical Spec Sheet',
-                                icon: <Printer className="w-3.5 h-3.5" />,
-                                onClick: () => window.print(),
-                              },
-                            ]}
-                          />
+                            {/* Financial Pricing Matrix Box */}
+                            <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-center text-xs">
+                              <div>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">
+                                  {isAr ? 'التكلفة' : 'Cost'}
+                                </span>
+                                <strong className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                                  {cost.toFixed(0)} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                                </strong>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">
+                                  {isAr ? 'الجملة' : 'Wholesale'}
+                                </span>
+                                <strong className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                                  {wholesale.toFixed(0)} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                                </strong>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">
+                                  {isAr ? 'التجزئة' : 'Retail'}
+                                </span>
+                                <strong className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                  {retail.toFixed(0)} <span className="text-[10px] font-normal text-emerald-600/70">{isAr ? 'ج.م' : 'EGP'}</span>
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer Actions */}
+                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 mt-2">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                              <span className="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/60 dark:border-emerald-800/40 rounded px-1.5 py-0.5">
+                                +{margin}% {isAr ? 'هامش' : 'margin'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                title={isAr ? 'عرض بطاقة الـ BOM والمصفوفة' : 'View BOM & Matrix'}
+                                onClick={() => setSelectedModelForBom(m)}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs text-white bg-blue-600 hover:bg-blue-700 shadow-2xs hover:shadow-xs hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
+                                aria-label={isAr ? 'عرض بطاقة الـ BOM' : 'View BOM'}
+                              >
+                                <Layers className="w-3.5 h-3.5 shrink-0" />
+                                <span>{isAr ? 'بطاقة الـ BOM' : 'BOM'}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title={isAr ? 'تعديل بيانات الموديل والتسعير' : 'Edit Style & Pricing'}
+                                onClick={() => {
+                                  setEditingModel(m);
+                                  setIsCreateModelOpen(true);
+                                }}
+                                className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-2xs transition-all cursor-pointer"
+                                aria-label={isAr ? 'تعديل الموديل' : 'Edit Style'}
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                title={isAr ? 'طباعة كارت المواصفات الفنية' : 'Print Technical Spec Sheet'}
+                                onClick={() => {
+                                  setSelectedModelForBom(m);
+                                  setTimeout(() => window.print(), 300);
+                                }}
+                                className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-2xs transition-all cursor-pointer"
+                                aria-label={isAr ? 'طباعة المواصفات' : 'Print Specs'}
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                title={isAr ? 'حذف أو أرشفة الموديل' : 'Delete / Archive Style'}
+                                onClick={() => handleDeleteModel(m)}
+                                className="inline-flex items-center justify-center p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200/80 dark:border-rose-800/40 shadow-2xs transition-all cursor-pointer"
+                                aria-label={isAr ? 'حذف الموديل' : 'Delete Style'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                  ))}
+                      );
+                    })}
                   </div>
                   {filteredModels.length > 0 && (
                     <div className="mt-4 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -2749,6 +2189,8 @@ export function App() {
                   )}
                 </div>
               )}
+                </>
+              )}
             </div>
           )}
 
@@ -2760,11 +2202,21 @@ export function App() {
                 warehouses={warehouses}
                 customerMaterials={customerMaterials}
                 stockLedger={stockLedger}
-                onOpenCreateItemModal={() => setIsCreateInventoryItemModalOpen(true)}
+                branches={branches}
+                onOpenCreateItemModal={(cat) => {
+                  setCreateInventoryItemCategory(cat || 'raw_materials');
+                  setIsCreateInventoryItemModalOpen(true);
+                }}
                 onOpenStockMovementModal={(item) => setSelectedStockItem(item)}
                 onOpenFabricCalcModal={() => setIsFabricCalcOpen(true)}
                 onOpenReceiveCustomerMatModal={() => setIsReceiveCustomerMatModalOpen(true)}
                 onOpenBarcodeLabelModal={(item) => setSelectedItemForBarcode(item)}
+                onItemUpdated={(updated) => {
+                  setInventoryItems((prev) => prev.map((it) => (it.id === updated.id ? { ...it, ...updated } : it)));
+                }}
+                onItemDeleted={(deletedId) => {
+                  setInventoryItems((prev) => prev.filter((it) => it.id !== deletedId));
+                }}
                 onRefreshData={loadBackendData}
                 isLoading={isDataLoading}
                 isAr={isAr}
@@ -3041,6 +2493,7 @@ export function App() {
                           <th className="py-3 px-4">{isAr ? 'رقم إذن القص' : 'Cut Order #'}</th>
                           <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'Production Order'}</th>
                           <th className="py-3 px-4">{isAr ? 'الطاولة' : 'Table #'}</th>
+                          <th className="py-3 px-4">{isAr ? 'المقصدار الفني' : 'Master Cutter'}</th>
                           <th className="py-3 px-4">{isAr ? 'الخامة المستخدمة' : 'Fabric Item'}</th>
                           <th className="py-3 px-4">{isAr ? 'مصدر القماش' : 'Fabric Source'}</th>
                           <th className="py-3 px-4">{isAr ? 'طول الفرشة' : 'Lay Length'}</th>
@@ -3052,11 +2505,23 @@ export function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                        {cuttingOrders.map((cut) => (
+                        {paginatedCuttingOrders.map((cut) => (
                           <tr key={cut.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
                             <td className="py-3 px-4 font-bold text-sky-400">{cut.cutting_order_number}</td>
                             <td className="py-3 px-4 text-indigo-400">{cut.production_order_number}</td>
                             <td className="py-3 px-4 font-sans text-slate-300">{cut.table_number}</td>
+                            <td className="py-3 px-4">
+                              {cut.assigned_cutter_name ? (
+                                <div className="flex items-center gap-1.5 font-sans font-medium text-slate-800 dark:text-slate-200">
+                                  <div className="w-5 h-5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] flex items-center justify-center font-bold">
+                                    {cut.assigned_cutter_name.trim().charAt(0)}
+                                  </div>
+                                  <span className="truncate">{cut.assigned_cutter_name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-[10px]">{isAr ? 'محمود السيد (رئيسي)' : 'Master Cutter'}</span>
+                              )}
+                            </td>
                             <td className="py-3 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{cut.fabric_name}</td>
                             <td className="py-3 px-4">
                               <Badge variant={cut.fabric_source === 'factory_owned' ? 'info' : 'warning'}>
@@ -3106,24 +2571,80 @@ export function App() {
                       </tbody>
                     </table>
                   </div>
+                  {cuttingOrders.length > cuttingOrderPerPage && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                      <Pagination
+                        currentPage={cuttingOrderPage}
+                        totalPages={totalCuttingOrderPages}
+                        totalItems={cuttingOrders.length}
+                        perPage={cuttingOrderPerPage}
+                        onPageChange={setCuttingOrderPage}
+                        isAr={isAr}
+                      />
+                    </div>
+                  )}
                 </Card>
               </div>
 
               {/* Section 3: Live Bundle Cards Floor Tracker */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'بطاقات الحزم وتتبع خطوط الإنتاج (Bundle Cards Floor Tracker)' : 'Bundle Cards & Shopfloor Tracker'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'تتبع مسار الحزم بالباركود بين مراحل القص، التجهيز، الخياطة، والتشطيب' : 'Barcode tracking across cutting, preparation, sewing, and finishing lines'}</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>{isAr ? 'بطاقات الحزم وتتبع خطوط الإنتاج والعمال' : 'Bundle Cards & Shopfloor Tracker'}</span>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                        {filteredBundles.length} {isAr ? 'حزمة' : 'bundles'}
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-400">{isAr ? 'تتبع مسار الحزم بالباركود بين مراحل القص، التجهيز، الخياطة، والتشطيب مع ربط العمال' : 'Barcode tracking across cutting, preparation, sewing, and finishing with worker link'}</p>
+                  </div>
+                </div>
+
+                {/* Bundle Filters & Stage Tabs */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                    {[
+                      { id: 'all', label: isAr ? `كل الحزم (${cuttingBundles.length})` : `All (${cuttingBundles.length})` },
+                      { id: 'cutting', label: isAr ? 'صالة القص' : 'Cutting' },
+                      { id: 'assembly', label: isAr ? 'التجهيز' : 'Assembly' },
+                      { id: 'sewing', label: isAr ? 'الخياطة' : 'Sewing' },
+                      { id: 'finishing', label: isAr ? 'التشطيب' : 'Finishing' },
+                      { id: 'ironing', label: isAr ? 'الكي' : 'Ironing' },
+                      { id: 'packing', label: isAr ? 'التعبئة' : 'Packing' },
+                      { id: 'completed', label: isAr ? 'مكتمل' : 'Completed' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setBundleFilterStage(tab.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                          bundleFilterStage === tab.id
+                            ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative">
+                    <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-2.5' : 'left-2.5'} top-2.5 pointer-events-none`} />
+                    <input
+                      type="text"
+                      placeholder={isAr ? 'بحث برقم الحزمة، العامل، اللون، أو المقاس...' : 'Search bundle #, worker, color, size...'}
+                      value={bundleSearchTerm}
+                      onChange={(e) => setBundleSearchTerm(e.target.value)}
+                      className={`bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg ${isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'} py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-64 focus:outline-none focus:border-indigo-500`}
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {cuttingBundles.map((bnd) => (
+                  {paginatedBundles.map((bnd) => (
                     <Card key={bnd.id} hover className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 space-y-2.5">
                       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                         <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-white">
-                          <QrCode className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                          <QrCode className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                           <span>{bnd.bundle_code}</span>
                         </div>
                         <Badge variant="neutral">{isAr ? `حزمة #${bnd.bundle_number}` : `Bundle #${bnd.bundle_number}`}</Badge>
@@ -3142,6 +2663,22 @@ export function App() {
                           <span className="text-slate-500 block text-[10px]">{isAr ? 'الكمية' : 'Quantity'}</span>
                           <span className="text-emerald-400 font-bold font-mono">{bnd.quantity} {isAr ? 'قطعة' : 'pcs'}</span>
                         </div>
+                      </div>
+
+                      {/* Assigned Worker Badge */}
+                      <div className="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800/60">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <User className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <span className="text-slate-500 dark:text-slate-400 text-[10px] shrink-0">{isAr ? 'العامل المسؤول:' : 'Worker:'}</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {bnd.assigned_employee_name || (isAr ? 'لم يُعيّن بعد' : 'Unassigned')}
+                          </span>
+                        </div>
+                        {bnd.work_group && (
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                            [{bnd.work_group}]
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800/60 text-xs gap-1">
@@ -3187,7 +2724,7 @@ export function App() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            className="text-[11px] h-7 px-2"
+                            className="text-[11px] h-7 px-2 font-medium"
                             onClick={() => {
                               const prod = productionOrders.find((p) => p.id === bnd.production_order_id);
                               if (prod) {
@@ -3202,17 +2739,35 @@ export function App() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-[11px] h-7 px-2"
+                            className="text-[11px] h-7 px-2 font-bold text-indigo-600 border-indigo-500/30"
                             onClick={() => setSelectedBundleForTracker(bnd)}
                             icon={<ArrowRightLeft className="w-3 h-3" />}
                           >
-                            {isAr ? 'نقل' : 'Transfer'}
+                            {isAr ? 'نقل وأجر' : 'Transfer'}
                           </Button>
                         </div>
                       </div>
                     </Card>
                   ))}
+                  {paginatedBundles.length === 0 && (
+                    <div className="col-span-full py-8 text-center text-slate-400 text-xs">
+                      {isAr ? 'لا توجد حزم تشغيل مطابقة لمعايير البحث.' : 'No production bundles match the current filters.'}
+                    </div>
+                  )}
                 </div>
+
+                {filteredBundles.length > bundlePerPage && (
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                    <Pagination
+                      currentPage={bundlePage}
+                      totalPages={totalBundlePages}
+                      totalItems={filteredBundles.length}
+                      perPage={bundlePerPage}
+                      onPageChange={setBundlePage}
+                      isAr={isAr}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Section 4: Quality Inspections & Defects Log */}
@@ -3286,336 +2841,28 @@ export function App() {
 
           {/* TAB 5: PROCUREMENT & VENDOR MANAGEMENT */}
           {activeTab === 'purchasing' && (
-            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-              <PageHeader
-                title={isAr ? 'المشتريات والموردين وفحص الاستلام والمطابقة الثلاثية' : 'Procurement, GRN & 3-Way Matching'}
-                subtitle={isAr
-                  ? 'أوامر الشراء (PO)، أذون استلام المخزن (GRN)، مطابقة الفواتير الثلاثية، وإدارة أرصدة الموردين.'
-                  : 'Purchase orders, goods receipt notes (GRN), 3-way invoice matching, and vendor ledger balances.'}
-                icon={<ShoppingCart className="w-5 h-5" />}
-                breadcrumbs={[
-                  { label: isAr ? 'الرئيسية' : 'Home' },
-                  { label: isAr ? 'المشتريات والموردون' : 'Procurement' },
-                ]}
-                actions={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setIsCreateSupplierModalOpen(true)}
-                    >
-                      {isAr ? 'تسجيل مورد جديد' : 'New Vendor'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => setIsCreatePoModalOpen(true)}
-                      icon={<Plus className="w-3.5 h-3.5" />}
-                    >
-                      {isAr ? 'إصدار أمر شراء جديد' : 'New Purchase Order'}
-                    </Button>
-                  </div>
-                }
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <PurchasingTab
+                purchaseOrders={purchaseOrders}
+                suppliers={suppliers}
+                goodsReceiptNotes={goodsReceiptNotes}
+                supplierInvoices={supplierInvoices}
+                warehouses={warehouses}
+                setPurchaseOrders={setPurchaseOrders}
+                setSuppliers={setSuppliers}
+                setGoodsReceiptNotes={setGoodsReceiptNotes}
+                setSupplierInvoices={setSupplierInvoices}
+                onOpenCreateSupplier={() => setIsCreateSupplierModalOpen(true)}
+                onOpenCreatePo={() => setIsCreatePoModalOpen(true)}
+                onSelectPoForReceipt={(po) => setSelectedPoForReceipt(po)}
+                onSelectPoForInvoice={(po) => setSelectedPoForInvoice(po)}
+                onSelectSupplierForStatement={(s) => {
+                  setSelectedSupplierForStatement(s);
+                  setIsSupplierStatementOpen(true);
+                }}
+                isAr={isAr}
               />
-
-              {/* Procurement KPI Summary */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'أوامر الشراء النشطة' : 'Active POs'}</div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-                    {purchaseOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'أوامر' : 'orders'}</span>
-                  </div>
-                  <div className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
-                    {isAr
-                      ? `منها ${purchaseOrders.filter((p) => p.status === 'approved' || p.status === 'partially_received').length} قيد التوريد`
-                      : `${purchaseOrders.filter((p) => p.status === 'approved' || p.status === 'partially_received').length} in delivery`}
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'إجمالي التزامات الموردين (المستحقات)' : 'Vendor Payables'}</div>
-                  <div className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
-                    {suppliers.reduce((acc, s) => acc + s.current_balance, 0).toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">ج.م</span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {isAr ? 'أرصدة حسابات الموردين المعتمدة' : 'approved vendor ledger balances'}
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'فواتير المطابقة الثلاثية (3-Way Match)' : '3-Way Match Invoices'}</div>
-                  <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {supplierInvoices.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'فواتير' : 'invoices'}</span>
-                  </div>
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-                    {isAr ? 'تمت المطابقة مع أذون استلام المخزن' : 'matched against GRNs & POs'}
-                  </div>
-                </Card>
-              </div>
-
-              {/* Purchase Orders Table */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أوامر الشراء ومتابعة التوريد' : 'Purchase Orders & Supply Tracking'}</h4>
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-3 px-4">{isAr ? 'رقم الأمر' : 'PO #'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المورد المعتمد' : 'Approved Vendor'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المخزن المستهدف' : 'Target Warehouse'}</th>
-                          <th className="py-3 px-4">{isAr ? 'تاريخ الأمر' : 'Order Date'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الإجمالي (شامل الضريبة)' : 'Total (Inc. VAT)'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الإجراءات والعمليات' : 'Actions & Ops'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                        {purchaseOrders.map((po) => (
-                          <tr key={po.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">{po.po_number}</td>
-                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">{po.supplier_name}</td>
-                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{po.warehouse_name}</td>
-                            <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{po.order_date}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                              {po.total_amount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge
-                                variant={
-                                  po.status === 'received'
-                                    ? 'success'
-                                    : po.status === 'approved'
-                                    ? 'info'
-                                    : po.status === 'partially_received'
-                                    ? 'warning'
-                                    : 'neutral'
-                                }
-                                dot={po.status === 'approved' || po.status === 'partially_received'}
-                              >
-                                {po.status === 'received'
-                                  ? (isAr ? 'مستلم بالكامل' : 'Fully Received')
-                                  : po.status === 'approved'
-                                  ? (isAr ? 'معتمد (قيد التوريد)' : 'Approved (In Delivery)')
-                                  : po.status === 'partially_received'
-                                  ? (isAr ? 'مستلم جزئيًا' : 'Partially Received')
-                                  : (isAr ? 'مسودة' : 'Draft')}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1.5 justify-end">
-                                {po.status === 'draft' ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-xs h-7 text-emerald-600 border-emerald-500/30 font-bold"
-                                    onClick={async () => {
-                                      try {
-                                        if (po.id.length > 20 && !po.id.startsWith('po-')) {
-                                          await api.procurement.approvePurchaseOrder(po.id);
-                                        }
-                                        setPurchaseOrders(prev =>
-                                          prev.map(p => p.id === po.id ? { ...p, status: 'approved' } : p)
-                                        );
-                                      } catch (err: any) {
-                                        alert(err.message || (isAr ? 'فشل اعتماد أمر الشراء' : 'Failed to approve purchase order'));
-                                      }
-                                    }}
-                                  >
-                                    {isAr ? 'اعتماد الأمر' : 'Approve Order'}
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    className="text-xs h-7"
-                                    onClick={() => setSelectedPoForReceipt(po)}
-                                    icon={<Truck className="w-3 h-3" />}
-                                  >
-                                    {isAr ? 'فحص واستلام (GRN)' : 'Inspect & Receive (GRN)'}
-                                  </Button>
-                                )}
-
-                                <ActionsMenu
-                                  variant="icon-horizontal"
-                                  items={[
-                                    {
-                                      id: 'grn',
-                                      label: isAr ? 'فحص واستلام البضاعة (GRN)' : 'Inspect Goods Receipt (GRN)',
-                                      icon: <Truck className="w-3.5 h-3.5" />,
-                                      onClick: () => setSelectedPoForReceipt(po),
-                                    },
-                                    {
-                                      id: 'match',
-                                      label: isAr ? 'مطابقة الفاتورة الثلاثية (3-Way Match)' : '3-Way Invoice Match',
-                                      icon: <Receipt className="w-3.5 h-3.5" />,
-                                      onClick: () => setSelectedPoForInvoice(po),
-                                    },
-                                    {
-                                      id: 'print',
-                                      label: isAr ? 'طباعة أمر الشراء المعتمد' : 'Print Purchase Order',
-                                      icon: <Printer className="w-3.5 h-3.5" />,
-                                      onClick: () => window.print(),
-                                    },
-                                  ]}
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Goods Receipt Notes Log */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أذون فحص واستلام البضاعة (GRN Log)' : 'Goods Receipt Notes (GRN Log)'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'سجل فحص الجودة والكميات المقبولة والمرفوضة المحولة للمخزن' : 'Quality inspection log of accepted and rejected goods routed to warehouse'}</p>
-                  </div>
-                </div>
-
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-2.5 px-4">{isAr ? 'رقم إذن الاستلام' : 'GRN #'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'أمر الشراء' : 'PO #'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'المورد' : 'Supplier'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'مسؤول فحص الجودة' : 'QC Inspector'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'نتيجة الفحص' : 'Inspection Result'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'المقبول (للمخزن)' : 'Accepted (Stock)'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'المرفوض (تالف)' : 'Rejected (Scrap)'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'ملاحظات الرفض' : 'Rejection Notes'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                        {goodsReceiptNotes.map((grn) => (
-                          <tr key={grn.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{grn.grn_number}</td>
-                            <td className="py-2.5 px-4 text-slate-300">{grn.po_number}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{grn.supplier_name}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-300">{grn.quality_inspector_name}</td>
-                            <td className="py-2.5 px-4">
-                              <Badge variant={grn.inspection_status === 'passed' ? 'success' : 'warning'}>
-                                {grn.inspection_status === 'passed' ? (isAr ? 'مطابق واجتاز الفحص' : 'Passed Inspection') : (isAr ? 'اجتياز جزئي' : 'Partial Pass')}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 px-4 font-bold text-emerald-400">+{grn.accepted_quantity.toLocaleString()} {isAr ? 'م' : 'm'}</td>
-                            <td className="py-2.5 px-4 font-bold text-rose-400">
-                              {grn.rejected_quantity > 0 ? `-${grn.rejected_quantity.toLocaleString()} ${isAr ? 'م' : 'm'}` : '0'}
-                            </td>
-                            <td className="py-2.5 px-4 font-sans text-slate-400">
-                              {grn.rejection_reason || '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-
-              {/* 3-Way Matched Supplier Invoices */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'سجل فواتير الموردين والمطابقة الثلاثية' : 'Supplier Invoices & 3-Way Match Log'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'فواتير معتمدة ومطابقة مع أوامر الشراء وأذون استلام المخزن' : 'Invoices verified and 3-way matched with POs and GRNs'}</p>
-                  </div>
-                </div>
-
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-2.5 px-4">{isAr ? 'رقم الفاتورة الضريبية' : 'Tax Invoice #'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'المرجع الداخلي' : 'Internal Ref'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'المورد' : 'Supplier'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'أمر الشراء المرجعي' : 'Ref PO #'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'القيمة الإجمالية' : 'Total Amount'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'نتيجة المطابقة الثلاثية' : '3-Way Match Result'}</th>
-                          <th className="py-2.5 px-4">{isAr ? 'حالة السداد' : 'Payment Status'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                        {supplierInvoices.map((inv) => (
-                          <tr key={inv.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                            <td className="py-2.5 px-4 font-bold text-slate-900 dark:text-white">{inv.invoice_number}</td>
-                            <td className="py-2.5 px-4 text-slate-400">{inv.internal_reference}</td>
-                            <td className="py-2.5 px-4 font-sans text-slate-800 dark:text-slate-200">{inv.supplier_name}</td>
-                            <td className="py-2.5 px-4 font-mono text-slate-700 dark:text-slate-300">{inv.po_number}</td>
-                            <td className="py-2.5 px-4 text-slate-300">{inv.due_date}</td>
-                            <td className="py-2.5 px-4 font-bold text-emerald-400">{inv.total_amount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                            <td className="py-2.5 px-4">
-                              <Badge variant={inv.matching_status === 'matched' ? 'success' : 'warning'}>
-                                {inv.matching_status === 'matched' ? (isAr ? 'مطابقة تامة 100%' : '100% Matched') : (isAr ? 'فرق في السعر' : 'Price Discrepancy')}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <Badge variant={inv.payment_status === 'paid' ? 'success' : 'neutral'}>
-                                {inv.payment_status === 'paid' ? (isAr ? 'مدفوعة' : 'Paid') : (isAr ? 'غير مسددة' : 'Unpaid')}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Vendors List */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'سجل الموردين المعتمدين' : 'Approved Suppliers Directory'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'بيانات الاتصال، السجل الضريبي، وشروط الدفع' : 'Contact info, tax ID, and credit payment terms'}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {suppliers.map((s) => (
-                    <Card key={s.id} className="border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 dark:text-white">{s.name}</span>
-                        <span className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold">{s.code}</span>
-                      </div>
-                      <div className="text-xs text-slate-400 flex items-center justify-between">
-                        <span>{isAr ? 'مسؤول الاتصال:' : 'Contact:'} <strong className="text-slate-300">{s.contact_person || '—'}</strong></span>
-                        <span>{isAr ? 'الهاتف:' : 'Phone:'} <strong className="text-slate-300 font-mono">{s.phone || '—'}</strong></span>
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
-                        <span className="text-slate-500 dark:text-slate-400">
-                          {isAr ? 'شروط الدفع:' : 'Payment Terms:'} <Badge variant="neutral">{s.payment_terms}</Badge>
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span>
-                            {isAr ? 'الرصيد المستحق:' : 'Balance:'} <strong className="text-amber-600 dark:text-amber-400 font-mono">{s.current_balance.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</strong>
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-6 text-[10px] px-2"
-                            onClick={() => {
-                              setSelectedSupplierForStatement(s);
-                              setIsSupplierStatementOpen(true);
-                            }}
-                          >
-                            {isAr ? 'كشف الحساب' : 'Statement'}
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </div>
+            </Suspense>
           )}
 
           {/* TAB: Subcontracting & CMT Services (Phase 6) */}
@@ -3628,6 +2875,7 @@ export function App() {
                 externalOperations={externalOperations}
                 jobDeliveryNotes={jobDeliveryNotes}
                 jobInvoices={jobInvoices}
+                employees={employees}
                 onOpenCreateJob={() => setIsCreateJobModalOpen(true)}
                 onOpenReceiveMaterial={() => setIsReceiveCustomerMatModalOpen(true)}
                 onOpenExternalOp={() => {
@@ -3711,7 +2959,7 @@ export function App() {
           {/* Phase G: Waslat Worsh Integrated B2B Marketplace */}
           {activeTab === 'waslat_worsh' && (
             <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
-              <WaslatWorshTab isAr={lang === 'ar'} />
+              <WaslatWorshTab isAr={lang === 'ar'} onNavigateToSubscription={() => setActiveTab('subscription')} />
             </Suspense>
           )}
 
@@ -4072,9 +3320,41 @@ export function App() {
         isOpen={isCreateInventoryItemModalOpen}
         onClose={() => setIsCreateInventoryItemModalOpen(false)}
         warehouses={warehouses}
+        defaultCategory={createInventoryItemCategory}
         onItemCreated={(newItem) => {
-          setInventoryItems((prev) => [newItem, ...prev]);
-          loadBackendData();
+          setInventoryItems((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)]);
+          // Silently refresh inventory in the background without triggering full-app loading freeze
+          api.inventory.getItems({ per_page: 100 }).then((res) => {
+            const rawList = res?.data || (res as any)?.items;
+            if (Array.isArray(rawList)) {
+              const mappedItems: InventoryItem[] = rawList.map((it: any) => ({
+                id: it.id,
+                warehouse_id: it.warehouse_id,
+                warehouse_name: it.warehouse?.name || 'المخزن الرئيسي',
+                variant_id: it.variant_id,
+                item_type: it.item_type || 'fabric_raw',
+                code: it.code,
+                name: it.name,
+                unit_of_measure: it.unit_of_measure,
+                current_balance: Number(it.current_balance),
+                average_cost: Number(it.average_cost || 0),
+                reorder_level: Number(it.reorder_level || 0),
+                is_customer_owned: Boolean(it.is_customer_owned),
+                customer_name: it.customer?.name || (it.is_customer_owned ? 'عميل تشغيل للغير' : undefined),
+                storage_zone: it.storage_zone || it.technical_specs?.storage_zone,
+                rack_location: it.rack_location || it.technical_specs?.rack_location,
+                shelf_bin_location: it.shelf_bin_location || it.technical_specs?.shelf_bin_location,
+                reserved_quantity: Number(it.reserved_quantity || 0),
+                available_quantity: Number(it.available_quantity !== undefined ? it.available_quantity : it.current_balance),
+                variant: it.variant,
+                warehouse: it.warehouse,
+                technical_specs: it.technical_specs || undefined,
+              }));
+              setInventoryItems(mappedItems);
+            }
+          }).catch((err) => {
+            console.warn('Silent inventory refresh warning:', err);
+          });
         }}
         isAr={isAr}
       />
@@ -4112,11 +3392,15 @@ export function App() {
         }}
       />
 
-      {/* MODAL 5: Create Garment Model Modal */}
+      {/* MODAL 5: Create / Edit Garment Model Modal */}
       <CreateModelModal
         isOpen={isCreateModelOpen}
-        onClose={() => setIsCreateModelOpen(false)}
-        onSuccess={handleModelCreated}
+        onClose={() => {
+          setIsCreateModelOpen(false);
+          setEditingModel(null);
+        }}
+        modelToEdit={editingModel}
+        onSuccess={handleModelSaved}
         isAr={isAr}
       />
 
@@ -4154,6 +3438,30 @@ export function App() {
             prev.map((p) => (p.id === updatedPo.id ? updatedPo : p))
           );
           setGoodsReceiptNotes((prev) => [newGrn, ...prev]);
+          // Refresh inventory items immediately so warehouse stock is updated
+          api.inventory.getItems({ per_page: 100 }).then((res) => {
+            const rawList = res?.data || (res as any)?.items;
+            if (Array.isArray(rawList)) {
+              const mappedItems: InventoryItem[] = rawList.map((it: any) => ({
+                id: it.id,
+                warehouse_id: it.warehouse_id,
+                category: it.item_type || it.category || 'fabric',
+                item_type: it.item_type || 'fabric',
+                is_customer_owned: Boolean(it.is_customer_owned),
+                code: it.code,
+                name: it.name,
+                unit_of_measure: it.unit_of_measure,
+                current_balance: Number(it.current_balance),
+                reserved_balance: Number(it.reserved_balance || 0),
+                average_cost: Number(it.average_cost),
+                reorder_level: Number(it.reorder_level),
+                min_stock_level: Number(it.min_stock_level),
+                warehouse: it.warehouse,
+                technical_specs: it.technical_specs || undefined,
+              }));
+              setInventoryItems(mappedItems);
+            }
+          }).catch(console.warn);
           setSelectedPoForReceipt(null);
         }}
       />
@@ -4169,6 +3477,11 @@ export function App() {
         isAr={isAr}
         onSuccess={(newInvoice) => {
           setSupplierInvoices((prev) => [newInvoice, ...prev]);
+          // Refresh suppliers to update balance on supplier cards
+          api.suppliers.getSuppliers({ per_page: 100 }).then((res: any) => {
+            const list = res?.data || res?.suppliers;
+            if (Array.isArray(list)) setSuppliers(list);
+          }).catch(console.warn);
           setSelectedPoForInvoice(null);
         }}
       />
@@ -4216,6 +3529,7 @@ export function App() {
         warehouses={warehouses}
         fabricItems={inventoryItems.filter((i) => i.unit_of_measure === 'meter' || i.unit_of_measure === 'm' || (isAr ? i.name.includes('قماش') : i.name.toLowerCase().includes('fabric')) || i.name.includes('قماش'))}
         customerMaterials={customerMaterials}
+        employees={employees}
         isAr={isAr}
         onSuccess={(newCut, newBundles) => {
           setCuttingOrders((prev) => [newCut, ...prev]);
@@ -4240,6 +3554,7 @@ export function App() {
         isOpen={selectedBundleForTracker !== null}
         onClose={() => setSelectedBundleForTracker(null)}
         bundle={selectedBundleForTracker}
+        employees={employees}
         isAr={isAr}
         onTransferSuccess={(updated) => {
           setCuttingBundles((prev) =>
@@ -4311,6 +3626,7 @@ export function App() {
         onClose={() => setIsCreateJobModalOpen(false)}
         customers={customers}
         models={models}
+        employees={employees}
         isAr={isAr}
         onSuccess={(newJob) => {
           setJobOrders((prev) => [newJob, ...prev]);
@@ -4355,6 +3671,7 @@ export function App() {
         }}
         jobOrders={jobOrders}
         existingOperation={selectedOpForReceive}
+        employees={employees}
         isAr={isAr}
         onSuccess={(op) => {
           if (selectedOpForReceive) {

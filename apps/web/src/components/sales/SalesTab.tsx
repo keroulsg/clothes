@@ -39,7 +39,7 @@ interface SalesTabProps {
 
 export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr, variants }) => {
   const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'customers' | 'returns' | 'pos' | 'deliveries'>('orders');
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'quotations' | 'invoices' | 'customers' | 'returns' | 'pos' | 'deliveries' | 'payments'>('orders');
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -50,12 +50,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [deliveryNotes, setDeliveryNotes] = useState<any[]>([]);
   const [salesReturns, setSalesReturns] = useState<SalesReturn[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [creditNotes, setCreditNotes] = useState<any[]>([]);
 
   // Modals
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
   const [isCustomerStatementOpen, setIsCustomerStatementOpen] = useState(false);
+  const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedCustomerForStatement, setSelectedCustomerForStatement] = useState<Customer | null>(null);
   const [selectedCustomerForEdit, setSelectedCustomerForEdit] = useState<Customer | null>(null);
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
@@ -80,17 +83,31 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [newQuotePrice, setNewQuotePrice] = useState<number>(165);
   const [newQuoteValidity, setNewQuoteValidity] = useState('');
 
+  // Payment Form State
+  const [paymentCustomerId, setPaymentCustomerId] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer' | 'check'>('cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentInvoiceId, setPaymentInvoiceId] = useState('');
+
+  // POS State & Barcode
+  const [posCart, setPosCart] = useState<{ variantId: string; name: string; price: number; qty: number }[]>([]);
+  const [posSuccessMsg, setPosSuccessMsg] = useState<string | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+
   const loadSalesData = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [ordersRes, invRes, quotesRes, delivRes, returnsRes, custRes] = await Promise.allSettled([
+      const [ordersRes, invRes, quotesRes, delivRes, returnsRes, custRes, payRes, credRes] = await Promise.allSettled([
         api.sales.getOrders(1),
         api.sales.getInvoices(1),
         api.sales.getQuotations(1),
         api.sales.getDeliveryNotes(1),
         api.sales.getReturns(1),
         api.customers.getCustomers(),
+        api.sales.getPayments(1),
+        api.sales.getCreditNotes(1),
       ]);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
@@ -111,6 +128,12 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       if (custRes.status === 'fulfilled' && custRes.value?.data) {
         setCustomers(custRes.value.data);
       }
+      if (payRes.status === 'fulfilled' && payRes.value?.data) {
+        setPayments(payRes.value.data);
+      }
+      if (credRes.status === 'fulfilled' && credRes.value?.data) {
+        setCreditNotes(credRes.value.data);
+      }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المبيعات' : 'Failed to load sales data'));
     } finally {
@@ -129,10 +152,6 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       setNewOrderPrice(p);
     }
   }, [variants, newOrderVariantId]);
-
-  // POS State
-  const [posCart, setPosCart] = useState<{ variantId: string; name: string; price: number; qty: number }[]>([]);
-  const [posSuccessMsg, setPosSuccessMsg] = useState<string | null>(null);
 
   const handleReserveStock = async (orderId: string) => {
     try {
@@ -244,7 +263,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
   const addToPosCart = (v: ProductVariant) => {
     const name = `${v.garment_model?.name || v.sku} (${v.size?.name || v.size_name || 'Std'} - ${v.color?.name || v.color_name || 'Std'})`;
-    const price = Number(v.retail_price) > 0 ? Number(v.retail_price) : 180;
+    const posPrice = Number(v.pos_price || v.effective_pos_price || v.product?.pos_price);
+    const price = posPrice > 0 ? posPrice : (Number(v.retail_price) > 0 ? Number(v.retail_price) : 0);
 
     setPosCart((prev) => {
       const exist = prev.find((i) => i.variantId === v.id);
@@ -289,6 +309,134 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   };
 
   const posTotal = posCart.reduce((sum, i) => sum + i.price * i.qty, 0);
+
+  const handleConvertQuotation = async (quotationId: string) => {
+    if (!confirm(isAr ? 'هل تريد تأكيد تحويل عرض السعر إلى أمر بيع رسمي؟' : 'Convert this quotation into a sales order?')) {
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await api.sales.convertQuotation(quotationId);
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تحويل عرض السعر إلى أمر بيع' : 'Failed to convert quotation'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    const reason = prompt(isAr ? 'يرجى إدخال سبب إلغاء أمر البيع:' : 'Please enter cancellation reason:');
+    if (reason === null) return;
+    setIsLoading(true);
+    try {
+      await api.sales.cancelOrder(orderId, reason || 'Cancelled by user');
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إلغاء أمر البيع' : 'Failed to cancel sales order'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeliverOrder = async (orderId: string) => {
+    setIsLoading(true);
+    try {
+      await api.sales.deliverOrder(orderId, { notes: 'Delivered from sales portal' });
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسليم وشحن الطلب' : 'Failed to deliver order'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelDeliveryNote = async (deliveryId: string) => {
+    const reason = prompt(isAr ? 'يرجى إدخال سبب إلغاء إذن التسليم:' : 'Please enter delivery cancellation reason:');
+    if (reason === null) return;
+    setIsLoading(true);
+    try {
+      await api.sales.cancelDeliveryNote(deliveryId, reason || 'Cancelled by user');
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إلغاء إذن التسليم' : 'Failed to cancel delivery note'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelInvoice = async (invoiceId: string) => {
+    const reason = prompt(isAr ? 'يرجى إدخال سبب إلغاء الفاتورة:' : 'Please enter invoice cancellation reason:');
+    if (reason === null) return;
+    setIsLoading(true);
+    try {
+      await api.sales.cancelInvoice(invoiceId, reason || 'Cancelled by user');
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إلغاء الفاتورة' : 'Failed to cancel invoice'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBarcodeScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!barcodeInput.trim()) return;
+    try {
+      const res = await api.sales.lookupBarcode(barcodeInput.trim());
+      const foundVariant = (res as any)?.variant || (res as any)?.item;
+      if (foundVariant) {
+        addToPosCart(foundVariant);
+        setBarcodeInput('');
+      } else {
+        setErrorMsg(isAr ? 'لم يتم العثور على صنف بالباركود المدخل' : 'Barcode not found');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'باركود غير صالح' : 'Invalid barcode'));
+    }
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentCustomerId || paymentAmount <= 0) {
+      setErrorMsg(isAr ? 'يرجى اختيار العميل وتحديد مبلغ التحصيل' : 'Select customer and amount');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await api.sales.recordPayment({
+        customer_id: paymentCustomerId,
+        amount: Number(paymentAmount),
+        payment_method: paymentMethod,
+        sales_invoice_id: paymentInvoiceId || undefined,
+        notes: paymentNotes || undefined,
+      });
+      setIsRecordPaymentOpen(false);
+      setPaymentCustomerId('');
+      setPaymentAmount(0);
+      setPaymentNotes('');
+      setPaymentInvoiceId('');
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل سند القبض' : 'Failed to record customer payment'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReversePayment = async (paymentId: string) => {
+    const reason = prompt(isAr ? 'يرجى إدخال سبب عكس / إلغاء سند القبض:' : 'Please enter payment reversal reason:');
+    if (reason === null) return;
+    setIsLoading(true);
+    try {
+      await api.sales.reversePayment(paymentId, reason || 'Reversed by user');
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل عكس سند القبض' : 'Failed to reverse payment'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Real server-backed dynamic calculations
   const totalConfirmedSales = orders
@@ -514,6 +662,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
           >
             {isAr ? 'دليل العملاء والحسابات' : 'Customers & Accounts'}
           </button>
+          <button
+            onClick={() => setActiveSubTab('payments')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeSubTab === 'payments'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            {isAr ? 'سندات القبض والتحصيل' : 'Customer Receipts'}
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -536,6 +694,12 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
             }}>
               <Plus className="w-4 h-4 me-1" />
               {isAr ? 'تسجيل عميل جديد' : 'New Customer'}
+            </Button>
+          )}
+          {activeSubTab === 'payments' && (
+            <Button size="sm" onClick={() => setIsRecordPaymentOpen(true)}>
+              <Plus className="w-4 h-4 me-1" />
+              {isAr ? 'تسجيل سند قبض' : 'Record Receipt'}
             </Button>
           )}
         </div>
@@ -654,6 +818,22 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                                     },
                                   ]
                                 : []),
+                              ...(order.status === 'confirmed' || order.status === 'reserved'
+                                ? [
+                                    {
+                                      id: 'deliver-action',
+                                      label: isAr ? 'تسليم وشحن الطلب' : 'Deliver & Dispatch',
+                                      icon: <Truck className="w-3.5 h-3.5 text-blue-500" />,
+                                      onClick: () => handleDeliverOrder(order.id),
+                                    },
+                                    {
+                                      id: 'cancel-order',
+                                      label: isAr ? 'إلغاء أمر البيع' : 'Cancel Sales Order',
+                                      icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                                      onClick: () => handleCancelOrder(order.id),
+                                    },
+                                  ]
+                                : []),
                               ...(order.status === 'reserved'
                                 ? [
                                     {
@@ -729,13 +909,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             },
                             {
                               id: 'convert-order',
-                              label: isAr ? 'تحويل لأمر بيع' : 'Convert to Sales Order',
+                              label: isAr ? 'تحويل لأمر بيع رسمي' : 'Convert to Sales Order',
                               icon: <FileText className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => {
-                                setNewOrderCustomer(q.customer_name);
-                                setNewOrderPrice(Number(q.total_amount));
-                                setIsOrderModalOpen(true);
-                              },
+                              onClick: () => handleConvertQuotation(q.id),
+                              disabled: q.status === 'converted' || q.status === 'rejected',
                             },
                           ]}
                         />
@@ -754,9 +931,23 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <h3 className="font-bold text-slate-900 dark:text-white mb-3">
-                {isAr ? 'منتجات معرض المصنع الجاهزة للتسليم المباشر' : 'Factory Outlet Available Garments'}
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h3 className="font-bold text-slate-900 dark:text-white">
+                  {isAr ? 'منتجات معرض المصنع الجاهزة للتسليم المباشر' : 'Factory Outlet Available Garments'}
+                </h3>
+                <form onSubmit={handleBarcodeScan} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    placeholder={isAr ? 'مسح الباركود (EAN-13)...' : 'Scan barcode...'}
+                    className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-primary w-48"
+                  />
+                  <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
+                    {isAr ? 'إضافة' : 'Scan'}
+                  </Button>
+                </form>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {variants.map((v) => (
                   <div
@@ -776,9 +967,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                       <p className="text-xs text-slate-400 font-mono mt-1">SKU: {v.sku}</p>
                     </div>
                     <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-                      <span className="font-bold text-primary text-sm">
-                        {Number(v.retail_price) > 0 ? Number(v.retail_price) : 180} ج.م
-                      </span>
+                      <div>
+                        <span className="font-bold text-primary text-sm">
+                          {Number(v.pos_price || v.effective_pos_price || v.product?.pos_price || v.retail_price || 0)} {isAr ? 'ج.م' : 'EGP'}
+                        </span>
+                        {(v.pos_price || v.effective_pos_price || v.product?.pos_price) ? (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 block font-medium">
+                            {isAr ? 'سعر المعرض' : 'POS Price'}
+                          </span>
+                        ) : null}
+                      </div>
                       <span className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
                         {isAr ? 'متاح' : 'In Stock'}
                       </span>
@@ -969,6 +1167,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                               icon: <Printer className="w-3.5 h-3.5 text-primary" />,
                               onClick: () => window.print(),
                             },
+                            {
+                              id: 'cancel-inv',
+                              label: isAr ? 'إلغاء الفاتورة' : 'Cancel Invoice',
+                              icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                              onClick: () => handleCancelInvoice(inv.id),
+                              disabled: inv.status === 'void' || Number(inv.paid_amount) > 0,
+                            },
                           ]}
                         />
                       </td>
@@ -1030,6 +1235,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                               label: isAr ? 'طباعة بوليصة التسليم' : 'Print Waybill',
                               icon: <Printer className="w-3.5 h-3.5 text-primary" />,
                               onClick: () => window.print(),
+                            },
+                            {
+                              id: 'cancel-delivery',
+                              label: isAr ? 'إلغاء إذن التسليم' : 'Cancel Delivery Note',
+                              icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                              onClick: () => handleCancelDeliveryNote(d.id),
+                              disabled: d.status === 'cancelled',
                             },
                           ]}
                         />
@@ -1504,7 +1716,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
               {isAr ? 'سجل مرتجعات المبيعات وإشعارات الدائن المعتمدة' : 'Sales Returns & Approved Credit Notes'}
             </h3>
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              {salesReturns.length} {isAr ? 'عملية مرتجع مسجلة' : 'returns on file'}
+              {salesReturns.length} {isAr ? 'مرتجع' : 'returns'} • {creditNotes.length} {isAr ? 'إشعار دائن' : 'credit notes'}
             </span>
           </div>
 
@@ -1577,6 +1789,194 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
           </div>
         </Card>
       )}
+
+      {/* CUSTOMER PAYMENTS VIEW */}
+      {activeSubTab === 'payments' && (
+        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                {isAr ? 'سجل سندات القبض والتحصيل للعملاء (Customer Receipts)' : 'Customer Payment Receipts & Collections'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isAr ? 'إدارة متحصلات عملاء الجملة والتجزئة وتوزيعها على الفواتير وإجراء القيود المحاسبية التلقائية.' : 'Track incoming receipts, allocations to open invoices, and double-entry postings.'}
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setIsRecordPaymentOpen(true)} icon={<Plus className="w-3.5 h-3.5" />}>
+              {isAr ? 'تسجيل سند قبض' : 'Record Receipt'}
+            </Button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-start text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="p-3 text-start">{isAr ? 'رقم السند' : 'Receipt #'}</th>
+                  <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
+                  <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Method'}</th>
+                  <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
+                  <th className="p-3 text-start">{isAr ? 'المبلغ المحصل' : 'Amount'}</th>
+                  <th className="p-3 text-start">{isAr ? 'البيان' : 'Notes'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {payments.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                      {isAr ? 'لا توجد سندات قبض مسجلة حتى الآن' : 'No customer receipts on record'}
+                    </td>
+                  </tr>
+                ) : (
+                  payments.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">{p.voucher_number}</td>
+                      <td className="p-3">{p.customer?.name || p.customer_name || '—'}</td>
+                      <td className="p-3 capitalize">{p.payment_method?.replace('_', ' ')}</td>
+                      <td className="p-3 text-slate-500 font-mono text-xs">{p.payment_date}</td>
+                      <td className="p-3 font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        {Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+                      </td>
+                      <td className="p-3 text-xs text-slate-500 max-w-xs truncate">{p.notes || '—'}</td>
+                      <td className="p-3 text-center">
+                        <Badge variant={p.status === 'posted' ? 'success' : 'danger'}>
+                          {p.status === 'posted' ? (isAr ? 'معتمد' : 'Posted') : (isAr ? 'معكوس / ملغى' : 'Reversed')}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center">
+                        <ActionsMenu
+                          variant="icon-horizontal"
+                          align={isAr ? 'left' : 'right'}
+                          items={[
+                            {
+                              id: 'print-receipt-voucher',
+                              label: isAr ? 'طباعة سند القبض' : 'Print Receipt Voucher',
+                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                              onClick: () => window.print(),
+                            },
+                            {
+                              id: 'reverse-receipt',
+                              label: isAr ? 'عكس / إلغاء سند القبض' : 'Reverse Payment Voucher',
+                              icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                              onClick: () => handleReversePayment(p.id),
+                              disabled: p.status === 'reversed',
+                            },
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* RECORD CUSTOMER PAYMENT MODAL */}
+      <Modal
+        isOpen={isRecordPaymentOpen}
+        onClose={() => setIsRecordPaymentOpen(false)}
+        title={isAr ? 'تسجيل سند قبض وتحصيل نقدية / بنك' : 'Record Customer Payment Receipt'}
+      >
+        <form onSubmit={handleRecordPayment} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'العميل *' : 'Customer *'}
+            </label>
+            <select
+              value={paymentCustomerId}
+              onChange={(e) => setPaymentCustomerId(e.target.value)}
+              required
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs"
+            >
+              <option value="">{isAr ? '— اختر العميل —' : '— Select Customer —'}</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} - {c.name} {c.current_balance ? `(${isAr ? 'مديونية:' : 'Bal:'} ${Number(c.current_balance).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'المبلغ المحصل (ج.م) *' : 'Amount (EGP) *'}
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                value={paymentAmount || ''}
+                onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                placeholder="0.00"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'طريقة التحصيل' : 'Payment Method'}
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs"
+              >
+                <option value="cash">{isAr ? 'نقدي (خزينة)' : 'Cash'}</option>
+                <option value="bank_transfer">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
+                <option value="check">{isAr ? 'شيك بنكي' : 'Check'}</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'تخصيص لفاتورة محددة (اختياري - يترك فارغاً للتسوية التلقائية FIFO)' : 'Allocate to Invoice (Optional)'}
+            </label>
+            <select
+              value={paymentInvoiceId}
+              onChange={(e) => setPaymentInvoiceId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs"
+            >
+              <option value="">{isAr ? '— تسوية تلقائية بأقدم الفواتير المستحقة (FIFO) —' : '— Auto FIFO Allocation —'}</option>
+              {invoices
+                .filter((inv) => inv.status !== 'void' && inv.status !== 'paid')
+                .map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.invoice_number} ({inv.customer_name}) - {isAr ? 'إجمالي:' : 'Total:'} {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'ملاحظات / مرجع التحصيل' : 'Notes / Reference'}
+            </label>
+            <textarea
+              rows={2}
+              value={paymentNotes}
+              onChange={(e) => setPaymentNotes(e.target.value)}
+              placeholder={isAr ? 'رقم الإيداع البنكي أو رقم الشيك...' : 'Bank deposit slip # or check #...'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsRecordPaymentOpen(false)} disabled={isSubmitting}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" variant="primary" size="sm" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري التسجيل...' : 'Recording...') : (isAr ? 'اعتماد سند القبض' : 'Record Receipt')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* SALES RETURN MODAL */}
       <SalesReturnModal

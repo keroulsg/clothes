@@ -350,9 +350,11 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         $orderRes->assertStatus(201);
         $orderId = $orderRes->json('order.id');
 
-        // Stock must be decremented by 3 => 17
-        $newBalance = (float)$this->inventoryA->fresh()->current_balance;
-        $this->assertEquals(17.0, $newBalance);
+        // Stock reservation: current_balance remains 20, reserved_balance becomes 3
+        $inv = $this->inventoryA->fresh();
+        $this->assertEquals(20.0, (float)$inv->current_balance);
+        $this->assertEquals(3.0, (float)$inv->reserved_balance);
+        $this->assertEquals(17.0, (float)($inv->current_balance - $inv->reserved_balance));
 
         // Cancel order via manager
         Sanctum::actingAs($this->managerA);
@@ -363,9 +365,10 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         ]);
         $cancelRes->assertStatus(200);
 
-        // Stock must be restored by 3 => 20
-        $restoredBalance = (float)$this->inventoryA->fresh()->current_balance;
-        $this->assertEquals(20.0, $restoredBalance);
+        // Reservation released: reserved_balance becomes 0, available is restored to 20
+        $restoredInv = $this->inventoryA->fresh();
+        $this->assertEquals(20.0, (float)$restoredInv->current_balance);
+        $this->assertEquals(0.0, (float)$restoredInv->reserved_balance);
     }
 
     public function test_insufficient_inventory_prevents_order_placement(): void
@@ -406,7 +409,10 @@ class StorefrontThemesAndPaymentsTest extends TestCase
             ],
         ]);
         $res1->assertStatus(201);
-        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->current_balance);
+        $inv1 = $this->inventoryA->fresh();
+        $this->assertEquals(1.0, (float)$inv1->current_balance);
+        $this->assertEquals(1.0, (float)$inv1->reserved_balance);
+        $this->assertEquals(0.0, (float)($inv1->current_balance - $inv1->reserved_balance));
 
         // Order 2 tries to order 1 unit when stock is 0
         $res2 = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
@@ -421,7 +427,6 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         ]);
         $res2->assertStatus(422);
         $this->assertStringContainsString('غير متوفرة حالياً بالمخزن', $res2->json('message'));
-        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->current_balance);
     }
 
     public function test_repeated_cancellation_cannot_restore_inventory_more_than_once(): void
@@ -440,26 +445,30 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         ]);
         $orderRes->assertStatus(201);
         $orderId = $orderRes->json('order.id');
-        $this->assertEquals(6.0, (float)$this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(4.0, (float)$this->inventoryA->fresh()->reserved_balance);
 
         Sanctum::actingAs($this->managerA);
         app()->instance('current_tenant_id', $this->tenantA->id);
 
-        // First cancellation restores 4 units -> 10
+        // First cancellation releases 4 units reserved
         $cancel1 = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'cancelled']);
         $cancel1->assertStatus(200);
         $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->reserved_balance);
 
         // Repeated cancellation call must not restore inventory again
         $cancel2 = $this->patchJson("/api/v1/storefront/orders/{$orderId}/status", ['status' => 'cancelled']);
         $cancel2->assertStatus(200);
         $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->reserved_balance);
 
         // Direct service calls must also remain strictly idempotent
         $orderModel = StoreOrder::find($orderId);
         app(StorefrontService::class)->restoreOrderInventory($orderModel);
         app(StorefrontService::class)->restoreOrderInventory($orderModel);
         $this->assertEquals(10.0, (float)$this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float)$this->inventoryA->fresh()->reserved_balance);
     }
 
     public function test_cannot_ship_unverified_instapay_order(): void

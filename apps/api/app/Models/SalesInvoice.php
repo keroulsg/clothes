@@ -31,6 +31,8 @@ class SalesInvoice extends Model
         'invoice_date',
         'due_date',
         'notes',
+        'cancelled_at',
+        'cancellation_reason',
     ];
 
     protected $casts = [
@@ -42,6 +44,7 @@ class SalesInvoice extends Model
         'balance_due' => 'decimal:4',
         'invoice_date' => 'date',
         'due_date' => 'date',
+        'cancelled_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -57,6 +60,21 @@ class SalesInvoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(SalesInvoiceItem::class);
+    }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(SalesReturn::class);
+    }
+
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentVoucherAllocation::class);
     }
 
     public function tenant(): BelongsTo

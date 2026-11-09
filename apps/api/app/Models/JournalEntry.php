@@ -6,6 +6,7 @@ use App\Models\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JournalEntry extends Model
@@ -21,7 +22,14 @@ class JournalEntry extends Model
         'description',
         'total_debit',
         'total_credit',
-        'status',
+        'status', // draft, approved, posted, reversed
+        'fiscal_period_id',
+        'branch_id',
+        'created_by',
+        'approved_by',
+        'posted_by',
+        'reversed_entry_id',
+        'reversal_reason',
     ];
 
     protected $casts = [
@@ -30,8 +38,32 @@ class JournalEntry extends Model
         'total_credit' => 'decimal:4',
     ];
 
+    protected $appends = [
+        'is_balanced',
+    ];
+
+    public function getIsBalancedAttribute(): bool
+    {
+        return abs((float)$this->total_debit - (float)$this->total_credit) < 0.0001;
+    }
+
     public function lines(): HasMany
     {
         return $this->hasMany(JournalEntryLine::class);
+    }
+
+    public function fiscalPeriod(): BelongsTo
+    {
+        return $this->belongsTo(FiscalPeriod::class, 'fiscal_period_id');
+    }
+
+    public function reversedEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class, 'reversed_entry_id');
+    }
+
+    public function reversingEntry(): HasMany
+    {
+        return $this->hasMany(JournalEntry::class, 'reversed_entry_id');
     }
 }

@@ -52,4 +52,9 @@ class MaintenanceWorkOrder extends Model
     {
         return $this->hasMany(MaintenanceSparePart::class, 'work_order_id');
     }
+
+    public function journalEntry(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(JournalEntry::class, 'reference_id')->where('reference_type', 'maintenance_work_order');
+    }
 }

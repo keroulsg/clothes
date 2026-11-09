@@ -16,6 +16,8 @@ class ProductionCostSheet extends Model
         'tenant_id',
         'production_order_id',
         'garment_model_id',
+        'costing_method', // standard, actual, weighted_average
+        'overhead_allocation_method', // direct_labor_cost_pct, direct_labor_hours, per_unit, machine_hours
         'total_produced_pieces',
         'direct_materials_cost',
         'direct_labor_cost',
@@ -24,7 +26,15 @@ class ProductionCostSheet extends Model
         'applied_overhead_rate',
         'total_cost',
         'cost_per_piece',
-        'status',
+        'planned_materials_cost',
+        'planned_labor_cost',
+        'planned_total_cost',
+        'scrap_pieces',
+        'scrap_cost',
+        'variance_amount',
+        'variance_percentage',
+        'notes',
+        'status', // calculated, approved, rejected
     ];
 
     protected $casts = [
@@ -36,6 +46,13 @@ class ProductionCostSheet extends Model
         'applied_overhead_rate' => 'decimal:4',
         'total_cost' => 'decimal:4',
         'cost_per_piece' => 'decimal:4',
+        'planned_materials_cost' => 'decimal:4',
+        'planned_labor_cost' => 'decimal:4',
+        'planned_total_cost' => 'decimal:4',
+        'scrap_pieces' => 'integer',
+        'scrap_cost' => 'decimal:4',
+        'variance_amount' => 'decimal:4',
+        'variance_percentage' => 'decimal:4',
     ];
 
     public function productionOrder(): BelongsTo

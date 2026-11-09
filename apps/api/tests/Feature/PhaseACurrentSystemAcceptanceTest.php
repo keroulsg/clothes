@@ -259,9 +259,10 @@ class PhaseACurrentSystemAcceptanceTest extends TestCase
         $this->assertNotEmpty($orderNumber);
         $this->assertEquals('cod_pending', $orderResponse->json('order.payment_status'));
 
-        // التحقق من خصم المخزون اللحظي: 50 - 2 = 48
+        // التحقق من حجز المخزون طبقاً لـ Batch 6: حجز 2 دون خصم الرصيد الفعلي قبل إصدار إذن التسليم
         $this->inventoryItem->refresh();
-        $this->assertEquals(48, (float)$this->inventoryItem->current_balance);
+        $this->assertEquals(2, (float)$this->inventoryItem->reserved_balance);
+        $this->assertEquals(50, (float)$this->inventoryItem->current_balance);
 
         // 3. العميل يتابع حالة الشحنة عبر مسار التتبع العام دون تسجيل دخول
         $trackResponse = $this->getJson("/api/v1/storefront/track/{$this->tenantA->id}?order_number={$orderNumber}&customer_phone=01012345678");

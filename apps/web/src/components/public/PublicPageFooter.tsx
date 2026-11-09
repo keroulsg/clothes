@@ -111,6 +111,16 @@ export const PublicPageFooter: React.FC<PublicPageFooterProps> = ({
                   {isAr ? 'المتجر الإلكتروني B2B' : 'B2B Wholesale Portal'}
                 </a>
               </li>
+              <li>
+                <a
+                  href="#/waslat-worsh"
+                  onClick={(e) => handleNavClick('waslat-worsh', e)}
+                  className="hover:text-rose-600 dark:hover:text-rose-400 font-bold transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Scissors className="w-3 h-3 text-rose-600 dark:text-rose-400 -rotate-45" />
+                  <span>{isAr ? 'وصلة ورش (بورصة القص B2B)' : 'Waslat Worsh Exchange'}</span>
+                </a>
+              </li>
             </ul>
           </div>
 

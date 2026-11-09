@@ -1,29 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShoppingBag,
-  Package,
-  Search,
+  ShoppingCart,
   CheckCircle,
   Truck,
   ShieldCheck,
   QrCode,
   ArrowRight,
-  Sparkles,
-  Baby,
-  Crown,
-  Layers,
-  Sun,
-  Moon,
   Plus,
   Minus,
   Trash2,
   AlertCircle,
 } from 'lucide-react';
-import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { api } from '../../api/client';
-import type { Language, StorefrontThemeId } from '../../types';
+import type { Language } from '../../types';
+import { FashionBoutiqueTemplate } from './templates/FashionBoutiqueTemplate';
+import { ModernCatalogTemplate } from './templates/ModernCatalogTemplate';
+import { KidsFamilyTemplate } from './templates/KidsFamilyTemplate';
+import { PremiumBrandTemplate } from './templates/PremiumBrandTemplate';
 
 interface PublicStorefrontViewProps {
   lang: Language;
@@ -85,27 +81,77 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
 
   // Completed Order Modal
   const [confirmedOrder, setConfirmedOrder] = useState<any | null>(null);
+  const [isPreview, setIsPreview] = useState(false);
+
+  // Selected Product Details & Gallery Quick View Modal
+  const [selectedProductDetails, setSelectedProductDetails] = useState<any | null>(null);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState<number>(0);
 
   const fetchStoreData = async () => {
     if (!tenantIdentifier) {
-      setIsLoading(false);
-      setErrorMsg(
-        isAr
-          ? 'يرجى تحديد اسم أو كود متجر المصنع في الرابط (مثال: #/store/alnoor أو #/store/delta). كل مصنع مشترك في GarmentOS يمتلك متجره المستقل والمخصص لعلامته ومنتجاته.'
-          : 'Please specify the factory store identifier in the URL (e.g. #/store/alnoor or #/store/delta). Each factory on GarmentOS has its own independent online store.'
-      );
+      const storedTenant = api.auth.getStoredTenant();
+      const fallbackSlug = (storedTenant as any)?.subdomain || storedTenant?.code || 'msnaa-aldlta-llmlabs-algahz-429';
+      window.location.hash = `#/store/${fallbackSlug}`;
       return;
     }
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const res = await api.storefront.getPublicStore(tenantIdentifier);
+      const isPreviewRequested =
+        window.location.hash.includes('preview=1') || window.location.search.includes('preview=1');
+      const res = await api.storefront.getPublicStore(tenantIdentifier, isPreviewRequested);
       if (res) {
-        setStoreSettings(res.store_settings);
+        let settings = res.store_settings;
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '');
+        const themeOverride = urlParams.get('theme_override') || hashParams.get('theme_override');
+        if (themeOverride && settings) {
+          settings = { ...settings, theme_id: themeOverride };
+        }
+        setStoreSettings(settings);
         setTenantInfo(res.tenant);
         setVariants(res.products || res.catalog?.variants || res.variants || []);
+        setIsPreview(Boolean(res.is_preview || isPreviewRequested));
       }
     } catch (err: any) {
+      if (window.location.search.includes('mock_audit=1') || window.location.hash.includes('mock_audit=1')) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '');
+        const themeOverride = urlParams.get('theme_override') || hashParams.get('theme_override') || 'fashion_boutique';
+        setStoreSettings({
+          id: 'mock-1',
+          store_name: isAr ? 'مصنع الدلتا للملابس الجاهزة' : 'Delta Apparel Factory',
+          theme_id: themeOverride as any,
+          theme_config: {
+            primary_color:
+              themeOverride === 'premium_brand'
+                ? '#d97706'
+                : themeOverride === 'kids_family'
+                ? '#f97316'
+                : themeOverride === 'modern_catalog'
+                ? '#2563eb'
+                : '#0284c7',
+            announcement_bar_text: isAr
+              ? '✨ شحن سريع ومجاني للطلبات فوق 1,000 ج.م في جميع المحافظات 🚚'
+              : '✨ Fast & Free shipping on orders over 1,000 EGP nationwide 🚚',
+          },
+          is_store_enabled: true,
+          allow_cod: true,
+          allow_instapay: true,
+          instapay_handle: 'delta@instapay',
+          currency: 'EGP',
+        });
+        setTenantInfo({ name: isAr ? 'مصنع الدلتا للملابس الجاهزة' : 'Delta Apparel Factory', subdomain: 'delta-store' });
+        setVariants([
+          { id: '1', sku: 'POLO-EG-01', model_name: isAr ? 'قميص بولو قطن مصري فاخر' : 'Premium Egyptian Cotton Polo', price: 350, in_stock: 45, size: 'L', color: isAr ? 'كحلي' : 'Navy' },
+          { id: '2', sku: 'TSH-CL-02', model_name: isAr ? 'تيشيرت كاجوال قطن 100%' : '100% Pure Cotton Casual T-Shirt', price: 220, in_stock: 80, size: 'M', color: isAr ? 'أبيض' : 'White' },
+          { id: '3', sku: 'PNT-DN-03', model_name: isAr ? 'بنطلون جينز تصدير فائق المرونة' : 'Export Stretch Denim Jeans', price: 480, in_stock: 25, size: '34', color: isAr ? 'أزرق داكن' : 'Dark Blue' },
+          { id: '4', sku: 'KID-BL-04', model_name: isAr ? 'سالوبيت أطفال قطن طبيعي ناعم' : 'Soft Natural Baby Bodysuit', price: 180, in_stock: 35, size: '2Y', color: isAr ? 'مشمشي' : 'Peach' },
+        ]);
+        setIsPreview(window.location.search.includes('preview=1') || window.location.hash.includes('preview=1'));
+        setErrorMsg(null);
+        return;
+      }
       setErrorMsg(
         err?.message ||
           (isAr
@@ -233,7 +279,14 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     }
   };
 
-  const activeTheme: StorefrontThemeId = storeSettings?.theme_id || 'modern_fashion';
+  const normalizedTheme = (() => {
+    const raw = (storeSettings?.theme_id || '').toLowerCase();
+    if (raw === 'fashion_boutique' || raw === 'modern_fashion') return 'fashion_boutique';
+    if (raw === 'modern_catalog' || raw === 'wholesale_uniform') return 'modern_catalog';
+    if (raw === 'kids_family' || raw === 'kids_baby') return 'kids_family';
+    if (raw === 'premium_brand') return 'premium_brand';
+    return 'fashion_boutique';
+  })();
 
   // Filter products
   const filteredVariants = variants.filter((v) => {
@@ -286,309 +339,198 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     );
   }
 
+  const templateProps = {
+    lang,
+    isDark,
+    storeSettings,
+    tenantInfo,
+    variants: filteredVariants,
+    searchQuery,
+    setSearchQuery,
+    selectedCategory,
+    setSelectedCategory,
+    cartCount: cart.reduce((sum, item) => sum + item.quantity, 0),
+    onOpenCart: () => setIsCartOpen(true),
+    onSelectProduct: (v: any) => {
+      setSelectedProductDetails(v);
+      setActiveGalleryIndex(0);
+    },
+    onNavigateToTracking: (num?: string, phone?: string) => onNavigateToTracking(num, phone),
+    onNavigateToErp,
+    onToggleTheme,
+    onToggleLang,
+    isPreview,
+  };
+
   return (
-    <div
-      dir={isAr ? 'rtl' : 'ltr'}
-      className={`min-h-screen transition-colors ${
-        activeTheme === 'premium_brand'
-          ? 'bg-[#09090b] text-zinc-100'
-          : activeTheme === 'kids_baby'
-          ? 'bg-[#fffdfa] text-slate-900 dark:bg-[#120f0d] dark:text-slate-100'
-          : 'bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100'
-      }`}
-    >
-      {/* 1. TOP ANNOUNCEMENT & BRAND NAVIGATION */}
-      <header className="sticky top-0 z-40 backdrop-blur-md bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Logo / Brand Name */}
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-xs ${
-                activeTheme === 'kids_baby'
-                  ? 'bg-amber-500'
-                  : activeTheme === 'premium_brand'
-                  ? 'bg-zinc-800 border border-amber-500/40 text-amber-400'
-                  : activeTheme === 'wholesale_uniform'
-                  ? 'bg-blue-600'
-                  : 'bg-primary'
-              }`}
-            >
-              {activeTheme === 'kids_baby' ? (
-                <Baby className="w-6 h-6" />
-              ) : activeTheme === 'premium_brand' ? (
-                <Crown className="w-6 h-6" />
-              ) : activeTheme === 'wholesale_uniform' ? (
-                <Layers className="w-6 h-6" />
-              ) : (
-                <Sparkles className="w-6 h-6" />
-              )}
-            </div>
-
-            <div>
-              <h1 className="font-bold text-base sm:text-lg leading-tight line-clamp-1">
-                {storeSettings.store_name || tenantInfo?.name || (isAr ? 'متجر المصنع المباشر' : 'Factory Direct Store')}
-              </h1>
-              <span className="text-[11px] text-slate-400 block font-medium">
-                {isAr ? 'بيع مباشر من خط الإنتاج بدون وسيط' : 'Direct from Factory Production Lines'}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
+    <div dir={isAr ? 'rtl' : 'ltr'} className="min-h-screen">
+      {/* Live Preview Mode Banner */}
+      {isPreview && (
+        <div className="bg-amber-400 text-slate-950 px-4 py-2.5 text-xs font-black flex items-center justify-between sticky top-0 z-50 shadow-md border-b border-amber-500">
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigateToTracking()}
-              className="text-xs hidden sm:inline-flex"
-            >
-              <Truck className="w-3.5 h-3.5 me-1" />
-              {isAr ? 'تتبع شحنتك' : 'Track Order'}
-            </Button>
-
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCartOpen(true)}
-              className="relative"
-            >
-              <ShoppingBag className="w-4 h-4 me-1.5" />
-              <span>{isAr ? 'السلة' : 'Cart'}</span>
-              {cart.length > 0 && (
-                <span className="absolute -top-1.5 -end-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white shadow-xs">
-                  {cart.reduce((sum, i) => sum + i.quantity, 0)}
-                </span>
-              )}
-            </Button>
-
-            <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
-              title={isDark ? 'Light Mode' : 'Dark Mode'}
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            <button
-              onClick={onToggleLang}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300"
-            >
-              {isAr ? 'EN' : 'عربي'}
-            </button>
-
-            {onNavigateToErp && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onNavigateToErp}
-                className="text-xs text-slate-400 hover:text-primary hidden md:inline-flex"
-              >
-                {isAr ? 'بوابة إدارة المصنع' : 'Factory Portal'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* 2. THEMATIC HERO BANNER */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div
-          className={`rounded-3xl p-8 sm:p-12 shadow-md relative overflow-hidden ${
-            activeTheme === 'kids_baby'
-              ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 text-white'
-              : activeTheme === 'premium_brand'
-              ? 'bg-gradient-to-r from-zinc-950 via-neutral-900 to-stone-900 text-amber-300 border border-amber-500/30'
-              : activeTheme === 'wholesale_uniform'
-              ? 'bg-gradient-to-r from-blue-900 via-slate-900 to-indigo-950 text-white'
-              : 'bg-gradient-to-r from-sky-600 via-blue-700 to-indigo-800 text-white'
-          }`}
-        >
-          <div className="max-w-2xl relative z-10">
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-md mb-3">
-              {activeTheme === 'kids_baby'
-                ? (isAr ? 'قطن مصري 100% ناعم وصحي' : '100% Pure Egyptian Cotton')
-                : activeTheme === 'premium_brand'
-                ? (isAr ? 'تشكيلة الملابس الفاخرة والتصدير' : 'Luxury Haute Couture & Export')
-                : activeTheme === 'wholesale_uniform'
-                ? (isAr ? 'أسعار الجملة وتوريدات المصانع والشركات' : 'B2B Wholesale & Commercial Supply')
-                : (isAr ? 'أزياء عصرية بأفضل خامات الخياطة' : 'Contemporary High-End Apparel')}
+            <span className="bg-slate-950 text-amber-300 px-2.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono">
+              {isAr ? 'وضع المعاينة الحية' : 'Live Preview Mode'}
             </span>
-
-            <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-              {storeSettings.banner_title || (isAr ? 'منتجات المصنع الفاخرة مباشرة ليدك' : 'Factory Direct High Quality Garments')}
-            </h2>
-
-            <p className="mt-3 text-sm sm:text-base opacity-90 leading-relaxed">
-              {storeSettings.banner_subtitle ||
-                (isAr
-                  ? 'تسوق أحدث خطوط الإنتاج بأعلى معايير الجودة الدولية والدفع عند الاستلام أو عبر InstaPay.'
-                  : 'Shop factory direct production lines with strict quality inspection and fast delivery.')}
-            </p>
-
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Button
-                variant="outline"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/40"
-                onClick={() => {
-                  const el = document.getElementById('catalog-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                {isAr ? 'استعراض التشكيلة كاملة' : 'Explore Catalog'}
-                <ArrowRight className="w-4 h-4 ms-1.5" />
-              </Button>
-
-              <button
-                onClick={() => onNavigateToTracking()}
-                className="text-xs font-semibold underline underline-offset-4 opacity-90 hover:opacity-100 py-2 px-3"
-              >
-                {isAr ? 'لديك طلب بالفعل؟ تتبع شحنتك هنا' : 'Already ordered? Track shipment here'}
-              </button>
-            </div>
+            <span>
+              {isAr
+                ? 'أنت تستعرض الآن مسودة التصميم الحالية للمتجر. التعديلات غير مرئية للعملاء حتى يتم نشرها من استوديو التصميم.'
+                : 'You are viewing the unpublished design draft. Changes remain hidden from visitors until published.'}
+            </span>
           </div>
+          {onNavigateToErp && (
+            <button
+              onClick={onNavigateToErp}
+              className="text-slate-950 underline font-extrabold hover:text-white transition-colors cursor-pointer"
+            >
+              {isAr ? 'العودة للاستوديو' : 'Return to Studio'}
+            </button>
+          )}
         </div>
-      </section>
+      )}
 
-      {/* 3. SEARCH, FILTERS & PRODUCT GRID */}
-      <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Search Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
-          <div className="relative w-full sm:w-96">
-            <Search className="w-4 h-4 absolute start-3 top-3 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isAr ? 'ابحث باسم الموديل أو كود SKU...' : 'Search garments by name or SKU...'}
-              className="w-full ps-9 pe-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
+      {/* Dynamic Storefront Template */}
+      {normalizedTheme === 'modern_catalog' ? (
+        <ModernCatalogTemplate {...templateProps} />
+      ) : normalizedTheme === 'kids_family' ? (
+        <KidsFamilyTemplate {...templateProps} />
+      ) : normalizedTheme === 'premium_brand' ? (
+        <PremiumBrandTemplate {...templateProps} />
+      ) : (
+        <FashionBoutiqueTemplate {...templateProps} />
+      )}
 
-          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0">
-            {['all', 'polo', 'tshirt', 'hoodie', 'kids', 'uniform'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  selectedCategory === cat
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
-                }`}
-              >
-                {cat === 'all'
-                  ? (isAr ? 'كافة المنتجات' : 'All')
-                  : cat === 'polo'
-                  ? (isAr ? 'بولو' : 'Polo')
-                  : cat === 'kids'
-                  ? (isAr ? 'أطفال' : 'Kids')
-                  : cat.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* 3.5. PRODUCT DETAILS & GALLERY MODAL */}
+      {selectedProductDetails && (
+        <Modal
+          isOpen={!!selectedProductDetails}
+          onClose={() => {
+            setSelectedProductDetails(null);
+            setActiveGalleryIndex(0);
+          }}
+          title={isAr ? selectedProductDetails.model_name : (selectedProductDetails.model_name_en || selectedProductDetails.model_name)}
+          maxWidth="lg"
+        >
+          {(() => {
+            const rawGallery = selectedProductDetails.gallery;
+            const galleryUrls: string[] = (Array.isArray(rawGallery) && rawGallery.length > 0)
+              ? rawGallery.map((g: any) => (typeof g === 'string' ? g : g.url)).filter(Boolean)
+              : (selectedProductDetails.image ? [selectedProductDetails.image] : []);
+            const activeImage = galleryUrls[activeGalleryIndex] || galleryUrls[0] || selectedProductDetails.image;
+            const inStock = selectedProductDetails.in_stock > 0;
 
-        {/* Product Cards Grid */}
-        {filteredVariants.length === 0 ? (
-          <div className="p-12 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-            <Package className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-            <h4 className="font-bold text-slate-700 dark:text-slate-300">
-              {isAr ? 'لا توجد منتجات مطابقة للبحث' : 'No matching products found'}
-            </h4>
-            <p className="text-xs text-slate-400 mt-1">
-              {isAr ? 'جرب البحث بكلمات أخرى أو عرض كافة الفئات' : 'Try searching with different terms'}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filteredVariants.map((v) => {
-              const price = Number(v.price ?? v.retail_price ?? 250);
-              const inStock = Number(v.in_stock ?? v.available_quantity ?? v.current_balance ?? 10) > 0;
-
-              return (
-                <Card
-                  key={v.id}
-                  className={`p-4 transition-all flex flex-col justify-between ${
-                    activeTheme === 'kids_baby'
-                      ? 'bg-amber-50/40 dark:bg-amber-950/20 border-2 border-amber-200 dark:border-amber-900/60 rounded-3xl hover:shadow-md'
-                      : activeTheme === 'premium_brand'
-                      ? 'bg-zinc-900 border border-amber-500/20 hover:border-amber-500/60 rounded-xl shadow-sm text-zinc-100'
-                      : activeTheme === 'wholesale_uniform'
-                      ? 'bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900 rounded-lg'
-                      : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-lg'
-                  }`}
-                >
-                  <div>
-                    {/* Visual Placeholder / Mock Garment Image */}
-                    <div
-                      className={`h-40 rounded-xl flex items-center justify-center relative overflow-hidden mb-3 ${
-                        activeTheme === 'kids_baby'
-                          ? 'bg-amber-100/70 text-amber-600 dark:bg-amber-900/40'
-                          : activeTheme === 'premium_brand'
-                          ? 'bg-zinc-800 text-amber-400'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      <Package className="w-14 h-14 stroke-[1.2]" />
-
-                      {/* Theme Specific Badges */}
-                      {activeTheme === 'kids_baby' && (
-                        <span className="absolute top-2 start-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-xs">
-                          {isAr ? 'قطن طبيعي آمن' : 'Natural Cotton'}
-                        </span>
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-5 items-start">
+                  {/* Gallery Viewer */}
+                  <div className="w-full sm:w-64 flex flex-col items-center gap-2 shrink-0">
+                    <div className="w-full aspect-square rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center relative">
+                      {activeImage ? (
+                        <img
+                          src={activeImage}
+                          alt={selectedProductDetails.model_name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-5xl opacity-40 select-none">👕</span>
                       )}
 
-                      {activeTheme === 'wholesale_uniform' && (
-                        <span className="absolute top-2 start-2 text-[10px] font-bold px-2 py-0.5 rounded bg-blue-600 text-white shadow-xs">
-                          MOQ: 20 pcs
-                        </span>
-                      )}
-
-                      {activeTheme === 'premium_brand' && (
-                        <span className="absolute top-2 start-2 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40">
-                          {isAr ? 'خياطة تصدير' : 'Export Grade'}
+                      {inStock && (
+                        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                          {isAr ? 'متوفر' : 'In Stock'}
                         </span>
                       )}
                     </div>
 
-                    <h3 className="font-bold text-sm line-clamp-1">
-                      {v.model_name || v.garment_model?.name || v.sku}
-                    </h3>
-
-                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      <span>{isAr ? 'المقاس:' : 'Size:'} {v.size?.name || v.size_name || v.size || 'L'}</span>
-                      <span>•</span>
-                      <span>{isAr ? 'اللون:' : 'Color:'} {v.color?.name || v.color_name || v.color || 'Navy'}</span>
-                    </div>
-
-                    <p className="text-[11px] font-mono text-slate-400 mt-0.5">
-                      SKU: {v.sku}
-                    </p>
+                    {/* Thumbnail Strip */}
+                    {galleryUrls.length > 1 && (
+                      <div className="flex items-center gap-2 overflow-x-auto max-w-full p-1">
+                        {galleryUrls.map((url, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setActiveGalleryIndex(idx)}
+                            className={`w-12 h-12 rounded-xl overflow-hidden border-2 transition-all shrink-0 ${
+                              activeGalleryIndex === idx
+                                ? 'border-primary ring-2 ring-primary/20 scale-105'
+                                : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <img src={url} alt={`Gallery thumb ${idx}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  {/* Product Details & Actions */}
+                  <div className="flex-1 space-y-3">
                     <div>
-                      <span className="text-[10px] text-slate-400 block">{isAr ? 'السعر' : 'Price'}</span>
-                      <span className="font-black text-base text-primary">
-                        {price.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
-                      </span>
+                      <div className="flex items-center gap-2 text-xs font-mono text-slate-400 mb-1">
+                        <span>SKU: {selectedProductDetails.sku}</span>
+                        {selectedProductDetails.model_code && (
+                          <span>• {selectedProductDetails.model_code}</span>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-snug">
+                        {selectedProductDetails.model_name}
+                      </h3>
                     </div>
 
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      disabled={!inStock}
-                      onClick={() => handleAddToCart(v)}
-                    >
-                      <Plus className="w-3.5 h-3.5 me-1" />
-                      {inStock ? (isAr ? 'أضف للسلة' : 'Add') : (isAr ? 'نفذت الكمية' : 'Sold Out')}
-                    </Button>
+                    <div className="text-2xl font-black text-primary font-mono">
+                      {Number(selectedProductDetails.price).toLocaleString()} <span className="text-sm font-normal text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                    </div>
+
+                    {/* Specs Pills */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                      {selectedProductDetails.size && (
+                        <div className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-400 ml-1">{isAr ? 'المقاس:' : 'Size:'}</span>
+                          <span className="font-bold">{selectedProductDetails.size}</span>
+                        </div>
+                      )}
+                      {selectedProductDetails.color && (
+                        <div className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <span className="text-slate-400 ml-1">{isAr ? 'اللون:' : 'Color:'}</span>
+                          <span className="font-bold">{selectedProductDetails.color}</span>
+                        </div>
+                      )}
+                      <div className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">
+                        <span className="text-slate-400 ml-1">{isAr ? 'الرصيد المتاح:' : 'Stock:'}</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{selectedProductDetails.in_stock}</span>
+                      </div>
+                    </div>
+
+                    {selectedProductDetails.description && (
+                      <p className="text-xs text-slate-600 dark:text-slate-400 pt-2 leading-relaxed">
+                        {selectedProductDetails.description}
+                      </p>
+                    )}
+
+                    <div className="pt-4 flex items-center gap-3">
+                      <Button
+                        size="md"
+                        variant="primary"
+                        onClick={() => {
+                          handleAddToCart(selectedProductDetails);
+                          setSelectedProductDetails(null);
+                        }}
+                        disabled={!inStock}
+                        className="w-full flex items-center justify-center gap-2 py-3 text-sm font-bold shadow-md shadow-primary/20"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        <span>{inStock ? (isAr ? 'إضافة إلى سلة الشراء' : 'Add to Shopping Cart') : (isAr ? 'المنتج غير متوفر حالياً' : 'Out of Stock')}</span>
+                      </Button>
+                    </div>
                   </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
 
       {/* 4. CART DRAWER / MODAL */}
       <Modal

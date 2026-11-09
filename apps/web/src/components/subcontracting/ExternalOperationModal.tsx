@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import type { ExternalOperation, JobOrder } from '../../types';
 import { api } from '../../api/client';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, UserCheck } from 'lucide-react';
 
 interface ExternalOperationModalProps {
   isOpen: boolean;
   onClose: () => void;
   jobOrders: JobOrder[];
   existingOperation?: ExternalOperation | null;
+  employees?: any[];
   onSuccess: (op: ExternalOperation) => void;
   isAr?: boolean;
 }
@@ -19,10 +20,27 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
   onClose,
   jobOrders,
   existingOperation,
+  employees: propEmployees = [],
   onSuccess,
   isAr = true,
 }) => {
   const isReceiving = !!existingOperation;
+
+  const [employeesList, setEmployeesList] = useState<any[]>(propEmployees);
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState<string>(existingOperation?.assigned_employee_id || '');
+  const [workerUnitRate, setWorkerUnitRate] = useState<number>(1.00);
+
+  useEffect(() => {
+    if (employeesList.length === 0) {
+      api.hr.getEmployees(1)
+        .then((res: any) => {
+          if (res?.data && Array.isArray(res.data)) {
+            setEmployeesList(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [employeesList]);
 
   const [jobOrderId, setJobOrderId] = useState(existingOperation?.job_order_id || jobOrders[0]?.id || '');
   const [subcontractorName, setSubcontractorName] = useState(
@@ -64,11 +82,14 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
           received_accepted_quantity: Number(acceptedQty),
           received_rejected_quantity: Number(rejectedQty),
           scrap_quantity: Number(scrapQty),
+          assigned_employee_id: assignedEmployeeId || undefined,
+          worker_unit_rate: Number(workerUnitRate),
         };
         const res = await api.subcontracting.receiveExternalOp(existingOperation.id, payload);
         const updated = res.data;
         const formatted: ExternalOperation = {
           ...existingOperation,
+          assigned_employee_id: assignedEmployeeId || existingOperation.assigned_employee_id,
           received_accepted_quantity: Number(updated.received_accepted_quantity ?? acceptedQty),
           received_rejected_quantity: Number(updated.received_rejected_quantity ?? rejectedQty),
           scrap_quantity: Number(updated.scrap_quantity ?? scrapQty),
@@ -82,6 +103,7 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
           job_order_id: jobOrderId && jobOrderId.length > 20 && !jobOrderId.startsWith('job-') ? jobOrderId : undefined,
           subcontractor_name: subcontractorName,
           operation_type: operationType,
+          assigned_employee_id: assignedEmployeeId || undefined,
           sent_quantity: Number(sentQuantity),
           unit_rate: Number(unitRate),
           notes: notes || undefined,
@@ -94,6 +116,7 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
           job_order_id: created.job_order_id || jobOrderId,
           subcontractor_name: created.subcontractor_name || subcontractorName,
           operation_type: created.operation_type || operationType,
+          assigned_employee_id: created.assigned_employee_id || assignedEmployeeId,
           sent_quantity: Number(created.sent_quantity ?? sentQuantity),
           received_accepted_quantity: Number(created.received_accepted_quantity ?? 0),
           received_rejected_quantity: Number(created.received_rejected_quantity ?? 0),
@@ -266,6 +289,53 @@ export const ExternalOperationModal: React.FC<ExternalOperationModalProps> = ({
                   className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
               </div>
+            </div>
+
+            {/* Assigned Worker / Inspector */}
+            <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl space-y-2">
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>{isAr ? 'الفني المستلم وفاحص الجودة (ربط بالعمال وأجر القطعة)' : 'Receiving Technician & QC Inspector (HR Link)'}</span>
+              </label>
+              <select
+                value={assignedEmployeeId}
+                onChange={(e) => setAssignedEmployeeId(e.target.value)}
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">{isAr ? '-- اختياري: إسناد لفني فحص --' : '-- Optional: Select Technician --'}</option>
+                {employeesList.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.employee_code || emp.id.slice(0, 5)} - {emp.name} ({emp.job_title || emp.department})
+                  </option>
+                ))}
+              </select>
+
+              {assignedEmployeeId && (
+                <div className="pt-2 border-t border-indigo-200/50 dark:border-indigo-800/40 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                      {isAr ? 'سعر فحص واستلام القطعة:' : 'Rate per inspected piece:'}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="0"
+                        value={workerUnitRate}
+                        onChange={(e) => setWorkerUnitRate(parseFloat(e.target.value) || 0)}
+                        className="w-16 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded px-1.5 py-0.5 text-xs text-center font-mono font-bold text-indigo-600 dark:text-indigo-400"
+                      />
+                      <span className="text-[10px] text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-indigo-700 dark:text-indigo-300 font-mono">
+                    <span>{isAr ? 'الأجر المستحق للفني:' : 'Estimated tech wage:'}</span>
+                    <span className="font-bold">
+                      {acceptedQty} {isAr ? 'قطعة' : 'pcs'} × {workerUnitRate.toFixed(2)} = {(acceptedQty * workerUnitRate).toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

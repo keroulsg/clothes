@@ -103,6 +103,12 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
       desc: isAr ? 'كتالوج الموديلات والطلب المباشر' : 'Customer wholesale ordering portal',
       icon: <Store className="w-4 h-4 text-rose-600 dark:text-rose-400" />,
     },
+    {
+      id: 'waslat-worsh',
+      title: isAr ? 'وصلة ورش (بورصة القص)' : 'Waslat Worsh (Cutting Exchange)',
+      desc: isAr ? 'سوق تبادل طاقات القص والتصنيع B2B' : 'B2B cutting floor capacity exchange',
+      icon: <Scissors className="w-4 h-4 text-rose-600 dark:text-rose-400" />,
+    },
   ];
 
   return (
@@ -190,6 +196,22 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
             )}
           </div>
 
+          {/* Waslat Worsh Cutting Exchange Highlight */}
+          <button
+            onClick={() => handleNavClick('waslat-worsh')}
+            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+              currentPage === 'waslat-worsh'
+                ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10 font-black ring-1 ring-rose-500/30'
+                : 'hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Scissors className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 -rotate-45" />
+            <span>{isAr ? 'وصلة ورش' : 'Waslat Worsh'}</span>
+            <span className="text-[9px] bg-rose-500/15 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">
+              {isAr ? 'بورصة القص' : 'B2B'}
+            </span>
+          </button>
+
           <button
             onClick={() => handleNavClick('features')}
             className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
@@ -243,19 +265,6 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
             }`}
           >
             {isAr ? 'تواصل معنا' : 'Contact'}
-          </button>
-
-          {/* Public Storefront Direct Access */}
-          <button
-            onClick={() => {
-              window.location.hash = '#/store';
-              setMobileMenuOpen(false);
-            }}
-            className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors cursor-pointer text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center gap-1.5 border border-emerald-500/30 ms-1"
-            title={isAr ? 'فتح متجر المعرض والبيع المباشر للعملاء' : 'Open Public Storefront'}
-          >
-            <Store className="w-3.5 h-3.5" />
-            <span>{isAr ? 'المتجر الإلكتروني' : 'Storefront'}</span>
           </button>
 
           <button
@@ -371,6 +380,22 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
                   {isAr ? 'الرئيسية' : 'Home'}
                 </button>
                 <button
+                  onClick={() => handleNavClick('waslat-worsh')}
+                  className={`w-full text-start px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                    currentPage === 'waslat-worsh'
+                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-s-4 border-rose-600 font-black'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Scissors className="w-3.5 h-3.5 text-rose-600 -rotate-45" />
+                    <span>{isAr ? 'وصلة ورش (بورصة القص)' : 'Waslat Worsh Exchange'}</span>
+                  </div>
+                  <span className="text-[9px] bg-rose-500/15 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">
+                    {isAr ? 'بورصة B2B' : 'B2B'}
+                  </span>
+                </button>
+                <button
                   onClick={() => handleNavClick('features')}
                   className={`w-full text-start px-3 py-2 rounded-xl text-xs font-bold transition-all ${
                     currentPage === 'features'
@@ -421,18 +446,7 @@ export const PublicPageHeader: React.FC<PublicPageHeaderProps> = ({
                   {isAr ? 'تواصل معنا' : 'Contact'}
                 </button>
 
-                {/* Direct Storefront & Tracking for Mobile */}
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    window.location.hash = '#/store';
-                  }}
-                  className="w-full text-start px-3 py-2 rounded-xl text-xs font-black transition-all bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center gap-2 border border-emerald-500/30"
-                >
-                  <Store className="w-4 h-4" />
-                  <span>{isAr ? 'المتجر الإلكتروني للعملاء' : 'Public Storefront'}</span>
-                </button>
-
+                {/* Order Tracking for Mobile */}
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);

@@ -306,6 +306,9 @@ class ProductionService
                         'garment_model_id' => $data['garment_model_id'],
                         'bill_of_material_id' => $data['bill_of_material_id'] ?? null,
                         'branch_id' => $data['branch_id'] ?? null,
+                        'customer_id' => $data['customer_id'] ?? null,
+                        'sales_order_id' => $data['sales_order_id'] ?? null,
+                        'responsible_person' => $data['responsible_person'] ?? null,
                         'planned_start_date' => $data['planned_start_date'] ?? date('Y-m-d'),
                         'target_delivery_date' => $data['target_delivery_date'] ?? date('Y-m-d', strtotime('+15 days')),
                         'total_planned_quantity' => $totalPlanned,
@@ -453,6 +456,7 @@ class ProductionService
             $customerMaterialId = $data['customer_material_id'] ?? null;
 
             // صرف القماش نظامياً من خلال خدمة المخزون أو رصيد أمانة العميل
+            $fabricItemCost = 0.0;
             if ($fabricSource === 'factory_owned') {
                 if (!$fabricItemId) {
                     throw new InvalidArgumentException('يجب تحديد صنف القماش عند الصرف من خامات المصنع.');
@@ -463,6 +467,7 @@ class ProductionService
                 if (!$fabricItem) {
                     throw new InvalidArgumentException('أمان: صنف القماش غير تابع للشركة الحالية.');
                 }
+                $fabricItemCost = (float) $fabricItem->average_cost;
 
                 // استدعاء خدمة المخزون لصرف كمية القماش الفعلية مع حظر السالب والتحقق من التزامن
                 $this->inventoryService->recordTransaction([
@@ -487,6 +492,9 @@ class ProductionService
 
             $totalCutPieces = (int) ($data['total_cut_pieces'] ?? ($layersCount * count($prodOrder->items)));
 
+            $assignedCutterId = $data['assigned_cutter_id'] ?? $data['employee_id'] ?? null;
+            $cutterUnitRate = isset($data['cutter_unit_rate']) ? (float)$data['cutter_unit_rate'] : null;
+
             // إنشاء أمر القص
             $cuttingOrder = CuttingOrder::create([
                 'tenant_id' => $contextTenantId,
@@ -498,6 +506,8 @@ class ProductionService
                 'fabric_source' => $fabricSource,
                 'customer_material_id' => $customerMaterialId,
                 'warehouse_id' => $warehouseId,
+                'assigned_cutter_id' => $assignedCutterId,
+                'cutter_unit_rate' => $cutterUnitRate,
                 'fabric_color_id' => $data['fabric_color_id'] ?? null,
                 'marker_name' => $data['marker_name'] ?? null,
                 'usable_width_meters' => $data['usable_width_meters'] ?? 1.60,
@@ -516,6 +526,57 @@ class ProductionService
                 'status' => 'cut_completed',
                 'notes' => $data['notes'] ?? null,
             ]);
+
+            // احتساب وقيد أجر القطعة آلياً للمقصدار المسؤول
+            if (!empty($assignedCutterId) && $totalCutPieces > 0) {
+                try {
+                    $pieceRate = \App\Models\PieceRate::where('tenant_id', $contextTenantId)
+                        ->where(function ($q) use ($prodOrder) {
+                            $q->where('garment_model_id', $prodOrder->garment_model_id)
+                              ->orWhereNull('garment_model_id');
+                        })
+                        ->where(function ($q) {
+                            $q->where('stage_name', 'cutting')
+                              ->orWhere('operation_name', 'like', '%قص%');
+                        })
+                        ->where('is_active', true)
+                        ->first();
+
+                    $effectiveCutterRate = $cutterUnitRate !== null && $cutterUnitRate > 0
+                        ? $cutterUnitRate
+                        : ($pieceRate ? (float)$pieceRate->rate_per_piece : 0.75);
+
+                    $cutterTotalEarnings = round($totalCutPieces * $effectiveCutterRate, 4);
+
+                    \App\Models\PieceWorkLog::create([
+                        'tenant_id' => $contextTenantId,
+                        'employee_id' => $assignedCutterId,
+                        'production_order_id' => $prodOrder->id,
+                        'cutting_order_id' => $cuttingOrder->id,
+                        'piece_rate_id' => $pieceRate?->id,
+                        'work_date' => now()->toDateString(),
+                        'completed_quantity' => $totalCutPieces,
+                        'unit_rate' => $effectiveCutterRate,
+                        'total_amount' => $cutterTotalEarnings,
+                        'status' => 'approved',
+                    ]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Auto piece-rate logging for cutter failed: ' . $e->getMessage());
+                }
+            }
+
+            // إثبات صرف الخامات محاسبياً (Debit WIP 1220, Credit Raw Materials 1210)
+            if ($fabricSource === 'factory_owned' && $actualMeters > 0 && $fabricItemCost > 0) {
+                try {
+                    $rawMatAmount = round($actualMeters * $fabricItemCost, 4);
+                    app(\App\Services\AccountingService::class)->postRawMaterialsIssue(
+                        $contextTenantId,
+                        $cuttingOrder,
+                        $rawMatAmount,
+                        (bool)($prodOrder->is_cmt ?? false)
+                    );
+                } catch (\Throwable) {}
+            }
 
             // التأكد من توفر مراحل الإنتاج
             $this->ensureDefaultStages($contextTenantId);
@@ -537,6 +598,10 @@ class ProductionService
                         'quantity' => $bundleQty,
                         'current_stage_code' => 'cutting',
                         'status' => 'active',
+                        'assigned_employee_id' => $bCfg['assigned_employee_id'] ?? null,
+                        'work_group' => $bCfg['work_group'] ?? null,
+                        'issue_date' => $bCfg['issue_date'] ?? date('Y-m-d'),
+                        'due_date' => $bCfg['due_date'] ?? null,
                     ]);
                 }
             } else {
@@ -557,6 +622,7 @@ class ProductionService
                             'quantity' => $bundleQty,
                             'current_stage_code' => 'cutting',
                             'status' => 'active',
+                            'issue_date' => date('Y-m-d'),
                         ]);
                         $remaining -= $bundleQty;
                     }
@@ -602,11 +668,12 @@ class ProductionService
             $inputQty = (int) ($operationData['input_quantity'] ?? $bundle->quantity);
             $acceptedQty = (int) ($operationData['output_accepted_quantity'] ?? $inputQty);
             $rejectedQty = (int) ($operationData['output_rejected_quantity'] ?? 0);
+            $reworkQty = (int) ($operationData['rework_quantity'] ?? 0);
             $scrapQty = (int) ($operationData['scrap_quantity'] ?? 0);
 
-            // التحقق من اتساق الكميات ومنع التلاعب
-            if ($acceptedQty + $rejectedQty + $scrapQty !== $inputQty) {
-                throw new InvalidArgumentException("مجموع الكميات (المقبول: {$acceptedQty} + المرفوض: {$rejectedQty} + الهالك: {$scrapQty}) يجب أن يساوي الكمية المستلمة: {$inputQty}.");
+            // التحقق من اتساق الكميات ومنع التلاعب (Reconciliation)
+            if ($acceptedQty + $rejectedQty + $reworkQty + $scrapQty !== $inputQty) {
+                throw new InvalidArgumentException("مجموع الكميات (المقبول: {$acceptedQty} + المرفوض: {$rejectedQty} + إعادة التشغيل: {$reworkQty} + الهالك: {$scrapQty}) يجب أن يساوي الكمية المستلمة: {$inputQty}.");
             }
 
             // إذا كان هناك هالك نهائي، تخفيض كمية الحزمة وتحديث أمر الإنتاج
@@ -617,28 +684,122 @@ class ProductionService
                     ->increment('total_scrapped_quantity', $scrapQty);
             }
 
+            if ($reworkQty > 0) {
+                ProductionOrder::where('tenant_id', $contextTenantId)
+                    ->where('id', $bundle->production_order_id)
+                    ->increment('total_rework_quantity', $reworkQty);
+            }
+
             $bundle->current_stage_code = $toStageCode;
+            $bundle->accepted_quantity = $acceptedQty;
+            $bundle->rejected_quantity = $rejectedQty;
+            $bundle->rework_quantity = $reworkQty;
+
+            if (!empty($operationData['employee_id'])) {
+                $bundle->assigned_employee_id = $operationData['employee_id'];
+            }
+
+            if (in_array($toStageCode, ['packing', 'completed'], true)) {
+                $bundle->completion_date = now()->toDateString();
+            }
+
             if ($bundle->quantity <= 0) {
                 $bundle->status = 'scrapped';
+            } elseif ($reworkQty > 0) {
+                $bundle->status = 'rework';
             } elseif ($rejectedQty > 0) {
                 $bundle->status = 'held_for_qc';
+            } elseif (in_array($toStageCode, ['packing', 'completed'], true)) {
+                $bundle->status = 'completed';
+            } else {
+                $bundle->status = 'active';
             }
             $bundle->save();
 
             // تسجيل حركة التشغيل في سجل المراحل
-            return BundleStageLog::create([
+            $stageLog = BundleStageLog::create([
                 'tenant_id' => $contextTenantId,
                 'cutting_bundle_id' => $bundle->id,
                 'production_stage_id' => $stage->id,
+                'employee_id' => $operationData['employee_id'] ?? $bundle->assigned_employee_id,
                 'operation_type' => $operationData['operation_type'] ?? 'transfer',
                 'operator_name' => $operationData['operator_name'] ?? 'مشغل خط الإنتاج',
                 'work_line' => $operationData['work_line'] ?? 'خط الإنتاج الرئيسي',
                 'input_quantity' => $inputQty,
                 'output_accepted_quantity' => $acceptedQty,
                 'output_rejected_quantity' => $rejectedQty,
+                'rework_quantity' => $reworkQty,
                 'scrap_quantity' => $scrapQty,
+                'notes' => $operationData['notes'] ?? null,
                 'logged_at' => now(),
             ]);
+
+            // احتساب وقيد أجر القطعة آلياً للعامل وربطه بالملف التعريفي ومسير الرواتب
+            $workerId = $operationData['employee_id'] ?? $bundle->assigned_employee_id;
+            if (!empty($workerId) && $acceptedQty > 0) {
+                try {
+                    $prodOrder = ProductionOrder::find($bundle->production_order_id);
+                    $modelId = $prodOrder?->garment_model_id;
+
+                    $pieceRate = null;
+                    if ($modelId) {
+                        $pieceRate = \App\Models\PieceRate::where('tenant_id', $contextTenantId)
+                            ->where('garment_model_id', $modelId)
+                            ->where(function ($q) use ($toStageCode) {
+                                $q->where('stage_name', $toStageCode)
+                                  ->orWhere('operation_name', 'like', "%{$toStageCode}%");
+                            })
+                            ->where('is_active', true)
+                            ->first();
+                    }
+
+                    if (!$pieceRate) {
+                        $pieceRate = \App\Models\PieceRate::where('tenant_id', $contextTenantId)
+                            ->where(function ($q) use ($toStageCode) {
+                                $q->where('stage_name', $toStageCode)
+                                  ->orWhere('operation_name', 'like', "%{$toStageCode}%");
+                            })
+                            ->where('is_active', true)
+                            ->first();
+                    }
+
+                    $rate = 0.0;
+                    if (!empty($operationData['unit_rate']) && (float)$operationData['unit_rate'] > 0) {
+                        $rate = (float)$operationData['unit_rate'];
+                    } elseif ($pieceRate) {
+                        $rate = (float)$pieceRate->rate_per_piece;
+                    } else {
+                        $stageDefaults = [
+                            'cutting' => 0.75,
+                            'assembly' => 1.00,
+                            'sewing' => 1.50,
+                            'finishing' => 0.50,
+                            'ironing' => 0.50,
+                            'packing' => 0.50,
+                        ];
+                        $rate = $stageDefaults[$toStageCode] ?? 1.25;
+                    }
+
+                    $totalAmount = round($acceptedQty * $rate, 4);
+
+                    \App\Models\PieceWorkLog::create([
+                        'tenant_id' => $contextTenantId,
+                        'employee_id' => $workerId,
+                        'production_order_id' => $bundle->production_order_id,
+                        'cutting_bundle_id' => $bundle->id,
+                        'piece_rate_id' => $pieceRate?->id,
+                        'work_date' => now()->toDateString(),
+                        'completed_quantity' => $acceptedQty,
+                        'unit_rate' => $rate,
+                        'total_amount' => $totalAmount,
+                        'status' => 'approved',
+                    ]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Bundle transfer auto piece-rate log failed: ' . $e->getMessage());
+                }
+            }
+
+            return $stageLog;
         });
     }
 
@@ -783,6 +944,14 @@ class ProductionService
                         'reference_type' => 'production_order',
                         'notes' => "إضافة منتج تام جاهز للتوزيع بعد الفحص النهائي لأمر الإنتاج [{$prodOrder->order_number}]",
                     ]);
+
+                    // إثبات قيد استلام الإنتاج التام محاسبياً (Debit Finished Goods 1230, Credit WIP 1220)
+                    if ((float)$fgItem->average_cost > 0) {
+                        try {
+                            $fgAmount = round($passedQty * (float)$fgItem->average_cost, 4);
+                            app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt($tenantId, $prodOrder, $fgAmount);
+                        } catch (\Throwable) {}
+                    }
                 }
             }
 
@@ -833,5 +1002,140 @@ class ProductionService
             'scrap_rate_percent' => $scrapRate,
             'defects_breakdown' => $defectStats,
         ];
+    }
+
+    /**
+     * إلغاء أمر القص واسترجاع أرصدة الأقمشة المصروفة إلى المخازن أو أرصدة أمانات العملاء وتحديث الحزم
+     */
+    public function cancelCuttingOrder(string $cuttingOrderId, string $reason): CuttingOrder
+    {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($cuttingOrderId, $reason, $contextTenantId) {
+            $cuttingOrder = CuttingOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $cuttingOrderId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($cuttingOrder->status === 'cancelled') {
+                throw new InvalidArgumentException('أمر القص ملغى بالفعل مسبقاً.');
+            }
+
+            // فحص الحزم المرتبطة: إذا بدأت مراحل الخياطة أو التجميع المتقدمة لا يمكن الإلغاء بدون تسوية
+            $hasAdvancedBundles = CuttingBundle::where('tenant_id', $contextTenantId)
+                ->where('cutting_order_id', $cuttingOrder->id)
+                ->whereNotIn('current_stage_code', ['cutting', 'assembly'])
+                ->exists();
+
+            if ($hasAdvancedBundles) {
+                throw new InvalidArgumentException('لا يمكن إلغاء أمر القص نظراً لانتقال بعض الحزم إلى مراحل تشغيل متقدمة بخطوط الإنتاج.');
+            }
+
+            // استرجاع القماش المصروف إلى المخزون (Factory Owned)
+            if ($cuttingOrder->fabric_source === 'factory_owned' && (float)$cuttingOrder->actual_fabric_meters_used > 0 && $cuttingOrder->fabric_inventory_item_id) {
+                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)->where('id', $cuttingOrder->fabric_inventory_item_id)->first();
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
+                    'inventory_item_id' => $cuttingOrder->fabric_inventory_item_id,
+                    'warehouse_id' => $cuttingOrder->warehouse_id,
+                    'quantity' => (float) $cuttingOrder->actual_fabric_meters_used,
+                    'direction' => 'IN',
+                    'transaction_type' => 'cutting_reversal',
+                    'reference_type' => 'cutting_order',
+                    'reference_id' => $cuttingOrder->id,
+                    'reference_number' => $cuttingOrder->cutting_order_number,
+                    'notes' => "استرجاع قماش لإلغاء أمر القص [{$cuttingOrder->cutting_order_number}]. سبب الإلغاء: {$reason}",
+                ]);
+
+                // عكس القيد المحاسبي لصرف الخامات
+                if ($fabricItem && (float)$fabricItem->average_cost > 0) {
+                    try {
+                        $reversalAmount = round((float)$cuttingOrder->actual_fabric_meters_used * (float)$fabricItem->average_cost, 4);
+                        app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal($contextTenantId, $cuttingOrder, $reversalAmount);
+                    } catch (\Throwable) {}
+                }
+            } elseif ($cuttingOrder->fabric_source === 'customer_deposit' && $cuttingOrder->customer_material_id) {
+                // استرجاع رصيد أمانة العميل
+                $custMaterial = CustomerMaterial::where('tenant_id', $contextTenantId)
+                    ->where('id', $cuttingOrder->customer_material_id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($custMaterial) {
+                    $theoretical = (float) $cuttingOrder->theoretical_fabric_meters;
+                    $waste = (float) max(0, (float)$cuttingOrder->actual_fabric_meters_used - $theoretical);
+                    $custMaterial->consumed_meters = max(0, (float)$custMaterial->consumed_meters - $theoretical);
+                    $custMaterial->waste_meters = max(0, (float)$custMaterial->waste_meters - $waste);
+                    $received = (float) ($custMaterial->received_meters ?? $custMaterial->total_meters ?? 0);
+                    $custMaterial->remaining_meters = max(0, $received - (float)$custMaterial->consumed_meters - (float)$custMaterial->waste_meters);
+                    $custMaterial->save();
+                }
+            }
+
+            // تحديث الحزم إلى ملغاة
+            CuttingBundle::where('tenant_id', $contextTenantId)
+                ->where('cutting_order_id', $cuttingOrder->id)
+                ->update(['status' => 'cancelled']);
+
+            // تعديل كميات أمر الإنتاج الإجمالية
+            if ($cuttingOrder->production_order_id) {
+                $prodOrder = ProductionOrder::where('tenant_id', $contextTenantId)
+                    ->where('id', $cuttingOrder->production_order_id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($prodOrder) {
+                    $prodOrder->total_cut_quantity = max(0, $prodOrder->total_cut_quantity - (int)$cuttingOrder->total_cut_pieces);
+                    $prodOrder->save();
+                }
+            }
+
+            $cuttingOrder->status = 'cancelled';
+            $cuttingOrder->cancelled_at = now();
+            $cuttingOrder->cancellation_reason = $reason;
+            $cuttingOrder->save();
+
+            return $cuttingOrder->load('bundles');
+        });
+    }
+
+    /**
+     * إسناد الحزمة لعامل أو وردية معينة وتحديد مواعيد التسليم
+     */
+    public function assignBundle(string $bundleId, array $data): CuttingBundle
+    {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($bundleId, $data, $contextTenantId) {
+            $bundle = CuttingBundle::where('tenant_id', $contextTenantId)
+                ->where('id', $bundleId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (!empty($data['employee_id'])) {
+                $employee = \App\Models\Employee::where('tenant_id', $contextTenantId)
+                    ->where('id', $data['employee_id'])
+                    ->firstOrFail();
+                $bundle->assigned_employee_id = $employee->id;
+            }
+
+            if (isset($data['work_group'])) {
+                $bundle->work_group = $data['work_group'];
+            }
+            if (isset($data['issue_date'])) {
+                $bundle->issue_date = $data['issue_date'];
+            }
+            if (isset($data['due_date'])) {
+                $bundle->due_date = $data['due_date'];
+            }
+
+            $bundle->save();
+
+            return $bundle->load(['assignedEmployee', 'productionOrder.garmentModel', 'color', 'size']);
+        });
     }
 }

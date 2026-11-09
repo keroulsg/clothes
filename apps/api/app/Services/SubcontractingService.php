@@ -54,6 +54,26 @@ class SubcontractingService
     {
         $tenantId = $this->getTenantId($data['tenant_id'] ?? null);
 
+        // منع التكرار: استرجاع العميل القائم إذا تطابق رقم الهاتف أو البريد الإلكتروني أو الكود
+        if (!empty($data['phone'])) {
+            $existing = Customer::where('tenant_id', $tenantId)->where('phone', $data['phone'])->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+        if (!empty($data['email'])) {
+            $existing = Customer::where('tenant_id', $tenantId)->where('email', $data['email'])->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+        if (!empty($data['code'])) {
+            $existing = Customer::where('tenant_id', $tenantId)->where('code', $data['code'])->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         $code = !empty($data['code']) ? $data['code'] : ('CUST-' . strtoupper(bin2hex(random_bytes(3))));
 
         return Customer::create([
@@ -212,6 +232,7 @@ class SubcontractingService
                         'customer_name' => $data['customer_name'],
                         'service_type' => $serviceType,
                         'garment_model_id' => $modelId,
+                        'assigned_employee_id' => $data['assigned_employee_id'] ?? null,
                         'production_order_id' => $data['production_order_id'] ?? null,
                         'fabric_source' => $data['fabric_source'] ?? 'customer_supplied',
                         'trims_responsibility' => $data['trims_responsibility'] ?? 'customer_supplied',
@@ -477,6 +498,7 @@ class SubcontractingService
                         'production_order_id' => $data['production_order_id'] ?? null,
                         'cutting_bundle_id' => $data['cutting_bundle_id'] ?? null,
                         'subcontractor_name' => $data['subcontractor_name'],
+                        'assigned_employee_id' => $data['assigned_employee_id'] ?? null,
                         'operation_type' => $data['operation_type'],
                         'sent_quantity' => $sentQty,
                         'received_accepted_quantity' => 0,
@@ -544,12 +566,50 @@ class SubcontractingService
                 throw new InvalidArgumentException("إجمالي الكمية الراجعة [{$totalReturned}] يتجاوز الكمية المرسلة أصلاً [{$operation->sent_quantity}].");
             }
 
+            if (!empty($data['assigned_employee_id'])) {
+                $operation->assigned_employee_id = $data['assigned_employee_id'];
+            }
+
             $operation->received_accepted_quantity = $accepted;
             $operation->received_rejected_quantity = $rejected;
             $operation->scrap_quantity = $scrap;
             $operation->returned_at = now();
             $operation->status = $totalReturned >= $operation->sent_quantity ? 'completed' : 'partially_returned';
             $operation->save();
+
+            // احتساب أجر القطعة آلياً للفني/المشرف المسؤول عن استلام العملية وفحصها
+            $workerId = $operation->assigned_employee_id;
+            if (!empty($workerId) && $accepted > 0) {
+                try {
+                    $pieceRate = \App\Models\PieceRate::where('tenant_id', $tenantId)
+                        ->where(function ($q) use ($operation) {
+                            $q->where('stage_name', 'subcontracting')
+                              ->orWhere('operation_name', 'like', "%{$operation->operation_type}%");
+                        })
+                        ->where('is_active', true)
+                        ->first();
+
+                    $workerRate = !empty($data['worker_unit_rate']) && (float)$data['worker_unit_rate'] > 0
+                        ? (float)$data['worker_unit_rate']
+                        : ($pieceRate ? (float)$pieceRate->rate_per_piece : 1.00);
+
+                    \App\Models\PieceWorkLog::create([
+                        'tenant_id' => $tenantId,
+                        'employee_id' => $workerId,
+                        'job_order_id' => $operation->job_order_id,
+                        'production_order_id' => $operation->production_order_id,
+                        'cutting_bundle_id' => $operation->cutting_bundle_id,
+                        'piece_rate_id' => $pieceRate?->id,
+                        'work_date' => now()->toDateString(),
+                        'completed_quantity' => $accepted,
+                        'unit_rate' => $workerRate,
+                        'total_amount' => round($accepted * $workerRate, 4),
+                        'status' => 'approved',
+                    ]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Subcontracting piece-rate logging failed: ' . $e->getMessage());
+                }
+            }
 
             return $operation;
         });

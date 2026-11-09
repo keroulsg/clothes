@@ -15,6 +15,7 @@ class GarmentModel extends Model
 
     protected $fillable = [
         'tenant_id',
+        'clothing_category_id',
         'code',
         'name',
         'category',
@@ -33,6 +34,11 @@ class GarmentModel extends Model
         'retail_price' => 'decimal:4',
         'technical_specs' => 'array',
     ];
+
+    public function clothingCategory(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(ClothingCategory::class, 'clothing_category_id');
+    }
 
     public function variants(): HasMany
     {

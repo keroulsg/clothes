@@ -23,6 +23,8 @@ class CuttingOrder extends Model
         'fabric_source',
         'customer_material_id',
         'warehouse_id',
+        'assigned_cutter_id',
+        'cutter_unit_rate',
         'fabric_color_id',
         'marker_name',
         'usable_width_meters',
@@ -40,10 +42,14 @@ class CuttingOrder extends Model
         'total_cut_pieces',
         'status',
         'notes',
+        'cancelled_at',
+        'cancellation_reason',
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'usable_width_meters' => 'float',
+        'cutter_unit_rate' => 'float',
         'lay_length_meters' => 'float',
         'layers_count' => 'integer',
         'marker_efficiency_percent' => 'float',
@@ -91,6 +97,11 @@ class CuttingOrder extends Model
     public function fabricColor(): BelongsTo
     {
         return $this->belongsTo(Color::class, 'fabric_color_id');
+    }
+
+    public function assignedCutter(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'assigned_cutter_id');
     }
 
     public function bundles(): HasMany

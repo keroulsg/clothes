@@ -434,6 +434,57 @@ class SubcontractingService
                     }
                 }
 
+                // تسجيل أمانات خامات العملاء في المخزن العام وحركات المخزون بصفتها عهدة CMT
+                try {
+                    $invItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('warehouse_id', $data['warehouse_id'])
+                        ->where('is_customer_owned', true)
+                        ->where('customer_name', $customerName)
+                        ->where('name', 'like', "%{$data['fabric_name']}%")
+                        ->first();
+
+                    $balBefore = $invItem ? (float)$invItem->current_balance : 0.0;
+                    $balAfter = round($balBefore + $receivedMeters, 4);
+
+                    if (!$invItem) {
+                        $invItem = InventoryItem::create([
+                            'tenant_id' => $tenantId,
+                            'warehouse_id' => $data['warehouse_id'],
+                            'item_type' => 'raw_material',
+                            'code' => $custMat->fabric_code,
+                            'name' => "أمانات خامات عملاء (CMT): {$data['fabric_name']} - [{$customerName}]",
+                            'unit_of_measure' => 'meter',
+                            'current_balance' => $balAfter,
+                            'is_customer_owned' => true,
+                            'customer_name' => $customerName,
+                            'is_active' => true,
+                            'description' => "أمانات استلام خامات - صالة القص والتشغيل للغير (CMT Custody) - إذن: {$receipt->receipt_number}",
+                        ]);
+                    } else {
+                        $invItem->current_balance = $balAfter;
+                        $invItem->save();
+                    }
+
+                    InventoryTransaction::create([
+                        'tenant_id' => $tenantId,
+                        'inventory_item_id' => $invItem->id,
+                        'warehouse_id' => $data['warehouse_id'],
+                        'transaction_type' => 'receipt',
+                        'direction' => 'IN',
+                        'quantity' => $receivedMeters,
+                        'unit_cost' => 0.0,
+                        'total_cost' => 0.0,
+                        'balance_before' => $balBefore,
+                        'balance_after' => $balAfter,
+                        'reference_type' => 'customer_material_receipt',
+                        'reference_id' => $receipt->id,
+                        'reference_number' => $receipt->receipt_number,
+                        'notes' => "أمانات استلام خامات - صالة القص والتشغيل للغير (CMT Custody) - العميل: {$customerName}",
+                    ]);
+                } catch (\Throwable $invEx) {
+                    \Illuminate\Support\Facades\Log::warning('Custody Inventory sync note: ' . $invEx->getMessage());
+                }
+
                 return $receipt->load('warehouse', 'customer', 'customerMaterial');
             });
         } catch (IdempotencyCollisionException $e) {

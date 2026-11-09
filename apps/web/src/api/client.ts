@@ -1001,6 +1001,17 @@ class ApiClient {
       });
     },
 
+    getCustomerDossier: async (id: string): Promise<{ success: boolean; data: any }> => {
+      return this.request<{ success: boolean; data: any }>(`/subcontracting/customers/${id}`);
+    },
+
+    updateCustomer: async (id: string, payload: any): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/subcontracting/customers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
     getJobs: async (params: { status?: string; service_type?: string } = {}): Promise<{ success: boolean; data: any[] }> => {
       const query = new URLSearchParams();
       if (params.status) query.append('status', params.status);

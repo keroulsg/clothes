@@ -580,15 +580,21 @@ export interface JobDeliveryNote {
   id: string;
   delivery_number: string;
   job_order_id: string;
+  customer_id?: string;
   order_number?: string;
   customer_name: string;
   delivery_date: string;
   status: 'draft' | 'confirmed' | 'delivered' | 'cancelled';
   total_delivered_pieces: number;
   returned_unused_fabric_meters: number;
+  returned_fabric_meters?: number;
   scrap_fabric_meters: number;
+  returned_scrap_kg?: number;
   delivered_by?: string;
   received_by_customer?: string;
+  recipient_name?: string;
+  packages_count?: number;
+  created_at?: string;
   notes?: string;
   items?: JobDeliveryItem[];
 }
@@ -608,6 +614,7 @@ export interface JobInvoice {
   id: string;
   invoice_number: string;
   job_order_id: string;
+  customer_id?: string;
   order_number?: string;
   customer_name: string;
   invoice_date: string;
@@ -619,6 +626,7 @@ export interface JobInvoice {
   tax_amount: number;
   total_amount: number;
   paid_amount: number;
+  created_at?: string;
   notes?: string;
   items?: JobInvoiceItem[];
 }
@@ -1065,6 +1073,7 @@ export interface PieceWorkLog {
   tenant_id?: string;
   employee_id: string;
   production_order_id?: string;
+  job_order_id?: string;
   cutting_order_id?: string;
   cutting_bundle_id?: string;
   piece_rate_id?: string;

@@ -65,6 +65,99 @@ class SubcontractingController extends Controller
     }
 
     /**
+     * 1.1 بروفايل العميل الشامل (Customer Dossier & CMT Metrics)
+     */
+    public function showCustomer(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $customer = Customer::where('tenant_id', $tenantId)->find($id);
+
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'العميل المحدد غير موجود أو غير تابع للشركة الحالية.',
+            ], 404);
+        }
+
+        $customer->load([
+            'jobOrders' => function ($q) {
+                $q->with(['garmentModel:id,name,code', 'assignedEmployee:id,name'])->orderByDesc('created_at');
+            },
+            'customerMaterials',
+            'materialReceipts.warehouse',
+            'deliveryNotes',
+            'invoices.items',
+        ]);
+
+        // الحسابات المالية والتشغيلية المجمعة
+        $totalJobs = $customer->jobOrders->count();
+        $totalTargetPieces = (int) $customer->jobOrders->sum('total_target_quantity');
+        $totalDeliveredPieces = (int) $customer->jobOrders->sum('total_delivered_quantity');
+        $totalCutPieces = (int) $customer->jobOrders->sum('total_cut_quantity');
+
+        $totalInvoicedAmount = (float) $customer->invoices->sum('total_amount');
+        $totalPaidAmount = (float) $customer->invoices->sum('paid_amount');
+        $remainingBalance = round($totalInvoicedAmount - $totalPaidAmount, 2);
+
+        $totalCustodyMeters = (float) $customer->customerMaterials->sum('received_meters');
+        $remainingCustodyMeters = (float) $customer->customerMaterials->sum('remaining_meters');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'customer' => $customer,
+                'metrics' => [
+                    'total_jobs' => $totalJobs,
+                    'total_target_pieces' => $totalTargetPieces,
+                    'total_cut_pieces' => $totalCutPieces,
+                    'total_delivered_pieces' => $totalDeliveredPieces,
+                    'total_invoiced_amount' => $totalInvoicedAmount,
+                    'total_paid_amount' => $totalPaidAmount,
+                    'remaining_balance' => $remainingBalance,
+                    'total_custody_meters' => $totalCustodyMeters,
+                    'remaining_custody_meters' => $remainingCustodyMeters,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * 1.2 تحديث بيانات العميل ونظام الدفع (كاش أو أقساط ودفعات)
+     */
+    public function updateCustomer(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $customer = Customer::where('tenant_id', $tenantId)->find($id);
+
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'العميل المحدد غير موجود أو غير تابع للشركة الحالية.',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'contact_person' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'tax_id' => 'nullable|string|max:100',
+            'payment_terms' => 'nullable|string|in:cash,installments',
+            'credit_limit' => 'nullable|numeric|min:0',
+            'address' => 'nullable|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        $customer->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث بيانات العميل ونظام الدفع بنجاح.',
+            'data' => $customer,
+        ]);
+    }
+
+    /**
      * 2. أوامر التشغيل للغير (Job Orders)
      */
     public function jobs(Request $request): JsonResponse

@@ -295,6 +295,8 @@ Route::prefix('v1')->group(function () {
         // خدمات القص والتصنيع للغير (Phase 6: Subcontracting & CMT Services)
         Route::get('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'customers']);
         Route::post('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeCustomer']);
+        Route::get('/subcontracting/customers/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'showCustomer']);
+        Route::put('/subcontracting/customers/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'updateCustomer']);
 
         Route::get('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'jobs']);
         Route::post('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeJob'])->middleware(['role:company_owner,production_manager,accountant', 'quota:subcontract_jobs']);

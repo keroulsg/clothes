@@ -2011,11 +2011,22 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                               <div className="font-bold truncate max-w-[190px]">
                                 {log.cut_name || (log.production_order ? `${log.production_order.order_number} - ${log.production_order.garment_model?.name || ''}` : null) || (log.cutting_order ? log.cutting_order.cutting_order_number : null) || log.notes || '—'}
                               </div>
-                              {log.cutting_bundle && (
-                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
-                                  #{log.cutting_bundle.bundle_code || log.cutting_bundle.bundle_number}
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                {log.job_order_id || (log.cut_name && (log.cut_name.includes('قص للغير') || log.cut_name.includes('CMT') || log.cut_name.includes('تشغيل للغير'))) ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                    ✂️ {isAr ? 'قص للغير (CMT)' : 'Subcontracting (CMT)'}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                    🏭 {isAr ? 'صالة القص (مصنع)' : 'Factory Production'}
+                                  </span>
+                                )}
+                                {log.cutting_bundle && (
+                                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                                    #{log.cutting_bundle.bundle_code || log.cutting_bundle.bundle_number}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5 px-3">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
@@ -3353,11 +3364,22 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                             <div className="font-bold text-slate-900 dark:text-white truncate max-w-[190px]">
                               {log.cut_name || (log.production_order ? `${log.production_order.order_number} - ${log.production_order.garment_model?.name || ''}` : null) || (log.cutting_order ? log.cutting_order.cutting_order_number : null) || log.notes || '—'}
                             </div>
-                            {log.cutting_bundle && (
-                              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
-                                #{log.cutting_bundle.bundle_code || log.cutting_bundle.bundle_number}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {log.job_order_id || (log.cut_name && (log.cut_name.includes('قص للغير') || log.cut_name.includes('CMT') || log.cut_name.includes('تشغيل للغير'))) ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                  ✂️ {isAr ? 'قص للغير (CMT)' : 'Subcontracting (CMT)'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                  🏭 {isAr ? 'صالة القص (مصنع)' : 'Factory Production'}
+                                </span>
+                              )}
+                              {log.cutting_bundle && (
+                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                                  #{log.cutting_bundle.bundle_code || log.cutting_bundle.bundle_number}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">

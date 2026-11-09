@@ -1,0 +1,1167 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Scissors,
+  Layers,
+  Plus,
+  Calculator,
+  Search,
+  QrCode,
+  ShieldCheck,
+  Printer,
+  DollarSign,
+  ArrowRightLeft,
+  User,
+  CheckCircle2,
+} from 'lucide-react';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { PageHeader } from '../ui/PageHeader';
+import { Pagination } from '../ui/Pagination';
+import { ActionsMenu } from '../ui/ActionsMenu';
+import type {
+  ProductionOrder,
+  CuttingOrder,
+  CuttingBundle,
+  QualityInspection,
+} from '../../types';
+
+export interface ProductionTabProps {
+  productionOrders: ProductionOrder[];
+  cuttingOrders: CuttingOrder[];
+  cuttingBundles: CuttingBundle[];
+  qualityInspections: QualityInspection[];
+  employees?: any[];
+  isAr?: boolean;
+  onOpenCreateProdOrder: () => void;
+  onOpenFabricCalc: () => void;
+  onSelectProdOrderForCut: (order: ProductionOrder) => void;
+  onSelectProdOrderForQc: (order: ProductionOrder) => void;
+  onSelectBundleForTracker: (bundle: CuttingBundle) => void;
+  onSelectBundleForQc: (bundle: CuttingBundle, order?: ProductionOrder) => void;
+  onApproveProdOrder: (orderId: string) => Promise<void>;
+  onNavigateToTab?: (tab: string) => void;
+}
+
+export const ProductionTab: React.FC<ProductionTabProps> = ({
+  productionOrders = [],
+  cuttingOrders = [],
+  cuttingBundles = [],
+  qualityInspections = [],
+  employees = [],
+  isAr = true,
+  onOpenCreateProdOrder,
+  onOpenFabricCalc,
+  onSelectProdOrderForCut,
+  onSelectProdOrderForQc,
+  onSelectBundleForTracker,
+  onSelectBundleForQc,
+  onApproveProdOrder,
+  onNavigateToTab,
+}) => {
+  // Navigation Sub-Tabs
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'cutting' | 'bundles' | 'qc'>('orders');
+
+  // --- Sub-Tab 1: Production Orders State ---
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [orderPage, setOrderPage] = useState(1);
+  const orderPerPage = 6;
+
+  // --- Sub-Tab 2: Cutting Orders State ---
+  const [cutSearch, setCutSearch] = useState('');
+  const [cutSourceFilter, setCutSourceFilter] = useState('all');
+  const [cutPage, setCutPage] = useState(1);
+  const cutPerPage = 6;
+
+  // --- Sub-Tab 3: Bundles State ---
+  const [bundleStageFilter, setBundleStageFilter] = useState('all');
+  const [bundleSearch, setBundleSearch] = useState('');
+  const [bundlePage, setBundlePage] = useState(1);
+  const bundlePerPage = 9;
+
+  // --- Sub-Tab 4: QC State ---
+  const [qcSearch, setQcSearch] = useState('');
+  const [qcDecisionFilter, setQcDecisionFilter] = useState('all');
+  const [qcPage, setQcPage] = useState(1);
+  const qcPerPage = 8;
+
+  // KPI Calculations
+  const stats = useMemo(() => {
+    const totalOrders = productionOrders.length;
+    const activeOrders = productionOrders.filter(
+      (p) => p.status === 'in_progress' || p.status === 'cutting' || p.status === 'sewing' || p.status === 'approved'
+    ).length;
+
+    // Accurate cut pieces calculation
+    const cutPiecesFromOrders = productionOrders.reduce((sum, p) => sum + (p.cut_quantity || 0), 0);
+    const cutPiecesFromCuts = cuttingOrders.reduce((sum, c) => sum + (c.total_cut_pieces || 0), 0);
+    const totalCutPieces = Math.max(cutPiecesFromOrders, cutPiecesFromCuts);
+
+    const totalBundles = cuttingBundles.length;
+    const activeBundles = cuttingBundles.filter((b) => b.current_stage_code !== 'completed').length;
+
+    const totalFinished = productionOrders.reduce(
+      (sum, p) => sum + (p.completed_quantity || p.qc_passed_quantity || 0),
+      0
+    );
+
+    const inspectedQty = qualityInspections.reduce((sum, q) => sum + (q.inspected_quantity || 0), 0);
+    const passedQty = qualityInspections.reduce((sum, q) => sum + (q.passed_quantity || 0), 0);
+    const passRate = inspectedQty > 0 ? Math.round((passedQty / inspectedQty) * 100) : 100;
+
+    return {
+      totalOrders,
+      activeOrders,
+      totalCutPieces,
+      totalBundles,
+      activeBundles,
+      totalFinished,
+      passRate,
+    };
+  }, [productionOrders, cuttingOrders, cuttingBundles, qualityInspections]);
+
+  // Filtered Production Orders
+  const filteredOrders = useMemo(() => {
+    return productionOrders.filter((order) => {
+      if (orderStatusFilter !== 'all') {
+        if (orderStatusFilter === 'in_progress' && order.status !== 'in_progress' && order.status !== 'sewing' && order.status !== 'cutting') return false;
+        if (orderStatusFilter !== 'in_progress' && order.status !== orderStatusFilter) return false;
+      }
+      if (orderSearch) {
+        const q = orderSearch.toLowerCase();
+        const matchNum = order.order_number?.toLowerCase().includes(q);
+        const matchModel = order.model_name?.toLowerCase().includes(q);
+        const matchCode = order.model_code?.toLowerCase().includes(q);
+        if (!matchNum && !matchModel && !matchCode) return false;
+      }
+      return true;
+    });
+  }, [productionOrders, orderStatusFilter, orderSearch]);
+
+  const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / orderPerPage));
+  const paginatedOrders = filteredOrders.slice((orderPage - 1) * orderPerPage, orderPage * orderPerPage);
+
+  // Filtered Cutting Orders
+  const filteredCuttingOrders = useMemo(() => {
+    return cuttingOrders.filter((cut) => {
+      if (cutSourceFilter !== 'all' && cut.fabric_source !== cutSourceFilter) return false;
+      if (cutSearch) {
+        const q = cutSearch.toLowerCase();
+        const matchCutNum = cut.cutting_order_number?.toLowerCase().includes(q);
+        const matchProdNum = cut.production_order_number?.toLowerCase().includes(q);
+        const matchCutter = (cut.assigned_cutter_name || '').toLowerCase().includes(q);
+        const matchFabric = (cut.fabric_name || '').toLowerCase().includes(q);
+        if (!matchCutNum && !matchProdNum && !matchCutter && !matchFabric) return false;
+      }
+      return true;
+    });
+  }, [cuttingOrders, cutSourceFilter, cutSearch]);
+
+  const totalCutPages = Math.max(1, Math.ceil(filteredCuttingOrders.length / cutPerPage));
+  const paginatedCuttingOrders = filteredCuttingOrders.slice((cutPage - 1) * cutPerPage, cutPage * cutPerPage);
+
+  // Filtered Bundles
+  const filteredBundles = useMemo(() => {
+    return cuttingBundles.filter((b) => {
+      if (bundleStageFilter !== 'all' && b.current_stage_code !== bundleStageFilter) return false;
+      if (bundleSearch) {
+        const q = bundleSearch.toLowerCase();
+        const matchCode = b.bundle_code?.toLowerCase().includes(q);
+        const matchWorker = (b.assigned_employee_name || '').toLowerCase().includes(q);
+        const matchColor = (b.color_name || '').toLowerCase().includes(q);
+        const matchSize = (b.size_name || '').toLowerCase().includes(q);
+        if (!matchCode && !matchWorker && !matchColor && !matchSize) return false;
+      }
+      return true;
+    });
+  }, [cuttingBundles, bundleStageFilter, bundleSearch]);
+
+  const totalBundlePages = Math.max(1, Math.ceil(filteredBundles.length / bundlePerPage));
+  const paginatedBundles = filteredBundles.slice((bundlePage - 1) * bundlePerPage, bundlePage * bundlePerPage);
+
+  // Filtered QC Reports
+  const filteredQC = useMemo(() => {
+    return qualityInspections.filter((qc) => {
+      if (qcDecisionFilter !== 'all' && qc.decision !== qcDecisionFilter) return false;
+      if (qcSearch) {
+        const q = qcSearch.toLowerCase();
+        const matchNum = qc.inspection_number?.toLowerCase().includes(q);
+        const matchProd = qc.production_order_number?.toLowerCase().includes(q);
+        const matchInspector = qc.inspector_name?.toLowerCase().includes(q);
+        if (!matchNum && !matchProd && !matchInspector) return false;
+      }
+      return true;
+    });
+  }, [qualityInspections, qcDecisionFilter, qcSearch]);
+
+  const totalQcPages = Math.max(1, Math.ceil(filteredQC.length / qcPerPage));
+  const paginatedQC = filteredQC.slice((qcPage - 1) * qcPerPage, qcPage * qcPerPage);
+
+  return (
+    <div className="space-y-6 w-full max-w-full min-w-0">
+      {/* Top Header */}
+      <PageHeader
+        title={isAr ? 'صالة القص وخطوط التشغيل وبطاقات الحزم' : 'Cutting Floor & Shopfloor Production'}
+        subtitle={
+          isAr
+            ? 'متابعة أوامر التشغيل المعتمدة، خطط الفرش والطبقات، بطاقات الحزم الذكية بالباركود، وتدقيق الجودة'
+            : 'Cutting orders, lay planning, QR bundle tracking across shopfloor stages, and quality inspection.'
+        }
+        icon={<Scissors className="w-5 h-5 text-indigo-500" />}
+        breadcrumbs={[
+          { label: isAr ? 'الرئيسية' : 'Home' },
+          { label: isAr ? 'صالة القص والإنتاج' : 'Cutting & Production' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenFabricCalc}
+              icon={<Calculator className="w-4 h-4 text-slate-500" />}
+              className="font-medium"
+            >
+              {isAr ? 'حاسبة أطوال الفرش' : 'Lay Calculator'}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={onOpenCreateProdOrder}
+              icon={<Plus className="w-4 h-4" />}
+              className="font-bold shadow-sm shadow-indigo-500/20"
+            >
+              {isAr ? 'أمر إنتاج جديد' : 'New Production Order'}
+            </Button>
+          </div>
+        }
+      />
+
+      {/* KPI Overview Cards - Modern Minimal Aesthetic */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Production Orders */}
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-indigo-500/30">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {isAr ? 'أوامر الإنتاج النشطة' : 'Active Orders'}
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Layers className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
+              {stats.totalOrders}
+            </span>
+            <span className="text-xs text-slate-400 font-sans">{isAr ? 'أمر إجمالي' : 'total'}</span>
+          </div>
+          <div className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            <span>{stats.activeOrders} {isAr ? 'قيد التشغيل بالورشة' : 'in progress'}</span>
+          </div>
+        </div>
+
+        {/* Card 2: Pieces Cut */}
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-sky-500/30">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {isAr ? 'القطع المقصوصة بصالة القص' : 'Pieces Cut'}
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+              <Scissors className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono text-sky-600 dark:text-sky-400">
+              {stats.totalCutPieces.toLocaleString()}
+            </span>
+            <span className="text-xs text-slate-400 font-sans">{isAr ? 'قطعة مقصوصة' : 'pcs cut'}</span>
+          </div>
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <span>{isAr ? `عبر ${cuttingOrders.length} أوامر فرش وقص` : `across ${cuttingOrders.length} lay cuts`}</span>
+          </div>
+        </div>
+
+        {/* Card 3: Active Bundles */}
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-purple-500/30">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {isAr ? 'حزم التشغيل النشطة بالباركود' : 'Active QR Bundles'}
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <QrCode className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono text-purple-600 dark:text-purple-400">
+              {stats.totalBundles}
+            </span>
+            <span className="text-xs text-slate-400 font-sans">{isAr ? 'حزمة تشغيل' : 'bundles'}</span>
+          </div>
+          <div className="mt-2 text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500" />
+            <span>{stats.activeBundles} {isAr ? 'قيد حركة الخطوط' : 'active on floor'}</span>
+          </div>
+        </div>
+
+        {/* Card 4: Quality & Finished */}
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-emerald-500/30">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {isAr ? 'المنتج التام المجاز والمرحل' : 'Passed QC Stock'}
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              {stats.totalFinished.toLocaleString()}
+            </span>
+            <span className="text-xs text-slate-400 font-sans">{isAr ? 'قطعة مجازة' : 'pcs finished'}</span>
+          </div>
+          <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>{stats.passRate}% {isAr ? 'نسبة الجودة والمطابقة' : 'pass rate'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Sub-Navigation Bar - Clean Pill Tabs */}
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {[
+            {
+              id: 'orders',
+              label: isAr ? 'أوامر الإنتاج والتشغيل' : 'Production Orders',
+              icon: Layers,
+              count: productionOrders.length,
+            },
+            {
+              id: 'cutting',
+              label: isAr ? 'صالة القص وخطط الفرش' : 'Lay & Cutting Orders',
+              icon: Scissors,
+              count: cuttingOrders.length,
+            },
+            {
+              id: 'bundles',
+              label: isAr ? 'بطاقات الحزم وتتبع الخط' : 'Bundle Floor Tracker',
+              icon: QrCode,
+              count: cuttingBundles.length,
+            },
+            {
+              id: 'qc',
+              label: isAr ? 'فحص ومراقبة الجودة' : 'Quality Control (QC)',
+              icon: ShieldCheck,
+              count: qualityInspections.length,
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                  isActive
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-400 dark:text-indigo-600' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${
+                    isActive
+                      ? 'bg-white/20 dark:bg-slate-900/20 text-white dark:text-slate-900'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* SUB-TAB 1: PRODUCTION ORDERS */}
+      {/* ============================================================== */}
+      {activeSubTab === 'orders' && (
+        <div className="space-y-4">
+          {/* Controls Bar: Filters & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            {/* Status Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+              {[
+                { id: 'all', label: isAr ? 'كل الحالات' : 'All Status' },
+                { id: 'in_progress', label: isAr ? 'قيد التشغيل' : 'In Progress' },
+                { id: 'approved', label: isAr ? 'جاهز للقص' : 'Ready to Cut' },
+                { id: 'draft', label: isAr ? 'مسودات' : 'Drafts' },
+                { id: 'completed', label: isAr ? 'مكتمل' : 'Completed' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => {
+                    setOrderStatusFilter(pill.id);
+                    setOrderPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                    orderStatusFilter === pill.id
+                      ? 'bg-indigo-600 text-white font-bold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث برقم الأمر، الموديل، الكود...' : 'Search order #, model, code...'}
+                value={orderSearch}
+                onChange={(e) => {
+                  setOrderSearch(e.target.value);
+                  setOrderPage(1);
+                }}
+                className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl ${
+                  isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-64 focus:outline-none focus:border-indigo-500`}
+              />
+            </div>
+          </div>
+
+          {/* Table Container */}
+          <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
+                  <tr>
+                    <th className="py-3 px-4">{isAr ? 'رقم الأمر' : 'Order #'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الموديل والنوع' : 'Model & SKU'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المخطط' : 'Target'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المقصوص' : 'Cut'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المنجز التام' : 'Finished'}</th>
+                    <th className="py-3 px-4">{isAr ? 'نسبة الإنجاز' : 'Progress'}</th>
+                    <th className="py-3 px-4">{isAr ? 'موعد التسليم' : 'Due Date'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الأولوية' : 'Priority'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                  {paginatedOrders.map((order) => {
+                    const targetQty = order.planned_quantity || order.target_quantity || 1;
+                    const cutQty = order.cut_quantity || 0;
+                    const finishedQty = order.completed_quantity || order.qc_passed_quantity || 0;
+                    const cutPct = Math.min(100, Math.round((cutQty / targetQty) * 100));
+                    const finishPct = Math.min(100, Math.round((finishedQty / targetQty) * 100));
+
+                    return (
+                      <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                          {order.order_number}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-900 dark:text-white">{order.model_name || '—'}</div>
+                          <span className="text-[10px] text-slate-400 font-mono">[{order.model_code || 'MOD'}]</span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 dark:text-slate-100">
+                          {targetQty.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-semibold text-sky-600 dark:text-sky-400">
+                          {cutQty.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {finishedQty.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 min-w-[130px]">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <span className="text-slate-400">{finishPct}%</span>
+                              <span className="text-slate-400">{isAr ? 'المقصوص:' : 'Cut:'} {cutPct}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden flex">
+                              <div
+                                className="bg-emerald-500 h-full transition-all"
+                                style={{ width: `${finishPct}%` }}
+                                title={`${finishPct}% finished`}
+                              />
+                              <div
+                                className="bg-sky-400 h-full transition-all opacity-60"
+                                style={{ width: `${Math.max(0, cutPct - finishPct)}%` }}
+                                title={`${cutPct}% cut`}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400 text-[11px]">
+                          {order.target_delivery_date || order.due_date || '—'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge
+                            variant={
+                              order.priority === 'urgent'
+                                ? 'danger'
+                                : order.priority === 'high'
+                                ? 'warning'
+                                : 'neutral'
+                            }
+                          >
+                            {order.priority === 'urgent'
+                              ? isAr ? 'عاجل جداً' : 'Urgent'
+                              : order.priority === 'high'
+                              ? isAr ? 'مرتفع' : 'High'
+                              : isAr ? 'عادي' : 'Normal'}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge
+                            variant={
+                              order.status === 'completed'
+                                ? 'success'
+                                : order.status === 'in_progress' || order.status === 'sewing'
+                                ? 'info'
+                                : order.status === 'approved' || order.status === 'cutting'
+                                ? 'purple'
+                                : 'neutral'
+                            }
+                            dot={order.status === 'in_progress' || order.status === 'approved'}
+                          >
+                            {order.status === 'completed'
+                              ? isAr ? 'مكتمل' : 'Completed'
+                              : order.status === 'in_progress' || order.status === 'sewing'
+                              ? isAr ? 'قيد التشغيل' : 'In Progress'
+                              : order.status === 'approved'
+                              ? isAr ? 'معتمد للقص' : 'Approved'
+                              : order.status === 'cutting'
+                              ? isAr ? 'صالة القص' : 'Cutting'
+                              : isAr ? 'مسودة' : 'Draft'}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 justify-center">
+                            {order.status === 'draft' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7 text-emerald-600 border-emerald-500/30 font-bold"
+                                onClick={() => onApproveProdOrder(order.id)}
+                              >
+                                {isAr ? 'اعتماد الأمر' : 'Approve'}
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7 text-indigo-600 border-indigo-500/30 font-bold"
+                                onClick={() => onSelectProdOrderForCut(order)}
+                                icon={<Scissors className="w-3 h-3" />}
+                              >
+                                {isAr ? 'أمر قص' : 'Cut'}
+                              </Button>
+                            )}
+
+                            <ActionsMenu
+                              variant="icon-horizontal"
+                              items={[
+                                {
+                                  id: 'cut',
+                                  label: isAr ? 'إصدار خطة قص وفرش' : 'Issue Cut Plan',
+                                  icon: <Scissors className="w-3.5 h-3.5" />,
+                                  onClick: () => onSelectProdOrderForCut(order),
+                                },
+                                {
+                                  id: 'qc',
+                                  label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection',
+                                  icon: <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />,
+                                  onClick: () => onSelectProdOrderForQc(order),
+                                },
+                                {
+                                  id: 'bundles',
+                                  label: isAr ? 'تتبع بطاقات الحزم بالباركود' : 'Track QR Bundles',
+                                  icon: <QrCode className="w-3.5 h-3.5 text-indigo-500" />,
+                                  onClick: () => {
+                                    const b = cuttingBundles.find((cb) => cb.production_order_id === order.id) || cuttingBundles[0];
+                                    if (b) onSelectBundleForTracker(b);
+                                  },
+                                },
+                                {
+                                  id: 'costing',
+                                  label: isAr ? 'حساب تكاليف أمر التشغيل' : 'Job Costing',
+                                  icon: <DollarSign className="w-3.5 h-3.5 text-emerald-500" />,
+                                  divider: true,
+                                  onClick: () => onNavigateToTab && onNavigateToTab('costing'),
+                                },
+                                {
+                                  id: 'print',
+                                  label: isAr ? 'طباعة تذكرة أمر التشغيل' : 'Print Job Ticket',
+                                  icon: <Printer className="w-3.5 h-3.5" />,
+                                  onClick: () => window.print(),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-10 text-center text-slate-400 text-xs">
+                        {isAr ? 'لا توجد أوامر إنتاج مطابقة لمعايير البحث.' : 'No production orders found.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {filteredOrders.length > orderPerPage && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                <Pagination
+                  currentPage={orderPage}
+                  totalPages={totalOrderPages}
+                  totalItems={filteredOrders.length}
+                  perPage={orderPerPage}
+                  onPageChange={setOrderPage}
+                  isAr={isAr}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* SUB-TAB 2: CUTTING ORDERS (LAY & PLIES) */}
+      {/* ============================================================== */}
+      {activeSubTab === 'cutting' && (
+        <div className="space-y-4">
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+              {[
+                { id: 'all', label: isAr ? 'كل المصادر' : 'All Sources' },
+                { id: 'factory_owned', label: isAr ? 'خامات المصنع' : 'Factory Owned' },
+                { id: 'customer_supplied', label: isAr ? 'أمانات عملاء CMT' : 'CMT Customer Material' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => {
+                    setCutSourceFilter(pill.id);
+                    setCutPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                    cutSourceFilter === pill.id
+                      ? 'bg-sky-600 text-white font-bold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث برقم الإذن، أمر الإنتاج، المقصدار...' : 'Search cut order #, PO, cutter...'}
+                value={cutSearch}
+                onChange={(e) => {
+                  setCutSearch(e.target.value);
+                  setCutPage(1);
+                }}
+                className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl ${
+                  isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-64 focus:outline-none focus:border-sky-500`}
+              />
+            </div>
+          </div>
+
+          {/* Cutting Orders Table */}
+          <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
+                  <tr>
+                    <th className="py-3 px-4">{isAr ? 'رقم إذن القص' : 'Cut Order #'}</th>
+                    <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'PO #'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الطاولة' : 'Table'}</th>
+                    <th className="py-3 px-4">{isAr ? 'المقصدار الفني' : 'Master Cutter'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الخامة ومصدرها' : 'Fabric & Source'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'طول الفرشة' : 'Lay Length'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الراقات' : 'Plies'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المستهلك' : 'Fabric Used'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'القطع الناتجة' : 'Yield'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                  {paginatedCuttingOrders.map((cut) => {
+                    const cutterEmp = cut.assigned_cutter_id ? employees.find(e => e.id === cut.assigned_cutter_id) : null;
+                    const cutterName = cut.assigned_cutter_name || (cut as any).assignedCutter?.name || cutterEmp?.name;
+
+                    return (
+                      <tr key={cut.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-sky-600 dark:text-sky-400">
+                          {cut.cutting_order_number}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-semibold text-indigo-500">
+                          {cut.production_order_number || '—'}
+                        </td>
+                        <td className="py-3 px-4 font-sans text-slate-700 dark:text-slate-300">
+                          {cut.table_number || 'Table 1'}
+                        </td>
+                        <td className="py-3 px-4">
+                          {cutterName ? (
+                            <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200">
+                              <div className="w-5 h-5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] flex items-center justify-center font-bold">
+                                {cutterName.trim().charAt(0)}
+                              </div>
+                              <span className="font-medium truncate max-w-[120px]">{cutterName}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-mono">{isAr ? 'غير معيّن' : 'Unassigned'}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-slate-800 dark:text-slate-200">{cut.fabric_name || (isAr ? 'قماش التشغيل' : 'Fabric')}</div>
+                          <Badge
+                            variant={cut.fabric_source === 'customer_deposit' ? 'purple' : 'info'}
+                            className="mt-0.5 text-[9px]"
+                          >
+                            {cut.fabric_source === 'customer_deposit'
+                              ? isAr ? 'أمانة عميل CMT' : 'CMT Custody'
+                              : isAr ? 'خامات المصنع' : 'Factory Owned'}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-slate-700 dark:text-slate-300">
+                          {cut.lay_length_meters} {isAr ? 'م' : 'm'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 dark:text-slate-100">
+                          {cut.layers_count} {isAr ? 'راقة' : 'plies'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-amber-600 dark:text-amber-400 font-bold">
+                          {cut.actual_fabric_meters_used} {isAr ? 'م' : 'm'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          {cut.total_cut_pieces} {isAr ? 'قطعة' : 'pcs'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant="success" dot>
+                            {isAr ? 'تم القص وتوليد الحزم' : 'Cut & Generated'}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 justify-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 px-2 font-bold text-purple-600 border-purple-500/30"
+                              onClick={() => {
+                                const b = cuttingBundles.find((cb) => cb.cutting_order_id === cut.id) || cuttingBundles[0];
+                                if (b) onSelectBundleForTracker(b);
+                              }}
+                              icon={<QrCode className="w-3 h-3" />}
+                            >
+                              {isAr ? 'الحزم' : 'Bundles'}
+                            </Button>
+                            <ActionsMenu
+                              variant="icon-horizontal"
+                              items={[
+                                {
+                                  id: 'qc',
+                                  label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection',
+                                  icon: <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />,
+                                  onClick: () => {
+                                    const prod = productionOrders.find((p) => p.id === cut.production_order_id);
+                                    if (prod) onSelectProdOrderForQc(prod);
+                                  },
+                                },
+                                {
+                                  id: 'print',
+                                  label: isAr ? 'طباعة كارت طاولة القص' : 'Print Cutting Ticket',
+                                  icon: <Printer className="w-3.5 h-3.5" />,
+                                  onClick: () => window.print(),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedCuttingOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="py-10 text-center text-slate-400 text-xs">
+                        {isAr ? 'لا توجد أوامر قص وفرش مسجلة مطابقة لمعايير البحث.' : 'No cutting orders found.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {filteredCuttingOrders.length > cutPerPage && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                <Pagination
+                  currentPage={cutPage}
+                  totalPages={totalCutPages}
+                  totalItems={filteredCuttingOrders.length}
+                  perPage={cutPerPage}
+                  onPageChange={setCutPage}
+                  isAr={isAr}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* SUB-TAB 3: BUNDLE FLOOR TRACKER */}
+      {/* ============================================================== */}
+      {activeSubTab === 'bundles' && (
+        <div className="space-y-4">
+          {/* Stage Filters & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            {/* Stage Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+              {[
+                { id: 'all', label: isAr ? `كل الحزم (${cuttingBundles.length})` : `All (${cuttingBundles.length})` },
+                { id: 'cutting', label: isAr ? 'صالة القص' : 'Cutting' },
+                { id: 'assembly', label: isAr ? 'التجهيز' : 'Assembly' },
+                { id: 'sewing', label: isAr ? 'الخياطة' : 'Sewing' },
+                { id: 'finishing', label: isAr ? 'التشطيب' : 'Finishing' },
+                { id: 'ironing', label: isAr ? 'الكي' : 'Ironing' },
+                { id: 'packing', label: isAr ? 'التعبئة' : 'Packing' },
+                { id: 'completed', label: isAr ? 'مكتمل' : 'Completed' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => {
+                    setBundleStageFilter(pill.id);
+                    setBundlePage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    bundleStageFilter === pill.id
+                      ? 'bg-purple-600 text-white font-bold shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث بكود الحزمة، العامل، اللون، المقاس...' : 'Search bundle, worker, color, size...'}
+                value={bundleSearch}
+                onChange={(e) => {
+                  setBundleSearch(e.target.value);
+                  setBundlePage(1);
+                }}
+                className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl ${
+                  isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-64 focus:outline-none focus:border-purple-500`}
+              />
+            </div>
+          </div>
+
+          {/* Bundles Grid Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {paginatedBundles.map((bnd) => (
+              <div
+                key={bnd.id}
+                className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 space-y-3 transition-all duration-200 hover:shadow-md hover:border-purple-500/40"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
+                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-slate-900 dark:text-white">
+                    <div className="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                      <QrCode className="w-3.5 h-3.5" />
+                    </div>
+                    <span>{bnd.bundle_code}</span>
+                  </div>
+                  <Badge variant="neutral" className="font-mono text-[10px]">
+                    {isAr ? `حزمة #${bnd.bundle_number}` : `Bundle #${bnd.bundle_number}`}
+                  </Badge>
+                </div>
+
+                {/* Specs Pills */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50/80 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/60 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">{isAr ? 'اللون' : 'Color'}</span>
+                    <span className="text-slate-900 dark:text-slate-100 font-semibold">{bnd.color_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">{isAr ? 'المقاس' : 'Size'}</span>
+                    <span className="text-slate-900 dark:text-slate-100 font-bold font-mono">{bnd.size_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">{isAr ? 'الكمية' : 'Quantity'}</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                      {bnd.quantity} {isAr ? 'ق' : 'pcs'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Worker Assignment Strip */}
+                <div className="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <User className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="text-slate-400 text-[10px] shrink-0">{isAr ? 'المسؤول:' : 'Worker:'}</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {bnd.assigned_employee_name || (isAr ? 'لم يُعيّن بعد' : 'Unassigned')}
+                    </span>
+                  </div>
+                  {bnd.work_group && (
+                    <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                      [{bnd.work_group}]
+                    </span>
+                  )}
+                </div>
+
+                {/* Card Footer: Stage Badge & Fast Action Buttons */}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 text-xs gap-1">
+                  <Badge
+                    variant={
+                      bnd.current_stage_code === 'completed'
+                        ? 'success'
+                        : bnd.current_stage_code === 'sewing'
+                        ? 'info'
+                        : bnd.current_stage_code === 'finishing' || bnd.current_stage_code === 'ironing'
+                        ? 'purple'
+                        : 'warning'
+                    }
+                    dot
+                  >
+                    {bnd.current_stage_code === 'cutting'
+                      ? isAr ? 'صالة القص' : 'Cutting'
+                      : bnd.current_stage_code === 'assembly'
+                      ? isAr ? 'التجميع' : 'Assembly'
+                      : bnd.current_stage_code === 'sewing'
+                      ? isAr ? 'الخياطة' : 'Sewing'
+                      : bnd.current_stage_code === 'finishing'
+                      ? isAr ? 'التشطيب' : 'Finishing'
+                      : bnd.current_stage_code === 'ironing'
+                      ? isAr ? 'الكي' : 'Ironing'
+                      : bnd.current_stage_code === 'packing'
+                      ? isAr ? 'التعبئة' : 'Packing'
+                      : isAr ? 'مكتمل' : 'Completed'}
+                  </Badge>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-[11px] h-7 px-2 font-medium text-amber-600 dark:text-amber-400"
+                      onClick={() => {
+                        const prod = productionOrders.find((p) => p.id === bnd.production_order_id);
+                        onSelectBundleForQc(bnd, prod);
+                      }}
+                      icon={<ShieldCheck className="w-3.5 h-3.5" />}
+                      title={isAr ? 'فحص الجودة' : 'QC Inspection'}
+                    >
+                      {isAr ? 'فحص' : 'QC'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="text-[11px] h-7 px-2.5 font-bold shadow-sm"
+                      onClick={() => onSelectBundleForTracker(bnd)}
+                      icon={<ArrowRightLeft className="w-3 h-3" />}
+                    >
+                      {isAr ? 'نقل وأجر' : 'Transfer'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {paginatedBundles.length === 0 && (
+              <div className="col-span-full py-12 text-center text-slate-400 text-xs">
+                {isAr ? 'لا توجد حزم تشغيل مطابقة لمعايير البحث في هذه المرحلة.' : 'No bundles found.'}
+              </div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {filteredBundles.length > bundlePerPage && (
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+              <Pagination
+                currentPage={bundlePage}
+                totalPages={totalBundlePages}
+                totalItems={filteredBundles.length}
+                perPage={bundlePerPage}
+                onPageChange={setBundlePage}
+                isAr={isAr}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* SUB-TAB 4: QUALITY CONTROL HUB */}
+      {/* ============================================================== */}
+      {activeSubTab === 'qc' && (
+        <div className="space-y-4">
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
+              {[
+                { id: 'all', label: isAr ? 'كل التقارير' : 'All Reports' },
+                { id: 'passed', label: isAr ? 'مجاز ومطابق' : 'Passed' },
+                { id: 'rework_required', label: isAr ? 'إعادة تشغيل' : 'Rework' },
+                { id: 'rejected', label: isAr ? 'مرفوض وهالك' : 'Rejected' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => {
+                    setQcDecisionFilter(pill.id);
+                    setQcPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                    qcDecisionFilter === pill.id
+                      ? 'bg-emerald-600 text-white font-bold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث برقم التقرير، أمر الإنتاج، المفتش...' : 'Search QC report, PO, inspector...'}
+                value={qcSearch}
+                onChange={(e) => {
+                  setQcSearch(e.target.value);
+                  setQcPage(1);
+                }}
+                className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl ${
+                  isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-64 focus:outline-none focus:border-emerald-500`}
+              />
+            </div>
+          </div>
+
+          {/* QC Reports Table */}
+          <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
+                  <tr>
+                    <th className="py-3 px-4">{isAr ? 'رقم تقرير الفحص' : 'Report #'}</th>
+                    <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'PO #'}</th>
+                    <th className="py-3 px-4">{isAr ? 'مفتش الجودة' : 'Inspector'}</th>
+                    <th className="py-3 px-4">{isAr ? 'نوع ونقطة الفحص' : 'Inspection Type'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المفحوص' : 'Inspected'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المقبول' : 'Passed'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'إعادة تشغيل' : 'Rework'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المرفوض' : 'Scrap'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'القرار والاعتماد' : 'Decision'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                  {paginatedQC.map((qc) => (
+                    <tr key={qc.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {qc.inspection_number}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-semibold text-indigo-500">
+                        {qc.production_order_number || '—'}
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
+                        {qc.inspector_name || '—'}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
+                        {qc.inspection_type === 'final_audit'
+                          ? isAr ? 'فحص نهائي وترحيل للمخزن' : 'Final Audit'
+                          : qc.inspection_type === 'inline'
+                          ? isAr ? 'فحص مرحلي بالخط' : 'Inline Audit'
+                          : isAr ? 'فحص نهاية الخط' : 'End of Line'}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 dark:text-slate-100">
+                        {qc.inspected_quantity}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {qc.passed_quantity}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                        {qc.rework_quantity}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-red-600 dark:text-red-400">
+                        {qc.rejected_quantity}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <Badge
+                          variant={
+                            qc.decision === 'passed'
+                              ? 'success'
+                              : qc.decision === 'rework_required'
+                              ? 'warning'
+                              : 'danger'
+                          }
+                          dot
+                        >
+                          {qc.decision === 'passed'
+                            ? isAr ? 'مطابق ومجاز' : 'Passed & Approved'
+                            : qc.decision === 'rework_required'
+                            ? isAr ? 'إعادة تشغيل' : 'Rework'
+                            : isAr ? 'مرفوض وهالك' : 'Rejected'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedQC.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="py-10 text-center text-slate-400 text-xs">
+                        {isAr ? 'لا توجد تقارير فحص جودة مطابقة للبحث.' : 'No QC reports found.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {filteredQC.length > qcPerPage && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                <Pagination
+                  currentPage={qcPage}
+                  totalPages={totalQcPages}
+                  totalItems={filteredQC.length}
+                  perPage={qcPerPage}
+                  onPageChange={setQcPage}
+                  isAr={isAr}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

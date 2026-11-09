@@ -1,19 +1,14 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import {
-  Scissors,
   Layers,
   AlertTriangle,
   Plus,
   CheckCircle,
-  Calculator,
-  ArrowRightLeft,
   Search,
   Filter,
-  QrCode,
   ShieldCheck,
   RefreshCw,
   Printer,
-  DollarSign,
   Building2,
   Table as TableIcon,
   LayoutGrid,
@@ -24,13 +19,11 @@ import {
   Edit2,
   Trash2,
   X,
-  User,
 } from 'lucide-react';
 import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 import { Button } from './components/ui/Button';
-import { ActionsMenu } from './components/ui/ActionsMenu';
 import { PageHeader } from './components/ui/PageHeader';
 import { Modal } from './components/ui/Modal';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
@@ -68,6 +61,7 @@ import { FactoryCommandDashboard } from './components/dashboard/FactoryCommandDa
 
 // Lazy Loaded Business Modules (Phase 2 Performance Code-Splitting)
 const PlatformAdminDashboard = lazy(() => import('./components/admin/PlatformAdminDashboard').then(m => ({ default: m.PlatformAdminDashboard })));
+const ProductionTab = lazy(() => import('./components/production/ProductionTab').then(m => ({ default: m.ProductionTab })));
 const WarehouseManagerTab = lazy(() => import('./components/inventory/WarehouseManagerTab').then(m => ({ default: m.WarehouseManagerTab })));
 const SubcontractingTab = lazy(() => import('./components/subcontracting/SubcontractingTab').then(m => ({ default: m.SubcontractingTab })));
 const PurchasingTab = lazy(() => import('./components/procurement/PurchasingTab').then(m => ({ default: m.PurchasingTab })));
@@ -1371,41 +1365,6 @@ export function App() {
   const totalModelPages = Math.ceil(filteredModels.length / modelPerPage);
   const paginatedModels = filteredModels.slice((modelPage - 1) * modelPerPage, modelPage * modelPerPage);
 
-  const [prodOrderPage, setProdOrderPage] = useState(1);
-  const prodOrderPerPage = 6;
-  const totalProdOrderPages = Math.ceil(productionOrders.length / prodOrderPerPage);
-  const paginatedProdOrders = productionOrders.slice((prodOrderPage - 1) * prodOrderPerPage, prodOrderPage * prodOrderPerPage);
-
-  const [cuttingOrderPage, setCuttingOrderPage] = useState(1);
-  const cuttingOrderPerPage = 6;
-  const totalCuttingOrderPages = Math.max(1, Math.ceil(cuttingOrders.length / cuttingOrderPerPage));
-  const paginatedCuttingOrders = cuttingOrders.slice((cuttingOrderPage - 1) * cuttingOrderPerPage, cuttingOrderPage * cuttingOrderPerPage);
-
-  const [bundlePage, setBundlePage] = useState(1);
-  const bundlePerPage = 9;
-  const [bundleFilterStage, setBundleFilterStage] = useState<string>('all');
-  const [bundleSearchTerm, setBundleSearchTerm] = useState<string>('');
-
-  const filteredBundles = cuttingBundles.filter((b) => {
-    if (bundleFilterStage !== 'all' && b.current_stage_code !== bundleFilterStage) return false;
-    if (bundleSearchTerm) {
-      const term = bundleSearchTerm.toLowerCase();
-      const matchCode = b.bundle_code.toLowerCase().includes(term);
-      const matchWorker = (b.assigned_employee_name || '').toLowerCase().includes(term);
-      const matchColor = (b.color_name || '').toLowerCase().includes(term);
-      const matchSize = (b.size_name || '').toLowerCase().includes(term);
-      if (!matchCode && !matchWorker && !matchColor && !matchSize) return false;
-    }
-    return true;
-  });
-
-  const totalBundlePages = Math.max(1, Math.ceil(filteredBundles.length / bundlePerPage));
-  const paginatedBundles = filteredBundles.slice((bundlePage - 1) * bundlePerPage, bundlePage * bundlePerPage);
-
-  useEffect(() => {
-    setBundlePage(1);
-  }, [bundleFilterStage, bundleSearchTerm]);
-
   useEffect(() => {
     setModelPage(1);
   }, [modelSearch, modelCategoryFilter]);
@@ -2226,617 +2185,38 @@ export function App() {
 
           {/* TAB 4: CUTTING & PRODUCTION */}
           {activeTab === 'cutting' && (
-            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-              <PageHeader
-                title={isAr ? 'صالة القص وخطوط التشغيل وبطاقات الحزم' : 'Cutting Floor & Bundle Operations'}
-                subtitle={isAr
-                  ? 'أوامر التشغيل المعتمدة، خطط الفرش والطبقات، بطاقات الحزم الذكية بالباركود، وتدقيق الجودة (QC).'
-                  : 'Cutting orders, lay planning & ply counts, QR bundle tracking, and quality control.'}
-                icon={<Scissors className="w-5 h-5" />}
-                breadcrumbs={[
-                  { label: isAr ? 'الرئيسية' : 'Home' },
-                  { label: isAr ? 'صالة القص والإنتاج' : 'Cutting & Production' },
-                ]}
-                actions={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setIsFabricCalcOpen(true)}
-                      icon={<Calculator className="w-3.5 h-3.5" />}
-                    >
-                      {isAr ? 'حاسبة أطوال الفرش' : 'Lay Length Calc'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => setIsCreateProdOrderModalOpen(true)}
-                      icon={<Plus className="w-3.5 h-3.5" />}
-                    >
-                      {isAr ? 'إصدار أمر إنتاج جديد' : 'New Production Order'}
-                    </Button>
-                  </div>
-                }
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <ProductionTab
+                productionOrders={productionOrders}
+                cuttingOrders={cuttingOrders}
+                cuttingBundles={cuttingBundles}
+                qualityInspections={qualityInspections}
+                employees={employees}
+                isAr={isAr}
+                onOpenCreateProdOrder={() => setIsCreateProdOrderModalOpen(true)}
+                onOpenFabricCalc={() => setIsFabricCalcOpen(true)}
+                onSelectProdOrderForCut={(order) => setSelectedProdOrderForCut(order)}
+                onSelectProdOrderForQc={(order) => setSelectedProdOrderForQc(order)}
+                onSelectBundleForTracker={(bundle) => setSelectedBundleForTracker(bundle)}
+                onSelectBundleForQc={(bundle, order) => {
+                  setSelectedBundleForQc(bundle);
+                  if (order) setSelectedProdOrderForQc(order);
+                }}
+                onApproveProdOrder={async (orderId) => {
+                  try {
+                    if (orderId.length > 20 && !orderId.startsWith('po-')) {
+                      await api.production.approveProductionOrder(orderId);
+                    }
+                    setProductionOrders((prev) =>
+                      prev.map((o) => (o.id === orderId ? { ...o, status: 'approved' } : o))
+                    );
+                  } catch (err: any) {
+                    alert(err.message || (isAr ? 'فشل اعتماد أمر الإنتاج' : 'Failed to approve production order'));
+                  }
+                }}
+                onNavigateToTab={(tab) => handleTabChange(tab)}
               />
-
-              {/* KPI Performance Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'إجمالي أوامر الإنتاج' : 'Total Production Orders'}</div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-                    {productionOrders.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'أوامر' : 'orders'}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
-                    {productionOrders.filter(p => p.status === 'in_progress').length} {isAr ? 'قيد التشغيل في الورشة' : 'in progress in shopfloor'}
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'القطع المقصوصة بصالة القص' : 'Pieces Cut'}</div>
-                  <div className="text-xl font-bold font-mono text-sky-600 dark:text-sky-400">
-                    {productionOrders.reduce((sum, p) => sum + p.cut_quantity, 0).toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {isAr ? `عبر ${cuttingOrders.length} أوامر فرش وقص` : `across ${cuttingOrders.length} cutting orders`}
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'حزم التشغيل النشطة بالباركود' : 'Active QR Bundles'}</div>
-                  <div className="text-xl font-bold font-mono text-purple-600 dark:text-purple-400">
-                    {cuttingBundles.length} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'حزمة' : 'bundles'}</span>
-                  </div>
-                  <div className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-medium">
-                    {isAr ? 'موزعة على الخياطة والتجهيز والتشطيب' : 'in sewing and finishing lines'}
-                  </div>
-                </Card>
-
-                <Card hover>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{isAr ? 'المنتج التام المجاز والمرحل للمخزن' : 'Passed QC Stock'}</div>
-                  <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {productionOrders.reduce((sum, p) => sum + (p.completed_quantity || p.qc_passed_quantity || 0), 0).toLocaleString()} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
-                  </div>
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-                    {isAr ? 'اجتازت الفحص النهائي بنجاح' : 'passed final QC inspection'}
-                  </div>
-                </Card>
-              </div>
-
-              {/* Section 1: Production Orders Table */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أوامر الإنتاج وتفصيل المقاسات والألوان' : 'Production Orders & SKU Planning'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'متابعة الكميات المخططة والمقصوصة والمنجزة ومواعيد التسليم' : 'Track planned, cut, and finished quantities with delivery schedules'}</p>
-                  </div>
-                </div>
-
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-3 px-4">{isAr ? 'رقم الأمر' : 'Order #'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الموديل والنوع' : 'Model & Type'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المخطط' : 'Planned'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المقصوص' : 'Cut'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المنجز التام' : 'Finished'}</th>
-                          <th className="py-3 px-4">{isAr ? 'موعد التسليم' : 'Delivery Date'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الأولوية' : 'Priority'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الإجراءات والعمليات' : 'Actions & Ops'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                        {paginatedProdOrders.map((order) => (
-                          <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-indigo-400">{order.order_number}</td>
-                            <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
-                              <div>{order.model_name}</div>
-                              <span className="text-[10px] text-slate-400 font-mono">[{order.model_code}]</span>
-                            </td>
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                              {(order.planned_quantity || order.target_quantity).toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4 font-mono text-sky-400 font-semibold">
-                              {order.cut_quantity.toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4 font-mono text-emerald-400 font-bold">
-                              {(order.completed_quantity || order.qc_passed_quantity || 0).toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{order.target_delivery_date || order.due_date}</td>
-                            <td className="py-3 px-4">
-                              <Badge
-                                variant={
-                                  order.priority === 'urgent'
-                                    ? 'danger'
-                                    : order.priority === 'high'
-                                    ? 'warning'
-                                    : 'neutral'
-                                }
-                              >
-                                {order.priority === 'urgent' ? (isAr ? 'عاجل جداً' : 'Urgent') : order.priority === 'high' ? (isAr ? 'مرتفع' : 'High') : (isAr ? 'عادي' : 'Normal')}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge
-                                variant={
-                                  order.status === 'completed'
-                                    ? 'success'
-                                    : order.status === 'in_progress' || order.status === 'sewing'
-                                    ? 'info'
-                                    : order.status === 'approved' || order.status === 'cutting'
-                                    ? 'purple'
-                                    : 'neutral'
-                                }
-                                dot={order.status === 'in_progress' || order.status === 'approved'}
-                              >
-                                {order.status === 'completed'
-                                  ? (isAr ? 'مكتمل' : 'Completed')
-                                  : order.status === 'in_progress' || order.status === 'sewing'
-                                  ? (isAr ? 'قيد التشغيل' : 'In Progress')
-                                  : order.status === 'approved'
-                                  ? (isAr ? 'معتمد (جاهز للقص)' : 'Approved (Ready to Cut)')
-                                  : order.status === 'cutting'
-                                  ? (isAr ? 'صالة القص' : 'Cutting Floor')
-                                  : (isAr ? 'مسودة' : 'Draft')}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1.5 justify-end">
-                                {order.status === 'draft' ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-xs h-7 text-emerald-600 border-emerald-500/30 font-bold"
-                                    onClick={async () => {
-                                      try {
-                                        if (order.id.length > 20 && !order.id.startsWith('po-')) {
-                                          await api.production.approveProductionOrder(order.id);
-                                        }
-                                        setProductionOrders((prev) =>
-                                          prev.map((o) => (o.id === order.id ? { ...o, status: 'approved' } : o))
-                                        );
-                                      } catch (err: any) {
-                                        alert(err.message || (isAr ? 'فشل اعتماد أمر الإنتاج' : 'Failed to approve production order'));
-                                      }
-                                    }}
-                                  >
-                                    {isAr ? 'اعتماد الأمر' : 'Approve Order'}
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    className="text-xs h-7"
-                                    onClick={() => setSelectedProdOrderForCut(order)}
-                                    icon={<Scissors className="w-3 h-3" />}
-                                  >
-                                    {isAr ? 'أمر قص وفرش' : 'Create Cut Order'}
-                                  </Button>
-                                )}
-
-                                <ActionsMenu
-                                  variant="icon-horizontal"
-                                  items={[
-                                    {
-                                      id: 'cut',
-                                      label: isAr ? 'إصدار خطة قص وفرش' : 'Issue Cutting Plan',
-                                      icon: <Scissors className="w-3.5 h-3.5" />,
-                                      onClick: () => setSelectedProdOrderForCut(order),
-                                    },
-                                    {
-                                      id: 'qc',
-                                      label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection (QC)',
-                                      icon: <ShieldCheck className="w-3.5 h-3.5" />,
-                                      onClick: () => setSelectedProdOrderForQc(order),
-                                    },
-                                    {
-                                      id: 'bundles',
-                                      label: isAr ? 'تتبع بطاقات الحزم بالباركود' : 'Track QR Bundles',
-                                      icon: <QrCode className="w-3.5 h-3.5" />,
-                                      onClick: () => {
-                                        const b = cuttingBundles.find((cb) => cb.production_order_id === order.id) || cuttingBundles[0];
-                                        if (b) setSelectedBundleForTracker(b);
-                                      },
-                                    },
-                                    {
-                                      id: 'costing',
-                                      label: isAr ? 'حساب تكاليف أمر التشغيل' : 'Calculate Job Costing',
-                                      icon: <DollarSign className="w-3.5 h-3.5" />,
-                                      divider: true,
-                                      onClick: () => handleTabChange('costing'),
-                                    },
-                                    {
-                                      id: 'print',
-                                      label: isAr ? 'طباعة تذكرة أمر التشغيل' : 'Print Job Order Ticket',
-                                      icon: <Printer className="w-3.5 h-3.5" />,
-                                      onClick: () => window.print(),
-                                    },
-                                  ]}
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {productionOrders.length > prodOrderPerPage && (
-                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                      <Pagination
-                        currentPage={prodOrderPage}
-                        totalPages={totalProdOrderPages}
-                        totalItems={productionOrders.length}
-                        perPage={prodOrderPerPage}
-                        onPageChange={setProdOrderPage}
-                        isAr={isAr}
-                      />
-                    </div>
-                  )}
-                </Card>
-              </div>
-
-              {/* Section 2: Cutting Room Orders (Lay & Plies) */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'أوامر صالة القص وخطط الفرش (Lay & Cut Orders)' : 'Cutting Room & Lay Orders'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'طول الفرشة، عدد الراقات، الأمتار المصروفة من المخزن، وعوادم الأطراف' : 'Lay length, plies count, fabric meters issued, and end scraps'}</p>
-                  </div>
-                </div>
-
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-3 px-4">{isAr ? 'رقم إذن القص' : 'Cut Order #'}</th>
-                          <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'Production Order'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الطاولة' : 'Table #'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المقصدار الفني' : 'Master Cutter'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الخامة المستخدمة' : 'Fabric Item'}</th>
-                          <th className="py-3 px-4">{isAr ? 'مصدر القماش' : 'Fabric Source'}</th>
-                          <th className="py-3 px-4">{isAr ? 'طول الفرشة' : 'Lay Length'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الطبقات (الراقات)' : 'Plies (Layers)'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الأمتار المصروفة' : 'Meters Used'}</th>
-                          <th className="py-3 px-4">{isAr ? 'القطع الناتجة' : 'Yield (Pcs)'}</th>
-                          <th className="py-3 px-4">{isAr ? 'الحالة' : 'Status'}</th>
-                          <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                        {paginatedCuttingOrders.map((cut) => (
-                          <tr key={cut.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                            <td className="py-3 px-4 font-bold text-sky-400">{cut.cutting_order_number}</td>
-                            <td className="py-3 px-4 text-indigo-400">{cut.production_order_number}</td>
-                            <td className="py-3 px-4 font-sans text-slate-300">{cut.table_number}</td>
-                            <td className="py-3 px-4">
-                              {cut.assigned_cutter_name ? (
-                                <div className="flex items-center gap-1.5 font-sans font-medium text-slate-800 dark:text-slate-200">
-                                  <div className="w-5 h-5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] flex items-center justify-center font-bold">
-                                    {cut.assigned_cutter_name.trim().charAt(0)}
-                                  </div>
-                                  <span className="truncate">{cut.assigned_cutter_name}</span>
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 font-mono text-[10px]">{isAr ? 'محمود السيد (رئيسي)' : 'Master Cutter'}</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 font-sans font-medium text-slate-800 dark:text-slate-200">{cut.fabric_name}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant={cut.fabric_source === 'factory_owned' ? 'info' : 'warning'}>
-                                {cut.fabric_source === 'factory_owned' ? (isAr ? 'خامات المصنع' : 'Factory Owned') : (isAr ? 'أمانة عميل CMT' : 'CMT Customer Custody')}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4 text-slate-300">{cut.lay_length_meters} {isAr ? 'م' : 'm'}</td>
-                            <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{cut.layers_count} {isAr ? 'راقة' : 'plies'}</td>
-                            <td className="py-3 px-4 text-amber-400 font-bold">{cut.actual_fabric_meters_used} {isAr ? 'م' : 'm'}</td>
-                            <td className="py-3 px-4 text-emerald-400 font-bold">{cut.total_cut_pieces} {isAr ? 'قطعة' : 'pcs'}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant="success">{isAr ? 'تم القص وتوليد الحزم' : 'Cut & Bundles Generated'}</Badge>
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <ActionsMenu
-                                variant="icon-horizontal"
-                                items={[
-                                  {
-                                    id: 'bundles',
-                                    label: isAr ? 'تتبع حزم أمر القص' : 'Track Cut Bundles',
-                                    icon: <QrCode className="w-3.5 h-3.5" />,
-                                    onClick: () => {
-                                      const b = cuttingBundles.find((cb) => cb.cutting_order_id === cut.id) || cuttingBundles[0];
-                                      if (b) setSelectedBundleForTracker(b);
-                                    },
-                                  },
-                                  {
-                                    id: 'qc',
-                                    label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection (QC)',
-                                    icon: <ShieldCheck className="w-3.5 h-3.5" />,
-                                    onClick: () => {
-                                      const prod = productionOrders.find((p) => p.id === cut.production_order_id);
-                                      if (prod) setSelectedProdOrderForQc(prod);
-                                    },
-                                  },
-                                  {
-                                    id: 'print',
-                                    label: isAr ? 'طباعة كارت طاولة القص' : 'Print Cutting Ticket',
-                                    icon: <Printer className="w-3.5 h-3.5" />,
-                                    onClick: () => window.print(),
-                                  },
-                                ]}
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {cuttingOrders.length > cuttingOrderPerPage && (
-                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                      <Pagination
-                        currentPage={cuttingOrderPage}
-                        totalPages={totalCuttingOrderPages}
-                        totalItems={cuttingOrders.length}
-                        perPage={cuttingOrderPerPage}
-                        onPageChange={setCuttingOrderPage}
-                        isAr={isAr}
-                      />
-                    </div>
-                  )}
-                </Card>
-              </div>
-
-              {/* Section 3: Live Bundle Cards Floor Tracker */}
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>{isAr ? 'بطاقات الحزم وتتبع خطوط الإنتاج والعمال' : 'Bundle Cards & Shopfloor Tracker'}</span>
-                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                        {filteredBundles.length} {isAr ? 'حزمة' : 'bundles'}
-                      </span>
-                    </h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'تتبع مسار الحزم بالباركود بين مراحل القص، التجهيز، الخياطة، والتشطيب مع ربط العمال' : 'Barcode tracking across cutting, preparation, sewing, and finishing with worker link'}</p>
-                  </div>
-                </div>
-
-                {/* Bundle Filters & Stage Tabs */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                    {[
-                      { id: 'all', label: isAr ? `كل الحزم (${cuttingBundles.length})` : `All (${cuttingBundles.length})` },
-                      { id: 'cutting', label: isAr ? 'صالة القص' : 'Cutting' },
-                      { id: 'assembly', label: isAr ? 'التجهيز' : 'Assembly' },
-                      { id: 'sewing', label: isAr ? 'الخياطة' : 'Sewing' },
-                      { id: 'finishing', label: isAr ? 'التشطيب' : 'Finishing' },
-                      { id: 'ironing', label: isAr ? 'الكي' : 'Ironing' },
-                      { id: 'packing', label: isAr ? 'التعبئة' : 'Packing' },
-                      { id: 'completed', label: isAr ? 'مكتمل' : 'Completed' },
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setBundleFilterStage(tab.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                          bundleFilterStage === tab.id
-                            ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="relative">
-                    <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-2.5' : 'left-2.5'} top-2.5 pointer-events-none`} />
-                    <input
-                      type="text"
-                      placeholder={isAr ? 'بحث برقم الحزمة، العامل، اللون، أو المقاس...' : 'Search bundle #, worker, color, size...'}
-                      value={bundleSearchTerm}
-                      onChange={(e) => setBundleSearchTerm(e.target.value)}
-                      className={`bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg ${isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'} py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-64 focus:outline-none focus:border-indigo-500`}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {paginatedBundles.map((bnd) => (
-                    <Card key={bnd.id} hover className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3.5 space-y-2.5">
-                      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900 dark:text-white">
-                          <QrCode className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
-                          <span>{bnd.bundle_code}</span>
-                        </div>
-                        <Badge variant="neutral">{isAr ? `حزمة #${bnd.bundle_number}` : `Bundle #${bnd.bundle_number}`}</Badge>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>
-                          <span className="text-slate-500 block text-[10px]">{isAr ? 'اللون' : 'Color'}</span>
-                          <span className="text-slate-800 dark:text-slate-200 font-semibold">{bnd.color_name}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 block text-[10px]">{isAr ? 'المقاس' : 'Size'}</span>
-                          <span className="text-slate-900 dark:text-slate-100 font-bold font-mono">{bnd.size_name}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 block text-[10px]">{isAr ? 'الكمية' : 'Quantity'}</span>
-                          <span className="text-emerald-400 font-bold font-mono">{bnd.quantity} {isAr ? 'قطعة' : 'pcs'}</span>
-                        </div>
-                      </div>
-
-                      {/* Assigned Worker Badge */}
-                      <div className="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800/60">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <User className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="text-slate-500 dark:text-slate-400 text-[10px] shrink-0">{isAr ? 'العامل المسؤول:' : 'Worker:'}</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                            {bnd.assigned_employee_name || (isAr ? 'لم يُعيّن بعد' : 'Unassigned')}
-                          </span>
-                        </div>
-                        {bnd.work_group && (
-                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                            [{bnd.work_group}]
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800/60 text-xs gap-1">
-                        <div className="flex items-center gap-1">
-                          <Badge
-                            variant={
-                              bnd.current_stage_code === 'completed'
-                                ? 'success'
-                                : bnd.current_stage_code === 'sewing'
-                                ? 'info'
-                                : bnd.current_stage_code === 'finishing' || bnd.current_stage_code === 'ironing'
-                                ? 'purple'
-                                : 'warning'
-                            }
-                            dot
-                          >
-                            {bnd.current_stage_code === 'cutting'
-                              ? (isAr ? 'صالة القص' : 'Cutting')
-                              : bnd.current_stage_code === 'assembly'
-                              ? (isAr ? 'التجميع' : 'Assembly')
-                              : bnd.current_stage_code === 'sewing'
-                              ? (isAr ? 'الخياطة' : 'Sewing')
-                              : bnd.current_stage_code === 'finishing'
-                              ? (isAr ? 'التشطيب' : 'Finishing')
-                              : bnd.current_stage_code === 'ironing'
-                              ? (isAr ? 'الكي' : 'Ironing')
-                              : bnd.current_stage_code === 'packing'
-                              ? (isAr ? 'التعبئة' : 'Packing')
-                              : (isAr ? 'مكتمل' : 'Completed')}
-                          </Badge>
-                          {bnd.status === 'rework' && (
-                            <Badge variant="warning">{isAr ? 'إعادة تشغيل' : 'Rework'}</Badge>
-                          )}
-                          {bnd.status === 'held_for_qc' && (
-                            <Badge variant="purple">{isAr ? 'فحص QC' : 'Held QC'}</Badge>
-                          )}
-                          {bnd.status === 'scrapped' && (
-                            <Badge variant="danger">{isAr ? 'مستبعد' : 'Scrapped'}</Badge>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="text-[11px] h-7 px-2 font-medium"
-                            onClick={() => {
-                              const prod = productionOrders.find((p) => p.id === bnd.production_order_id);
-                              if (prod) {
-                                setSelectedBundleForQc(bnd);
-                                setSelectedProdOrderForQc(prod);
-                              }
-                            }}
-                            icon={<ShieldCheck className="w-3 h-3 text-amber-500" />}
-                          >
-                            {isAr ? 'فحص' : 'QC'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-[11px] h-7 px-2 font-bold text-indigo-600 border-indigo-500/30"
-                            onClick={() => setSelectedBundleForTracker(bnd)}
-                            icon={<ArrowRightLeft className="w-3 h-3" />}
-                          >
-                            {isAr ? 'نقل وأجر' : 'Transfer'}
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                  {paginatedBundles.length === 0 && (
-                    <div className="col-span-full py-8 text-center text-slate-400 text-xs">
-                      {isAr ? 'لا توجد حزم تشغيل مطابقة لمعايير البحث.' : 'No production bundles match the current filters.'}
-                    </div>
-                  )}
-                </div>
-
-                {filteredBundles.length > bundlePerPage && (
-                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                    <Pagination
-                      currentPage={bundlePage}
-                      totalPages={totalBundlePages}
-                      totalItems={filteredBundles.length}
-                      perPage={bundlePerPage}
-                      onPageChange={setBundlePage}
-                      isAr={isAr}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Section 4: Quality Inspections & Defects Log */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{isAr ? 'سجل فحص وتدقيق الجودة والعيوب (Quality Control Hub)' : 'Quality Control & Defects Hub'}</h4>
-                    <p className="text-xs text-slate-400">{isAr ? 'تقارير الفحص المرحلي، العيوب المسجلة، وإذن الترحيل للمنتج النهائي' : 'Stage inspection logs, recorded defects, and finished goods transfer approval'}</p>
-                  </div>
-                </div>
-
-                <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-3 px-4">{isAr ? 'رقم تقرير الفحص' : 'QC Report #'}</th>
-                          <th className="py-3 px-4">{isAr ? 'أمر الإنتاج' : 'Production Order'}</th>
-                          <th className="py-3 px-4">{isAr ? 'مفتش الجودة' : 'QC Inspector'}</th>
-                          <th className="py-3 px-4">{isAr ? 'نوع الفحص' : 'Inspection Type'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المفحوص' : 'Inspected'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المقبول السليم' : 'Passed'}</th>
-                          <th className="py-3 px-4">{isAr ? 'إعادة تشغيل (Rework)' : 'Rework'}</th>
-                          <th className="py-3 px-4">{isAr ? 'المرفوض (Scrap)' : 'Scrap'}</th>
-                          <th className="py-3 px-4">{isAr ? 'القرار والاعتماد' : 'Decision'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-200">
-                        {qualityInspections.map((qc) => (
-                          <tr key={qc.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                            <td className="py-3 px-4 font-bold text-emerald-400">{qc.inspection_number}</td>
-                            <td className="py-3 px-4 text-indigo-400">{qc.production_order_number}</td>
-                            <td className="py-3 px-4 font-sans text-slate-800 dark:text-slate-200">{qc.inspector_name}</td>
-                            <td className="py-3 px-4 font-sans text-slate-300">
-                              {qc.inspection_type === 'final_audit'
-                                ? (isAr ? 'فحص نهائي وترحيل للمخزن' : 'Final Audit & Stock In')
-                                : qc.inspection_type === 'inline'
-                                ? (isAr ? 'فحص مرحلي بالخط' : 'Inline Inspection')
-                                : (isAr ? 'فحص نهاية الخط' : 'End of Line Audit')}
-                            </td>
-                            <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{qc.inspected_quantity}</td>
-                            <td className="py-3 px-4 text-emerald-400 font-bold">{qc.passed_quantity}</td>
-                            <td className="py-3 px-4 text-amber-400 font-bold">{qc.rework_quantity}</td>
-                            <td className="py-3 px-4 text-red-400 font-bold">{qc.rejected_quantity}</td>
-                            <td className="py-3 px-4">
-                              <Badge
-                                variant={
-                                  qc.decision === 'passed'
-                                    ? 'success'
-                                    : qc.decision === 'rework_required'
-                                    ? 'warning'
-                                    : 'danger'
-                                }
-                              >
-                                {qc.decision === 'passed'
-                                  ? (isAr ? 'مطابق ومجاز' : 'Passed & Approved')
-                                  : qc.decision === 'rework_required'
-                                  ? (isAr ? 'إعادة تشغيل' : 'Rework Required')
-                                  : (isAr ? 'مرفوض' : 'Rejected')}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-            </div>
+            </Suspense>
           )}
 
           {/* TAB 5: PROCUREMENT & VENDOR MANAGEMENT */}

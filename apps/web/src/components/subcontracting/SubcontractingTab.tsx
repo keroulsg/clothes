@@ -20,6 +20,7 @@ import {
   ExternalLink,
   QrCode,
   ArrowRightLeft,
+  ChevronLeft,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -1617,10 +1618,10 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         </Card>
       )}
 
-      {/* 10. VIEW 6: Customers Directory & Dossiers (Bento Cards) */}
+      {/* 10. VIEW 6: Customers Directory & Dossiers (Ultra-Modern Executive Bento Cards) */}
       {activeSubTab === 'customers' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {paginatedCustomers.map((c) => {
               const stats = customerStatsMap.get(c.id) || {
                 totalJobs: 0,
@@ -1631,94 +1632,211 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                 custodyMeters: 0,
               };
 
+              const hasDebt = stats.remainingBalance > 0;
+              const paymentPercent = stats.totalInvoiced > 0
+                ? Math.min(100, Math.round((stats.totalPaid / stats.totalInvoiced) * 100))
+                : 100;
+
               return (
                 <div
                   key={c.id}
-                  className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs hover:shadow-md transition-all space-y-4 relative overflow-hidden group"
+                  className="group relative rounded-3xl border border-slate-200/90 dark:border-[#7F1625]/30 bg-gradient-to-b from-white via-white to-slate-50/60 dark:from-[#000000] dark:via-[#090204] dark:to-[#020001] p-5 shadow-xs hover:shadow-xl hover:shadow-[#7F1625]/10 hover:border-[#7F1625]/60 dark:hover:border-[#7F1625]/80 transition-all duration-300 flex flex-col justify-between overflow-hidden"
                 >
-                  {/* Subtle top accent line */}
-                  <div className={`absolute top-0 inset-x-0 h-1.5 ${stats.remainingBalance > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                  {/* Top Ambient Glow & Accent Indicator */}
+                  <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-transparent via-[#7F1625] to-transparent opacity-80" />
+                  <div
+                    className={`absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl pointer-events-none transition-opacity ${
+                      hasDebt ? 'bg-[#7F1625]/15' : 'bg-emerald-500/10'
+                    }`}
+                  />
 
-                  {/* Header: Avatar, Name, Code, Payment System */}
-                  <div className="flex items-start justify-between gap-3 pt-1">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-black text-lg border border-[#7F1625]/20 shrink-0">
-                        {c.name.trim().charAt(0)}
+                  <div className="space-y-4">
+                    {/* Header: Avatar, Name, Code, Status & Payment Badge */}
+                    <div className="flex items-start justify-between gap-3 pt-1">
+                      <div className="flex items-start gap-3.5 min-w-0">
+                        {/* Luxury Gradient Monogram Avatar */}
+                        <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#7F1625] via-[#630f1b] to-[#2b040a] text-white flex items-center justify-center font-black text-xl shadow-md shadow-[#7F1625]/25 border border-[#ff8ba0]/20 shrink-0 ring-2 ring-white dark:ring-slate-900">
+                          {c.name.trim().charAt(0)}
+                        </div>
+
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDossier(c.id)}
+                            className="font-black text-slate-900 dark:text-slate-100 text-[14.5px] leading-snug truncate block group-hover:text-[#7F1625] dark:group-hover:text-[#ff8ba0] transition-colors cursor-pointer text-right w-full"
+                            title={c.name}
+                          >
+                            {c.name}
+                          </button>
+
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-slate-200/60 dark:border-slate-700">
+                              {c.code || 'CUST'}
+                            </span>
+
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                                c.payment_terms === 'installments'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
+                              }`}
+                            >
+                              <span>{c.payment_terms === 'installments' ? '📑' : '💵'}</span>
+                              <span>
+                                {c.payment_terms === 'installments'
+                                  ? isAr
+                                    ? 'دفعات وأقساط'
+                                    : 'Installments'
+                                  : isAr
+                                  ? 'كاش فوري'
+                                  : 'Cash'}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block truncate group-hover:text-[#7F1625] transition-colors">
-                          {c.name}
-                        </span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono text-[11px] text-slate-400 font-bold">{c.code || '—'}</span>
-                          <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold border ${
-                            c.payment_terms === 'installments'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
-                          }`}>
-                            {c.payment_terms === 'installments' ? (isAr ? '📑 دفعات وأقساط' : 'Installments') : (isAr ? '💵 كاش فوري' : 'Cash')}
+
+                      {/* Financial State Micro-Pill */}
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0 border ${
+                          hasDebt
+                            ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-[#7F1625]/20 dark:text-[#ff8ba0] dark:border-[#7F1625]/40'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                        }`}
+                      >
+                        {hasDebt ? (isAr ? 'مديونية' : 'Debt') : (isAr ? 'خالص' : 'Settled')}
+                      </span>
+                    </div>
+
+                    {/* Contact Identity Bar */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-100 dark:border-slate-800/70 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
+                      {c.contact_person && (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0] shrink-0" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-[11.5px]">
+                            {c.contact_person}
                           </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-2 pt-0.5 text-[11px] font-mono">
+                        {c.phone ? (
+                          <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                            <span className="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center text-[10px]">
+                              📞
+                            </span>
+                            <span className="font-bold">{c.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[10px]">{isAr ? 'بدون هاتف' : 'No Phone'}</span>
+                        )}
+
+                        <span className="text-[10px] text-slate-400 font-sans">
+                          {c.tax_id ? `${isAr ? 'سجل:' : 'Tax:'} ${c.tax_id}` : (isAr ? 'عميل معتمد' : 'Verified')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Elevated 4-Bento Metrics Box */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {/* Metric 1: Jobs */}
+                      <div className="p-3 bg-white dark:bg-[#120406] rounded-2xl border border-slate-200/70 dark:border-[#7F1625]/25 shadow-2xs">
+                        <div className="flex items-center justify-between text-slate-400 text-[10.5px]">
+                          <span>{isAr ? 'أوامر القص والتشغيل' : 'Cut Jobs'}</span>
+                          <Scissors className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-1">
+                          <strong className="text-slate-900 dark:text-slate-100 font-mono text-base font-black">
+                            {stats.totalJobs}
+                          </strong>
+                          <span className="text-[10px] text-slate-400 font-medium">{isAr ? 'أمر' : 'jobs'}</span>
+                        </div>
+                      </div>
+
+                      {/* Metric 2: Custody Fabric */}
+                      <div className="p-3 bg-white dark:bg-[#120406] rounded-2xl border border-slate-200/70 dark:border-sky-900/30 shadow-2xs">
+                        <div className="flex items-center justify-between text-slate-400 text-[10.5px]">
+                          <span>{isAr ? 'أمانات القماش بالعهدة' : 'Custody Fabric'}</span>
+                          <Boxes className="w-3.5 h-3.5 text-sky-500" />
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-1">
+                          <strong className="text-sky-600 dark:text-sky-400 font-mono text-base font-black">
+                            {stats.custodyMeters.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </strong>
+                          <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">{isAr ? 'م' : 'm'}</span>
+                        </div>
+                      </div>
+
+                      {/* Metric 3: Total Invoiced */}
+                      <div className="p-3 bg-white dark:bg-[#120406] rounded-2xl border border-slate-200/70 dark:border-[#7F1625]/25 shadow-2xs">
+                        <div className="flex items-center justify-between text-slate-400 text-[10.5px]">
+                          <span>{isAr ? 'إجمالي المفوتر' : 'Invoiced'}</span>
+                          <Receipt className="w-3.5 h-3.5 text-amber-500" />
+                        </div>
+                        <div className="mt-1">
+                          <strong className="text-slate-900 dark:text-slate-100 font-mono text-xs font-bold block truncate">
+                            {stats.totalInvoiced.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Metric 4: Outstanding Balance */}
+                      <div className={`p-3 rounded-2xl border shadow-2xs ${
+                        hasDebt
+                          ? 'bg-rose-50/40 dark:bg-[#7F1625]/15 border-rose-200/80 dark:border-[#7F1625]/40'
+                          : 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-800/40'
+                      }`}>
+                        <div className="flex items-center justify-between text-slate-400 text-[10.5px]">
+                          <span>{isAr ? 'المتبقي المستحق' : 'Due Balance'}</span>
+                          {hasDebt ? (
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-[#ff8ba0]" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <strong className={`font-mono text-xs font-black block truncate ${
+                            hasDebt ? 'text-rose-600 dark:text-[#ff8ba0]' : 'text-emerald-600 dark:text-emerald-400'
+                          }`}>
+                            {stats.remainingBalance.toLocaleString()} <span className="text-[10px] font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+                          </strong>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Contact Chips */}
-                  <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400 pt-1">
-                    {c.contact_person && (
-                      <div className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{c.contact_person}</span>
+                    {/* Payment Fulfilment Progress Bar */}
+                    <div className="space-y-1 bg-slate-50/80 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between text-[10.5px] font-mono">
+                        <span className="text-slate-500 dark:text-slate-400 font-sans">{isAr ? 'نسبة سداد الحساب:' : 'Payment Fulfilled:'}</span>
+                        <span className={`font-black ${paymentPercent === 100 ? 'text-emerald-600' : 'text-[#7F1625] dark:text-[#ff8ba0]'}`}>
+                          {paymentPercent}%
+                        </span>
                       </div>
-                    )}
-                    {c.phone && (
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <span className="text-slate-400 text-[11px]">📞</span>
-                        <span>{c.phone}</span>
+                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            paymentPercent === 100
+                              ? 'bg-emerald-500'
+                              : 'bg-gradient-to-r from-amber-500 to-[#7F1625]'
+                          }`}
+                          style={{ width: `${paymentPercent}%` }}
+                        />
                       </div>
-                    )}
-                  </div>
-
-                  {/* 4 Micro-Stats Box */}
-                  <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">{isAr ? 'أوامر القص والتشغيل' : 'Cut Jobs'}</span>
-                      <strong className="text-slate-900 dark:text-slate-100 font-mono text-sm block mt-0.5">
-                        {stats.totalJobs} {isAr ? 'أوامر' : 'jobs'}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">{isAr ? 'أمانات القماش بالعهدة' : 'Custody Fabric'}</span>
-                      <strong className="text-sky-600 dark:text-sky-400 font-mono text-sm block mt-0.5">
-                        {stats.custodyMeters.toFixed(1)} م
-                      </strong>
-                    </div>
-
-                    <div className="pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                      <span className="text-[10px] text-slate-400 block">{isAr ? 'إجمالي المفوتر' : 'Invoiced'}</span>
-                      <strong className="text-slate-900 dark:text-slate-100 font-mono text-xs block mt-0.5">
-                        {stats.totalInvoiced.toLocaleString()} ج.م
-                      </strong>
-                    </div>
-
-                    <div className="pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                      <span className="text-[10px] text-slate-400 block">{isAr ? 'المتبقي المستحق' : 'Balance'}</span>
-                      <strong className={`font-mono text-xs block mt-0.5 ${stats.remainingBalance > 0 ? 'text-rose-600 font-black' : 'text-emerald-600'}`}>
-                        {stats.remainingBalance.toLocaleString()} ج.م
-                      </strong>
                     </div>
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-850 mt-2 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => handleOpenDossier(c.id)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 text-xs font-bold transition-all cursor-pointer"
+                      className="flex-1 inline-flex items-center justify-between py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-[#7F1625] to-[#9e1c2f] hover:from-[#6b121e] hover:to-[#7F1625] text-white text-xs font-black shadow-sm shadow-[#7F1625]/25 transition-all cursor-pointer group/btn"
                     >
-                      <UserCheck className="w-3.5 h-3.5" />
-                      <span>{isAr ? 'بروفايل العميل وكشف الحساب' : 'Client Dossier'}</span>
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-rose-200" />
+                        <span>{isAr ? 'بروفايل العميل وكشف الحساب' : 'Client Profile'}</span>
+                      </div>
+                      <ChevronLeft className="w-4 h-4 rtl:rotate-0 ltr:rotate-180 text-rose-300 group-hover/btn:-translate-x-1 transition-transform" />
                     </button>
                   </div>
                 </div>

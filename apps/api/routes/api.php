@@ -275,6 +275,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'show']);
         Route::put('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'update'])->middleware('role:production_manager,company_owner');
         Route::post('/production-orders/{id}/approve', [\App\Http\Controllers\Api\ProductionOrderController::class, 'approve'])->middleware('role:production_manager');
+        Route::post('/production-orders/{id}/complete', [\App\Http\Controllers\Api\ProductionOrderController::class, 'complete']);
         Route::post('/production-orders/{id}/cancel', [\App\Http\Controllers\Api\ProductionOrderController::class, 'cancel'])->middleware('role:production_manager,company_owner');
         Route::get('/production-orders/{id}/metrics', [\App\Http\Controllers\Api\ProductionOrderController::class, 'metrics']);
 

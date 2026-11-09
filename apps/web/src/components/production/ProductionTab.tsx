@@ -43,6 +43,7 @@ export interface ProductionTabProps {
   onSelectBundleForQc: (bundle: CuttingBundle, order?: ProductionOrder) => void;
   onApproveProdOrder: (orderId: string) => Promise<void>;
   onCuttingOrderArchived?: (updatedCut: CuttingOrder) => void;
+  onProductionOrderUpdated?: (updatedOrder: ProductionOrder) => void;
   onNavigateToTab?: (tab: string) => void;
 }
 
@@ -61,6 +62,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   onSelectBundleForQc,
   onApproveProdOrder,
   onCuttingOrderArchived,
+  onProductionOrderUpdated,
   onNavigateToTab,
 }) => {
   // Navigation Sub-Tabs
@@ -199,6 +201,61 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
     }
   };
 
+  // Helper: determine if production order is complete
+  const isProdOrderCompleted = (order: ProductionOrder): boolean => {
+    if (order.status === 'completed') return true;
+    const cutQty = Number((order as any).total_cut_quantity ?? order.cut_quantity) || 0;
+    const compQty = Number((order as any).total_completed_quantity ?? order.completed_quantity ?? (order as any).qc_passed_quantity) || 0;
+
+    if (cutQty > 0 && compQty >= cutQty) {
+      const orderCuts = cuttingOrders.filter((c) => c.production_order_id === order.id);
+      if (
+        orderCuts.length > 0 &&
+        orderCuts.every(
+          (c) =>
+            c.status === 'cut_completed' ||
+            (c.status as any) === 'completed' ||
+            isCuttingOrderArchived(c)
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleCompleteProdOrder = async (order: ProductionOrder) => {
+    const confirmMsg = isAr
+      ? `هل تريد تأكيد واعتماد إتمام أمر الإنتاج [${order.order_number}] بالكامل؟`
+      : `Mark production order [${order.order_number}] as completed?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const cutQty = Number(
+      (order as any).total_cut_quantity ??
+      order.cut_quantity ??
+      (order as any).total_planned_quantity ??
+      180
+    );
+
+    const updated: ProductionOrder = {
+      ...order,
+      status: 'completed' as const,
+      completed_quantity: cutQty,
+      total_completed_quantity: cutQty,
+      actual_completion_date: new Date().toISOString().split('T')[0],
+    };
+
+    try {
+      await api.production.completeProductionOrder(order.id);
+    } catch (e) {
+      console.warn('API error completing order:', e);
+    }
+
+    if (onProductionOrderUpdated) {
+      onProductionOrderUpdated(updated);
+    }
+  };
+
   // KPI Calculations
   const stats = useMemo(() => {
     const totalOrders = productionOrders.length;
@@ -240,9 +297,16 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   // Filtered Production Orders
   const filteredOrders = useMemo(() => {
     return productionOrders.filter((order) => {
+      const isComplete = isProdOrderCompleted(order);
       if (orderStatusFilter !== 'all') {
-        if (orderStatusFilter === 'in_progress' && order.status !== 'in_progress' && order.status !== 'sewing' && order.status !== 'cutting') return false;
-        if (orderStatusFilter !== 'in_progress' && order.status !== orderStatusFilter) return false;
+        if (orderStatusFilter === 'completed') {
+          if (!isComplete) return false;
+        } else if (orderStatusFilter === 'in_progress') {
+          if (isComplete) return false;
+          if (order.status !== 'in_progress' && order.status !== 'sewing' && order.status !== 'cutting') return false;
+        } else if (orderStatusFilter !== 'in_progress' && order.status !== orderStatusFilter) {
+          return false;
+        }
       }
       if (orderSearch) {
         const q = orderSearch.toLowerCase();
@@ -253,7 +317,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
       }
       return true;
     });
-  }, [productionOrders, orderStatusFilter, orderSearch]);
+  }, [productionOrders, orderStatusFilter, orderSearch, cuttingOrders, cuttingBundles]);
 
   const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / orderPerPage));
   const paginatedOrders = filteredOrders.slice((orderPage - 1) * orderPerPage, orderPage * orderPerPage);
@@ -634,15 +698,18 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                       .filter((c) => c.production_order_id === order.id)
                       .reduce((sum, c) => sum + (Number(c.total_cut_pieces) || 0), 0);
                     const cutQty = Math.max(cutQtyFromOrder, cutQtyFromCuts);
-                    const finishedQty = Number(
-                      (order as any).total_completed_quantity ??
-                      order.completed_quantity ??
-                      order.qc_passed_quantity ??
-                      0
-                    );
+                    const isOrderComplete = isProdOrderCompleted(order);
+                    const finishedQty = isOrderComplete
+                      ? Math.max(Number((order as any).total_completed_quantity ?? order.completed_quantity ?? 0), cutQty)
+                      : Number(
+                          (order as any).total_completed_quantity ??
+                          order.completed_quantity ??
+                          order.qc_passed_quantity ??
+                          0
+                        );
                     const safeTarget = targetQty > 0 ? targetQty : 1;
-                    const cutPct = targetQty > 0 ? Math.min(100, Math.round((cutQty / safeTarget) * 100)) : 0;
-                    const finishPct = targetQty > 0 ? Math.min(100, Math.round((finishedQty / safeTarget) * 100)) : 0;
+                    const cutPct = isOrderComplete ? 100 : (targetQty > 0 ? Math.min(100, Math.round((cutQty / safeTarget) * 100)) : 0);
+                    const finishPct = isOrderComplete ? 100 : (targetQty > 0 ? Math.min(100, Math.round((finishedQty / safeTarget) * 100)) : 0);
 
                     const rawDue = order.target_delivery_date || order.due_date || (order as any).delivery_date;
                     const cleanDue = rawDue ? String(rawDue).split('T')[0].split(' ')[0] : '—';
@@ -668,7 +735,9 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                         <td className="py-3 px-4 min-w-[130px]">
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[10px] font-mono">
-                              <span className="text-slate-400">{finishPct}%</span>
+                              <span className={isOrderComplete ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}>
+                                {finishPct}% {isOrderComplete && (isAr ? '(مكتمل)' : '(Done)')}
+                              </span>
                               <span className="text-slate-400">{isAr ? 'المقصوص:' : 'Cut:'} {cutPct}%</span>
                             </div>
                             <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden flex">
@@ -708,7 +777,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                         <td className="py-3 px-4">
                           <Badge
                             variant={
-                              order.status === 'completed'
+                              isOrderComplete
                                 ? 'success'
                                 : order.status === 'in_progress' || order.status === 'sewing'
                                 ? 'info'
@@ -716,10 +785,10 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                                 ? 'purple'
                                 : 'neutral'
                             }
-                            dot={order.status === 'in_progress' || order.status === 'approved'}
+                            dot={!isOrderComplete && (order.status === 'in_progress' || order.status === 'approved')}
                           >
-                            {order.status === 'completed'
-                              ? isAr ? 'مكتمل' : 'Completed'
+                            {isOrderComplete
+                              ? isAr ? 'مكتمل ومؤرشف' : 'Completed'
                               : order.status === 'in_progress' || order.status === 'sewing'
                               ? isAr ? 'قيد التشغيل' : 'In Progress'
                               : order.status === 'approved'
@@ -739,6 +808,31 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                                 className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer shadow-2xs"
                               >
                                 <CheckCircle2 className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {!isOrderComplete && (
+                              <button
+                                type="button"
+                                title={isAr ? 'إنهاء واعتماد اكتمال أمر الإنتاج بالكامل' : 'Mark Production Order Completed'}
+                                onClick={() => handleCompleteProdOrder(order)}
+                                className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {isOrderComplete && (
+                              <button
+                                type="button"
+                                title={isAr ? 'عرض ملف القصة المؤرشفة' : 'View Archived Cut Dossier'}
+                                onClick={() => {
+                                  const cut = cuttingOrders.find((c) => c.production_order_id === order.id);
+                                  if (cut) handleOpenDossier(cut);
+                                }}
+                                className="p-1.5 rounded-lg text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <FileText className="w-4 h-4" />
                               </button>
                             )}
 

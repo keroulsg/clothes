@@ -352,4 +352,34 @@ class ProductionOrderController extends Controller
             ], 422);
         }
     }
+
+    public function complete(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $order->status = 'completed';
+        $order->actual_completion_date = now()->toDateString();
+        if ($order->total_cut_quantity > 0 && $order->total_completed_quantity < $order->total_cut_quantity) {
+            $order->total_completed_quantity = $order->total_cut_quantity;
+        }
+        $order->save();
+
+        \App\Models\AuditLog::create([
+            'tenant_id' => $tenantId,
+            'user_id' => $request->user()?->id,
+            'action' => 'production_order_completed',
+            'auditable_type' => ProductionOrder::class,
+            'auditable_id' => $order->id,
+            'old_values' => ['status' => $order->getOriginal('status')],
+            'new_values' => ['status' => 'completed'],
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إنهاء واعتماد اكتمال أمر الإنتاج بنجاح.',
+            'data' => $order->fresh(['garmentModel']),
+        ]);
+    }
 }

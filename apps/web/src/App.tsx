@@ -2258,7 +2258,27 @@ export function App() {
                           : b
                       )
                     );
+                    if (updatedCut.production_order_id) {
+                      setProductionOrders((prev) =>
+                        prev.map((p) =>
+                          p.id === updatedCut.production_order_id
+                            ? {
+                                ...p,
+                                status: 'completed',
+                                completed_quantity: Number(p.total_cut_quantity || p.cut_quantity || p.total_planned_quantity || p.planned_quantity || 180),
+                                total_completed_quantity: Number(p.total_cut_quantity || p.cut_quantity || p.total_planned_quantity || p.planned_quantity || 180),
+                                actual_completion_date: new Date().toISOString().split('T')[0],
+                              }
+                            : p
+                        )
+                      );
+                    }
                   }
+                }}
+                onProductionOrderUpdated={(updatedOrder) => {
+                  setProductionOrders((prev) =>
+                    prev.map((p) => (p.id === updatedOrder.id ? { ...p, ...updatedOrder } : p))
+                  );
                 }}
                 onNavigateToTab={(tab) => handleTabChange(tab)}
               />

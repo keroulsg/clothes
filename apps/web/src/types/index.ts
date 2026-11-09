@@ -47,10 +47,14 @@ export interface ProductionOrder {
   category: string;
   target_quantity: number;
   planned_quantity?: number;
+  total_planned_quantity?: number;
   cut_quantity: number;
+  total_cut_quantity?: number;
   sewn_quantity?: number;
   qc_passed_quantity?: number;
   completed_quantity?: number;
+  total_completed_quantity?: number;
+  actual_completion_date?: string;
   scrapped_quantity?: number;
   rework_quantity?: number;
   waste_percentage?: number;

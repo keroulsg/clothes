@@ -237,6 +237,27 @@ class CuttingOrderController extends Controller
                 'completion_date' => now()->toDateString(),
             ]);
 
+        // تحديث حالة أمر الإنتاج المرتبط إذا كانت كافة أوامر القص الخاصة به مكتملة
+        if ($order->production_order_id) {
+            $prodOrder = \App\Models\ProductionOrder::where('tenant_id', $tenantId)->find($order->production_order_id);
+            if ($prodOrder) {
+                $hasActiveCuts = \App\Models\CuttingOrder::where('tenant_id', $tenantId)
+                    ->where('production_order_id', $prodOrder->id)
+                    ->where('id', '!=', $order->id)
+                    ->whereNotIn('status', ['cut_completed', 'completed', 'cancelled'])
+                    ->exists();
+
+                if (!$hasActiveCuts) {
+                    $prodOrder->status = 'completed';
+                    $prodOrder->actual_completion_date = now()->toDateString();
+                    if ($prodOrder->total_cut_quantity > 0 && $prodOrder->total_completed_quantity < $prodOrder->total_cut_quantity) {
+                        $prodOrder->total_completed_quantity = $prodOrder->total_cut_quantity;
+                    }
+                    $prodOrder->save();
+                }
+            }
+        }
+
         // توثيق سجل التدقيق
         \App\Models\AuditLog::create([
             'tenant_id' => $tenantId,

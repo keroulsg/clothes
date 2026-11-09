@@ -877,6 +877,12 @@ class ApiClient {
       });
     },
 
+    completeProductionOrder: async (id: string): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/production-orders/${id}/complete`, {
+        method: 'POST',
+      });
+    },
+
     updateProductionOrder: async (id: string, payload: any): Promise<{ success: boolean; message: string; data: any }> => {
       return this.request<{ success: boolean; message: string; data: any }>(`/production-orders/${id}`, {
         method: 'PUT',

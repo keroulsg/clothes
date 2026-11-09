@@ -24,7 +24,6 @@ import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
 import { Badge } from './components/ui/Badge';
 import { Button } from './components/ui/Button';
-import { PageHeader } from './components/ui/PageHeader';
 import { Modal } from './components/ui/Modal';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { Pagination } from './components/ui/Pagination';
@@ -1596,94 +1595,127 @@ export function App() {
           {/* TAB 2: GARMENT MODELS CATALOG & BOM */}
           {activeTab === 'models' && (
             <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-              <PageHeader
-                title={isAr ? 'كتالوج موديلات الملابس وبطاقات التشغيل (BOM)' : 'Garment Models & BOM Catalog'}
-                subtitle={isAr
-                  ? 'إدارة الموديلات والمقاسات والألوان وتوليد الباركود الدولي والـ SKU وقوائم المواد الأولية.'
-                  : 'Manage apparel styles, size/color matrix, international barcodes, and bill of materials.'}
-                icon={<Layers className="w-5 h-5" />}
-                breadcrumbs={[
-                  { label: isAr ? 'الرئيسية' : 'Home' },
-                  { label: isAr ? 'الموديلات والتصميم' : 'Style Catalog' },
-                ]}
-                actions={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => setIsCreateModelOpen(true)}
-                      icon={<Plus className="w-3.5 h-3.5" />}
-                    >
-                      {isAr ? 'موديل جديد + مصفوفة المتغيرات' : 'New Model + Matrix'}
-                    </Button>
-                  </div>
-                }
-              />
+              {/* 1. Ultra-Modern Hero Header & Control Center */}
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+                {/* Ambient Glows */}
+                <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
 
-              {/* Catalog Module Sub-Tabs Navigation */}
-              <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                  <div className="space-y-2.5 max-w-2xl">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        {isAr ? 'كتالوج الموديلات وشجرة الـ BOM' : 'Garment Models & BOM Studio'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                        <Tag className="w-3.5 h-3.5 text-amber-400" />
+                        {isAr ? 'توليد الباركود والـ SKU المتري الدولي' : 'Auto Barcode & SKU'}
+                      </span>
+                    </div>
+
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+                      <Layers className="w-7 h-7 text-[#E05265] shrink-0" />
+                      <span>{isAr ? 'كتالوج موديلات الملابس وشجرة BOM' : 'Garment Models & BOM Catalog'}</span>
+                    </h1>
+
+                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                      {isAr
+                        ? 'إدارة الموديلات والمقاسات والألوان، توليد الباركود الدولي والـ SKU، وهندسة قوائم المواد الأولية (BOM) لربط القص بالتكاليف الفعلية.'
+                        : 'Manage apparel styles, size/color matrix, international barcodes, and bill of materials.'}
+                    </p>
+                  </div>
+
+                  {/* Quick Action Buttons */}
+                  <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateModelOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{isAr ? 'موديل جديد + مصفوفة المتغيرات' : 'New Model + Matrix'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogSubTab('products')}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+                    >
+                      <ShoppingBag className="w-4 h-4 text-emerald-400" />
+                      <span>{isAr ? 'منتجات المتجر' : 'Store Products'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Luxury Segmented Pill Tab Bar */}
+              <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1.5 overflow-x-auto shadow-inner text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setCatalogSubTab('models')}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                     catalogSubTab === 'models'
-                      ? 'bg-blue-600 text-white shadow-xs border border-transparent'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                      ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                   }`}
                 >
-                  <Layers className="w-4 h-4 shrink-0" />
+                  <Layers className="w-4 h-4" />
                   <span>{isAr ? 'موديلات الملابس وبطاقات الـ BOM' : 'Garment Models & BOM'}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${catalogSubTab === 'models' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+                    {models.length}
+                  </span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setCatalogSubTab('products')}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                     catalogSubTab === 'products'
-                      ? 'bg-emerald-600 text-white shadow-xs border border-transparent'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                      ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                   }`}
                 >
-                  <ShoppingBag className="w-4 h-4 shrink-0" />
+                  <ShoppingBag className="w-4 h-4" />
                   <span>{isAr ? 'المنتجات التجارية (كتالوج المتجر)' : 'Storefront Products'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setCatalogSubTab('categories')}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                     catalogSubTab === 'categories'
-                      ? 'bg-amber-600 text-white shadow-xs border border-transparent'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                      ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                   }`}
                 >
-                  <FolderTree className="w-4 h-4 shrink-0" />
+                  <FolderTree className="w-4 h-4" />
                   <span>{isAr ? 'تصنيفات الملابس' : 'Clothing Categories'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setCatalogSubTab('sizes')}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                     catalogSubTab === 'sizes'
-                      ? 'bg-sky-600 text-white shadow-xs border border-transparent'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                      ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                   }`}
                 >
-                  <Tag className="w-4 h-4 shrink-0" />
+                  <Tag className="w-4 h-4" />
                   <span>{isAr ? 'دليل المقاسات المعتمدة' : 'Approved Sizes Matrix'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setCatalogSubTab('colors')}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                     catalogSubTab === 'colors'
-                      ? 'bg-indigo-600 text-white shadow-xs border border-transparent'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+                      ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                   }`}
                 >
-                  <Palette className="w-4 h-4 shrink-0" />
+                  <Palette className="w-4 h-4" />
                   <span>{isAr ? 'دليل الألوان المعتمدة' : 'Approved Colors & Swatches'}</span>
                 </button>
               </div>
@@ -2353,27 +2385,41 @@ export function App() {
           {/* Settings Tab */}
           {activeTab === 'settings' && (
             <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-              <PageHeader
-                title={lang === 'ar' ? 'إعدادات الشركة والمصنع والمستأجر' : 'Tenant & Factory Configuration'}
-                subtitle={lang === 'ar'
-                  ? 'إدارة الهوية الصناعية، فروع ومخازن التشغيل، بيانات الاشتراك، وصلاحيات الوصول.'
-                  : 'Manage factory profile, operational branches, subscription tier, and system access.'}
-                icon={<Building2 className="w-5 h-5" />}
-                breadcrumbs={[
-                  { label: lang === 'ar' ? 'الرئيسية' : 'Home' },
-                  { label: lang === 'ar' ? 'إعدادات النظام' : 'Settings' },
-                ]}
-                actions={
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => setIsBranchModalOpen(true)}
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                  >
-                    {lang === 'ar' ? 'إضافة فرع / مخزن جديد' : 'New Branch / Node'}
-                  </Button>
-                }
-              />
+              {/* ─── Ultra-Modern Hero Header & Control Center (#7F1625 & #000000) ─── */}
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] border border-[#7F1625]/40 p-6 md:p-8 text-white shadow-2xl">
+                <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7F1625]/30 border border-[#7F1625]/50 text-[#ff8ba0] text-xs font-bold tracking-wide backdrop-blur-md">
+                      <span className="w-2 h-2 rounded-full bg-[#ff4d6d] animate-pulse" />
+                      {lang === 'ar' ? 'إعدادات الشركة والمصنع • العزل السحابي والصلاحيات' : 'Factory & Tenant Settings • Active'}
+                    </div>
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-[#7F1625] flex items-center justify-center shadow-lg shadow-[#7F1625]/50">
+                        <Building2 className="w-5 h-5 text-white" />
+                      </div>
+                      {lang === 'ar' ? 'إعدادات الشركة والمصنع والفروع' : 'Company & Factory Settings'}
+                    </h1>
+                    <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+                      {lang === 'ar'
+                        ? 'إدارة الهوية الصناعية، فروع ومخازن التشغيل، بيانات الاشتراك، وصلاحيات الوصول ومصفوفة الأدوار.'
+                        : 'Manage factory profile, operational branches, subscription tier, and RBAC security boundaries.'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      onClick={() => setIsBranchModalOpen(true)}
+                      className="px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all flex items-center gap-2 active:scale-95 border border-[#ff4d6d]/30"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{lang === 'ar' ? 'إضافة فرع / مخزن جديد' : 'New Branch / Node'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 1. Tenant & Factory Profile */}
                 <Card className="lg:col-span-1 p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">

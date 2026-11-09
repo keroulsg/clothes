@@ -5,7 +5,6 @@ import {
   Calculator,
   ArrowRightLeft,
   Search,
-  QrCode,
   ShieldCheck,
   Boxes,
   ShoppingCart,
@@ -20,7 +19,6 @@ import {
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/PageHeader';
 import { ActionsMenu } from '../ui/ActionsMenu';
 import { Pagination } from '../ui/Pagination';
 import { EmptyState } from '../ui/EmptyState';
@@ -171,103 +169,97 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
 
   return (
     <div className="space-y-6 min-w-0 max-w-full overflow-hidden">
-      {/* Modern Enterprise Page Header */}
-      <PageHeader
-        title={isAr ? 'مركز قيادة العمليات الصناعية والمخزنية' : 'Industrial Operations Command'}
-        subtitle={isAr
-          ? 'متابعة لحظية لخطوط الإنتاج، أوامر صالة القص، أرصدة خامات الأقمشة، ومطابقة الجودة.'
-          : 'Real-time monitoring of cutting runs, bundle tracking, fabric inventory, and quality yields.'}
-        icon={<Scissors className="w-5 h-5" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'لوحة العمليات' : 'Operations Dashboard' },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onOpenCreateProdOrder}
-              icon={<Scissors className="w-4 h-4" />}
-            >
-              {isAr ? '+ أمر قص جديد' : '+ New Cutting Order'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onOpenFabricCalc}
-              icon={<Calculator className="w-4 h-4" />}
-            >
-              {isAr ? 'حاسبة الـ GSM' : 'Fabric GSM'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(`#/store/${storeSlug}`, '_blank')}
-              icon={<Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
-              className="border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 shadow-xs"
-              title={isAr ? `فتح موقع ومتجر ${tenantName} الإلكتروني المستقل` : `Open ${tenantName} Online Store`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {isAr ? 'موقع ومتجر المصنع' : 'Factory Website'}
-            </Button>
-            <ActionsMenu
-              label={isAr ? 'إجراءات سريعة ▾' : 'Quick Actions ▾'}
-              variant="outline"
-              size="sm"
-              items={[
-                {
-                  id: 'tenant-store',
-                  label: isAr ? 'زيارة موقع ومتجر المصنع' : 'Visit Factory Website & Store',
-                  icon: <Globe className="w-4 h-4 text-emerald-500" />,
-                  onClick: () => window.open(`#/store/${storeSlug}`, '_blank'),
-                },
-                {
-                  id: 'create-model',
-                  label: isAr ? 'تعريف موديل جديد + متغيرات' : 'New Garment Model',
-                  icon: <Plus className="w-4 h-4" />,
-                  onClick: onOpenCreateModel,
-                },
-                {
-                  id: 'stock-movement',
-                  label: isAr ? 'تسجيل حركة مخزنية سريعة' : 'Record Stock Movement',
-                  icon: <ArrowRightLeft className="w-4 h-4" />,
-                  onClick: () => onSelectStockItem(inventoryItems[0] || ({} as any)),
-                },
-                {
-                  id: 'cmt-custody',
-                  divider: true,
-                  label: isAr ? 'استلام أمانات عميل (CMT)' : 'Receive CMT Customer Goods',
-                  icon: <Boxes className="w-4 h-4" />,
-                  onClick: onOpenReceiveCustomerMat,
-                },
-                {
-                  id: 'purchase-order',
-                  label: isAr ? 'أمر شراء وتوريد خامات' : 'Create Purchase Order (PO)',
-                  icon: <ShoppingCart className="w-4 h-4" />,
-                  onClick: onOpenCreatePo,
-                },
-                {
-                  id: 'bundle-tracker',
-                  label: isAr ? 'تتبع بطاقات الحزم الذكية' : 'Track QR Bundles',
-                  icon: <QrCode className="w-4 h-4" />,
-                  onClick: () => onTabChange('cutting'),
-                },
-              ]}
-            />
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'مركز قيادة العمليات الصناعية والمخزنية' : 'Industrial Operations Command'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                {isAr ? 'ربط سحابي فوري 100%' : 'Cloud Connected'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <Scissors className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'لوحة قيادة المصنع والتشغيل الذكي' : 'Factory Command & Operations Hub'}</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'متابعة لحظية لخطوط الإنتاج، أوامر صالة القص والفرش، أرصدة خامات الأقمشة والمخازن، ومطابقة الجودة والربحية الصناعية.'
+                : 'Real-time monitoring of cutting runs, bundle tracking, fabric inventory, and quality yields.'}
+            </p>
           </div>
-        }
-      />
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={onOpenCreateProdOrder}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+            >
+              <Scissors className="w-4 h-4" />
+              <span>{isAr ? '+ أمر قص وإنتاج جديد' : '+ New Cutting Order'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenCreateModel}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              <span>{isAr ? 'موديل جديد + BOM' : 'New Model'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenFabricCalc}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <Calculator className="w-4 h-4 text-sky-400" />
+              <span>{isAr ? 'حاسبة الـ GSM' : 'Fabric GSM'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenReceiveCustomerMat}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <ArrowRightLeft className="w-4 h-4 text-purple-400" />
+              <span>{isAr ? 'أمانات أقمشة العملاء' : 'Customer Material'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.open(`#/store/${storeSlug}`, '_blank')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-500/30 backdrop-blur-md transition-all cursor-pointer"
+              title={isAr ? `فتح موقع ومتجر ${tenantName} الإلكتروني المستقل` : `Open Online Store`}
+            >
+              <Globe className="w-4 h-4 text-emerald-400" />
+              <span>{isAr ? 'متجر وموقع المصنع' : 'Storefront'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Real Traceable KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Production Orders */}
-        <Card hover className="p-4.5 border-t-[3px] border-t-[var(--brand-primary)]">
+        <Card hover className="p-4.5 border-slate-200/80 dark:border-[#2d080e] bg-white dark:bg-[#0a0204]/90 shadow-2xs hover:shadow-xl hover:border-[#7F1625]/40 transition-all rounded-2xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
               {isAr ? 'أوامر التشغيل الجارية' : 'Active Production Runs'}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-[var(--brand-subtle)] text-[var(--brand-primary)] dark:text-[#F87171] flex items-center justify-center border border-[var(--brand-border)]">
+            <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center border border-[#7F1625]/20 font-bold">
               <Scissors className="w-4 h-4" />
             </div>
           </div>
@@ -288,7 +280,7 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
           </div>
           <div className="mt-2 w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-primary-light)] rounded-full transition-all duration-500"
+              className="h-full bg-gradient-to-r from-[#7F1625] to-[#ff8ba0] rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, overallSewnPercent)}%` }}
             />
           </div>

@@ -715,52 +715,74 @@ export const WaslatWorshTab: React.FC<WaslatWorshTabProps> = ({ isAr = true, onN
         </div>
       )}
 
-      {/* 1. Module Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <Boxes className="w-6 h-6 text-primary" />
-            <span>{isAr ? 'منصة وصلة ورش (Waslat Worsh B2B)' : 'Waslat Worsh Industrial Marketplace'}</span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            {isAr
-              ? 'سوق تبادل الطاقة الإنتاجية بين مصانع الملابس، مشاغل الخياطة، وصالات القص المعتمدة'
-              : 'Integrated B2B capacity exchange connecting garment brands with specialized workshops'}
-          </p>
-        </div>
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadData} disabled={isLoading}>
-            <RefreshCw className={`w-3.5 h-3.5 me-1.5 ${isLoading ? 'animate-spin' : ''}`} />
-            {isAr ? 'تحديث' : 'Refresh'}
-          </Button>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'بورصة وصلة ورش الصناعية B2B' : 'Waslat Worsh B2B Hub'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                {isAr ? 'عقود موثقة وضمان جودة الحياكة والقص' : 'Certified Workshops Network'}
+              </span>
+            </div>
 
-          {!isViewingHistoryOnly && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setIsCreateWorkshopModalOpen(true)}>
-                <Building2 className="w-3.5 h-3.5 me-1.5 text-indigo-500" />
-                {isAr ? 'تسجيل مشغل / ورشة' : 'Register Workshop'}
-              </Button>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <Building2 className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'منصة وصلة ورش (Waslat Worsh B2B)' : 'Waslat Worsh Industrial Marketplace'}</span>
+            </h1>
 
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setEditingDraftRfq(null);
-                  setIsCreateCuttingModalOpen(true);
-                }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
-              >
-                <Scissors className="w-3.5 h-3.5 me-1.5" />
-                {isAr ? 'طرح طلب قص فني' : 'New Cutting RFQ'}
-              </Button>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'سوق تبادل الطاقة الإنتاجية الفائضة بين مصانع الملابس، مشاغل الخياطة، وصالات القص المعتمدة، مع طرح طلبات التسعير (RFQ) وترسية العروض.'
+                : 'Integrated B2B capacity exchange connecting garment brands with specialized workshops.'}
+            </p>
+          </div>
 
-              <Button variant="outline" size="sm" onClick={() => setIsCreateRfqModalOpen(true)}>
-                <Plus className="w-3.5 h-3.5 me-1.5" />
-                {isAr ? 'طلب تشغيل عام' : 'Generic RFQ'}
-              </Button>
-            </>
-          )}
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            {!isViewingHistoryOnly && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingDraftRfq(null);
+                    setIsCreateCuttingModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                >
+                  <Scissors className="w-4 h-4" />
+                  <span>{isAr ? 'طرح طلب قص فني' : 'New Cutting RFQ'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCreateWorkshopModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+                >
+                  <Building2 className="w-4 h-4 text-sky-400" />
+                  <span>{isAr ? 'تسجيل مشغل / ورشة' : 'Register Workshop'}</span>
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-amber-400' : ''}`} />
+              <span>{isAr ? 'تحديث' : 'Refresh'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -923,33 +945,33 @@ export const WaslatWorshTab: React.FC<WaslatWorshTabProps> = ({ isAr = true, onN
 
       {/* 2. Sub-Tabs & Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs font-bold w-fit">
+        <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1.5 overflow-x-auto shadow-inner text-xs font-bold w-fit">
           <button
             onClick={() => setActiveSubTab('my_rfqs')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'my_rfqs'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            <FolderKanban className="w-3.5 h-3.5 text-indigo-500" />
+            <FolderKanban className="w-3.5 h-3.5" />
             <span>{isAr ? 'طلباتي للقص' : 'My Requests'}</span>
-            <span className="text-[10px] bg-indigo-500/10 text-indigo-500 px-1.5 py-0.2 rounded-full font-mono">
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'my_rfqs' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
               {myRfqs.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('rfqs')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'rfqs'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
             <Briefcase className="w-3.5 h-3.5" />
             <span>{isAr ? 'الطلبات المتاحة' : 'Available RFQs'}</span>
-            <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.2 rounded-full font-mono">
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'rfqs' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
               {rfqs.length}
             </span>
           </button>
@@ -961,15 +983,15 @@ export const WaslatWorshTab: React.FC<WaslatWorshTabProps> = ({ isAr = true, onN
                   setActiveSubTab('my_bids');
                   loadMyBids();
                 }}
-                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                   activeSubTab === 'my_bids'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                 }`}
               >
-                <DollarSign className="w-3.5 h-3.5 text-amber-500" />
+                <DollarSign className="w-3.5 h-3.5" />
                 <span>{isAr ? 'عروضي المقدمة' : 'My Bids'}</span>
-                <span className="text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.2 rounded-full font-mono">
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'my_bids' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
                   {myBids.length}
                 </span>
               </button>
@@ -979,15 +1001,15 @@ export const WaslatWorshTab: React.FC<WaslatWorshTabProps> = ({ isAr = true, onN
                   setActiveSubTab('my_operations');
                   loadMyOperations();
                 }}
-                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                   activeSubTab === 'my_operations'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
                 }`}
               >
-                <Truck className="w-3.5 h-3.5 text-emerald-500" />
+                <Truck className="w-3.5 h-3.5" />
                 <span>{isAr ? 'العمليات المسندة' : 'My Operations'}</span>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.2 rounded-full font-mono">
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'my_operations' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
                   {myOperations.length}
                 </span>
               </button>
@@ -996,15 +1018,15 @@ export const WaslatWorshTab: React.FC<WaslatWorshTabProps> = ({ isAr = true, onN
 
           <button
             onClick={() => setActiveSubTab('workshops')}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'workshops'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+            <Building2 className="w-3.5 h-3.5" />
             <span>{isAr ? 'دليل الورش' : 'Workshops'}</span>
-            <span className="text-[10px] bg-indigo-500/10 text-indigo-500 px-1.5 py-0.2 rounded-full font-mono">
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'workshops' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
               {workshops.length}
             </span>
           </button>

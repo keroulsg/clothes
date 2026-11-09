@@ -168,35 +168,56 @@ export const TenantSubscriptionView: React.FC<TenantSubscriptionViewProps> = ({ 
 
   return (
     <div className="space-y-6">
-      {/* 1. Header & Title Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-primary" />
-            <span>{isAr ? 'إدارة الاشتراك والعدادات السحابية' : 'Subscription & Cloud Usage Meters'}</span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            {isAr
-              ? 'متابعة استهلاك موارد المصنع، حماية صالة القص والإنتاج، وترقية الباقات التجارية'
-              : 'Monitor factory resource consumption, production quotas, and plan tiers'}
-          </p>
-        </div>
+      {/* ─── Ultra-Modern Hero Header & Control Center (#7F1625 & #000000) ─── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] border border-[#7F1625]/40 p-6 md:p-8 text-white shadow-2xl">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadData} disabled={isLoading}>
-            <RefreshCw className={`w-3.5 h-3.5 me-1.5 ${isLoading ? 'animate-spin' : ''}`} />
-            {isAr ? 'تحديث العدادات' : 'Refresh'}
-          </Button>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7F1625]/30 border border-[#7F1625]/50 text-[#ff8ba0] text-xs font-bold tracking-wide backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-[#ff4d6d] animate-pulse" />
+              {isAr ? 'إدارة الاشتراك والعدادات السحابية • سعة المصنع' : 'Subscription & Quota Management • Active'}
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#7F1625] flex items-center justify-center shadow-lg shadow-[#7F1625]/50">
+                <CreditCard className="w-5 h-5 text-white" />
+              </div>
+              {isAr ? 'الاشتراك وسعة المصنع والعدادات' : 'Subscription & Quotas'}
+            </h1>
+            <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+              {isAr
+                ? 'متابعة استهلاك موارد المصنع، حماية صالة القص والإنتاج، وتعديل الباقات وسعات المستخدمين والعمال.'
+                : 'Monitor factory resource consumption, production quotas, cutting lay limits, and plan tiers.'}
+            </p>
+          </div>
 
-          <Button variant="outline" size="sm" onClick={() => setIsOverrideModalOpen(true)}>
-            <ShieldCheck className="w-3.5 h-3.5 me-1.5 text-amber-500" />
-            {isAr ? 'استثناء تشغيلي طارئ' : 'Emergency Override'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setIsUpgradeModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all flex items-center gap-2 active:scale-95 border border-[#ff4d6d]/30"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>{isAr ? 'ترقية الباقة' : 'Upgrade Plan'}</span>
+            </button>
 
-          <Button variant="primary" size="sm" onClick={() => setIsUpgradeModalOpen(true)}>
-            <ArrowUpRight className="w-3.5 h-3.5 me-1.5" />
-            {isAr ? 'ترقية الباقة' : 'Upgrade Plan'}
-          </Button>
+            <button
+              onClick={() => setIsOverrideModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span>{isAr ? 'استثناء تشغيلي طارئ' : 'Emergency Override'}</span>
+            </button>
+
+            <button
+              onClick={loadData}
+              disabled={isLoading}
+              title={isAr ? 'تحديث العدادات' : 'Refresh'}
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all backdrop-blur-md"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#ff8ba0]' : ''}`} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -230,45 +251,45 @@ export const TenantSubscriptionView: React.FC<TenantSubscriptionViewProps> = ({ 
         </div>
       )}
 
-      {/* 3. Current Subscription Status Card */}
+      {/* 3. Current Subscription Status Card Bento-Style */}
       {report && (
-        <Card className="p-5 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white border-0 shadow-lg">
+        <div className="p-6 rounded-3xl bg-gradient-to-br from-[#0a0204] via-[#150508] to-[#000000] text-white border border-[#7F1625]/40 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-2 h-full bg-[#7F1625]" />
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="flex items-center gap-2">
-                <Badge variant="brand" className="bg-primary/90 text-white text-xs">
+                <span className="px-3 py-1 rounded-xl text-xs font-black bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30">
                   {isAr ? report.subscription.plan_name_ar : report.subscription.plan_name_en}
-                </Badge>
-                <span className="text-xs uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                </span>
+                <span className="text-xs uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
                   {report.subscription.status}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-300 font-semibold">
                   • {report.subscription.billing_cycle === 'annual' ? (isAr ? 'اشتراك سنوي' : 'Annual') : (isAr ? 'اشتراك شهري' : 'Monthly')}
                 </span>
               </div>
 
-              <div className="text-2xl sm:text-3xl font-black font-sans tracking-tight">
-                {Number(report.subscription.monthly_price).toLocaleString()} <span className="text-sm font-normal text-slate-300">{isAr ? 'ج.م / شهرياً' : 'EGP / mo'}</span>
+              <div className="text-2xl sm:text-3xl font-black font-sans tracking-tight text-white">
+                {Number(report.subscription.monthly_price).toLocaleString()} <span className="text-sm font-normal text-slate-400">{isAr ? 'ج.م / شهرياً' : 'EGP / mo'}</span>
               </div>
 
-              <div className="text-xs text-slate-400 flex items-center gap-4">
+              <div className="text-xs text-slate-400 flex items-center gap-4 font-mono">
                 <span>{isAr ? 'بداية الدورة:' : 'Period Start:'} {report.subscription.current_period_start}</span>
                 <span>{isAr ? 'تاريخ التجديد:' : 'Renews on:'} {report.subscription.current_period_end}</span>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="primary"
+              <button
                 onClick={() => setIsUpgradeModalOpen(true)}
-                className="bg-white text-slate-900 hover:bg-slate-100 font-bold"
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 text-xs font-black shadow-md transition-all flex items-center gap-1.5"
               >
-                <ArrowUpRight className="w-4 h-4 me-1.5" />
+                <ArrowUpRight className="w-4 h-4 text-[#7F1625]" />
                 {isAr ? 'ترقية سعة المصنع' : 'Upgrade Capacity'}
-              </Button>
+              </button>
             </div>
           </div>
-        </Card>
+        </div>
       )}
 
       {/* 4. Production Immunity Policy Note */}

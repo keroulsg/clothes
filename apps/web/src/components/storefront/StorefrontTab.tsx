@@ -24,7 +24,6 @@ import {
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/PageHeader';
 import { Modal } from '../ui/Modal';
 import { api } from '../../api/client';
 import type { Language, StoreOrder, ProductVariant, TenantStoreSetting, StorefrontThemeId } from '../../types';
@@ -368,32 +367,32 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <PageHeader
-        title={isAr ? 'المتجر الإلكتروني وهوية المصنع' : 'Multi-Tenant Digital Storefront & Themes'}
-        subtitle={
-          isAr
-            ? 'إدارة المتجر الإلكتروني، اختيار الثيمات والعلامة التجارية، إدارة طلبات الشحن، ومراجعة تحويلات InstaPay.'
-            : 'Manage branded factory storefront, 4 theme families, COD & InstaPay payment review, and inventory synchronization.'
-        }
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'المتجر الإلكتروني' : 'Storefront' },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open('#/store/track', '_blank')}
-              className="flex items-center gap-1.5"
-            >
-              <Truck className="w-4 h-4 text-primary" />
-              <span>{isAr ? 'تتبع طلبات العملاء' : 'Track Orders'}</span>
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
+      {/* ─── Ultra-Modern Hero Header & Control Center (#7F1625 & #000000) ─── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] border border-[#7F1625]/40 p-6 md:p-8 text-white shadow-2xl">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7F1625]/30 border border-[#7F1625]/50 text-[#ff8ba0] text-xs font-bold tracking-wide backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-[#ff4d6d] animate-pulse" />
+              {isAr ? 'المتجر الإلكتروني وهوية المصنع • ثيمات واستوديو التصميم' : 'Digital Storefront & Themes • Live'}
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#7F1625] flex items-center justify-center shadow-lg shadow-[#7F1625]/50">
+                <Store className="w-5 h-5 text-white" />
+              </div>
+              {isAr ? 'المتجر الإلكتروني ومحرر ثيمات المصنع' : 'Storefront & Theme Studio'}
+            </h1>
+            <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+              {isAr
+                ? 'إدارة المتجر الإلكتروني، 4 عائلات ثيمات احترافية، استوديو التخصيص، شحن وتتبع الطلبات، ومراجعة تحويلات InstaPay.'
+                : 'Manage branded factory storefront, 4 theme families, COD & InstaPay payment audit, and real-time inventory sync.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
               onClick={() => {
                 const targetSlug =
                   (storeSettings as any)?.slug ||
@@ -403,177 +402,166 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                   'msnaa-aldlta-llmlabs-algahz-429';
                 window.open(`#/store/${targetSlug}`, '_blank');
               }}
-              className="flex items-center gap-1.5 shadow-sm"
+              className="px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all flex items-center gap-2 active:scale-95 border border-[#ff4d6d]/30"
             >
               <ExternalLink className="w-4 h-4" />
               <span>{isAr ? 'فتح المتجر الإلكتروني للعملاء' : 'Open Public Store'}</span>
-            </Button>
-          </div>
-        }
-      />
+            </button>
 
-      {/* KPI Cards */}
+            <button
+              onClick={() => window.open('#/store/track', '_blank')}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
+            >
+              <Truck className="w-4 h-4 text-[#ff8ba0]" />
+              <span>{isAr ? 'تتبع طلبات العملاء' : 'Track Orders'}</span>
+            </button>
+
+            <button
+              onClick={loadData}
+              disabled={isLoading}
+              title={isAr ? 'تحديث البيانات' : 'Refresh'}
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all backdrop-blur-md"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#ff8ba0]' : ''}`} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Dynamic KPI Cards Bento-Grid (#7F1625 & #000000) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-[#7F1625] rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'إجمالي طلبات المتجر' : 'Total Store Orders'}
               </p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{orders.length}</p>
-              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-1 tracking-tight">{orders.length}</p>
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-1 inline-block">
                 {orders.filter((o) => o.payment_status === 'pending_review').length} {isAr ? 'تحويل InstaPay بانتظار الاعتماد' : 'InstaPay pending review'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <div className="w-11 h-11 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/20 flex items-center justify-center text-[#7F1625] dark:text-[#ff8ba0] group-hover:scale-110 transition-transform">
               <Store className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500 rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'مبيعات المتجر المحققة' : 'Verified Online Sales'}
               </p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 tracking-tight">
                 {orders
                   .filter((o) => o.status !== 'cancelled')
                   .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
                   .toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
-              <span className="text-xs text-emerald-600 dark:text-emerald-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1 inline-block">
                 {orders.filter((o) => o.status === 'delivered').length} {isAr ? 'طلب مكتمل ومسلّم' : 'delivered orders'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
               <ShoppingBag className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-[#7F1625] rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'الثيم المعتمد حالياً' : 'Active Store Theme'}
               </p>
-              <p className="text-lg font-bold text-slate-900 dark:text-white mt-1 flex items-center gap-1.5">
+              <p className="text-lg font-black text-[#7F1625] dark:text-[#ff8ba0] mt-1 flex items-center gap-1.5 tracking-tight">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeThemeMeta.color }} />
                 {isAr ? activeThemeMeta.name_ar.split('(')[0] : activeThemeMeta.name_en}
               </p>
-              <span className="text-xs text-primary font-medium">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1 inline-block">
                 {isAr ? '4 عائلات تصميم متاحة' : '4 theme families ready'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
+            <div className="w-11 h-11 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/20 flex items-center justify-center text-[#7F1625] dark:text-[#ff8ba0] group-hover:scale-110 transition-transform">
               <Palette className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-500 rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'حالة المتجر وبوابات الدفع' : 'Store & Payment Gateways'}
               </p>
-              <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
+              <p className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 {storeSettings.is_store_enabled ? (isAr ? 'المتجر نشط' : 'Store Active') : (isAr ? 'مغلق' : 'Disabled')}
               </p>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1 inline-block">
                 COD {storeSettings.allow_cod ? '✓' : '✗'} | InstaPay {storeSettings.allow_instapay ? '✓' : '✗'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
               <CreditCard className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
       </div>
 
-      {/* Sub-tabs Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveSubTab('orders')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-              activeSubTab === 'orders'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Truck className="w-4 h-4" />
-            {isAr ? 'إدارة الطلبات والشحن' : 'Store Orders'}
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('design_studio')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-              activeSubTab === 'design_studio'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 hover:bg-amber-100'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>{isAr ? 'استوديو التصميم ومحرر المتجر' : 'Design Studio & Themes'}</span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-slate-950 text-amber-300">BATCH 9</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('themes')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-              activeSubTab === 'themes'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Palette className="w-4 h-4" />
-            {isAr ? 'ثيمات وهوية المتجر (4 ثيمات)' : 'Theme Architecture (4 Themes)'}
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('preview')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-              activeSubTab === 'preview'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Eye className="w-4 h-4" />
-            {isAr ? 'معاينة متجر المصنع المباشر' : 'Live Storefront Preview'}
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('pending_payments')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-              activeSubTab === 'pending_payments'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            {isAr ? 'مراجعة تحويلات إنستاباي' : 'Audit InstaPay Payments'}
-            {pendingPayments.length > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-amber-500 text-white font-bold">
-                {pendingPayments.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('settings')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-              activeSubTab === 'settings'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            {isAr ? 'إعدادات InstaPay والدفع' : 'InstaPay & Settings'}
-          </button>
+      {/* Luxury Segmented Pill Tab Bar (#7F1625 & #000000) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e]">
+        <div className="flex flex-wrap items-center gap-1">
+          {[
+            { id: 'orders', icon: Truck, labelAr: 'إدارة الطلبات والشحن', labelEn: 'Store Orders', count: orders.length },
+            { id: 'design_studio', icon: Sparkles, labelAr: 'استوديو التصميم ومحرر المتجر', labelEn: 'Design Studio & Themes', count: null, badge: 'STUDIO' },
+            { id: 'themes', icon: Palette, labelAr: 'ثيمات وهوية المتجر (4 ثيمات)', labelEn: 'Theme Architecture (4 Themes)', count: 4 },
+            { id: 'preview', icon: Eye, labelAr: 'معاينة متجر المصنع المباشر', labelEn: 'Live Storefront Preview', count: null },
+            { id: 'pending_payments', icon: ShieldCheck, labelAr: 'مراجعة تحويلات إنستاباي', labelEn: 'Audit InstaPay Payments', count: pendingPayments.length, highlight: pendingPayments.length },
+            { id: 'settings', icon: Settings, labelAr: 'إعدادات InstaPay والدفع', labelEn: 'InstaPay & Settings', count: null },
+          ].map((tab) => {
+            const isActive = activeSubTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  isActive
+                    ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/5'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                {tab.badge && (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#ff4d6d]/20 text-[#ff4d6d]">
+                    {tab.badge}
+                  </span>
+                )}
+                {tab.highlight && tab.highlight > 0 ? (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-[#ff4d6d] text-white animate-pulse">
+                    {tab.highlight}
+                  </span>
+                ) : tab.count !== null ? (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
 
         <Button size="sm" variant="outline" onClick={loadData} disabled={isLoading}>

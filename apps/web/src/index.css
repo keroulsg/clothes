@@ -78,38 +78,38 @@
   color-scheme: light;
 }
 
-/* ───── Dark Theme Tokens: Restrained Burgundy Card Surfaces on Neutral Charcoal ───── */
+/* ───── Dark Theme Tokens: Pure Obsidian #000000 & Royal Burgundy #7F1625 ───── */
 .dark, [data-theme="dark"], [data-coreui-theme="dark"] {
   color-scheme: dark;
-  --brand-primary: #9E2A3B;
-  --brand-primary-hover: #B8354A;
-  --brand-primary-light: #C44358;
-  --brand-gradient: linear-gradient(135deg, #9E2A3B 0%, #7F1625 100%);
-  --brand-subtle: rgba(158, 42, 59, 0.20);
-  --brand-border: rgba(158, 42, 59, 0.35);
+  --brand-primary: #7F1625;
+  --brand-primary-hover: #961b2c;
+  --brand-primary-light: #b3263b;
+  --brand-gradient: linear-gradient(135deg, #7F1625 0%, #180508 100%);
+  --brand-subtle: rgba(127, 22, 37, 0.20);
+  --brand-border: rgba(127, 22, 37, 0.40);
 
-  /* Charcoal App Canvas & Header/Sidebar */
-  --bg-app: #0C0E12;
-  --bg-sidebar: #10131A;
-  --bg-header: #10131A;
+  /* Obsidian #000000 App Canvas & Header/Sidebar */
+  --bg-app: #000000;
+  --bg-sidebar: #050102;
+  --bg-header: #050102;
 
-  /* Restrained Dark Burgundy Card Surfaces (derived from #7F1625) */
-  --bg-surface: #180D11;
-  --bg-card: #180D11;
-  --bg-elevated: #221218;
-  --bg-muted: #1E1216;
-  --bg-hover: #26141B;
+  /* Restrained Dark Burgundy Card Surfaces on Obsidian */
+  --bg-surface: #0a0204;
+  --bg-card: #0a0204;
+  --bg-elevated: #120406;
+  --bg-muted: #160508;
+  --bg-hover: #1e070c;
 
-  /* Burgundy-Charcoal Borders */
-  --border-subtle: #2C1820;
-  --border-strong: #452430;
-  --border-color: #381E27;
+  /* Burgundy-Obsidian Borders */
+  --border-subtle: #2d080e;
+  --border-strong: #4a0d16;
+  --border-color: #380a11;
 
   /* Typography - Crisp White & Light Gray (WCAG AAA compliant) */
   --text-primary: #F8FAFC;
   --text-secondary: #E2E8F0;
   --text-muted: #94A3B8;
-  --text-inverse: #090D16;
+  --text-inverse: #000000;
 
   --color-success: #34D399;
   --color-warning: #FBBF24;

@@ -44,7 +44,6 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { PageHeader } from '../ui/PageHeader';
 import { Pagination } from '../ui/Pagination';
 import { api } from '../../api/client';
 import type {
@@ -1277,29 +1276,38 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
-      {/* 1. Page Header */}
-      <PageHeader
-        title={isAr ? 'إدارة القوى العاملة والحضور ومسيرات الرواتب' : 'Workforce, Attendance & Payroll'}
-        subtitle={
-          isAr
-            ? 'سجل العمال الموحد، ساعات الحضور والورديات، أجور القطعة، السلف والخصومات، ومحرك الرواتب المعتمد.'
-            : 'Unified worker registry, time & attendance, piece rates, advances, defect adjustments, and certified payroll engine.'
-        }
-        icon={<Users className="w-5 h-5 text-indigo-500" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'القوى العاملة والرواتب' : 'Workforce & Payroll' },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
+      {/* ─── Ultra-Modern Hero Header & Control Center (#7F1625 & #000000) ─── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] border border-[#7F1625]/40 p-6 md:p-8 text-white shadow-2xl">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7F1625]/30 border border-[#7F1625]/50 text-[#ff8ba0] text-xs font-bold tracking-wide backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-[#ff4d6d] animate-pulse" />
+              {isAr ? 'إدارة القوى العاملة ومسيرات الرواتب • حضور وإنتاجية' : 'Workforce & Piece-Rate Engine • Active'}
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#7F1625] flex items-center justify-center shadow-lg shadow-[#7F1625]/50">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              {isAr ? 'القوى العاملة، أجور القطعة ومسيرات الرواتب' : 'Workforce & Payroll Engine'}
+            </h1>
+            <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+              {isAr
+                ? 'سجل العمال الموحد، ساعات الحضور والورديات، أجور القطعة، السلف والخصومات، ومحرك الرواتب المعتمد.'
+                : 'Unified worker registry, time & attendance, piece rates, advances, defect adjustments, and certified payroll engine.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => {
                 resetEmployeeForm();
                 setIsEmployeeModalOpen(true);
               }}
-              title={isAr ? 'تسجيل عامل أو موظف جديد بالمصنع' : 'Register New Worker'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-xs transition-all cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all flex items-center gap-2 active:scale-95 border border-[#ff4d6d]/30"
             >
               <UserPlus className="w-4 h-4" />
               <span>{isAr ? '+ عامل جديد' : '+ New Worker'}</span>
@@ -1308,30 +1316,27 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
             <button
               type="button"
               onClick={() => openNewAttendanceModalForWorker()}
-              title={isAr ? 'تسجيل حركة حضور وانصراف' : 'Record Attendance'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-xs transition-all cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
             >
-              <Clock className="w-4 h-4" />
+              <Clock className="w-4 h-4 text-emerald-400" />
               <span>{isAr ? '+ تسجيل حضور' : '+ Attendance'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsAdjustmentModalOpen(true)}
-              title={isAr ? 'طلب سلفة أو مكافأة أو بدل مالي' : 'New Advance or Allowance'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-xs transition-all cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
             >
-              <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-4 h-4 text-amber-400" />
               <span>{isAr ? '+ سلفة / مكافأة' : '+ Adjustment'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsPayrollModalOpen(true)}
-              title={isAr ? 'توليد واحتساب مسير رواتب دوري جديد' : 'Generate Payroll'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-900 bg-amber-400 hover:bg-amber-300 shadow-xs transition-all cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
             >
-              <Calculator className="w-4 h-4" />
+              <Calculator className="w-4 h-4 text-[#ff8ba0]" />
               <span>{isAr ? '+ مسير رواتب' : '+ Payroll'}</span>
             </button>
 
@@ -1339,13 +1344,13 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
               type="button"
               onClick={loadHrData}
               title={isAr ? 'تحديث البيانات' : 'Refresh'}
-              className="inline-flex items-center justify-center w-8.5 h-8.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all backdrop-blur-md"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-500' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#ff8ba0]' : ''}`} />
             </button>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {/* Global Alerts */}
       {errorMsg && (
@@ -2485,8 +2490,8 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
         );
       })() : (
         <div className="space-y-5">
-      {/* 2. Top 4 Interactive Modern KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* 2. Top 4 Bento-Grid KPI Cards (#7F1625 & #000000) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Employees */}
         <div
           onClick={() => {
@@ -2495,25 +2500,26 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
             setEmployeePayTypeFilter('all');
             setEmployeeSearch('');
           }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+          className={`p-5 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden group ${
             activeSubTab === 'employees'
-              ? 'bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/30 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-400/30'
-              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-indigo-300'
+              ? 'bg-gradient-to-br from-[#7F1625]/15 via-[#180508]/40 to-black border-[#7F1625] ring-2 ring-[#7F1625]/30'
+              : 'bg-white dark:bg-[#0a0204]/90 border-slate-200/80 dark:border-[#2d080e] hover:border-[#7F1625]/40'
           }`}
         >
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-[#7F1625] rounded-r" />
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
               {isAr ? 'إجمالي القوى العاملة والعمال' : 'Total Workforce'}
             </span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs border border-indigo-200/60 dark:border-indigo-800/40">
+            <div className="w-11 h-11 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1">
+          <div className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 tracking-tight">
             {totalEmployeesCount}{' '}
             <span className="text-xs font-normal text-slate-400">{isAr ? 'عامل وموظف' : 'workers'}</span>
           </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-[#2d080e] text-[11px]">
             <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <span>{activeEmployeesCount} {isAr ? 'على رأس العمل' : 'Active'}</span>
@@ -2531,25 +2537,26 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
           onClick={() => {
             setActiveSubTab('attendance');
           }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+          className={`p-5 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden group ${
             activeSubTab === 'attendance'
-              ? 'bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 border-emerald-400 dark:border-emerald-700 ring-2 ring-emerald-400/30'
-              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-emerald-300'
+              ? 'bg-gradient-to-br from-[#7F1625]/15 via-[#180508]/40 to-black border-[#7F1625] ring-2 ring-[#7F1625]/30'
+              : 'bg-white dark:bg-[#0a0204]/90 border-slate-200/80 dark:border-[#2d080e] hover:border-[#7F1625]/40'
           }`}
         >
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500 rounded-r" />
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
               {isAr ? 'حضور اليوم والتشغيل' : "Today's Attendance"}
             </span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-2xs border border-emerald-200/60 dark:border-emerald-800/40">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Clock className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+          <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 tracking-tight">
             {presentCount}{' '}
             <span className="text-xs font-normal text-slate-400">/ {totalEmployeesCount || 0}</span>
           </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-[#2d080e] text-[11px]">
             <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
               <span>{attendanceRate}% {isAr ? 'نسبة الحضور' : 'Rate'}</span>
               {lateCount > 0 && <span className="text-amber-600 font-normal">({lateCount} {isAr ? 'متأخر' : 'late'})</span>}
@@ -2565,25 +2572,26 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
           onClick={() => {
             setActiveSubTab('adjustments');
           }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+          className={`p-5 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden group ${
             activeSubTab === 'adjustments'
-              ? 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 border-amber-400 dark:border-amber-700 ring-2 ring-amber-400/30'
-              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-amber-300'
+              ? 'bg-gradient-to-br from-[#7F1625]/15 via-[#180508]/40 to-black border-[#7F1625] ring-2 ring-[#7F1625]/30'
+              : 'bg-white dark:bg-[#0a0204]/90 border-slate-200/80 dark:border-[#2d080e] hover:border-[#7F1625]/40'
           }`}
         >
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500 rounded-r" />
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
               {isAr ? 'السلف والتسويات المعلقة' : 'Pending Adjustments'}
             </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs border border-amber-200/60 dark:border-amber-800/40">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center group-hover:scale-110 transition-transform">
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1">
+          <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1 tracking-tight">
             {pendingAdjustmentsCount}{' '}
             <span className="text-xs font-normal text-slate-400">{isAr ? 'طلب معلق' : 'pending'}</span>
           </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-[#2d080e] text-[11px]">
             <span className="text-amber-700 dark:text-amber-400 font-bold truncate">
               {totalPendingAdvancesAmount > 0
                 ? `${totalPendingAdvancesAmount.toLocaleString()} ${isAr ? 'ج.م سلف معلقة' : 'EGP pending'}`
@@ -2600,27 +2608,28 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
           onClick={() => {
             setActiveSubTab('defects');
           }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
+          className={`p-5 rounded-2xl border transition-all cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden group ${
             activeSubTab === 'defects'
-              ? 'bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/40 dark:to-red-950/30 border-rose-400 dark:border-rose-700 ring-2 ring-rose-400/30'
-              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-rose-300'
+              ? 'bg-gradient-to-br from-[#7F1625]/15 via-[#180508]/40 to-black border-[#7F1625] ring-2 ring-[#7F1625]/30'
+              : 'bg-white dark:bg-[#0a0204]/90 border-slate-200/80 dark:border-[#2d080e] hover:border-[#7F1625]/40'
           }`}
         >
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-[#7F1625] rounded-r" />
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
               {isAr ? 'بلاغات عيوب الجودة المعلقة' : 'Quality Defect Penalties'}
             </span>
-            <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shadow-2xs border border-rose-200/60 dark:border-rose-800/40">
+            <div className="w-11 h-11 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center group-hover:scale-110 transition-transform">
               <ShieldAlert className="w-5 h-5" />
             </div>
           </div>
-          <div className={`text-2xl font-black font-mono mt-1 ${pendingDefectCount > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+          <div className={`text-2xl font-black font-mono mt-1 tracking-tight ${pendingDefectCount > 0 ? 'text-[#ff4d6d]' : 'text-slate-900 dark:text-white'}`}>
             {pendingDefectCount}{' '}
             <span className="text-xs font-normal text-slate-400">{isAr ? 'بلاغ معلق' : 'pending'}</span>
           </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
-            <span className={`font-bold flex items-center gap-1 ${pendingDefectCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${pendingDefectCount > 0 ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`} />
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-[#2d080e] text-[11px]">
+            <span className={`font-bold flex items-center gap-1 ${pendingDefectCount > 0 ? 'text-[#ff4d6d]' : 'text-emerald-600'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${pendingDefectCount > 0 ? 'bg-[#ff4d6d] animate-ping' : 'bg-emerald-500'}`} />
               <span>{pendingDefectCount > 0 ? (isAr ? 'تتطلب اعتماداً صريحاً' : 'Action Required') : (isAr ? 'لا توجد بلاغات حرجة' : 'All Clear')}</span>
             </span>
             <span className="text-[10px] text-slate-400 font-medium">
@@ -2630,131 +2639,52 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
         </div>
       </div>
 
-      {/* 3. Sub-Tabs Navigation Bar */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('employees')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'employees'
-              ? 'bg-indigo-600 text-white ring-2 ring-indigo-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>{isAr ? 'سجل العمال والموظفين' : 'Employees'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'employees' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-            {employees.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('attendance')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'attendance'
-              ? 'bg-emerald-600 text-white ring-2 ring-emerald-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>{isAr ? 'الحضور وساعات العمل' : 'Attendance & Time'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'attendance' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-            {attendances.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('worklogs')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'worklogs'
-              ? 'bg-sky-600 text-white ring-2 ring-sky-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Scissors className="w-4 h-4" />
-          <span>{isAr ? 'إنتاجية أجور القطعة' : 'Piece-Work Logs'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'worklogs' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-            {workLogs.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('adjustments')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'adjustments'
-              ? 'bg-amber-600 text-white ring-2 ring-amber-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <DollarSign className="w-4 h-4" />
-          <span>{isAr ? 'السلف والمكافآت والخصومات' : 'Advances & Adjustments'}</span>
-          {pendingAdjustmentsCount > 0 ? (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-bold animate-pulse">
-              {pendingAdjustmentsCount}
-            </span>
-          ) : (
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'adjustments' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-              {adjustments.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('defects')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'defects'
-              ? 'bg-rose-600 text-white ring-2 ring-rose-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4" />
-          <span>{isAr ? 'تسويات عيوب الجودة' : 'Defect Deductions'}</span>
-          {pendingDefectCount > 0 ? (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-bold animate-pulse">
-              {pendingDefectCount}
-            </span>
-          ) : (
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'defects' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-              {defectAdjustments.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('piecerates')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'piecerates'
-              ? 'bg-purple-600 text-white ring-2 ring-purple-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Award className="w-4 h-4" />
-          <span>{isAr ? 'لائحة أسعار العمليات' : 'Piece Rates'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'piecerates' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-            {pieceRates.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('payrolls')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-            activeSubTab === 'payrolls'
-              ? 'bg-teal-600 text-white ring-2 ring-teal-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Calculator className="w-4 h-4" />
-          <span>{isAr ? 'مسيرات الرواتب والمستحقات' : 'Payrolls'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'payrolls' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-            {payrolls.length}
-          </span>
-        </button>
+      {/* 3. Luxury Segmented Pill Tab Bar (#7F1625 & #000000) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e]">
+        <div className="flex flex-wrap items-center gap-1">
+          {[
+            { id: 'employees', icon: Users, labelAr: 'سجل العمال والموظفين', labelEn: 'Employees', count: employees.length },
+            { id: 'attendance', icon: Clock, labelAr: 'الحضور وساعات العمل', labelEn: 'Attendance & Time', count: attendances.length },
+            { id: 'worklogs', icon: Scissors, labelAr: 'إنتاجية أجور القطعة', labelEn: 'Piece-Work Logs', count: workLogs.length },
+            { id: 'adjustments', icon: DollarSign, labelAr: 'السلف والمكافآت والخصومات', labelEn: 'Advances & Adjustments', count: adjustments.length, highlight: pendingAdjustmentsCount },
+            { id: 'defects', icon: ShieldAlert, labelAr: 'تسويات عيوب الجودة', labelEn: 'Defect Deductions', count: defectAdjustments.length, highlight: pendingDefectCount },
+            { id: 'piecerates', icon: Award, labelAr: 'لائحة أسعار العمليات', labelEn: 'Piece Rates', count: pieceRates.length },
+            { id: 'payrolls', icon: Calculator, labelAr: 'مسيرات الرواتب والمستحقات', labelEn: 'Payrolls', count: payrolls.length },
+          ].map((tab) => {
+            const isActive = activeSubTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  isActive
+                    ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/5'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                {tab.highlight && tab.highlight > 0 ? (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-[#ff4d6d] text-white animate-pulse">
+                    {tab.highlight}
+                  </span>
+                ) : (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 4. Subtab 1: Employees Register */}

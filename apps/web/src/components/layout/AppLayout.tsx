@@ -308,7 +308,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   return (
     <div
       dir={dir}
-      className="h-screen max-h-screen w-full max-w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-[var(--brand-primary)] selection:text-white transition-colors duration-200"
+      className="h-screen max-h-screen w-full max-w-full overflow-hidden bg-slate-50 dark:bg-[#000000] text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-[var(--brand-primary)] selection:text-white transition-colors duration-200"
     >
       {/* ───── Top Navbar: Masterpiece Nano-Glass Floating Bar ───── */}
       <header className="h-16 shrink-0 z-40 px-3 sm:px-6 flex items-center justify-between glass-panel border-b border-white/60 dark:border-white/10 max-w-full overflow-hidden">
@@ -605,7 +605,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       <div className="flex-1 flex min-w-0 w-full max-w-full overflow-hidden">
         {/* ───── CoreUI Pro Nano-Glass Sidebar ───── */}
         <aside
-          className={`glass-panel border-e border-white/60 dark:border-white/10 p-2.5 hidden md:flex flex-col justify-between shrink-0 overflow-y-auto transition-all duration-300 ease-out shadow-[4px_0_30px_-5px_rgba(0,0,0,0.04)] ${
+          className={`glass-panel dark:bg-[#070102]/95 border-e border-white/60 dark:border-[#2d080e] p-2.5 hidden md:flex flex-col justify-between shrink-0 overflow-y-auto transition-all duration-300 ease-out shadow-[4px_0_30px_-5px_rgba(0,0,0,0.04)] ${
             sidebarCollapsed ? 'w-[78px]' : 'w-64'
           }`}
         >
@@ -665,7 +665,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                             item.disabled
                               ? 'opacity-30 cursor-not-allowed'
                               : isActive
-                              ? 'bg-white/95 dark:bg-slate-850 text-slate-900 dark:text-white shadow-[0_8px_25px_-4px_rgba(127,22,37,0.25)] border border-[var(--brand-primary)]/40 font-extrabold'
+                              ? 'bg-white/95 dark:bg-[#120406] text-slate-900 dark:text-white shadow-[0_8px_25px_-4px_rgba(127,22,37,0.35)] border border-[#7F1625]/50 font-extrabold'
                               : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/90 dark:hover:bg-slate-800/80 hover:shadow-[0_12px_30px_-5px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_12px_30px_-5px_rgba(0,0,0,0.6)] hover:-translate-y-1 hover:scale-[1.02]'
                           }`}
                         >
@@ -782,7 +782,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         </aside>
 
         {/* ───── Main Content Area ───── */}
-        <main className="flex-1 h-full min-w-0 max-w-full w-full overflow-y-auto overflow-x-hidden p-3.5 sm:p-6 lg:p-8 bg-slate-50/70 dark:bg-slate-950/70">
+        <main className="flex-1 h-full min-w-0 max-w-full w-full overflow-y-auto overflow-x-hidden p-3.5 sm:p-6 lg:p-8 bg-slate-50/70 dark:bg-[#000000]">
           <div className="max-w-7xl mx-auto space-y-6 w-full min-w-0">{children}</div>
         </main>
       </div>

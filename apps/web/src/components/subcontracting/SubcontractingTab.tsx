@@ -254,15 +254,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
   return (
     <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
       {/* 1. Ultra-Modern Hero Header & Control Center */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 shadow-xl border border-indigo-500/20">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
         {/* Glow Effects */}
-        <div className="absolute -right-16 -top-16 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-2xl">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 backdrop-blur-md">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 {isAr ? 'منظومة التشغيل والقص للغير (CMT 2.0)' : 'Subcontracting & CMT Hub'}
               </span>
@@ -273,7 +273,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              <Scissors className="w-7 h-7 text-indigo-400 shrink-0" />
+              <Scissors className="w-7 h-7 text-[#E05265] shrink-0" />
               <span>{isAr ? 'خدمات القص للغير والتصنيع الكامل' : 'Subcontracting & CMT Operations'}</span>
             </h1>
 
@@ -289,7 +289,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             <button
               type="button"
               onClick={onOpenCreateJob}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-black shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>{isAr ? 'أمر قص وتشغيل جديد' : 'New Cut Order'}</span>
@@ -319,10 +319,10 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
       {/* 2. Bento-Grid Elevated KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Jobs */}
-        <Card hover className="p-4 border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-indigo-50/50 via-white to-transparent dark:from-indigo-950/20 dark:via-slate-900 rounded-2xl shadow-2xs">
+        <Card hover className="p-4 border-slate-200/80 dark:border-[#2d080e] bg-gradient-to-br from-[#7F1625]/5 via-white to-transparent dark:from-[#7F1625]/15 dark:via-[#0a0204] rounded-2xl shadow-2xs">
           <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
             <span>{isAr ? 'أوامر التشغيل' : 'Job Orders'}</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold border border-[#7F1625]/20">
               <Layers className="w-4 h-4" />
             </div>
           </div>
@@ -330,7 +330,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             {jobOrders.length}
           </div>
           <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold">{activeJobsCount} {isAr ? 'قيد التنفيذ' : 'in progress'}</span>
+            <span className="text-[#7F1625] dark:text-[#ff8ba0] font-bold">{activeJobsCount} {isAr ? 'قيد التنفيذ' : 'in progress'}</span>
             <span>{completedJobsCount} {isAr ? 'مكتمل' : 'done'}</span>
           </div>
         </Card>
@@ -422,19 +422,19 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
       </div>
 
       {/* 3. Luxury Segmented Pill Tab Bar */}
-      <div className="p-1.5 bg-slate-100 dark:bg-slate-900/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-1 overflow-x-auto shadow-inner text-xs font-bold">
+      <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1 overflow-x-auto shadow-inner text-xs font-bold">
         <button
           type="button"
           onClick={() => setActiveSubTab('jobs')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'jobs'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Layers className="w-4 h-4" />
           <span>{isAr ? 'أوامر التشغيل والقص' : 'Job Orders'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'jobs' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'jobs' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {jobOrders.length}
           </span>
         </button>
@@ -444,13 +444,13 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('receipts')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'receipts'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Boxes className="w-4 h-4" />
           <span>{isAr ? 'أمانات الخامات' : 'Material Custody'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {customerMaterialReceipts.length}
           </span>
         </button>
@@ -460,13 +460,13 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('external_ops')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'external_ops'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Scissors className="w-4 h-4" />
           <span>{isAr ? 'التشغيل الخارجي (الباطن)' : 'External Ops'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'external_ops' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'external_ops' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {externalOperations.length}
           </span>
         </button>
@@ -476,13 +476,13 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('deliveries')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'deliveries'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Truck className="w-4 h-4" />
           <span>{isAr ? 'أذون التسليم والمصالحات' : 'Delivery Notes'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'deliveries' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'deliveries' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {jobDeliveryNotes.length}
           </span>
         </button>
@@ -492,13 +492,13 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('invoices')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'invoices'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Receipt className="w-4 h-4" />
           <span>{isAr ? 'الفواتير والأقساط' : 'Invoices & Tranches'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {jobInvoices.length}
           </span>
         </button>
@@ -508,20 +508,20 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
           onClick={() => setActiveSubTab('customers')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'customers'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Users className="w-4 h-4" />
           <span>{isAr ? 'العملاء وبروفايلاتهم' : 'Clients & Dossiers'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {customers.length}
           </span>
         </button>
       </div>
 
       {/* 4. Enhanced Search & Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs text-xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 bg-white dark:bg-[#0a0204] rounded-2xl border border-slate-200 dark:border-[#2d080e] shadow-2xs text-xs">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative min-w-[260px]">
             <Search className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
@@ -530,7 +530,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               placeholder={isAr ? 'بحث برقم الأمر، العميل، الموديل، الفني، الخامة...' : 'Search order #, client, model, fabric...'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-all`}
+              className={`w-full bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#7F1625] focus:ring-1 focus:ring-[#7F1625]/30 transition-all`}
             />
           </div>
 
@@ -539,7 +539,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               <select
                 value={serviceTypeFilter}
                 onChange={(e) => setServiceTypeFilter(e.target.value as any)}
-                className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#7F1625]"
               >
                 <option value="all">{isAr ? 'كل الخدمات (قص وتصنيع)' : 'All Services'}</option>
                 <option value="contract_cutting">{isAr ? '✂️ قص للغير فقط' : 'Cutting Only'}</option>
@@ -549,7 +549,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#7F1625]"
               >
                 <option value="all">{isAr ? 'كل الحالات' : 'All Statuses'}</option>
                 <option value="draft">{isAr ? 'مسودة' : 'Draft'}</option>
@@ -575,7 +575,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             <button
               type="button"
               onClick={() => setSearchTerm('')}
-              className="text-xs text-indigo-600 hover:underline font-bold"
+              className="text-xs text-[#7F1625] dark:text-[#ff8ba0] hover:underline font-bold"
             >
               {isAr ? 'مسح الفلتر' : 'Clear'}
             </button>
@@ -615,7 +615,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   return (
                     <tr key={job.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       {/* Order Number */}
-                      <td className="py-3 px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                      <td className="py-3 px-4 font-mono font-bold text-[#7F1625] dark:text-[#ff8ba0]">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs">{job.order_number}</span>
                         </div>
@@ -626,10 +626,10 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                         <button
                           type="button"
                           onClick={() => job.customer_id && handleOpenDossier(job.customer_id)}
-                          className="font-bold text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-right cursor-pointer flex items-center gap-1.5 group"
+                          className="font-bold text-slate-900 dark:text-slate-100 hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1.5 group"
                           title={isAr ? 'فتح بروفايل العميل الشامل وكشف الحساب' : 'Open Customer Dossier'}
                         >
-                          <Building className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 shrink-0" />
+                          <Building className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7F1625] shrink-0" />
                           <span className="group-hover:underline">{job.customer_name}</span>
                           <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
@@ -655,7 +655,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       <td className="py-3 px-4">
                         {empName ? (
                           <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200">
-                            <div className="w-5 h-5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] flex items-center justify-center font-bold">
+                            <div className="w-5 h-5 rounded-md bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] text-[10px] flex items-center justify-center font-bold">
                               {empName.trim().charAt(0)}
                             </div>
                             <span className="font-medium truncate max-w-[120px]">{empName}</span>
@@ -672,7 +672,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             <span className="text-slate-500">{isAr ? 'مطلوب:' : 'Target:'} <strong>{targetQty}</strong></span>
                             <span className="text-emerald-600 font-bold">{isAr ? 'مسلم:' : 'Del:'} {deliveredQty} ({delPercent}%)</span>
                           </div>
-                          {/* Dual Progress Bar: Cut (indigo) & Delivered (emerald) */}
+                          {/* Dual Progress Bar: Cut (Wine Red) & Delivered (emerald) */}
                           <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden flex">
                             <div
                               style={{ width: `${delPercent}%` }}
@@ -681,7 +681,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             />
                             <div
                               style={{ width: `${Math.max(0, cutPercent - delPercent)}%` }}
-                              className="bg-indigo-500/70 h-full"
+                              className="bg-[#7F1625]/80 h-full"
                               title={`${isAr ? 'مقصوص قيد التشغيل:' : 'Cut in progress:'} ${cutPercent}%`}
                             />
                           </div>
@@ -699,12 +699,12 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                           job.status === 'completed'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
                             : job.status === 'in_progress'
-                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300'
+                            ? 'bg-[#7F1625]/10 text-[#7F1625] border-[#7F1625]/30 dark:bg-[#7F1625]/25 dark:text-[#ff8ba0]'
                             : job.status === 'confirmed'
                             ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300'
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}>
-                          {job.status === 'in_progress' && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />}
+                          {job.status === 'in_progress' && <span className="w-1.5 h-1.5 rounded-full bg-[#7F1625] animate-pulse" />}
                           {job.status === 'completed' ? (isAr ? 'مكتمل' : 'Completed') : job.status === 'in_progress' ? (isAr ? 'قيد التشغيل' : 'In Progress') : job.status === 'confirmed' ? (isAr ? 'مؤكد' : 'Confirmed') : (isAr ? 'مسودة' : 'Draft')}
                         </span>
                       </td>
@@ -749,7 +749,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             type="button"
                             onClick={() => handlePrintDocument('job', job)}
                             title={isAr ? 'طباعة تذكرة أمر التشغيل والقص' : 'Print Job Ticket'}
-                            className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-colors"
+                            className="p-1.5 rounded-lg text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors"
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
@@ -833,7 +833,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       <button
                         type="button"
                         onClick={() => r.customer_id && handleOpenDossier(r.customer_id)}
-                        className="font-bold hover:text-indigo-600 transition-colors text-right cursor-pointer flex items-center gap-1 group"
+                        className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1 group"
                         title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
                       >
                         <span className="group-hover:underline">{r.customer_name}</span>
@@ -871,7 +871,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             type="button"
                             onClick={() => handleOpenDossier(r.customer_id!)}
                             title={isAr ? 'بروفايل العميل' : 'Customer Dossier'}
-                            className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-colors"
+                            className="p-1.5 rounded-lg text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors"
                           >
                             <UserCheck className="w-3.5 h-3.5" />
                           </button>
@@ -954,7 +954,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       <td className="py-3 px-4 font-sans">
                         {empName ? (
                           <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200">
-                            <UserCheck className="w-3.5 h-3.5 text-indigo-500" />
+                            <UserCheck className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0]" />
                             <span className="font-medium truncate max-w-[100px]">{empName}</span>
                           </div>
                         ) : (
@@ -977,7 +977,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                               type="button"
                               onClick={() => onSelectOpForReceive(op)}
                               title={isAr ? 'استلام وفحص الجودة' : 'Receive & QC'}
-                              className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-colors"
+                              className="p-1.5 rounded-lg text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors"
                             >
                               <Download className="w-3.5 h-3.5" />
                             </button>
@@ -1048,7 +1048,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       <button
                         type="button"
                         onClick={() => del.customer_id && handleOpenDossier(del.customer_id)}
-                        className="font-bold hover:text-indigo-600 transition-colors text-right cursor-pointer flex items-center gap-1 group"
+                        className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1 group"
                         title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
                       >
                         <span className="group-hover:underline">{del.customer_name}</span>
@@ -1139,12 +1139,12 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   const paid = Number(inv.paid_amount || 0);
                   return (
                     <tr key={inv.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                      <td className="py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">{inv.invoice_number}</td>
+                      <td className="py-3 px-4 font-bold text-[#7F1625] dark:text-[#ff8ba0]">{inv.invoice_number}</td>
                       <td className="py-3 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
                         <button
                           type="button"
                           onClick={() => inv.customer_id && handleOpenDossier(inv.customer_id)}
-                          className="font-bold hover:text-indigo-600 transition-colors text-right cursor-pointer flex items-center gap-1 group"
+                          className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1 group"
                           title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
                         >
                           <span className="group-hover:underline">{inv.customer_name}</span>
@@ -1243,11 +1243,11 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   {/* Header: Avatar, Name, Code, Payment System */}
                   <div className="flex items-start justify-between gap-3 pt-1">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-lg border border-indigo-100 dark:border-indigo-900 shrink-0">
+                      <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-black text-lg border border-[#7F1625]/20 shrink-0">
                         {c.name.trim().charAt(0)}
                       </div>
                       <div className="min-w-0">
-                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block truncate group-hover:text-indigo-600 transition-colors">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block truncate group-hover:text-[#7F1625] transition-colors">
                           {c.name}
                         </span>
                         <div className="flex items-center gap-2 mt-0.5">

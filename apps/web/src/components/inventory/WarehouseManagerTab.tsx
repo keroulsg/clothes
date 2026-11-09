@@ -30,7 +30,6 @@ import {
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/PageHeader';
 import { Pagination } from '../ui/Pagination';
 import { Modal } from '../ui/Modal';
 import { api } from '../../api/client';
@@ -529,79 +528,97 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
   };
 
   return (
-    <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-      {/* Page Header */}
-      <PageHeader
-        title={isAr ? 'إدارة المستودعات والتخزين الفيزيائي المنفصل' : 'Warehouses & Segregated Inventory'}
-        subtitle={isAr
-          ? 'فصل تام بين خامات ومستلزمات الإنتاج وبضاعة تامة الصنع، مع تتبع مواضع الرفوف (Rack/Shelf/Bin) وأمانات خامات العملاء.'
-          : 'Segregated raw materials vs finished goods with rack/shelf coordinates and immutable stock ledger.'}
-        icon={<Boxes className="w-5 h-5" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'المخازن والمستودعات' : 'Inventory & Storage' },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            {onRefreshData && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onRefreshData}
-                disabled={isLoading}
-                icon={<RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />}
-                title={isAr ? 'تحديث البيانات' : 'Sync'}
-              >
-                {isAr ? 'تحديث' : 'Sync'}
-              </Button>
-            )}
+    <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden" dir={isAr ? 'rtl' : 'ltr'}>
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
 
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'المستودعات والتخزين الفيزيائي المنفصل' : 'Warehouses & Segregated Stock'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                {isAr ? 'تتبع مواضع الرفوف (Rack/Shelf/Bin)' : 'Rack/Shelf/Bin Tracking'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <Boxes className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'المخازن والأقمشة والتخزين المنفصل' : 'Warehouses & Fabric Inventory'}</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'فصل تام بين خامات ومستلزمات الإنتاج وبضاعة تامة الصنع، مع تتبع مواضع الرفوف (Rack/Shelf/Bin) وأمانات خامات العملاء المعزولة ودفتر الأستاذ.'
+                : 'Segregated raw materials vs finished goods with rack/shelf coordinates and immutable stock ledger.'}
+            </p>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             {subTab === 'raw_materials' && (
-              <Button
-                size="sm"
-                className="bg-amber-600 hover:bg-amber-700 text-white shadow-xs border-transparent font-bold"
+              <button
+                type="button"
                 onClick={() => onOpenCreateItemModal('raw_materials')}
-                icon={<Plus className="w-3.5 h-3.5" />}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
               >
-                {isAr ? '+ إضافة خامة أو مستلزم جديد' : '+ New Raw Material'}
-              </Button>
+                <Plus className="w-4 h-4" />
+                <span>{isAr ? '+ إضافة خامة جديدة' : '+ New Raw Material'}</span>
+              </button>
             )}
 
             {subTab === 'finished_goods' && (
-              <Button
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-transparent font-bold"
+              <button
+                type="button"
                 onClick={() => onOpenCreateItemModal('finished_goods')}
-                icon={<Plus className="w-3.5 h-3.5" />}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
               >
-                {isAr ? '+ إضافة منتج تام للرصيد' : '+ Add Finished Good'}
-              </Button>
+                <Plus className="w-4 h-4" />
+                <span>{isAr ? '+ إضافة منتج تام' : '+ Add Finished Good'}</span>
+              </button>
             )}
 
             {subTab === 'customer_cmt' && (
-              <Button
-                size="sm"
-                className="bg-sky-600 hover:bg-sky-700 text-white shadow-xs border-transparent font-bold"
+              <button
+                type="button"
                 onClick={onOpenReceiveCustomerMatModal}
-                icon={<Plus className="w-3.5 h-3.5" />}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
               >
-                {isAr ? '+ استلام أمانة عميل جديدة' : '+ Receive CMT'}
-              </Button>
+                <Plus className="w-4 h-4" />
+                <span>{isAr ? '+ استلام أمانة عميل' : '+ Receive CMT'}</span>
+              </button>
             )}
 
-            {subTab === 'ledger' && (
-              <Button
-                size="sm"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs border-transparent font-bold"
-                onClick={() => setIsTransfersModalOpen(true)}
-                icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+            <button
+              type="button"
+              onClick={() => setIsTransfersModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <ArrowRightLeft className="w-4 h-4 text-amber-400" />
+              <span>{isAr ? 'تحويل مخزني' : 'Transfer'}</span>
+            </button>
+
+            {onRefreshData && (
+              <button
+                type="button"
+                onClick={onRefreshData}
+                disabled={isLoading}
+                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+                title={isAr ? 'تحديث البيانات' : 'Sync'}
               >
-                {isAr ? '+ تحويل مخزني' : '+ Stock Transfer'}
-              </Button>
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-amber-400' : ''}`} />
+                <span>{isAr ? 'تحديث' : 'Sync'}</span>
+              </button>
             )}
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {/* Operations & Warehouses Quick Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
@@ -750,20 +767,20 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
         </div>
       </div>
 
-      {/* Segregated Workspace Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+      {/* 3. Luxury Segmented Pill Tab Bar */}
+      <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1.5 overflow-x-auto shadow-inner text-xs font-bold">
         <button
           type="button"
           onClick={() => { setSubTab('raw_materials'); setCurrentPage(1); }}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'raw_materials'
-              ? 'bg-amber-600 text-white shadow-xs border border-transparent'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Layers className="w-4 h-4 shrink-0" />
           <span>{isAr ? 'مستودع الخامات ومستلزمات الإنتاج' : 'Raw Materials & Trims'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${subTab === 'raw_materials' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'raw_materials' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {rawMaterialItems.length}
           </span>
         </button>
@@ -771,15 +788,15 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
         <button
           type="button"
           onClick={() => { setSubTab('finished_goods'); setCurrentPage(1); }}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'finished_goods'
-              ? 'bg-emerald-600 text-white shadow-xs border border-transparent'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Shirt className="w-4 h-4 shrink-0" />
-          <span>{isAr ? 'مستودع المنتجات تامة الصنع (جاهز للبيع)' : 'Finished Goods & POS'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${subTab === 'finished_goods' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+          <span>{isAr ? 'مستودع المنتجات تامة الصنع' : 'Finished Goods & POS'}</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'finished_goods' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {finishedGoodsItems.length}
           </span>
         </button>
@@ -787,15 +804,15 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
         <button
           type="button"
           onClick={() => { setSubTab('customer_cmt'); setCurrentPage(1); }}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'customer_cmt'
-              ? 'bg-sky-600 text-white shadow-xs border border-transparent'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Boxes className="w-4 h-4 shrink-0" />
           <span>{isAr ? 'أمانات خامات العملاء (CMT)' : 'Customer CMT'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${subTab === 'customer_cmt' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'customer_cmt' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {customerMaterials.length}
           </span>
         </button>
@@ -803,15 +820,15 @@ export const WarehouseManagerTab: React.FC<WarehouseManagerTabProps> = ({
         <button
           type="button"
           onClick={() => { setSubTab('ledger'); setCurrentPage(1); }}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-[0.98] ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'ledger'
-              ? 'bg-indigo-600 text-white shadow-xs border border-transparent'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-2xs'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <ShieldCheck className="w-4 h-4 shrink-0" />
           <span>{isAr ? 'دفتر الأستاذ المخزني (Audit Ledger)' : 'Audit Ledger'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${subTab === 'ledger' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'ledger' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {stockLedger.length}
           </span>
         </button>

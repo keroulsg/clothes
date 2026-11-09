@@ -26,7 +26,6 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
-import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import { FinancialReportsView } from './FinancialReportsView';
 import { AccountStatementModal } from './AccountStatementModal';
@@ -540,53 +539,62 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={isAr ? 'الإدارة المالية والتكاليف الصناعية' : 'Financial Accounting & Industrial Costing'}
-        subtitle={isAr
-          ? 'دليل الحسابات، الأستاذ العام، الخزائن والبنوك، التحويلات، المطابقة، ومراكز التكلفة.'
-          : 'Chart of accounts, general ledger, cash/banks, transfers, reconciliation, and costing.'}
-        icon={<Receipt className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'المالية والتكاليف' : 'Finance & Costing' },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsJournalModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
-            >
-              {isAr ? '+ قيد يومية متوازن' : '+ Journal Entry'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsVoucherModalOpen(true)}
-              icon={<FileCheck className="w-4 h-4" />}
-            >
-              {isAr ? '+ سند مالي' : '+ Voucher'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsTransferModalOpen(true)}
-              icon={<ArrowRightLeft className="w-4 h-4" />}
-            >
-              {isAr ? 'تحويل مالي' : 'Transfer'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsCalcCostModalOpen(true)}
-              icon={<Calculator className="w-4 h-4" />}
-            >
-              {isAr ? 'احتساب تكلفة أمر' : 'Cost Order'}
-            </Button>
+      {/* ─── Ultra-Modern Hero Header & Control Center (#7F1625 & #000000) ─── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] border border-[#7F1625]/40 p-6 md:p-8 text-white shadow-2xl">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7F1625]/30 border border-[#7F1625]/50 text-[#ff8ba0] text-xs font-bold tracking-wide backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-[#ff4d6d] animate-pulse" />
+              {isAr ? 'الإدارة المالية والتكاليف الصناعية • قيود وأستاذ عام' : 'Financial Accounting & Industrial Costing • Active Ledger'}
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#7F1625] flex items-center justify-center shadow-lg shadow-[#7F1625]/50">
+                <Receipt className="w-5 h-5 text-white" />
+              </div>
+              {isAr ? 'المالية والتكاليف الصناعية والأستاذ العام' : 'Financial Accounting & Costing'}
+            </h1>
+            <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+              {isAr
+                ? 'دليل الحسابات الشجري، القيود المتوازنة، الخزائن والبنوك، التحويلات، المطابقة، ومراكز التكلفة وبطاقات التكلفة الصناعية.'
+                : 'Chart of accounts, general ledger, cash/banks, balanced vouchers, reconciliation, and industrial costing sheets.'}
+            </p>
           </div>
-        }
-      />
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setIsJournalModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all flex items-center gap-2 active:scale-95 border border-[#ff4d6d]/30"
+            >
+              <Plus className="w-4 h-4" />
+              {isAr ? '+ قيد يومية متوازن' : '+ Journal Entry'}
+            </button>
+            <button
+              onClick={() => setIsVoucherModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
+            >
+              <FileCheck className="w-4 h-4 text-[#ff8ba0]" />
+              {isAr ? '+ سند مالي' : '+ Voucher'}
+            </button>
+            <button
+              onClick={() => setIsTransferModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
+            >
+              <ArrowRightLeft className="w-4 h-4 text-emerald-400" />
+              {isAr ? 'تحويل مالي' : 'Transfer'}
+            </button>
+            <button
+              onClick={() => setIsCalcCostModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-bold transition-all flex items-center gap-1.5 backdrop-blur-md"
+            >
+              <Calculator className="w-4 h-4 text-amber-400" />
+              {isAr ? 'احتساب تكلفة أمر' : 'Cost Order'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
@@ -609,184 +617,135 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       )}
 
       {isLoading && (
-        <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
+        <div className="p-2.5 rounded-xl bg-[#7F1625]/10 border border-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] text-xs flex items-center gap-2">
           <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
           <span>{isAr ? 'جاري تحميل البيانات المحاسبية...' : 'Loading accounting records...'}</span>
         </div>
       )}
 
-      {/* Dynamic Financial KPI Cards */}
+      {/* Dynamic Financial KPI Cards Bento-Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500 rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'إجمالي الأصول والنقدية' : 'Total Assets & Cash'}
               </p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-1 tracking-tight">
                 {totalAssets.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                {accounts.filter((a) => a.type === 'asset').length} {isAr ? 'حسابات أصول' : 'asset accounts'}
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-1 inline-block">
+                {accounts.filter((a) => a.type === 'asset').length} {isAr ? 'حسابات أصول معتمدة' : 'asset accounts'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-[#7F1625] rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'إيرادات المبيعات المحققة' : 'Garment Sales Revenue'}
               </p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+              <p className="text-2xl font-black text-[#7F1625] dark:text-[#ff8ba0] mt-1 tracking-tight">
                 {totalRevenues.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1 inline-block">
                 {isAr ? 'أرصدة قيود الإيرادات' : 'Ledger revenue accounts'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <div className="w-11 h-11 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/20 flex items-center justify-center text-[#7F1625] dark:text-[#ff8ba0] group-hover:scale-110 transition-transform">
               <Receipt className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500 rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'التكاليف والمصروفات' : 'Direct Expenses & Cost'}
               </p>
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+              <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 tracking-tight">
                 {directExpenses.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1 inline-block">
                 {costSheets.length} {isAr ? 'أوامر إنتاج محسوبة' : 'costed orders'}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
               <Scale className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-[#7F1625] rounded-r" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {isAr ? 'صافي الربح الدفتري' : 'Net Book Profit'}
               </p>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 tracking-tight">
                 {grossProfit.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </p>
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-1 inline-block">
                 {isAr ? `هامش ربح ${grossMarginPct}%` : `${grossMarginPct}% profit margin`}
               </span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
               <PieChart className="w-5 h-5" />
             </div>
           </div>
-        </Card>
+        </div>
       </div>
 
-      {/* Sub-tabs Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => setActiveSubTab('accounts')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'accounts'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'دليل الحسابات (COA)' : 'Chart of Accounts'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('journals')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'journals'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'قيود اليومية العامة' : 'Journal Entries'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('financial_accounts')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'financial_accounts'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'الخزائن والبنوك والتحويلات' : 'Cash & Banks'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('reconciliation')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'reconciliation'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'مطابقة الأستاذ العام (Reconciliation)' : 'Reconciliation'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('cost_centers')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'cost_centers'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'مراكز التكلفة' : 'Cost Centers'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('fiscal_periods')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'fiscal_periods'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'السنوات والفترات المالية' : 'Fiscal Periods'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('vouchers')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'vouchers'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'سندات القبض والصرف' : 'Payment Vouchers'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('costing')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'costing'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'بطاقات التكلفة الصناعية' : 'Cost Sheets'}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('reports')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeSubTab === 'reports'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            {isAr ? 'التقارير والقوائم الختامية' : 'Financial Reports'}
-          </button>
+      {/* Luxury Segmented Pill Tab Bar (#7F1625 & #000000) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e]">
+        <div className="flex flex-wrap items-center gap-1">
+          {[
+            { id: 'accounts', labelAr: 'دليل الحسابات (COA)', labelEn: 'Chart of Accounts', count: accounts.length },
+            { id: 'journals', labelAr: 'قيود اليومية العامة', labelEn: 'Journal Entries', count: journals.length },
+            { id: 'financial_accounts', labelAr: 'الخزائن والبنوك والتحويلات', labelEn: 'Cash & Banks', count: financialAccounts.length },
+            { id: 'reconciliation', labelAr: 'مطابقة الأستاذ (Reconciliation)', labelEn: 'Reconciliation', count: null },
+            { id: 'cost_centers', labelAr: 'مراكز التكلفة', labelEn: 'Cost Centers', count: costCenters.length },
+            { id: 'fiscal_periods', labelAr: 'السنوات والفترات المالية', labelEn: 'Fiscal Periods', count: fiscalYears.length },
+            { id: 'vouchers', labelAr: 'سندات القبض والصرف', labelEn: 'Payment Vouchers', count: vouchers.length },
+            { id: 'costing', labelAr: 'بطاقات التكلفة الصناعية', labelEn: 'Cost Sheets', count: costSheets.length },
+            { id: 'reports', labelAr: 'التقارير والقوائم الختامية', labelEn: 'Financial Reports', count: null },
+          ].map((tab) => {
+            const isActive = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  isActive
+                    ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/5'
+                }`}
+              >
+                <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                {tab.count !== null && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2">

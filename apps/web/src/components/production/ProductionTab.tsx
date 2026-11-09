@@ -14,8 +14,6 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/PageHeader';
 import { Pagination } from '../ui/Pagination';
 import { ProductionPrintModal, type PrintDocumentType } from './ProductionPrintModal';
 import type {
@@ -212,80 +210,97 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   const paginatedQC = filteredQC.slice((qcPage - 1) * qcPerPage, qcPage * qcPerPage);
 
   return (
-    <div className="space-y-6 w-full max-w-full min-w-0">
-      {/* Top Header */}
-      <PageHeader
-        title={isAr ? 'صالة القص وخطوط التشغيل وبطاقات الحزم' : 'Cutting Floor & Shopfloor Production'}
-        subtitle={
-          isAr
-            ? 'متابعة أوامر التشغيل المعتمدة، خطط الفرش والطبقات، بطاقات الحزم الذكية بالباركود، وتدقيق الجودة'
-            : 'Cutting orders, lay planning, QR bundle tracking across shopfloor stages, and quality inspection.'
-        }
-        icon={<Scissors className="w-5 h-5 text-indigo-500" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'صالة القص والإنتاج' : 'Cutting & Production' },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onOpenFabricCalc}
-              icon={<Calculator className="w-4 h-4 text-slate-500" />}
-              className="font-medium"
-            >
-              {isAr ? 'حاسبة أطوال الفرش' : 'Lay Calculator'}
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={onOpenCreateProdOrder}
-              icon={<Plus className="w-4 h-4" />}
-              className="font-bold shadow-sm shadow-indigo-500/20"
-            >
-              {isAr ? 'أمر إنتاج جديد' : 'New Production Order'}
-            </Button>
-          </div>
-        }
-      />
+    <div className="space-y-6 w-full max-w-full min-w-0" dir={isAr ? 'rtl' : 'ltr'}>
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
 
-      {/* KPI Overview Cards - Modern Minimal Aesthetic */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'صالة القص وخطوط التشغيل المباشرة' : 'Cutting Floor & Shopfloor Live'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                {isAr ? 'تتبع الباركود الذكي للحزم والراقات' : 'Smart QR Bundle Tracking'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <Scissors className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'صالة القص وخطوط التشغيل وبطاقات الحزم' : 'Cutting Floor & Shopfloor Production'}</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'متابعة أوامر التشغيل المعتمدة، خطط الفرش والطبقات (Lay Planning)، بطاقات الحزم الذكية بالباركود، وتدقيق الجودة (QC) وتسليم المنتج التام للمخازن.'
+                : 'Cutting orders, lay planning, QR bundle tracking across shopfloor stages, and quality inspection.'}
+            </p>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={onOpenCreateProdOrder}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{isAr ? 'أمر إنتاج وتشغيل جديد' : 'New Production Order'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenFabricCalc}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <Calculator className="w-4 h-4 text-amber-400" />
+              <span>{isAr ? 'حاسبة أطوال الفرش والـ GSM' : 'Lay Calculator'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Bento-Grid Elevated KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Card 1: Production Orders */}
-        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-indigo-500/30">
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] p-4.5 transition-all duration-200 hover:shadow-xl hover:border-[#7F1625]/40 shadow-2xs">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {isAr ? 'أوامر الإنتاج النشطة' : 'Active Orders'}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold border border-[#7F1625]/20">
               <Layers className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
+            <span className="text-2xl font-black font-mono text-slate-900 dark:text-white">
               {stats.totalOrders}
             </span>
             <span className="text-xs text-slate-400 font-sans">{isAr ? 'أمر إجمالي' : 'total'}</span>
           </div>
-          <div className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+          <div className="mt-2 text-xs text-[#7F1625] dark:text-[#ff8ba0] font-medium flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#7F1625] animate-pulse" />
             <span>{stats.activeOrders} {isAr ? 'قيد التشغيل بالورشة' : 'in progress'}</span>
           </div>
         </div>
 
         {/* Card 2: Pieces Cut */}
-        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-sky-500/30">
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] p-4.5 transition-all duration-200 hover:shadow-xl hover:border-sky-500/40 shadow-2xs">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {isAr ? 'القطع المقصوصة بصالة القص' : 'Pieces Cut'}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center border border-sky-500/20 font-bold">
               <Scissors className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-sky-600 dark:text-sky-400">
+            <span className="text-2xl font-black font-mono text-sky-600 dark:text-sky-400">
               {stats.totalCutPieces.toLocaleString()}
             </span>
             <span className="text-xs text-slate-400 font-sans">{isAr ? 'قطعة مقصوصة' : 'pcs cut'}</span>
@@ -296,17 +311,17 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
         </div>
 
         {/* Card 3: Active Bundles */}
-        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-purple-500/30">
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] p-4.5 transition-all duration-200 hover:shadow-xl hover:border-purple-500/40 shadow-2xs">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {isAr ? 'حزم التشغيل النشطة بالباركود' : 'Active QR Bundles'}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-500/20 font-bold">
               <QrCode className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-purple-600 dark:text-purple-400">
+            <span className="text-2xl font-black font-mono text-purple-600 dark:text-purple-400">
               {stats.totalBundles}
             </span>
             <span className="text-xs text-slate-400 font-sans">{isAr ? 'حزمة تشغيل' : 'bundles'}</span>
@@ -318,17 +333,17 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
         </div>
 
         {/* Card 4: Quality & Finished */}
-        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 transition-all duration-200 hover:shadow-md hover:border-emerald-500/30">
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#0a0204]/90 border border-slate-200/80 dark:border-[#2d080e] p-4.5 transition-all duration-200 hover:shadow-xl hover:border-emerald-500/40 shadow-2xs">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {isAr ? 'المنتج التام المجاز والمرحل' : 'Passed QC Stock'}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20 font-bold">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+            <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
               {stats.totalFinished.toLocaleString()}
             </span>
             <span className="text-xs text-slate-400 font-sans">{isAr ? 'قطعة مجازة' : 'pcs finished'}</span>
@@ -340,62 +355,60 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
         </div>
       </div>
 
-      {/* Main Sub-Navigation Bar - Clean Pill Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {[
-            {
-              id: 'orders',
-              label: isAr ? 'أوامر الإنتاج والتشغيل' : 'Production Orders',
-              icon: Layers,
-              count: productionOrders.length,
-            },
-            {
-              id: 'cutting',
-              label: isAr ? 'صالة القص وخطط الفرش' : 'Lay & Cutting Orders',
-              icon: Scissors,
-              count: cuttingOrders.length,
-            },
-            {
-              id: 'bundles',
-              label: isAr ? 'بطاقات الحزم وتتبع الخط' : 'Bundle Floor Tracker',
-              icon: QrCode,
-              count: cuttingBundles.length,
-            },
-            {
-              id: 'qc',
-              label: isAr ? 'فحص ومراقبة الجودة' : 'Quality Control (QC)',
-              icon: ShieldCheck,
-              count: qualityInspections.length,
-            },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeSubTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+      {/* 3. Luxury Segmented Pill Tab Bar */}
+      <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1 overflow-x-auto shadow-inner text-xs font-bold">
+        {[
+          {
+            id: 'orders',
+            label: isAr ? 'أوامر الإنتاج والتشغيل' : 'Production Orders',
+            icon: Layers,
+            count: productionOrders.length,
+          },
+          {
+            id: 'cutting',
+            label: isAr ? 'صالة القص وخطط الفرش' : 'Lay & Cutting Orders',
+            icon: Scissors,
+            count: cuttingOrders.length,
+          },
+          {
+            id: 'bundles',
+            label: isAr ? 'بطاقات الحزم وتتبع الخط' : 'Bundle Floor Tracker',
+            icon: QrCode,
+            count: cuttingBundles.length,
+          },
+          {
+            id: 'qc',
+            label: isAr ? 'فحص ومراقبة الجودة' : 'Quality Control (QC)',
+            icon: ShieldCheck,
+            count: qualityInspections.length,
+          },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeSubTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                isActive
+                  ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              <span
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
                   isActive
-                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-400 dark:text-indigo-600' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
-                <span
-                  className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${
-                    isActive
-                      ? 'bg-white/20 dark:bg-slate-900/20 text-white dark:text-slate-900'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ============================================================== */}
@@ -420,10 +433,10 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                     setOrderStatusFilter(pill.id);
                     setOrderPage(1);
                   }}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
                     orderStatusFilter === pill.id
-                      ? 'bg-indigo-600 text-white font-bold'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-[#7F1625] text-white font-bold shadow-xs'
+                      : 'bg-slate-100 dark:bg-[#180608] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#22070c]'
                   }`}
                 >
                   {pill.label}
@@ -442,9 +455,9 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                   setOrderSearch(e.target.value);
                   setOrderPage(1);
                 }}
-                className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl ${
+                className={`bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl ${
                   isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
-                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-64 focus:outline-none focus:border-indigo-500`}
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-64 focus:outline-none focus:border-[#7F1625] focus:ring-1 focus:ring-[#7F1625]/30`}
               />
             </div>
           </div>
@@ -499,7 +512,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
 
                     return (
                       <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                        <td className="py-3 px-4 font-mono font-bold text-[#7F1625] dark:text-[#ff8ba0]">
                           {order.order_number}
                         </td>
                         <td className="py-3 px-4">
@@ -749,7 +762,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                         <td className="py-3 px-4 font-mono font-bold text-sky-600 dark:text-sky-400">
                           {cut.cutting_order_number}
                         </td>
-                        <td className="py-3 px-4 font-mono font-semibold text-indigo-500">
+                        <td className="py-3 px-4 font-mono font-semibold text-[#7F1625] dark:text-[#ff8ba0]">
                           {cut.production_order_number || '—'}
                         </td>
                         <td className="py-3 px-4 font-sans text-slate-700 dark:text-slate-300">
@@ -758,7 +771,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                         <td className="py-3 px-4">
                           {cutterName ? (
                             <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200">
-                              <div className="w-5 h-5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] flex items-center justify-center font-bold">
+                              <div className="w-5 h-5 rounded-md bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] text-[10px] flex items-center justify-center font-bold">
                                 {cutterName.trim().charAt(0)}
                               </div>
                               <span className="font-medium truncate max-w-[120px]">{cutterName}</span>
@@ -828,7 +841,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                                 setActiveSubTab('orders');
                                 setOrderSearch(cut.production_order_number || '');
                               }}
-                              className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                              className="p-1.5 rounded-lg text-[#7F1625] hover:text-[#961b2c] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-all cursor-pointer shadow-2xs"
                             >
                               <Layers className="w-4 h-4" />
                             </button>
@@ -968,7 +981,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                 {/* Worker Assignment Strip */}
                 <div className="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <User className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <User className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0] shrink-0" />
                     <span className="text-slate-400 text-[10px] shrink-0">{isAr ? 'المسؤول:' : 'Worker:'}</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {bnd.assigned_employee_name || (isAr ? 'لم يُعيّن بعد' : 'Unassigned')}
@@ -1015,7 +1028,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                       type="button"
                       title={isAr ? 'تسليم ونقل المرحلة وقيد أجر العامل' : 'Transfer Stage & Record Piece Wage'}
                       onClick={() => onSelectBundleForTracker(bnd)}
-                      className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                      className="p-1.5 rounded-lg text-[#7F1625] hover:text-[#961b2c] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-all cursor-pointer shadow-2xs"
                     >
                       <ArrowRightLeft className="w-4 h-4" />
                     </button>
@@ -1152,7 +1165,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                       <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {qc.inspection_number}
                       </td>
-                      <td className="py-3 px-4 font-mono font-semibold text-indigo-500">
+                      <td className="py-3 px-4 font-mono font-semibold text-[#7F1625] dark:text-[#ff8ba0]">
                         {qc.production_order_number || '—'}
                       </td>
                       <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
@@ -1213,7 +1226,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                               setActiveSubTab('orders');
                               setOrderSearch(qc.production_order_number || '');
                             }}
-                            className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                            className="p-1.5 rounded-lg text-[#7F1625] hover:text-[#961b2c] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-all cursor-pointer shadow-2xs"
                           >
                             <Layers className="w-4 h-4" />
                           </button>

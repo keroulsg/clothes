@@ -23,7 +23,6 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
-import { PageHeader } from '../ui/PageHeader';
 import { SalesReturnModal } from './SalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
 import { CreateCustomerModal } from './CreateCustomerModal';
@@ -460,38 +459,69 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={isAr ? 'إدارة المبيعات ونقاط البيع (POS)' : 'Commercial Sales & POS'}
-        subtitle={isAr
-          ? 'إدارة أوامر البيع للعملاء، إصدار عروض الأسعار، ونقطة بيع فورية (POS).'
-          : 'Customer sales orders, quotations, invoices, and factory POS terminal.'}
-        icon={<TrendingUp className="w-5 h-5 text-[var(--brand-primary)] dark:text-[#F87171]" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'المبيعات ونقطة البيع' : 'Sales & POS' },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsOrderModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
-            >
-              {isAr ? '+ أمر بيع جديد' : '+ New Sales Order'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsQuotationModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
-            >
-              {isAr ? '+ عرض سعر' : '+ New Quote'}
-            </Button>
+    <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'إدارة المبيعات ونقاط البيع السريعة POS' : 'Commercial Sales & POS Engine'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <PackageCheck className="w-3.5 h-3.5 text-sky-400" />
+                {isAr ? 'حجز وتخصيص المخزون التام آلياً' : 'Automated Finished Stock Reservation'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <TrendingUp className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'المبيعات ونقطة البيع (POS) والفواتير' : 'Commercial Sales & POS'}</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'إدارة أوامر البيع للعملاء، حجز المخزون الجاهز، إصدار عروض الأسعار، ونقطة بيع فورية (POS) لصالة العرض والمنافذ مع فواتير ضريبية وسندات قبض.'
+                : 'Customer sales orders, quotations, invoices, and factory POS terminal.'}
+            </p>
           </div>
-        }
-      />
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsOrderModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{isAr ? '+ أمر بيع جديد' : '+ New Sales Order'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsQuotationModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              <span>{isAr ? '+ عرض سعر' : '+ New Quote'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('pos')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-500/30 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4 text-emerald-400" />
+              <span>{isAr ? 'كاشير المعرض (POS)' : 'Open POS'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -589,88 +619,128 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         </Card>
       </div>
 
-      {/* Sub-tabs Navigation */}
+      {/* 3. Luxury Segmented Pill Tab Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1 overflow-x-auto shadow-inner text-xs font-bold">
           <button
+            type="button"
             onClick={() => setActiveSubTab('orders')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'orders'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'أوامر البيع وحجز المخزون' : 'Sales Orders'}
+            <span>{isAr ? 'أوامر البيع وحجز المخزون' : 'Sales Orders'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {orders.length}
+            </span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('quotations')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'quotations'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'عروض الأسعار' : 'Quotations'}
+            <span>{isAr ? 'عروض الأسعار' : 'Quotations'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'quotations' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {quotations.length}
+            </span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('pos')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'pos'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'نقطة البيع السريعة (POS)' : 'Factory Outlet POS'}
+            <ShoppingBag className="w-3.5 h-3.5" />
+            <span>{isAr ? 'نقطة البيع (POS)' : 'Factory POS'}</span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('invoices')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'invoices'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'فواتير المبيعات' : 'Invoices'}
+            <Receipt className="w-3.5 h-3.5" />
+            <span>{isAr ? 'الفواتير' : 'Invoices'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {invoices.length}
+            </span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('returns')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'returns'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'مرتجعات المبيعات والدائن' : 'Returns & Credits'}
+            <span>{isAr ? 'المرتجعات' : 'Returns'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'returns' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {salesReturns.length}
+            </span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('deliveries')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'deliveries'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'إذون التسليم والشحن' : 'Delivery Notes'}
+            <Truck className="w-3.5 h-3.5" />
+            <span>{isAr ? 'إذون التسليم' : 'Deliveries'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'deliveries' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {deliveryNotes.length}
+            </span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('customers')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'customers'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'دليل العملاء والحسابات' : 'Customers & Accounts'}
+            <span>{isAr ? 'العملاء' : 'Customers'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {customers.length}
+            </span>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveSubTab('payments')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeSubTab === 'payments'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-800 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
             }`}
           >
-            {isAr ? 'سندات القبض والتحصيل' : 'Customer Receipts'}
+            <DollarSign className="w-3.5 h-3.5" />
+            <span>{isAr ? 'التحصيلات والقبض' : 'Receipts'}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'payments' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+              {payments.length}
+            </span>
           </button>
         </div>
 

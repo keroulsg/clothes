@@ -27,7 +27,6 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { PageHeader } from '../ui/PageHeader';
 import { api } from '../../api/client';
 import type { Language, Machine, MaintenanceWorkOrder, MaintenanceSparePart, DowntimeSummary } from '../../types';
 
@@ -520,28 +519,47 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-200">
-      {/* 1. Page Header */}
-      <PageHeader
-        title={isAr ? 'صيانة الماكينات والأصول الصناعية' : 'Machine Assets & Maintenance'}
-        subtitle={isAr
-          ? 'سجل ماكينات الخياطة والقص، أوامر الصيانة الدورية والطارئة، وتتبع ساعات التوقف وقطع الغيار.'
-          : 'Machine asset registry, emergency & preventative work orders, downtime logs, and spare parts.'}
-        icon={<Wrench className="w-5 h-5 text-amber-500" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'صيانة الماكينات' : 'Machine Assets' },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-6 animate-in fade-in duration-200" dir={isAr ? 'rtl' : 'ltr'}>
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'صيانة الماكينات والأصول الصناعية 4.0' : 'Machinery & Assets 4.0'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                {isAr ? 'تتبع لحظي لزمن التوقف والإنتاجية' : 'Zero Downtime Architecture'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <Wrench className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'صيانة الماكينات والأصول الصناعية' : 'Machine Assets & Maintenance'}</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'سجل ماكينات الخياطة والقص، أوامر الصيانة الدورية والطارئة، وتتبع ساعات التوقف، واستعواض قطع الغيار بالمخازن.'
+                : 'Machine asset registry, emergency & preventative work orders, downtime logs, and spare parts.'}
+            </p>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <button
               type="button"
               onClick={() => {
                 setNewOrder((prev) => ({ ...prev, work_type: 'breakdown', priority: 'critical' }));
                 setIsWorkOrderModalOpen(true);
               }}
-              title={isAr ? 'إبلاغ فوري عن عطل وتوقف خط إنتاج' : 'Report Emergency Breakdown'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-600/30 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
             >
               <ShieldAlert className="w-4 h-4" />
               <span>{isAr ? '+ بلاغ عطل طارئ' : '+ Emergency Ticket'}</span>
@@ -553,8 +571,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
                 setNewOrder((prev) => ({ ...prev, work_type: 'preventive', priority: 'medium' }));
                 setIsWorkOrderModalOpen(true);
               }}
-              title={isAr ? 'إصدار أمر صيانة وقائية مجدولة' : 'New Preventative Order'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
             >
               <Wrench className="w-4 h-4" />
               <span>{isAr ? '+ أمر صيانة' : '+ Work Order'}</span>
@@ -562,35 +579,25 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
 
             <button
               type="button"
-              onClick={() => setIsAddSparePartStockModalOpen(true)}
-              title={isAr ? 'إضافة وتوريد قطعة غيار جديدة إلى مستودع المصنع' : 'Add Spare Part to Stock'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-xs transition-all cursor-pointer"
-            >
-              <Boxes className="w-4 h-4" />
-              <span>{isAr ? '+ قطعة للمخزن' : '+ Add Part to Stock'}</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setIsAddMachineModalOpen(true)}
-              title={isAr ? 'تسجيل ماكينة ومعدة جديدة بالمصنع' : 'Register New Machine'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-900 bg-amber-400 hover:bg-amber-300 shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 text-amber-400" />
               <span>{isAr ? '+ تسجيل ماكينة' : '+ New Machine'}</span>
             </button>
 
             <button
               type="button"
               onClick={loadMaintenanceData}
+              disabled={isLoading}
               title={isAr ? 'تحديث البيانات' : 'Refresh'}
-              className="inline-flex items-center justify-center w-8.5 h-8.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all backdrop-blur-md cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-amber-500' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#ff8ba0]' : ''}`} />
             </button>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {errorMsg && (
         <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between shadow-2xs">
@@ -709,19 +716,19 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
           onClick={() => setActiveSubTab('spareparts')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-md hover:-translate-y-0.5 ${
             activeSubTab === 'spareparts'
-              ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/30 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-400/30'
-              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-indigo-300'
+              ? 'bg-gradient-to-br from-[#7F1625]/10 to-[#9E2A3B]/10 dark:from-[#7F1625]/25 dark:to-[#000000] border-[#7F1625] ring-2 ring-[#7F1625]/30'
+              : 'bg-white dark:bg-[#0a0204]/90 border-slate-200/90 dark:border-[#2d080e] hover:border-[#7F1625]/40'
           }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
               {isAr ? 'تكلفة الصيانة وقطع الغيار' : 'Maintenance Expense'}
             </span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-2xs border border-indigo-200/60 dark:border-indigo-800/40">
+            <div className="w-9 h-9 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center shadow-2xs border border-[#7F1625]/20 font-bold">
               <Wrench className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-1">
+          <div className="text-2xl font-black font-mono text-[#7F1625] dark:text-[#ff8ba0] mt-1">
             {totalMaintenanceExpense.toLocaleString()}{' '}
             <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
           </div>
@@ -731,20 +738,20 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         </div>
       </div>
 
-      {/* 3. Sub-Tabs Navigation Bar */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+      {/* 3. Luxury Segmented Pill Tab Bar */}
+      <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1.5 overflow-x-auto shadow-inner text-xs font-bold">
         <button
           type="button"
           onClick={() => setActiveSubTab('machines')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'machines'
-              ? 'bg-indigo-600 text-white ring-2 ring-indigo-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Cpu className="w-4 h-4" />
           <span>{isAr ? 'سجل الماكينات والمعدات' : 'Asset Register'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'machines' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'machines' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {machines.length}
           </span>
         </button>
@@ -752,15 +759,15 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         <button
           type="button"
           onClick={() => setActiveSubTab('workorders')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'workorders'
-              ? 'bg-rose-600 text-white ring-2 ring-rose-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Wrench className="w-4 h-4" />
           <span>{isAr ? 'أوامر الصيانة وبلاغات الأعطال' : 'Work Orders & Tickets'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'workorders' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'workorders' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {workOrders.length}
           </span>
         </button>
@@ -768,16 +775,16 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({ lang }) => {
         <button
           type="button"
           onClick={() => setActiveSubTab('spareparts')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'spareparts'
-              ? 'bg-amber-600 text-white ring-2 ring-amber-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Package className="w-4 h-4" />
-          <span>{isAr ? 'مخزون وقطع غيار الماكينات' : 'Spare Parts & Stock'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeSubTab === 'spareparts' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-            {sparePartsStock.length} {isAr ? 'بالمخزن' : 'stock'} | {spareParts.length} {isAr ? 'منصرف' : 'used'}
+          <span>{isAr ? 'قطع الغيار ومستودع الصيانة' : 'Spare Parts Stock'}</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${activeSubTab === 'spareparts' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+            {sparePartsStock.length}
           </span>
         </button>
       </div>

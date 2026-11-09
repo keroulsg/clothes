@@ -3,7 +3,6 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
-import { PageHeader } from '../ui/PageHeader';
 import {
   ShoppingCart,
   Plus,
@@ -242,54 +241,69 @@ export const PurchasingTab: React.FC<PurchasingTabProps> = ({
   };
 
   return (
-    <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-      {/* Page Header */}
-      <PageHeader
-        title={isAr ? 'المشتريات والموردين وفحص الاستلام والمطابقة الثلاثية' : 'Procurement, GRN & 3-Way Matching'}
-        subtitle={
-          isAr
-            ? 'إدارة دورة الشراء الكاملة: أوامر الشراء (PO)، أذون استلام وفحص الجودة (GRN)، مطابقة الفواتير الثلاثية، وأرصدة الموردين.'
-            : 'End-to-end procurement: purchase orders, goods receipt notes (GRN), 3-way invoice matching, and vendor ledgers.'
-        }
-        icon={<ShoppingCart className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
-        breadcrumbs={[
-          { label: isAr ? 'الرئيسية' : 'Home' },
-          { label: isAr ? 'المشتريات والموردون' : 'Procurement' },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden" dir={isAr ? 'rtl' : 'ltr'}>
+      {/* 1. Ultra-Modern Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Ambient Glows */}
+        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {isAr ? 'دورة المشتريات والمطابقة الثلاثية 3-Way Match' : '3-Way Match Procurement'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                {isAr ? 'مطابقة PO + GRN + Invoice' : 'Verified GRN & Invoicing'}
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <ShoppingCart className="w-7 h-7 text-[#E05265] shrink-0" />
+              <span>{isAr ? 'المشتريات والموردين وفحص الاستلام' : 'Procurement, GRN & 3-Way Matching'}</span>
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {isAr
+                ? 'إدارة دورة الشراء الكاملة: أوامر الشراء (PO)، أذون استلام وفحص الجودة (GRN)، مطابقة الفواتير الثلاثية، وأرصدة ومسيرات الموردين.'
+                : 'End-to-end procurement: purchase orders, goods receipt notes (GRN), 3-way invoice matching, and vendor ledgers.'}
+            </p>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={onOpenCreatePo}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{isAr ? '+ أمر شراء جديد (PO)' : '+ New PO'}</span>
+            </button>
+
             <button
               type="button"
               onClick={onOpenCreateSupplier}
-              title={isAr ? 'تسجيل مورد جديد في الدليل' : 'New Supplier'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/80 shadow-2xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
             >
-              <Building2 className="w-3.5 h-3.5 text-amber-500" />
+              <Building2 className="w-4 h-4 text-amber-400" />
               <span>{isAr ? 'مورد جديد' : 'New Supplier'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubTab('requisitions')}
-              title={isAr ? 'عرض طلبات الاحتياج الداخلي (PR)' : 'Requisitions (PR)'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 hover:bg-purple-100 dark:hover:bg-purple-900/40 shadow-2xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
             >
-              <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <span>{isAr ? 'طلبات الاحتياج (PR)' : 'Requisitions (PR)'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenCreatePo}
-              title={isAr ? 'إصدار أمر شراء رسمي جديد (PO)' : 'New Purchase Order'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition-all cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{isAr ? 'أمر شراء جديد' : 'New PO'}</span>
+              <FileText className="w-4 h-4 text-purple-400" />
+              <span>{isAr ? 'طلبات الاحتياج (PR)' : 'PR Requisitions'}</span>
             </button>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {/* 4 Interactive KPI Cards Deck */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -400,20 +414,20 @@ export const PurchasingTab: React.FC<PurchasingTabProps> = ({
         </div>
       </div>
 
-      {/* Sub-Tabs Navigation Bar */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+      {/* 3. Luxury Segmented Pill Tab Bar */}
+      <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1.5 overflow-x-auto shadow-inner text-xs font-bold">
         <button
           type="button"
           onClick={() => setSubTab('orders')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'orders'
-              ? 'bg-indigo-600 text-white ring-2 ring-indigo-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <ShoppingCart className="w-4 h-4" />
           <span>{isAr ? 'أوامر الشراء والتوريد' : 'Purchase Orders'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${subTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {purchaseOrders.length}
           </span>
         </button>
@@ -421,10 +435,10 @@ export const PurchasingTab: React.FC<PurchasingTabProps> = ({
         <button
           type="button"
           onClick={() => setSubTab('requisitions')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'requisitions'
-              ? 'bg-purple-600 text-white ring-2 ring-purple-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -434,15 +448,15 @@ export const PurchasingTab: React.FC<PurchasingTabProps> = ({
         <button
           type="button"
           onClick={() => setSubTab('receipts')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'receipts'
-              ? 'bg-sky-600 text-white ring-2 ring-sky-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Truck className="w-4 h-4" />
           <span>{isAr ? 'أذون فحص واستلام البضاعة (GRN)' : 'Goods Receipts (GRN)'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${subTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {goodsReceiptNotes.length}
           </span>
         </button>
@@ -450,15 +464,15 @@ export const PurchasingTab: React.FC<PurchasingTabProps> = ({
         <button
           type="button"
           onClick={() => setSubTab('invoices')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'invoices'
-              ? 'bg-emerald-600 text-white ring-2 ring-emerald-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Receipt className="w-4 h-4" />
           <span>{isAr ? 'فواتير الموردين والمطابقة الثلاثية' : '3-Way Match Invoices'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${subTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {supplierInvoices.length}
           </span>
         </button>
@@ -466,15 +480,15 @@ export const PurchasingTab: React.FC<PurchasingTabProps> = ({
         <button
           type="button"
           onClick={() => setSubTab('suppliers')}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             subTab === 'suppliers'
-              ? 'bg-amber-600 text-white ring-2 ring-amber-500/30'
-              : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
           }`}
         >
           <Building2 className="w-4 h-4" />
           <span>{isAr ? 'دليل وسجل الموردين المعتمدين' : 'Suppliers Directory'}</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${subTab === 'suppliers' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${subTab === 'suppliers' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
             {suppliers.length}
           </span>
         </button>

@@ -10,7 +10,6 @@ import {
   Search,
   Eye,
   UserCheck,
-  Building,
   Printer,
   CheckCircle2,
   DollarSign,
@@ -22,8 +21,6 @@ import {
   ArrowRightLeft,
   ChevronLeft,
 } from 'lucide-react';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
 import { Pagination } from '../ui/Pagination';
 import { Badge } from '../ui/Badge';
 import { CustomerDossierModal } from './CustomerDossierModal';
@@ -423,31 +420,33 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
   return (
     <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
-      {/* 1. Ultra-Modern Hero Header & Control Center */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
-        {/* Glow Effects */}
-        <div className="absolute -right-16 -top-16 w-64 h-64 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
+      {/* 1. Ultra-Modern Executive Hero Header & Control Center */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#120306] to-[#000000] text-white p-6 sm:p-8 shadow-2xl border border-[#7F1625]/40">
+        {/* Subtle Ambient Burgundy Glow */}
+        <div className="absolute -right-20 -top-20 w-80 h-80 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-[#7F1625]/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2.5 max-w-2xl">
+          <div className="space-y-3 max-w-2xl">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#7F1625]/30 text-[#ff8ba0] border border-[#7F1625]/50 backdrop-blur-md">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 {isAr ? 'منظومة التشغيل والقص للغير (CMT 2.0)' : 'Subcontracting & CMT Hub'}
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-slate-300 border border-white/10 backdrop-blur-md">
                 <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
-                {isAr ? 'أمانات أقمشة العملاء معزولة ومحمية' : 'Segregated Fabric Custody'}
+                {isAr ? 'أمانات خامات العملاء معزولة ومحمية' : 'Segregated Fabric Custody'}
               </span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              <Scissors className="w-7 h-7 text-[#E05265] shrink-0" />
+              <div className="w-10 h-10 rounded-2xl bg-[#7F1625]/40 border border-[#7F1625]/60 flex items-center justify-center text-[#ff8ba0] shrink-0 shadow-inner">
+                <Scissors className="w-5 h-5 text-[#ff8ba0]" />
+              </div>
               <span>{isAr ? 'خدمات القص للغير والتصنيع الكامل' : 'Subcontracting & CMT Operations'}</span>
             </h1>
 
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">
               {isAr
                 ? 'إدارة عقود تشغيل الغير، ربط عمليات القص والأورليه والخياطة بأجور العمال بالقطعة، متابعة أمانات الخامات بالمستودع، تتبع المطابع والمغاسل، ونظام فواتير مرن كاش أو على دفعات وأقساط.'
                 : 'Enterprise hub for CMT & contract cutting, worker piece-rate crediting, isolated fabric custody, outsourced embellishments, and installment billing.'}
@@ -459,7 +458,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             <button
               type="button"
               onClick={onOpenCreateJob}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer border border-[#ff8ba0]/20"
             >
               <Plus className="w-4 h-4" />
               <span>{isAr ? 'أمر قص وتشغيل جديد' : 'New Cut Order'}</span>
@@ -468,7 +467,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             <button
               type="button"
               onClick={onOpenReceiveMaterial}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer hover:border-sky-400/50"
             >
               <Boxes className="w-4 h-4 text-sky-400" />
               <span>{isAr ? 'استلام أمانة قماش' : 'Intake Fabric'}</span>
@@ -477,7 +476,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             <button
               type="button"
               onClick={onOpenExternalOp}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all cursor-pointer hover:border-amber-400/50"
             >
               <Scissors className="w-4 h-4 text-amber-400" />
               <span>{isAr ? 'تشغيل خارجي (مطبعة/تطريز)' : 'Outsourced Op'}</span>
@@ -486,125 +485,138 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Bento-Grid Elevated KPI Cards */}
+      {/* 2. Bento-Grid Elevated KPI Cards (Executive #7F1625 & #000000 Theme) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Jobs */}
-        <Card hover className="p-4 border-slate-200/80 dark:border-[#2d080e] bg-gradient-to-br from-[#7F1625]/5 via-white to-transparent dark:from-[#7F1625]/15 dark:via-[#0a0204] rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>{isAr ? 'أوامر التشغيل' : 'Job Orders'}</span>
-            <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold border border-[#7F1625]/20">
-              <Layers className="w-4 h-4" />
+        <div className="relative group rounded-3xl p-5 border border-slate-200/90 dark:border-[#7F1625]/30 bg-white dark:bg-[#000000] shadow-xs hover:shadow-xl hover:shadow-[#7F1625]/10 hover:border-[#7F1625]/60 transition-all duration-300 overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#7F1625] to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+            <span>{isAr ? 'أوامر التشغيل والقص' : 'Job Orders'}</span>
+            <div className="w-9 h-9 rounded-2xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold border border-[#7F1625]/20 group-hover:scale-105 transition-transform">
+              <Layers className="w-4.5 h-4.5" />
             </div>
           </div>
-          <div className="mt-2 text-2xl font-black font-mono text-slate-900 dark:text-slate-100">
-            {jobOrders.length}
+          <div className="mt-3">
+            <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white tracking-tight">
+              {jobOrders.length}
+            </div>
+            <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+              <span className="text-[#7F1625] dark:text-[#ff8ba0] font-bold">{activeJobsCount} {isAr ? 'قيد التنفيذ' : 'in progress'}</span>
+              <span>{completedJobsCount} {isAr ? 'مكتمل' : 'done'}</span>
+            </div>
           </div>
-          <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
-            <span className="text-[#7F1625] dark:text-[#ff8ba0] font-bold">{activeJobsCount} {isAr ? 'قيد التنفيذ' : 'in progress'}</span>
-            <span>{completedJobsCount} {isAr ? 'مكتمل' : 'done'}</span>
-          </div>
-        </Card>
+        </div>
 
         {/* Card 2: Custody Fabric Meters */}
-        <Card hover className="p-4 border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-sky-50/50 via-white to-transparent dark:from-sky-950/20 dark:via-slate-900 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+        <div className="relative group rounded-3xl p-5 border border-slate-200/90 dark:border-[#7F1625]/30 bg-white dark:bg-[#000000] shadow-xs hover:shadow-xl hover:shadow-[#7F1625]/10 hover:border-[#7F1625]/60 transition-all duration-300 overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-500 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
             <span>{isAr ? 'أمانات أقمشة العملاء' : 'Custody Fabric'}</span>
-            <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold">
-              <Boxes className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-2xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold border border-sky-200 dark:border-sky-800/40 group-hover:scale-105 transition-transform">
+              <Boxes className="w-4.5 h-4.5" />
             </div>
           </div>
-          <div className="mt-2 text-2xl font-black font-mono text-sky-600 dark:text-sky-400">
-            {totalCustodyMeters.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-xs font-normal">متر</span>
+          <div className="mt-3">
+            <div className="text-2xl sm:text-3xl font-black font-mono text-sky-600 dark:text-sky-400 tracking-tight">
+              {totalCustodyMeters.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-xs font-normal text-slate-400">{isAr ? 'متر' : 'm'}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <span>{customerMaterialReceipts.length} {isAr ? 'إذن أمانة معتمد' : 'receipt notes'}</span>
+            </div>
           </div>
-          <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>{customerMaterialReceipts.length} {isAr ? 'إذن استلام معتمد' : 'receipt notes'}</span>
-          </div>
-        </Card>
+        </div>
 
         {/* Card 3: Delivered Pieces */}
-        <Card hover className="p-4 border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-blue-50/50 via-white to-transparent dark:from-blue-950/20 dark:via-slate-900 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+        <div className="relative group rounded-3xl p-5 border border-slate-200/90 dark:border-[#7F1625]/30 bg-white dark:bg-[#000000] shadow-xs hover:shadow-xl hover:shadow-[#7F1625]/10 hover:border-[#7F1625]/60 transition-all duration-300 overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
             <span>{isAr ? 'القطع المسلمة' : 'Delivered Pieces'}</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-              <Truck className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold border border-emerald-200 dark:border-emerald-800/40 group-hover:scale-105 transition-transform">
+              <Truck className="w-4.5 h-4.5" />
             </div>
           </div>
-          <div className="mt-2 text-2xl font-black font-mono text-blue-600 dark:text-blue-400">
-            {totalDeliveredPieces.toLocaleString()}
+          <div className="mt-3">
+            <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
+              {totalDeliveredPieces.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+              {totalTargetPieces > 0 ? (
+                <span>{Math.round((totalDeliveredPieces / totalTargetPieces) * 100)}% {isAr ? 'من إجمالي المطلوب' : 'fulfilled'}</span>
+              ) : (
+                <span>{isAr ? 'جاهزة للتسليم' : 'ready'}</span>
+              )}
+            </div>
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">
-            {totalTargetPieces > 0 ? (
-              <span>{Math.round((totalDeliveredPieces / totalTargetPieces) * 100)}% {isAr ? 'من إجمالي المطلوب' : 'fulfilled'}</span>
-            ) : (
-              <span>{isAr ? 'جاهزة للشحن' : 'ready'}</span>
-            )}
-          </div>
-        </Card>
+        </div>
 
         {/* Card 4: Invoiced Revenue */}
-        <Card hover className="p-4 border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-amber-50/50 via-white to-transparent dark:from-amber-950/20 dark:via-slate-900 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+        <div className="relative group rounded-3xl p-5 border border-slate-200/90 dark:border-[#7F1625]/30 bg-white dark:bg-[#000000] shadow-xs hover:shadow-xl hover:shadow-[#7F1625]/10 hover:border-[#7F1625]/60 transition-all duration-300 overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
             <span>{isAr ? 'إجمالي المفوتر' : 'Invoiced Revenue'}</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-              <Receipt className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold border border-amber-200 dark:border-amber-800/40 group-hover:scale-105 transition-transform">
+              <Receipt className="w-4.5 h-4.5" />
             </div>
           </div>
-          <div className="mt-2 text-xl font-black font-mono text-slate-900 dark:text-slate-100">
-            {totalInvoicedRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+          <div className="mt-3">
+            <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white tracking-tight">
+              {totalInvoicedRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+              {totalPaidRevenue.toLocaleString()} {isAr ? 'ج.م مسدد فعلياً' : 'EGP paid'}
+            </div>
           </div>
-          <div className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
-            {totalPaidRevenue.toLocaleString()} {isAr ? 'ج.م مسدد فعلياً' : 'EGP paid'}
-          </div>
-        </Card>
+        </div>
 
         {/* Card 5: Outstanding Balance */}
-        <Card hover className={`p-4 border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xs ${
-          totalOutstandingBalance > 0
-            ? 'bg-gradient-to-br from-rose-50/60 via-white to-transparent dark:from-rose-950/30 dark:via-slate-900'
-            : 'bg-gradient-to-br from-emerald-50/50 via-white to-transparent dark:from-emerald-950/20 dark:via-slate-900'
-        }`}>
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+        <div className="relative group rounded-3xl p-5 border border-slate-200/90 dark:border-[#7F1625]/30 bg-white dark:bg-[#000000] shadow-xs hover:shadow-xl hover:shadow-[#7F1625]/10 hover:border-[#7F1625]/60 transition-all duration-300 overflow-hidden flex flex-col justify-between">
+          <div className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent ${totalOutstandingBalance > 0 ? 'via-[#7F1625]' : 'via-emerald-500'} to-transparent opacity-60 group-hover:opacity-100 transition-opacity`} />
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
             <span>{isAr ? 'الرصيد المتبقي المستحق' : 'Outstanding Due'}</span>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
-              totalOutstandingBalance > 0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950' : 'bg-emerald-50 text-emerald-600'
+            <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold border group-hover:scale-105 transition-transform ${
+              totalOutstandingBalance > 0
+                ? 'bg-[#7F1625]/10 text-[#7F1625] dark:bg-[#7F1625]/25 dark:text-[#ff8ba0] border-[#7F1625]/20'
+                : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
             }`}>
-              <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-4.5 h-4.5" />
             </div>
           </div>
-          <div className={`mt-2 text-xl font-black font-mono ${totalOutstandingBalance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            {totalOutstandingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+          <div className="mt-3">
+            <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${totalOutstandingBalance > 0 ? 'text-[#7F1625] dark:text-[#ff8ba0]' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              {totalOutstandingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+            </div>
+            <div className="mt-1 text-[11px] font-semibold">
+              {totalOutstandingBalance > 0 ? (
+                <span className="text-[#7F1625] dark:text-[#ff8ba0] flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {isAr ? 'مستحق تحت التحصيل' : 'due from clients'}
+                </span>
+              ) : (
+                <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {isAr ? 'حسابات العملاء مسواة' : 'all settled'}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="mt-1 text-[11px] font-semibold">
-            {totalOutstandingBalance > 0 ? (
-              <span className="text-rose-600 flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {isAr ? 'مستحق تحت التحصيل' : 'due from clients'}
-              </span>
-            ) : (
-              <span className="text-emerald-600 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {isAr ? 'حسابات العملاء مسواة' : 'all settled'}
-              </span>
-            )}
-          </div>
-        </Card>
+        </div>
       </div>
 
-      {/* 3. Luxury Segmented Pill Tab Bar */}
-      <div className="p-1.5 bg-slate-100 dark:bg-[#0a0204] rounded-2xl border border-slate-200/80 dark:border-[#2d080e] flex items-center gap-1 overflow-x-auto shadow-inner text-xs font-bold">
+      {/* 3. Luxury Segmented Pill Tab Bar (Executive Obsidian & Burgundy Theme) */}
+      <div className="p-1.5 bg-white dark:bg-[#000000] rounded-2xl border border-slate-200/90 dark:border-[#7F1625]/30 flex items-center gap-1 overflow-x-auto shadow-xs text-xs font-bold">
         <button
           type="button"
           onClick={() => setActiveSubTab('jobs')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'jobs'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <Layers className="w-4 h-4" />
           <span>{isAr ? 'أوامر التشغيل والقص' : 'Job Orders'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'jobs' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'jobs' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {jobOrders.length}
           </span>
         </button>
@@ -612,15 +624,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('bundles')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'bundles'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <QrCode className="w-4 h-4" />
           <span>{isAr ? 'بطاقات الحزم وتتبع الخط' : 'CMT Bundle Floor'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'bundles' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'bundles' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {cmtBundles.filter((b) => b.current_stage_code !== 'completed').length}
           </span>
         </button>
@@ -628,15 +640,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('receipts')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'receipts'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <Boxes className="w-4 h-4" />
           <span>{isAr ? 'أمانات الخامات' : 'Material Custody'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'receipts' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {customerMaterialReceipts.length}
           </span>
         </button>
@@ -644,15 +656,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('external_ops')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'external_ops'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <Scissors className="w-4 h-4" />
           <span>{isAr ? 'التشغيل الخارجي (الباطن)' : 'External Ops'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'external_ops' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'external_ops' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {externalOperations.length}
           </span>
         </button>
@@ -660,15 +672,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('deliveries')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'deliveries'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <Truck className="w-4 h-4" />
           <span>{isAr ? 'أذون التسليم والمصالحات' : 'Delivery Notes'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'deliveries' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'deliveries' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {jobDeliveryNotes.length}
           </span>
         </button>
@@ -676,15 +688,15 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('invoices')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'invoices'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <Receipt className="w-4 h-4" />
           <span>{isAr ? 'الفواتير والأقساط' : 'Invoices & Tranches'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'invoices' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {jobInvoices.length}
           </span>
         </button>
@@ -692,31 +704,31 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('customers')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
             activeSubTab === 'customers'
-              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#180608]'
+              ? 'bg-[#7F1625] text-white shadow-md shadow-[#7F1625]/35 font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#150406]'
           }`}
         >
           <Users className="w-4 h-4" />
           <span>{isAr ? 'العملاء وبروفايلاتهم' : 'Clients & Dossiers'}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-[#22070c] text-slate-700 dark:text-slate-300'}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${activeSubTab === 'customers' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-[#1a0508] text-slate-700 dark:text-slate-300'}`}>
             {customers.length}
           </span>
         </button>
       </div>
 
-      {/* 4. Enhanced Search & Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 bg-white dark:bg-[#0a0204] rounded-2xl border border-slate-200 dark:border-[#2d080e] shadow-2xs text-xs">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative min-w-[260px]">
-            <Search className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+      {/* 4. Enhanced Search & Filter Toolbar (Obsidian Standard) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-white dark:bg-[#000000] rounded-2xl border border-slate-200/90 dark:border-[#7F1625]/30 shadow-xs text-xs">
+        <div className="flex items-center gap-2.5 flex-wrap flex-1">
+          <div className="relative min-w-[280px] flex-1 max-w-md">
+            <Search className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'right-3.5' : 'left-3.5'} top-3 pointer-events-none`} />
             <input
               type="text"
               placeholder={isAr ? 'بحث برقم الأمر، العميل، الموديل، الفني، الخامة...' : 'Search order #, client, model, fabric...'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#7F1625] focus:ring-1 focus:ring-[#7F1625]/30 transition-all`}
+              className={`w-full bg-slate-50 dark:bg-[#0d0204] border border-slate-200 dark:border-[#7F1625]/30 rounded-xl ${isAr ? 'pr-10 pl-3' : 'pl-10 pr-3'} py-2.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#7F1625] focus:ring-2 focus:ring-[#7F1625]/20 transition-all font-medium`}
             />
           </div>
 
@@ -725,7 +737,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               <select
                 value={serviceTypeFilter}
                 onChange={(e) => setServiceTypeFilter(e.target.value as any)}
-                className="bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#7F1625]"
+                className="bg-slate-50 dark:bg-[#0d0204] border border-slate-200 dark:border-[#7F1625]/30 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#7F1625] cursor-pointer"
               >
                 <option value="all">{isAr ? 'كل الخدمات (قص وتصنيع)' : 'All Services'}</option>
                 <option value="contract_cutting">{isAr ? '✂️ قص للغير فقط' : 'Cutting Only'}</option>
@@ -735,7 +747,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-slate-50 dark:bg-[#120406] border border-slate-200 dark:border-[#2d080e] rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#7F1625]"
+                className="bg-slate-50 dark:bg-[#0d0204] border border-slate-200 dark:border-[#7F1625]/30 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#7F1625] cursor-pointer"
               >
                 <option value="all">{isAr ? 'كل الحالات' : 'All Statuses'}</option>
                 <option value="draft">{isAr ? 'مسودة' : 'Draft'}</option>
@@ -749,7 +761,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         </div>
 
         <div className="flex items-center gap-2 justify-end text-slate-500 text-xs font-mono">
-          <span>
+          <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-[#0d0204] border border-slate-200/80 dark:border-[#7F1625]/25 text-slate-700 dark:text-slate-300 font-bold">
             {activeSubTab === 'jobs' && `${filteredJobs.length} ${isAr ? 'أمر متاح' : 'orders'}`}
             {activeSubTab === 'bundles' && `${filteredBundles.length} ${isAr ? 'حزمة تشغيل' : 'bundles'}`}
             {activeSubTab === 'receipts' && `${filteredReceipts.length} ${isAr ? 'إذن أمانة' : 'receipts'}`}
@@ -762,7 +774,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
             <button
               type="button"
               onClick={() => setSearchTerm('')}
-              className="text-xs text-[#7F1625] dark:text-[#ff8ba0] hover:underline font-bold"
+              className="px-2.5 py-1 text-xs text-[#7F1625] dark:text-[#ff8ba0] hover:underline font-bold cursor-pointer"
             >
               {isAr ? 'مسح الفلتر' : 'Clear'}
             </button>
@@ -770,25 +782,25 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         </div>
       </div>
 
-      {/* 5. VIEW 1: Job Orders Table */}
+      {/* 5. VIEW 1: Job Orders Table (Executive Obsidian & Burgundy) */}
       {activeSubTab === 'jobs' && (
-        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm bg-white dark:bg-slate-900">
+        <div className="overflow-hidden border border-slate-200/90 dark:border-[#7F1625]/30 rounded-3xl shadow-xs bg-white dark:bg-[#000000]">
           <div className="overflow-x-auto">
             <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
-              <thead className="bg-slate-50/80 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-mono font-bold text-[11.5px]">
+              <thead className="bg-slate-50/90 dark:bg-[#0c0204] text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#7F1625]/25 font-mono font-bold text-[11.5px]">
                 <tr>
-                  <th className="py-3.5 px-4">{isAr ? 'رقم الأمر' : 'Order #'}</th>
-                  <th className="py-3.5 px-4">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="py-3.5 px-4">{isAr ? 'نوع الخدمة' : 'Service Type'}</th>
-                  <th className="py-3.5 px-4">{isAr ? 'الموديل' : 'Model'}</th>
-                  <th className="py-3.5 px-4">{isAr ? 'الفني المسؤول' : 'Lead Technician'}</th>
-                  <th className="py-3.5 px-4 text-center">{isAr ? 'نسبة الإنجاز والتسليم' : 'Progress'}</th>
-                  <th className="py-3.5 px-4 text-center">{isAr ? 'سعر الوحدة' : 'Unit Rate'}</th>
-                  <th className="py-3.5 px-4 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="py-3.5 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  <th className="py-4 px-4">{isAr ? 'رقم الأمر' : 'Order #'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'نوع الخدمة' : 'Service Type'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'الموديل' : 'Model'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'الفني المسؤول' : 'Lead Technician'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'نسبة الإنجاز والتسليم' : 'Progress'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'سعر الوحدة' : 'Unit Rate'}</th>
+                  <th className="py-4 px-4 text-center font-sans">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="py-4 px-4 text-center font-sans">{isAr ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-sans">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60 font-sans">
                 {paginatedJobs.map((job) => {
                   const empFromList = job.assigned_employee_id ? employees.find(e => e.id === job.assigned_employee_id) : null;
                   const empName = job.assigned_employee_name || (job as any).assigned_employee?.name || (job as any).assignedEmployee?.name || empFromList?.name;
@@ -800,46 +812,50 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                   const delPercent = targetQty > 0 ? Math.min(100, Math.round((deliveredQty / targetQty) * 100)) : 0;
 
                   return (
-                    <tr key={job.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr key={job.id} className="hover:bg-slate-50/70 dark:hover:bg-[#120406] transition-colors">
                       {/* Order Number */}
-                      <td className="py-3 px-4 font-mono font-bold text-[#7F1625] dark:text-[#ff8ba0]">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs">{job.order_number}</span>
-                        </div>
+                      <td className="py-3.5 px-4 font-mono font-black text-[#7F1625] dark:text-[#ff8ba0]">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#7F1625]/10 dark:bg-[#7F1625]/20 border border-[#7F1625]/25 text-xs">
+                          {job.order_number}
+                        </span>
                       </td>
 
-                      {/* Customer Name Clickable to Dossier */}
-                      <td className="py-3 px-4">
+                      {/* Customer with Monogram Avatar */}
+                      <td className="py-3.5 px-4">
                         <button
                           type="button"
                           onClick={() => job.customer_id && handleOpenDossier(job.customer_id)}
-                          className="font-bold text-slate-900 dark:text-slate-100 hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1.5 group"
+                          className="font-bold text-slate-900 dark:text-slate-100 hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-2.5 group"
                           title={isAr ? 'فتح بروفايل العميل الشامل وكشف الحساب' : 'Open Customer Dossier'}
                         >
-                          <Building className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7F1625] shrink-0" />
-                          <span className="group-hover:underline">{job.customer_name}</span>
-                          <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#7F1625] to-[#450a12] text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+                            {job.customer_name ? job.customer_name.trim().charAt(0) : '؟'}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="group-hover:underline block truncate max-w-[160px]">{job.customer_name}</span>
+                          </div>
+                          <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         </button>
                       </td>
 
                       {/* Service Type */}
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
                           job.service_type === 'contract_cutting'
                             ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800'
-                            : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                            : 'bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] border-[#7F1625]/30'
                         }`}>
-                          {job.service_type === 'contract_cutting' ? '✂️ ' + (isAr ? 'قص للغير' : 'Cutting') : '🏭 ' + (isAr ? 'تصنيع CMT' : 'CMT')}
+                          {job.service_type === 'contract_cutting' ? '✂️ ' + (isAr ? 'قص للغير' : 'Cutting Only') : '🏭 ' + (isAr ? 'تصنيع CMT' : 'Full CMT')}
                         </span>
                       </td>
 
                       {/* Model Name */}
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300 font-medium">
+                      <td className="py-3.5 px-4 text-slate-800 dark:text-slate-200 font-semibold">
                         {job.model_name || '—'}
                       </td>
 
                       {/* Lead Technician */}
-                      <td className="py-3 px-4">
+                      <td className="py-3.5 px-4">
                         {empName ? (
                           <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200">
                             <div className="w-5 h-5 rounded-md bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] text-[10px] flex items-center justify-center font-bold">
@@ -853,11 +869,11 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       </td>
 
                       {/* Progress Bar Cell */}
-                      <td className="py-3 px-4 min-w-[180px]">
-                        <div className="space-y-1">
+                      <td className="py-3.5 px-4 min-w-[180px]">
+                        <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[10.5px] font-mono">
-                            <span className="text-slate-500">{isAr ? 'مطلوب:' : 'Target:'} <strong>{targetQty}</strong></span>
-                            <span className="text-emerald-600 font-bold">{isAr ? 'مسلم:' : 'Del:'} {deliveredQty} ({delPercent}%)</span>
+                            <span className="text-slate-500 dark:text-slate-400">{isAr ? 'مطلوب:' : 'Target:'} <strong className="text-slate-900 dark:text-slate-100">{targetQty}</strong></span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">{isAr ? 'مسلم:' : 'Del:'} {deliveredQty} ({delPercent}%)</span>
                           </div>
                           {/* Dual Progress Bar: Cut (Wine Red) & Delivered (emerald) */}
                           <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden flex">
@@ -868,7 +884,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             />
                             <div
                               style={{ width: `${Math.max(0, cutPercent - delPercent)}%` }}
-                              className="bg-[#7F1625]/80 h-full"
+                              className="bg-[#7F1625] h-full"
                               title={`${isAr ? 'مقصوص قيد التشغيل:' : 'Cut in progress:'} ${cutPercent}%`}
                             />
                           </div>
@@ -876,20 +892,20 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       </td>
 
                       {/* Unit Rate */}
-                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
+                      <td className="py-3.5 px-4 text-center font-mono font-black text-slate-900 dark:text-slate-100">
                         {Number(job.unit_rate).toFixed(2)} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${
                           job.status === 'completed'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                             : job.status === 'in_progress'
                             ? 'bg-[#7F1625]/10 text-[#7F1625] border-[#7F1625]/30 dark:bg-[#7F1625]/25 dark:text-[#ff8ba0]'
                             : job.status === 'confirmed'
-                            ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                            ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800'
+                            : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800'
                         }`}>
                           {job.status === 'in_progress' && <span className="w-1.5 h-1.5 rounded-full bg-[#7F1625] animate-pulse" />}
                           {job.status === 'completed' ? (isAr ? 'مكتمل' : 'Completed') : job.status === 'in_progress' ? (isAr ? 'قيد التشغيل' : 'In Progress') : job.status === 'confirmed' ? (isAr ? 'مؤكد' : 'Confirmed') : (isAr ? 'مسودة' : 'Draft')}
@@ -897,16 +913,16 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center justify-center gap-1.5">
                           {job.status === 'draft' && (
                             <button
                               type="button"
                               onClick={() => onConfirmJob(job.id)}
                               title={isAr ? 'تأكيد أمر التشغيل' : 'Confirm Order'}
-                              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors"
+                              className="p-1.5 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <CheckCircle2 className="w-4 h-4" />
                             </button>
                           )}
 
@@ -915,9 +931,9 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                               type="button"
                               onClick={() => onSelectJobForDelivery(job)}
                               title={isAr ? 'تحرير إذن تسليم مشغولات' : 'Create Delivery Note'}
-                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 border border-blue-200 dark:border-blue-800 transition-colors"
+                              className="p-1.5 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
                             >
-                              <Truck className="w-3.5 h-3.5" />
+                              <Truck className="w-4 h-4" />
                             </button>
                           )}
 
@@ -926,9 +942,9 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                               type="button"
                               onClick={() => onSelectJobForInvoice(job)}
                               title={isAr ? 'إصدار فاتورة خدمات وأقساط' : 'Create Service Invoice'}
-                              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-colors"
+                              className="p-1.5 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer"
                             >
-                              <Receipt className="w-3.5 h-3.5" />
+                              <Receipt className="w-4 h-4" />
                             </button>
                           )}
 
@@ -936,18 +952,18 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                             type="button"
                             onClick={() => handlePrintDocument('job', job)}
                             title={isAr ? 'طباعة تذكرة أمر التشغيل والقص' : 'Print Job Ticket'}
-                            className="p-1.5 rounded-lg text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors"
+                            className="p-1.5 rounded-xl text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors cursor-pointer"
                           >
-                            <Printer className="w-3.5 h-3.5" />
+                            <Printer className="w-4 h-4" />
                           </button>
 
                           <button
                             type="button"
                             onClick={() => onSelectJobForDetails(job)}
                             title={isAr ? 'عرض التفاصيل وتحليل الربحية' : 'View Details & Profitability'}
-                            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
+                            className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 dark:hover:bg-[#1f070b] dark:text-slate-300 border border-slate-200 dark:border-[#7F1625]/30 transition-colors cursor-pointer"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -956,16 +972,19 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                 })}
                 {paginatedJobs.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
-                      <Scissors className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                      <p className="font-bold text-xs">{isAr ? 'لا توجد أوامر تشغيل مطابقة للفلاتر.' : 'No job orders found.'}</p>
+                    <td colSpan={9} className="py-14 text-center text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center mx-auto mb-3 border border-[#7F1625]/20">
+                        <Scissors className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-1">{isAr ? 'لا توجد أوامر تشغيل مطابقة للفلاتر.' : 'No job orders found.'}</p>
+                      <p className="text-xs text-slate-400">{isAr ? 'يمكنك إنشاء أمر قص وتشغيل جديد بالنقر على الزر بالأعلى.' : 'Create a new order to get started.'}</p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50/40 dark:bg-slate-900/40">
+          <div className="p-4 border-t border-slate-200 dark:border-[#7F1625]/20 flex justify-center bg-white dark:bg-[#000000]">
             <Pagination
               currentPage={jobPage}
               totalPages={totalJobPages}
@@ -976,7 +995,7 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               isAr={isAr}
             />
           </div>
-        </Card>
+        </div>
       )}
 
       {/* VIEW: CMT Bundle Floor Tracker & Worker Piece-Rate Wages */}
@@ -1192,123 +1211,152 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
         </div>
       )}
 
-      {/* 6. VIEW 2: Customer Material Receipts */}
+      {/* 6. VIEW 3: Customer Material Receipts (Isolated Custody) */}
       {activeSubTab === 'receipts' && (
-        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm bg-white dark:bg-slate-900">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Boxes className="w-4 h-4 text-sky-600" />
-                <span>{isAr ? 'محاضر استلام أمانات خامات العملاء' : 'Customer Material Custody Receipts'}</span>
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {isAr ? 'أمانات أقمشة العملاء تسجل كعهدة منفصلة وتسمع تلقائياً في المخزن العام تحت حسابات أمانات CMT' : 'Segregated customer fabrics tracked in inventory under client-owned custody accounts'}
-              </p>
+        <div className="space-y-4">
+          {/* Custody Isolation Security Callout Banner */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-500/10 via-slate-50 to-white dark:from-sky-950/30 dark:via-[#000000] dark:to-[#0a0204] p-5 border border-sky-200/80 dark:border-sky-900/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold shrink-0 border border-sky-500/30 shadow-xs">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h5 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>{isAr ? 'مستودع أمانات خامات العملاء معزول ومحمي قانونياً' : 'Isolated Customer Fabric Custody'}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 font-bold border border-sky-200 dark:border-sky-800/60">
+                    {isAr ? 'خاص بالقص للغير' : 'CMT Isolated'}
+                  </span>
+                </h5>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {isAr
+                    ? 'أمانات أقمشة العملاء تسجل وتُقيد كعهدة مستقلة، وتسمع دفترياً في المخازن العامة تحت بند "أمانات صالة القص" دون الخلط بأصول المصنع.'
+                    : 'Customer-supplied fabrics are tracked in dedicated custody accounts and reconciled with general ledger as third-party assets.'}
+                </p>
+              </div>
             </div>
-            <Button size="sm" onClick={onOpenReceiveMaterial} icon={<Plus className="w-3.5 h-3.5" />}>
-              {isAr ? 'إذن استلام أمانة جديد' : 'New Custody Intake'}
-            </Button>
+            <div className="shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onOpenReceiveMaterial}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-md shadow-[#7F1625]/30 transition-all cursor-pointer border border-[#ff8ba0]/20"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isAr ? 'إذن استلام أمانة جديد' : 'New Custody Intake'}</span>
+              </button>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
-              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-mono font-semibold">
-                <tr>
-                  <th className="py-3 px-4">{isAr ? 'رقم الإذن' : 'Receipt #'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'نوع القماش والخامة' : 'Fabric Name'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الأمتار المستلمة' : 'Meters'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الوزن (كجم)' : 'Weight (kg)'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الأثواب' : 'Rolls'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'حالة القماش' : 'Condition'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'الفاحص المستلم' : 'Inspector'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
-                {paginatedReceipts.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                    <td className="py-3 px-4 font-bold text-sky-600 dark:text-sky-400">{r.receipt_number}</td>
-                    <td className="py-3 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => r.customer_id && handleOpenDossier(r.customer_id)}
-                        className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1 group"
-                        title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
-                      >
-                        <span className="group-hover:underline">{r.customer_name}</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                    </td>
-                    <td className="py-3 px-4 font-sans text-slate-800 dark:text-slate-200 font-medium">
-                      {r.fabric_name}
-                      {r.fabric_code && <span className="block text-[10px] text-slate-400 font-mono">{r.fabric_code}</span>}
-                    </td>
-                    <td className="py-3 px-4 text-center font-black text-sky-600 dark:text-sky-400 text-sm">
-                      {Number(r.received_meters).toFixed(1)} م
-                    </td>
-                    <td className="py-3 px-4 text-center">{r.received_weight_kg ? `${r.received_weight_kg} كجم` : '—'}</td>
-                    <td className="py-3 px-4 text-center font-bold text-slate-800 dark:text-slate-200">{r.rolls_count || 1}</td>
-                    <td className="py-3 px-4 text-center font-sans">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                        {r.condition_status === 'accepted' ? (isAr ? 'مقبول سليم' : 'Accepted') : r.condition_status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-sans text-slate-600 dark:text-slate-400">{r.inspector_name || '—'}</td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
+          <div className="overflow-hidden border border-slate-200/90 dark:border-[#7F1625]/30 rounded-3xl shadow-xs bg-white dark:bg-[#000000]">
+            <div className="overflow-x-auto">
+              <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
+                <thead className="bg-slate-50/90 dark:bg-[#0c0204] text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#7F1625]/25 font-mono font-bold text-[11.5px]">
+                  <tr>
+                    <th className="py-4 px-4">{isAr ? 'رقم الإذن' : 'Receipt #'}</th>
+                    <th className="py-4 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
+                    <th className="py-4 px-4 font-sans">{isAr ? 'نوع القماش والخامة' : 'Fabric Name'}</th>
+                    <th className="py-4 px-4 text-center">{isAr ? 'الأمتار المستلمة' : 'Meters'}</th>
+                    <th className="py-4 px-4 text-center">{isAr ? 'الوزن (كجم)' : 'Weight (kg)'}</th>
+                    <th className="py-4 px-4 text-center">{isAr ? 'الأثواب' : 'Rolls'}</th>
+                    <th className="py-4 px-4 font-sans text-center">{isAr ? 'حالة القماش' : 'Condition'}</th>
+                    <th className="py-4 px-4 font-sans">{isAr ? 'الفاحص المستلم' : 'Inspector'}</th>
+                    <th className="py-4 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60 font-mono">
+                  {paginatedReceipts.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/70 dark:hover:bg-[#120406] transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-sky-600 dark:text-sky-400">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/40 text-xs font-mono">
+                          {r.receipt_number}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
                         <button
                           type="button"
-                          onClick={() => handlePrintDocument('receipt', r)}
-                          title={isAr ? 'طباعة محضر استلام أمانة الخامات' : 'Print Receipt'}
-                          className="p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40 border border-sky-200 dark:border-sky-800 transition-colors"
+                          onClick={() => r.customer_id && handleOpenDossier(r.customer_id)}
+                          className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-2 group"
+                          title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
                         >
-                          <Printer className="w-3.5 h-3.5" />
+                          <div className="w-6 h-6 rounded-lg bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            {r.customer_name ? r.customer_name.trim().charAt(0) : '؟'}
+                          </div>
+                          <span className="group-hover:underline truncate max-w-[150px]">{r.customer_name}</span>
+                          <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         </button>
-                        {r.customer_id && (
+                      </td>
+                      <td className="py-3.5 px-4 font-sans text-slate-800 dark:text-slate-200 font-semibold">
+                        {r.fabric_name}
+                        {r.fabric_code && <span className="block text-[10px] text-slate-400 font-mono mt-0.5">{r.fabric_code}</span>}
+                      </td>
+                      <td className="py-3.5 px-4 text-center font-black text-sky-600 dark:text-sky-400 text-sm">
+                        {Number(r.received_meters).toFixed(1)} <span className="text-[11px] font-normal text-slate-400">م</span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-slate-700 dark:text-slate-300 font-bold">{r.received_weight_kg ? `${r.received_weight_kg} كجم` : '—'}</td>
+                      <td className="py-3.5 px-4 text-center font-black text-slate-900 dark:text-slate-100">{r.rolls_count || 1}</td>
+                      <td className="py-3.5 px-4 text-center font-sans">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          {r.condition_status === 'accepted' ? (isAr ? 'مقبول سليم' : 'Accepted') : r.condition_status}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-sans text-slate-600 dark:text-slate-400">{r.inspector_name || '—'}</td>
+                      <td className="py-3.5 px-4 text-center font-sans">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleOpenDossier(r.customer_id!)}
-                            title={isAr ? 'بروفايل العميل' : 'Customer Dossier'}
-                            className="p-1.5 rounded-lg text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors"
+                            onClick={() => handlePrintDocument('receipt', r)}
+                            title={isAr ? 'طباعة محضر استلام أمانة الخامات' : 'Print Receipt'}
+                            className="p-1.5 rounded-xl text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40 border border-sky-200 dark:border-sky-800 transition-colors cursor-pointer"
                           >
-                            <UserCheck className="w-3.5 h-3.5" />
+                            <Printer className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {paginatedReceipts.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
-                      <Boxes className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                      <p className="font-bold text-xs">{isAr ? 'لا توجد محاضر استلام خامات مسجلة.' : 'No receipts found.'}</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                          {r.customer_id && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDossier(r.customer_id!)}
+                              title={isAr ? 'بروفايل العميل' : 'Customer Dossier'}
+                              className="p-1.5 rounded-xl text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors cursor-pointer"
+                            >
+                              <UserCheck className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedReceipts.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="py-14 text-center text-slate-400 font-sans">
+                        <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 flex items-center justify-center mx-auto mb-3 border border-sky-200 dark:border-sky-800/40">
+                          <Boxes className="w-6 h-6" />
+                        </div>
+                        <p className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-1">{isAr ? 'لا توجد محاضر استلام أمانات خامات مسجلة.' : 'No receipts found.'}</p>
+                        <p className="text-xs text-slate-400">{isAr ? 'يمكنك تحرير إذن استلام أمانة جديد لتسجيل أقمشة العملاء المعزولة.' : 'Receive customer fabrics to get started.'}</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-[#7F1625]/20 flex justify-center bg-white dark:bg-[#000000]">
+              <Pagination
+                currentPage={receiptPage}
+                totalPages={totalReceiptPages}
+                totalItems={filteredReceipts.length}
+                perPage={receiptPerPage}
+                onPageChange={setReceiptPage}
+                alwaysShow={true}
+                isAr={isAr}
+              />
+            </div>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50/40 dark:bg-slate-900/40">
-            <Pagination
-              currentPage={receiptPage}
-              totalPages={totalReceiptPages}
-              totalItems={filteredReceipts.length}
-              perPage={receiptPerPage}
-              onPageChange={setReceiptPage}
-              alwaysShow={true}
-              isAr={isAr}
-            />
-          </div>
-        </Card>
+        </div>
       )}
 
-      {/* 7. VIEW 3: External Operations */}
+      {/* 7. VIEW 4: External Operations (Outsourced Subcontractors) */}
       {activeSubTab === 'external_ops' && (
-        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm bg-white dark:bg-slate-900">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 flex items-center justify-between flex-wrap gap-3">
+        <div className="overflow-hidden border border-slate-200/90 dark:border-[#7F1625]/30 rounded-3xl shadow-xs bg-white dark:bg-[#000000]">
+          <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-[#7F1625]/25 bg-slate-50/80 dark:bg-[#0c0204] flex items-center justify-between flex-wrap gap-3">
             <div>
               <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Scissors className="w-4 h-4 text-amber-500" />
@@ -1318,68 +1366,79 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                 {isAr ? 'تتبع خروج القطع للمطابع والمغاسل وورش التطريز، وتعيين فني الفحص لاحتساب أجره بالقطعة' : 'Track batches dispatched to embroidery, print, or laundry vendors, and credit inspecting technician'}
               </p>
             </div>
-            <Button size="sm" onClick={onOpenExternalOp} icon={<Plus className="w-3.5 h-3.5" />}>
-              {isAr ? 'إرسال تشغيل جديد' : 'New Dispatch'}
-            </Button>
+            <button
+              type="button"
+              onClick={onOpenExternalOp}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-bold shadow-sm transition-all cursor-pointer border border-[#ff8ba0]/20"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{isAr ? 'إرسال تشغيل جديد' : 'New Dispatch'}</span>
+            </button>
           </div>
 
           <div className="overflow-x-auto">
             <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
-              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-mono font-semibold">
+              <thead className="bg-slate-50/90 dark:bg-[#0c0204] text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#7F1625]/25 font-mono font-bold text-[11.5px]">
                 <tr>
-                  <th className="py-3 px-4">{isAr ? 'رقم الحركة' : 'Operation #'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'المقاول / الورشة' : 'Subcontractor'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'العملية' : 'Operation'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'الفني المستلم' : 'Technician'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'المرسل' : 'Sent Qty'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'السليم' : 'Accepted'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الهالك' : 'Scrap'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'التكلفة' : 'Cost'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
+                  <th className="py-4 px-4">{isAr ? 'رقم الحركة' : 'Operation #'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'المقاول / الورشة' : 'Subcontractor'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'العملية' : 'Operation'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'الفني المستلم' : 'Technician'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'المرسل' : 'Sent Qty'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'السليم' : 'Accepted'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'الهالك' : 'Scrap'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'التكلفة' : 'Cost'}</th>
+                  <th className="py-4 px-4 font-sans text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="py-4 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60 font-mono text-[11.5px]">
                 {paginatedOps.map((op) => {
                   const empName = (op as any).assigned_employee?.name || (op as any).assignedEmployee?.name || (op as any).assigned_employee_name;
                   return (
-                    <tr key={op.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                      <td className="py-3 px-4 font-bold text-amber-600 dark:text-amber-400">{op.operation_number}</td>
-                      <td className="py-3 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">{op.subcontractor_name}</td>
-                      <td className="py-3 px-4 font-sans">
-                        <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <tr key={op.id} className="hover:bg-slate-50/70 dark:hover:bg-[#120406] transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-amber-600 dark:text-amber-400">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 text-xs font-mono">
+                          {op.operation_number}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-sans font-bold text-slate-900 dark:text-slate-100">{op.subcontractor_name}</td>
+                      <td className="py-3.5 px-4 font-sans">
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
                           {op.operation_type === 'embroidery' ? (isAr ? '🪡 تطريز آلي' : 'Embroidery') : op.operation_type === 'printing' ? (isAr ? '🎨 طباعة' : 'Printing') : (isAr ? '💧 غسيل وتجهيز' : op.operation_type)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-sans">
+                      <td className="py-3.5 px-4 font-sans">
                         {empName ? (
                           <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200">
-                            <UserCheck className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0]" />
-                            <span className="font-medium truncate max-w-[100px]">{empName}</span>
+                            <div className="w-5 h-5 rounded-md bg-[#7F1625]/10 dark:bg-[#7F1625]/25 text-[#7F1625] dark:text-[#ff8ba0] text-[10px] flex items-center justify-center font-bold">
+                              {empName.trim().charAt(0)}
+                            </div>
+                            <span className="font-medium truncate max-w-[110px]">{empName}</span>
                           </div>
                         ) : (
                           <span className="text-[10px] text-slate-400 font-mono">{isAr ? 'غير معيّن' : '—'}</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-slate-100">{op.sent_quantity}</td>
-                      <td className="py-3 px-4 text-center text-emerald-600 dark:text-emerald-400 font-bold">{op.received_accepted_quantity}</td>
-                      <td className="py-3 px-4 text-center text-rose-600 dark:text-rose-400 font-bold">{op.scrap_quantity}</td>
-                      <td className="py-3 px-4 text-center text-slate-800 dark:text-slate-300 font-bold">{Number(op.total_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="py-3 px-4 text-center font-sans">
-                        <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${op.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                      <td className="py-3.5 px-4 text-center font-black text-slate-900 dark:text-slate-100 text-xs">{op.sent_quantity}</td>
+                      <td className="py-3.5 px-4 text-center text-emerald-600 dark:text-emerald-400 font-black text-xs">{op.received_accepted_quantity}</td>
+                      <td className="py-3.5 px-4 text-center text-rose-600 dark:text-rose-400 font-bold">{op.scrap_quantity}</td>
+                      <td className="py-3.5 px-4 text-center text-slate-800 dark:text-slate-200 font-black">{Number(op.total_cost).toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span></td>
+                      <td className="py-3.5 px-4 text-center font-sans">
+                        <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-bold ${op.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'}`}>
                           {op.status === 'completed' ? (isAr ? 'مكتمل' : 'Completed') : (isAr ? 'مرسل بالخارج' : 'Dispatched')}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center font-sans">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="py-3.5 px-4 text-center font-sans">
+                        <div className="flex items-center justify-center gap-1.5">
                           {op.status !== 'completed' && (
                             <button
                               type="button"
                               onClick={() => onSelectOpForReceive(op)}
                               title={isAr ? 'استلام وفحص الجودة' : 'Receive & QC'}
-                              className="p-1.5 rounded-lg text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors"
+                              className="p-1.5 rounded-xl text-[#7F1625] hover:bg-[#7F1625]/10 dark:text-[#ff8ba0] dark:hover:bg-[#7F1625]/25 border border-[#7F1625]/30 transition-colors cursor-pointer"
                             >
-                              <Download className="w-3.5 h-3.5" />
+                              <Download className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -1389,16 +1448,19 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                 })}
                 {paginatedOps.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
-                      <Scissors className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                      <p className="font-bold text-xs">{isAr ? 'لا توجد حركات تشغيل خارجي مسجلة.' : 'No operations found.'}</p>
+                    <td colSpan={10} className="py-14 text-center text-slate-400 font-sans">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3 border border-amber-200 dark:border-amber-800/40">
+                        <Scissors className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-1">{isAr ? 'لا توجد حركات تشغيل خارجي مسجلة.' : 'No operations found.'}</p>
+                      <p className="text-xs text-slate-400">{isAr ? 'يمكنك إرسال تشغيل جديد لمقاولي الباطن (مطابع، تطريز، مغاسل).' : 'Dispatch batches to subcontractors to get started.'}</p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50/40 dark:bg-slate-900/40">
+          <div className="p-4 border-t border-slate-200 dark:border-[#7F1625]/20 flex justify-center bg-white dark:bg-[#000000]">
             <Pagination
               currentPage={opPage}
               totalPages={totalOpPages}
@@ -1409,13 +1471,13 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               isAr={isAr}
             />
           </div>
-        </Card>
+        </div>
       )}
 
-      {/* 8. VIEW 4: Delivery Notes */}
+      {/* 8. VIEW 5: Delivery Notes & Fabric Reconciliation */}
       {activeSubTab === 'deliveries' && (
-        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm bg-white dark:bg-slate-900">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60">
+        <div className="overflow-hidden border border-slate-200/90 dark:border-[#7F1625]/30 rounded-3xl shadow-xs bg-white dark:bg-[#000000]">
+          <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-[#7F1625]/25 bg-slate-50/80 dark:bg-[#0c0204]">
             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Truck className="w-4 h-4 text-emerald-600" />
               <span>{isAr ? 'أذون تسليم المشغولات ومصالحة خامات الأمانة' : 'Job Delivery Notes & Fabric Reconciliation'}</span>
@@ -1427,53 +1489,62 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
           <div className="overflow-x-auto">
             <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
-              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-mono font-semibold">
+              <thead className="bg-slate-50/90 dark:bg-[#0c0204] text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#7F1625]/25 font-mono font-bold text-[11.5px]">
                 <tr>
-                  <th className="py-3 px-4">{isAr ? 'رقم إذن التسليم' : 'Delivery #'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'تاريخ التسليم' : 'Delivery Date'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'القطع المسلمة' : 'Delivered Pieces'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'قماش مرتجع للعميل' : 'Returned Fabric'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'عوادم مسلّمة' : 'Returned Scrap'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'المستلم' : 'Received By'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
+                  <th className="py-4 px-4">{isAr ? 'رقم إذن التسليم' : 'Delivery #'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'تاريخ التسليم' : 'Delivery Date'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'القطع المسلمة' : 'Delivered Pieces'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'قماش مرتجع للعميل' : 'Returned Fabric'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'عوادم مسلّمة' : 'Returned Scrap'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'المستلم' : 'Received By'}</th>
+                  <th className="py-4 px-4 font-sans text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="py-4 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60 font-mono text-[11.5px]">
                 {paginatedDeliveries.map((del) => (
-                  <tr key={del.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                    <td className="py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400">{del.delivery_number}</td>
-                    <td className="py-3 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
+                  <tr key={del.id} className="hover:bg-slate-50/70 dark:hover:bg-[#120406] transition-colors">
+                    <td className="py-3.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-xs font-mono">
+                        {del.delivery_number}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
                       <button
                         type="button"
                         onClick={() => del.customer_id && handleOpenDossier(del.customer_id)}
-                        className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1 group"
+                        className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-2 group"
                         title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
                       >
-                        <span className="group-hover:underline">{del.customer_name}</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
+                          {del.customer_name ? del.customer_name.trim().charAt(0) : '؟'}
+                        </div>
+                        <span className="group-hover:underline truncate max-w-[150px]">{del.customer_name}</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </button>
                     </td>
-                    <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400">{formatDate(del.delivery_date)}</td>
-                    <td className="py-3 px-4 text-center font-black text-emerald-600 dark:text-emerald-400 text-sm">{del.total_delivered_pieces} {isAr ? 'قطعة' : 'pcs'}</td>
-                    <td className="py-3 px-4 text-center text-slate-700 dark:text-slate-300 font-bold">{Number(del.returned_fabric_meters || 0).toFixed(1)} م</td>
-                    <td className="py-3 px-4 text-center text-slate-700 dark:text-slate-300 font-bold">{Number(del.returned_scrap_kg || 0).toFixed(1)} كجم</td>
-                    <td className="py-3 px-4 font-sans text-slate-600 dark:text-slate-400">{del.recipient_name || '—'}</td>
-                    <td className="py-3 px-4 text-center font-sans">
-                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <td className="py-3.5 px-4 text-center text-slate-600 dark:text-slate-400">{formatDate(del.delivery_date)}</td>
+                    <td className="py-3.5 px-4 text-center font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                      {del.total_delivered_pieces} <span className="text-[11px] font-normal text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-slate-700 dark:text-slate-300 font-bold">{Number(del.returned_fabric_meters || 0).toFixed(1)} م</td>
+                    <td className="py-3.5 px-4 text-center text-slate-700 dark:text-slate-300 font-bold">{Number(del.returned_scrap_kg || 0).toFixed(1)} كجم</td>
+                    <td className="py-3.5 px-4 font-sans text-slate-600 dark:text-slate-400">{del.recipient_name || '—'}</td>
+                    <td className="py-3.5 px-4 text-center font-sans">
+                      <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
                         {isAr ? 'مسلم للعميل' : 'Delivered'}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="py-3.5 px-4 text-center font-sans">
+                      <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => handlePrintDocument('delivery', del)}
                           title={isAr ? 'طباعة إذن التسليم ومصالحة الخامات' : 'Print Delivery Note'}
-                          className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors"
+                          className="p-1.5 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
                         >
-                          <Printer className="w-3.5 h-3.5" />
+                          <Printer className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -1481,16 +1552,19 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                 ))}
                 {paginatedDeliveries.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
-                      <Truck className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                      <p className="font-bold text-xs">{isAr ? 'لا توجد أذون تسليم مسجلة.' : 'No delivery notes found.'}</p>
+                    <td colSpan={9} className="py-14 text-center text-slate-400 font-sans">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3 border border-emerald-200 dark:border-emerald-800/40">
+                        <Truck className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-1">{isAr ? 'لا توجد أذون تسليم مسجلة.' : 'No delivery notes found.'}</p>
+                      <p className="text-xs text-slate-400">{isAr ? 'يتم تحرير أذون التسليم تلقائياً عند تسليم المشغولات المنتهية للعملاء.' : 'Deliveries will appear here as finished goods are dispatched.'}</p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50/40 dark:bg-slate-900/40">
+          <div className="p-4 border-t border-slate-200 dark:border-[#7F1625]/20 flex justify-center bg-white dark:bg-[#000000]">
             <Pagination
               currentPage={deliveryPage}
               totalPages={totalDeliveryPages}
@@ -1501,13 +1575,13 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               isAr={isAr}
             />
           </div>
-        </Card>
+        </div>
       )}
 
-      {/* 9. VIEW 5: Service Invoices & Installments */}
+      {/* 9. VIEW 6: Service Invoices & Installments */}
       {activeSubTab === 'invoices' && (
-        <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm bg-white dark:bg-slate-900">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60">
+        <div className="overflow-hidden border border-slate-200/90 dark:border-[#7F1625]/30 rounded-3xl shadow-xs bg-white dark:bg-[#000000]">
+          <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-[#7F1625]/25 bg-slate-50/80 dark:bg-[#0c0204]">
             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-amber-600" />
               <span>{isAr ? 'فواتير ومطالبات خدمات التشغيل للغير والأقساط' : 'Subcontracting Invoices & Tranches'}</span>
@@ -1519,74 +1593,81 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
 
           <div className="overflow-x-auto">
             <table className={`w-full text-xs ${isAr ? 'text-right' : 'text-left'}`}>
-              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-mono font-semibold">
+              <thead className="bg-slate-50/90 dark:bg-[#0c0204] text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-[#7F1625]/25 font-mono font-bold text-[11.5px]">
                 <tr>
-                  <th className="py-3 px-4">{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
-                  <th className="py-3 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الاستحقاق' : 'Due Date'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الخدمة' : 'Base'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'إضافي' : 'Extra'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'خصومات' : 'Deductions'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'الإجمالي' : 'Total'}</th>
-                  <th className="py-3 px-4 text-center">{isAr ? 'المسدد' : 'Paid'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="py-3 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
+                  <th className="py-4 px-4">{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
+                  <th className="py-4 px-4 font-sans">{isAr ? 'العميل' : 'Customer'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'الاستحقاق' : 'Due Date'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'الخدمة' : 'Base'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'إضافي' : 'Extra'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'خصومات' : 'Deductions'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'الإجمالي' : 'Total'}</th>
+                  <th className="py-4 px-4 text-center">{isAr ? 'المسدد' : 'Paid'}</th>
+                  <th className="py-4 px-4 font-sans text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="py-4 px-4 font-sans text-center">{isAr ? 'إجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60 font-mono text-[11.5px]">
                 {paginatedInvoices.map((inv) => {
                   const total = Number(inv.total_amount || 0);
                   const paid = Number(inv.paid_amount || 0);
                   return (
-                    <tr key={inv.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
-                      <td className="py-3 px-4 font-bold text-[#7F1625] dark:text-[#ff8ba0]">{inv.invoice_number}</td>
-                      <td className="py-3 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
+                    <tr key={inv.id} className="hover:bg-slate-50/70 dark:hover:bg-[#120406] transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-[#7F1625] dark:text-[#ff8ba0]">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#7F1625]/10 dark:bg-[#7F1625]/20 border border-[#7F1625]/25 text-xs font-mono">
+                          {inv.invoice_number}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-sans font-medium text-slate-900 dark:text-slate-200">
                         <button
                           type="button"
                           onClick={() => inv.customer_id && handleOpenDossier(inv.customer_id)}
-                          className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-1 group"
+                          className="font-bold hover:text-[#7F1625] dark:hover:text-[#ff8ba0] transition-colors text-right cursor-pointer flex items-center gap-2 group"
                           title={isAr ? 'فتح بروفايل العميل' : 'Open Dossier'}
                         >
-                          <span className="group-hover:underline">{inv.customer_name}</span>
-                          <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            {inv.customer_name ? inv.customer_name.trim().charAt(0) : '؟'}
+                          </div>
+                          <span className="group-hover:underline truncate max-w-[150px]">{inv.customer_name}</span>
+                          <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         </button>
                       </td>
-                      <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400">{formatDate(inv.due_date)}</td>
-                      <td className="py-3 px-4 text-center text-slate-800 dark:text-slate-300">{Number(inv.service_amount).toLocaleString()}</td>
-                      <td className="py-3 px-4 text-center text-emerald-600 dark:text-emerald-400">+{inv.additional_charges}</td>
-                      <td className="py-3 px-4 text-center text-rose-600 dark:text-rose-400">-{inv.deductions}</td>
-                      <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-slate-100">{total.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="py-3 px-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{paid.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="py-3 px-4 text-center font-sans">
-                        <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${
+                      <td className="py-3.5 px-4 text-center text-slate-600 dark:text-slate-400">{formatDate(inv.due_date)}</td>
+                      <td className="py-3.5 px-4 text-center text-slate-800 dark:text-slate-300">{Number(inv.service_amount).toLocaleString()}</td>
+                      <td className="py-3.5 px-4 text-center text-emerald-600 dark:text-emerald-400 font-bold">+{inv.additional_charges}</td>
+                      <td className="py-3.5 px-4 text-center text-rose-600 dark:text-rose-400 font-bold">-{inv.deductions}</td>
+                      <td className="py-3.5 px-4 text-center font-black text-slate-900 dark:text-slate-100">{total.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span></td>
+                      <td className="py-3.5 px-4 text-center font-black text-emerald-600 dark:text-emerald-400">{paid.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span></td>
+                      <td className="py-3.5 px-4 text-center font-sans">
+                        <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-bold ${
                           inv.status === 'paid'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                             : inv.status === 'partially_paid'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-[#7F1625]/20 dark:text-[#ff8ba0] dark:border-[#7F1625]/40'
                         }`}>
                           {inv.status === 'paid' ? (isAr ? 'مسددة بالكامل' : 'Paid') : inv.status === 'partially_paid' ? (isAr ? 'مسددة جزئياً' : 'Partial') : (isAr ? 'غير مسددة' : 'Unpaid')}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center font-sans">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="py-3.5 px-4 text-center font-sans">
+                        <div className="flex items-center justify-center gap-1.5">
                           {inv.status !== 'paid' && (
                             <button
                               type="button"
                               onClick={() => onPayInvoice(inv.id)}
                               title={isAr ? 'تسجيل سداد دفعة' : 'Record Payment Tranche'}
-                              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors"
+                              className="p-1.5 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
                             >
-                              <DollarSign className="w-3.5 h-3.5" />
+                              <DollarSign className="w-4 h-4" />
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => handlePrintDocument('invoice', inv)}
                             title={isAr ? 'طباعة الفاتورة المستقلة' : 'Print Invoice'}
-                            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-colors"
+                            className="p-1.5 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-colors cursor-pointer"
                           >
-                            <Printer className="w-3.5 h-3.5" />
+                            <Printer className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -1595,16 +1676,19 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
                 })}
                 {paginatedInvoices.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
-                      <Receipt className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                      <p className="font-bold text-xs">{isAr ? 'لا توجد فواتير خدمات مسجلة.' : 'No invoices found.'}</p>
+                    <td colSpan={10} className="py-14 text-center text-slate-400 font-sans">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3 border border-amber-200 dark:border-amber-800/40">
+                        <Receipt className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-1">{isAr ? 'لا توجد فواتير خدمات مسجلة.' : 'No invoices found.'}</p>
+                      <p className="text-xs text-slate-400">{isAr ? 'يمكنك إصدار فاتورة خدمات لأي أمر تم تسليم جزء من مشغولاته.' : 'Invoices are generated upon job deliveries.'}</p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center bg-slate-50/40 dark:bg-slate-900/40">
+          <div className="p-4 border-t border-slate-200 dark:border-[#7F1625]/20 flex justify-center bg-white dark:bg-[#000000]">
             <Pagination
               currentPage={invoicePage}
               totalPages={totalInvoicePages}
@@ -1615,10 +1699,10 @@ export const SubcontractingTab: React.FC<SubcontractingTabProps> = ({
               isAr={isAr}
             />
           </div>
-        </Card>
+        </div>
       )}
 
-      {/* 10. VIEW 6: Customers Directory & Dossiers (Ultra-Modern Executive Bento Cards) */}
+      {/* 10. VIEW 7: Customers Directory & Dossiers (Ultra-Modern Executive Bento Cards) */}
       {activeSubTab === 'customers' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

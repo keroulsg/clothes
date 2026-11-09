@@ -22,7 +22,16 @@ class CuttingOrderController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $query = CuttingOrder::where('tenant_id', $tenantId)
-            ->with(['productionOrder.garmentModel', 'warehouse', 'assignedCutter', 'bundles.assignedEmployee']);
+            ->with([
+                'productionOrder.garmentModel',
+                'warehouse',
+                'assignedCutter',
+                'bundles.assignedEmployee',
+                'bundles.color',
+                'bundles.size',
+                'bundles.stageLogs.employee',
+                'bundles.stageLogs.productionStage',
+            ]);
 
         if ($request->filled('search')) {
             $s = trim($request->query('search'));
@@ -151,7 +160,16 @@ class CuttingOrderController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $order = CuttingOrder::where('tenant_id', $tenantId)
-            ->with(['productionOrder.garmentModel', 'warehouse', 'assignedCutter', 'bundles.assignedEmployee', 'bundles.stageLogs.employee'])
+            ->with([
+                'productionOrder.garmentModel',
+                'warehouse',
+                'assignedCutter',
+                'bundles.assignedEmployee',
+                'bundles.color',
+                'bundles.size',
+                'bundles.stageLogs.employee',
+                'bundles.stageLogs.productionStage',
+            ])
             ->findOrFail($id);
 
         return response()->json([
@@ -234,7 +252,16 @@ class CuttingOrderController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'تم إنهاء وأرشفة القصة بنجاح ونقلها إلى سجل أرشيف القصات المكتملة.',
-            'data' => $order->fresh(['productionOrder.garmentModel', 'warehouse', 'assignedCutter', 'bundles.assignedEmployee', 'bundles.stageLogs.employee']),
+            'data' => $order->fresh([
+                'productionOrder.garmentModel',
+                'warehouse',
+                'assignedCutter',
+                'bundles.assignedEmployee',
+                'bundles.color',
+                'bundles.size',
+                'bundles.stageLogs.employee',
+                'bundles.stageLogs.productionStage',
+            ]),
         ]);
     }
 }

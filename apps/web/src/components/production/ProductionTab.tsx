@@ -1653,6 +1653,8 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
         isOpen={isDossierOpen}
         onClose={() => setIsDossierOpen(false)}
         cuttingOrder={selectedArchivedCutForDossier}
+        employees={employees}
+        productionOrders={productionOrders}
         isAr={isAr}
       />
     </div>

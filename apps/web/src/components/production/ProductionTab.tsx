@@ -17,7 +17,6 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { PageHeader } from '../ui/PageHeader';
 import { Pagination } from '../ui/Pagination';
-import { ActionsMenu } from '../ui/ActionsMenu';
 import type {
   ProductionOrder,
   CuttingOrder,
@@ -570,66 +569,64 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
-                            {order.status === 'draft' ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-xs h-7 text-emerald-600 border-emerald-500/30 font-bold"
+                            {order.status === 'draft' && (
+                              <button
+                                type="button"
+                                title={isAr ? 'اعتماد أمر الإنتاج' : 'Approve Order'}
                                 onClick={() => onApproveProdOrder(order.id)}
+                                className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer shadow-2xs"
                               >
-                                {isAr ? 'اعتماد الأمر' : 'Approve'}
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-xs h-7 text-indigo-600 border-indigo-500/30 font-bold"
-                                onClick={() => onSelectProdOrderForCut(order)}
-                                icon={<Scissors className="w-3 h-3" />}
-                              >
-                                {isAr ? 'أمر قص' : 'Cut'}
-                              </Button>
+                                <CheckCircle2 className="w-4 h-4" />
+                              </button>
                             )}
 
-                            <ActionsMenu
-                              variant="icon-horizontal"
-                              items={[
-                                {
-                                  id: 'cut',
-                                  label: isAr ? 'إصدار خطة قص وفرش' : 'Issue Cut Plan',
-                                  icon: <Scissors className="w-3.5 h-3.5" />,
-                                  onClick: () => onSelectProdOrderForCut(order),
-                                },
-                                {
-                                  id: 'qc',
-                                  label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection',
-                                  icon: <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />,
-                                  onClick: () => onSelectProdOrderForQc(order),
-                                },
-                                {
-                                  id: 'bundles',
-                                  label: isAr ? 'تتبع بطاقات الحزم بالباركود' : 'Track QR Bundles',
-                                  icon: <QrCode className="w-3.5 h-3.5 text-indigo-500" />,
-                                  onClick: () => {
-                                    const b = cuttingBundles.find((cb) => cb.production_order_id === order.id) || cuttingBundles[0];
-                                    if (b) onSelectBundleForTracker(b);
-                                  },
-                                },
-                                {
-                                  id: 'costing',
-                                  label: isAr ? 'حساب تكاليف أمر التشغيل' : 'Job Costing',
-                                  icon: <DollarSign className="w-3.5 h-3.5 text-emerald-500" />,
-                                  divider: true,
-                                  onClick: () => onNavigateToTab && onNavigateToTab('costing'),
-                                },
-                                {
-                                  id: 'print',
-                                  label: isAr ? 'طباعة تذكرة أمر التشغيل' : 'Print Job Ticket',
-                                  icon: <Printer className="w-3.5 h-3.5" />,
-                                  onClick: () => window.print(),
-                                },
-                              ]}
-                            />
+                            <button
+                              type="button"
+                              title={isAr ? 'إصدار أمر قص وفرش' : 'Issue Lay & Cut Order'}
+                              onClick={() => onSelectProdOrderForCut(order)}
+                              className="p-1.5 rounded-lg text-sky-600 hover:text-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/40 border border-sky-200 dark:border-sky-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Scissors className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'تتبع بطاقات الحزم بالباركود' : 'Track QR Bundles'}
+                              onClick={() => {
+                                const b = cuttingBundles.find((cb) => cb.production_order_id === order.id) || cuttingBundles[0];
+                                if (b) onSelectBundleForTracker(b);
+                              }}
+                              className="p-1.5 rounded-lg text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <QrCode className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection'}
+                              onClick={() => onSelectProdOrderForQc(order)}
+                              className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'حساب تكاليف أمر التشغيل' : 'Job Costing'}
+                              onClick={() => onNavigateToTab && onNavigateToTab('costing')}
+                              className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'طباعة تذكرة أمر التشغيل' : 'Print Job Ticket'}
+                              onClick={() => window.print()}
+                              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -647,17 +644,16 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
             </div>
 
             {/* Pagination */}
-            {filteredOrders.length > orderPerPage && (
-              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                <Pagination
-                  currentPage={orderPage}
-                  totalPages={totalOrderPages}
-                  totalItems={filteredOrders.length}
-                  perPage={orderPerPage}
-                  onPageChange={setOrderPage}
-                  isAr={isAr}
-                />
-              </div>
+            {filteredOrders.length > 0 && (
+              <Pagination
+                currentPage={orderPage}
+                totalPages={totalOrderPages}
+                totalItems={filteredOrders.length}
+                perPage={orderPerPage}
+                onPageChange={setOrderPage}
+                isAr={isAr}
+                alwaysShow={true}
+              />
             )}
           </div>
         </div>
@@ -789,38 +785,50 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 px-2 font-bold text-purple-600 border-purple-500/30"
+                            <button
+                              type="button"
+                              title={isAr ? 'تتبع بطاقات الحزم بالباركود' : 'Track QR Bundles'}
                               onClick={() => {
                                 const b = cuttingBundles.find((cb) => cb.cutting_order_id === cut.id) || cuttingBundles[0];
                                 if (b) onSelectBundleForTracker(b);
                               }}
-                              icon={<QrCode className="w-3 h-3" />}
+                              className="p-1.5 rounded-lg text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer shadow-2xs"
                             >
-                              {isAr ? 'الحزم' : 'Bundles'}
-                            </Button>
-                            <ActionsMenu
-                              variant="icon-horizontal"
-                              items={[
-                                {
-                                  id: 'qc',
-                                  label: isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection',
-                                  icon: <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />,
-                                  onClick: () => {
-                                    const prod = productionOrders.find((p) => p.id === cut.production_order_id);
-                                    if (prod) onSelectProdOrderForQc(prod);
-                                  },
-                                },
-                                {
-                                  id: 'print',
-                                  label: isAr ? 'طباعة كارت طاولة القص' : 'Print Cutting Ticket',
-                                  icon: <Printer className="w-3.5 h-3.5" />,
-                                  onClick: () => window.print(),
-                                },
-                              ]}
-                            />
+                              <QrCode className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection'}
+                              onClick={() => {
+                                const prod = productionOrders.find((p) => p.id === cut.production_order_id);
+                                if (prod) onSelectProdOrderForQc(prod);
+                              }}
+                              className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'عرض أمر الإنتاج المرتبط' : 'View Linked PO'}
+                              onClick={() => {
+                                setActiveSubTab('orders');
+                                setOrderSearch(cut.production_order_number || '');
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Layers className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              title={isAr ? 'طباعة كارت وإذن طاولة القص' : 'Print Cutting Ticket'}
+                              onClick={() => window.print()}
+                              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -838,17 +846,16 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
             </div>
 
             {/* Pagination */}
-            {filteredCuttingOrders.length > cutPerPage && (
-              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                <Pagination
-                  currentPage={cutPage}
-                  totalPages={totalCutPages}
-                  totalItems={filteredCuttingOrders.length}
-                  perPage={cutPerPage}
-                  onPageChange={setCutPage}
-                  isAr={isAr}
-                />
-              </div>
+            {filteredCuttingOrders.length > 0 && (
+              <Pagination
+                currentPage={cutPage}
+                totalPages={totalCutPages}
+                totalItems={filteredCuttingOrders.length}
+                perPage={cutPerPage}
+                onPageChange={setCutPage}
+                isAr={isAr}
+                alwaysShow={true}
+              />
             )}
           </div>
         </div>
@@ -991,29 +998,45 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                       : isAr ? 'مكتمل' : 'Completed'}
                   </Badge>
 
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-[11px] h-7 px-2 font-medium text-amber-600 dark:text-amber-400"
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      title={isAr ? 'تسليم ونقل المرحلة وقيد أجر العامل' : 'Transfer Stage & Record Piece Wage'}
+                      onClick={() => onSelectBundleForTracker(bnd)}
+                      className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      title={isAr ? 'فحص الجودة والمطابقة (QC)' : 'Quality Inspection'}
                       onClick={() => {
                         const prod = productionOrders.find((p) => p.id === bnd.production_order_id);
                         onSelectBundleForQc(bnd, prod);
                       }}
-                      icon={<ShieldCheck className="w-3.5 h-3.5" />}
-                      title={isAr ? 'فحص الجودة' : 'QC Inspection'}
+                      className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs"
                     >
-                      {isAr ? 'فحص' : 'QC'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      className="text-[11px] h-7 px-2.5 font-bold shadow-sm"
+                      <ShieldCheck className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      title={isAr ? 'طباعة باركود وتكت الحزمة' : 'Print Bundle Sticker'}
+                      onClick={() => window.print()}
+                      className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Printer className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      title={isAr ? 'عرض بطاقة الحزمة كاملة' : 'View Bundle Card'}
                       onClick={() => onSelectBundleForTracker(bnd)}
-                      icon={<ArrowRightLeft className="w-3 h-3" />}
+                      className="p-1.5 rounded-lg text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer shadow-2xs"
                     >
-                      {isAr ? 'نقل وأجر' : 'Transfer'}
-                    </Button>
+                      <QrCode className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1027,8 +1050,8 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
           </div>
 
           {/* Pagination */}
-          {filteredBundles.length > bundlePerPage && (
-            <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+          {filteredBundles.length > 0 && (
+            <div className="rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <Pagination
                 currentPage={bundlePage}
                 totalPages={totalBundlePages}
@@ -1036,6 +1059,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                 perPage={bundlePerPage}
                 onPageChange={setBundlePage}
                 isAr={isAr}
+                alwaysShow={true}
               />
             </div>
           )}
@@ -1107,6 +1131,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                     <th className="py-3 px-4 text-center">{isAr ? 'إعادة تشغيل' : 'Rework'}</th>
                     <th className="py-3 px-4 text-center">{isAr ? 'المرفوض' : 'Scrap'}</th>
                     <th className="py-3 px-4 text-center">{isAr ? 'القرار والاعتماد' : 'Decision'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
@@ -1158,11 +1183,47 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                             : isAr ? 'مرفوض وهالك' : 'Rejected'}
                         </Badge>
                       </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5 justify-center">
+                          <button
+                            type="button"
+                            title={isAr ? 'طباعة شهادة وتقرير الفحص' : 'Print QC Certificate'}
+                            onClick={() => window.print()}
+                            className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            title={isAr ? 'عرض أمر الإنتاج المرتبط' : 'View Linked PO'}
+                            onClick={() => {
+                              setActiveSubTab('orders');
+                              setOrderSearch(qc.production_order_number || '');
+                            }}
+                            className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Layers className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            title={isAr ? 'إجراء فحص جودة جديد' : 'New QC Inspection'}
+                            onClick={() => {
+                              const prod = productionOrders.find((p) => p.order_number === qc.production_order_number);
+                              if (prod) onSelectProdOrderForQc(prod);
+                            }}
+                            className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {paginatedQC.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-10 text-center text-slate-400 text-xs">
+                      <td colSpan={10} className="py-10 text-center text-slate-400 text-xs">
                         {isAr ? 'لا توجد تقارير فحص جودة مطابقة للبحث.' : 'No QC reports found.'}
                       </td>
                     </tr>
@@ -1172,17 +1233,16 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
             </div>
 
             {/* Pagination */}
-            {filteredQC.length > qcPerPage && (
-              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                <Pagination
-                  currentPage={qcPage}
-                  totalPages={totalQcPages}
-                  totalItems={filteredQC.length}
-                  perPage={qcPerPage}
-                  onPageChange={setQcPage}
-                  isAr={isAr}
-                />
-              </div>
+            {filteredQC.length > 0 && (
+              <Pagination
+                currentPage={qcPage}
+                totalPages={totalQcPages}
+                totalItems={filteredQC.length}
+                perPage={qcPerPage}
+                onPageChange={setQcPage}
+                isAr={isAr}
+                alwaysShow={true}
+              />
             )}
           </div>
         </div>

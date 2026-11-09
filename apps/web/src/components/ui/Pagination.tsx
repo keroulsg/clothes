@@ -10,6 +10,7 @@ export interface PaginationProps {
   isLoading?: boolean;
   isAr?: boolean;
   className?: string;
+  alwaysShow?: boolean;
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
@@ -21,8 +22,11 @@ export const Pagination: React.FC<PaginationProps> = ({
   isLoading = false,
   isAr = true,
   className = '',
+  alwaysShow = false,
 }) => {
-  if (totalItems === 0 || totalPages <= 1) {
+  const safeTotalPages = Math.max(1, totalPages);
+
+  if (totalItems === 0 || (!alwaysShow && safeTotalPages <= 1)) {
     return null;
   }
 
@@ -32,18 +36,18 @@ export const Pagination: React.FC<PaginationProps> = ({
   // Generate page numbers with ellipsis for large ranges
   const getPageNumbers = () => {
     const pages: (number | 'ellipsis')[] = [];
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    if (safeTotalPages <= 7) {
+      for (let i = 1; i <= safeTotalPages; i++) pages.push(i);
     } else {
       pages.push(1);
       if (currentPage > 3) pages.push('ellipsis');
       const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
+      const end = Math.min(safeTotalPages - 1, currentPage + 1);
       for (let i = start; i <= end; i++) {
         if (!pages.includes(i)) pages.push(i);
       }
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      if (!pages.includes(totalPages)) pages.push(totalPages);
+      if (currentPage < safeTotalPages - 2) pages.push('ellipsis');
+      if (!pages.includes(safeTotalPages)) pages.push(safeTotalPages);
     }
     return pages;
   };
@@ -107,7 +111,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         {/* Next Button */}
         <button
           type="button"
-          disabled={currentPage >= totalPages || isLoading}
+          disabled={currentPage >= safeTotalPages || isLoading}
           onClick={() => onPageChange(currentPage + 1)}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
           aria-label={isAr ? 'الصفحة التالية' : 'Next page'}

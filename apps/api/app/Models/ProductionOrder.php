@@ -51,6 +51,45 @@ class ProductionOrder extends Model
         'cancelled_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'planned_quantity',
+        'target_quantity',
+        'cut_quantity',
+        'completed_quantity',
+        'model_name',
+        'model_code',
+    ];
+
+    public function getPlannedQuantityAttribute(): int
+    {
+        return (int) ($this->total_planned_quantity ?? 0);
+    }
+
+    public function getTargetQuantityAttribute(): int
+    {
+        return (int) ($this->total_planned_quantity ?? 0);
+    }
+
+    public function getCutQuantityAttribute(): int
+    {
+        return (int) ($this->total_cut_quantity ?? 0);
+    }
+
+    public function getCompletedQuantityAttribute(): int
+    {
+        return (int) ($this->total_completed_quantity ?? 0);
+    }
+
+    public function getModelNameAttribute(): ?string
+    {
+        return $this->garmentModel?->name ?? ($this->garment_model_id ? GarmentModel::find($this->garment_model_id)?->name : null) ?? '—';
+    }
+
+    public function getModelCodeAttribute(): ?string
+    {
+        return $this->garmentModel?->code ?? ($this->garment_model_id ? GarmentModel::find($this->garment_model_id)?->code : null) ?? 'MOD';
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

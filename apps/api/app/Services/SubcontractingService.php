@@ -600,11 +600,17 @@ class SubcontractingService
                         'production_order_id' => $operation->production_order_id,
                         'cutting_bundle_id' => $operation->cutting_bundle_id,
                         'piece_rate_id' => $pieceRate?->id,
+                        'stage_code' => $operation->operation_type,
+                        'operation_name' => 'تشغيل خارجي: ' . $operation->operation_type,
+                        'cut_name' => 'أمر تشغيل خارجي: ' . ($operation->operation_number),
                         'work_date' => now()->toDateString(),
+                        'started_at' => $operation->dispatched_at ?? now(),
+                        'completed_at' => now(),
                         'completed_quantity' => $accepted,
                         'unit_rate' => $workerRate,
                         'total_amount' => round($accepted * $workerRate, 4),
                         'status' => 'approved',
+                        'notes' => "استلام عملية معالجة خارجية {$operation->operation_number} من {$operation->subcontractor_name}",
                     ]);
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('Subcontracting piece-rate logging failed: ' . $e->getMessage());

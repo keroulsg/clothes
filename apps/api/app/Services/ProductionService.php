@@ -402,6 +402,7 @@ class ProductionService
             ['stage_code' => 'finishing', 'name' => 'التشطيب وإزالة الخيوط', 'order_sequence' => 4, 'requires_qc' => false],
             ['stage_code' => 'ironing', 'name' => 'الكي بالبخار', 'order_sequence' => 5, 'requires_qc' => false],
             ['stage_code' => 'packing', 'name' => 'الفحص النهائي والتعبئة', 'order_sequence' => 6, 'requires_qc' => true],
+            ['stage_code' => 'completed', 'name' => 'اكتملت بالكامل (جاهز للمخزن)', 'order_sequence' => 7, 'requires_qc' => false],
         ];
 
         foreach ($defaultStages as $stage) {
@@ -554,11 +555,17 @@ class ProductionService
                         'production_order_id' => $prodOrder->id,
                         'cutting_order_id' => $cuttingOrder->id,
                         'piece_rate_id' => $pieceRate?->id,
+                        'stage_code' => 'cutting',
+                        'operation_name' => 'قص وفرش الطبقات',
+                        'cut_name' => ($prodOrder->order_number ?? 'أمر قص') . ' - ' . ($prodOrder->garmentModel?->name ?? 'قصة التشغيل'),
                         'work_date' => now()->toDateString(),
+                        'started_at' => $cuttingOrder->created_at ?? now(),
+                        'completed_at' => now(),
                         'completed_quantity' => $totalCutPieces,
                         'unit_rate' => $effectiveCutterRate,
                         'total_amount' => $cutterTotalEarnings,
                         'status' => 'approved',
+                        'notes' => "تنفيذ أمر قص {$cuttingOrder->cutting_order_number} لطاولة {$cuttingOrder->table_number}",
                     ]);
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('Auto piece-rate logging for cutter failed: ' . $e->getMessage());
@@ -663,7 +670,27 @@ class ProductionService
 
             $stage = ProductionStage::where('tenant_id', $contextTenantId)
                 ->where('stage_code', $toStageCode)
-                ->firstOrFail();
+                ->first();
+
+            if (!$stage) {
+                $stageNames = [
+                    'cutting' => 'صالة القص',
+                    'assembly' => 'التجهيز والتجميع',
+                    'sewing' => 'خط الخياطة والتجميع',
+                    'finishing' => 'التشطيب وإزالة الخيوط',
+                    'ironing' => 'الكي بالبخار',
+                    'packing' => 'الفحص النهائي والتعبئة',
+                    'completed' => 'اكتملت بالكامل (جاهز للمخزن)',
+                ];
+                $stage = ProductionStage::firstOrCreate(
+                    ['tenant_id' => $contextTenantId, 'stage_code' => $toStageCode],
+                    [
+                        'name' => $stageNames[$toStageCode] ?? $toStageCode,
+                        'order_sequence' => $toStageCode === 'completed' ? 7 : 99,
+                        'requires_qc' => false,
+                    ]
+                );
+            }
 
             $inputQty = (int) ($operationData['input_quantity'] ?? $bundle->quantity);
             $acceptedQty = (int) ($operationData['output_accepted_quantity'] ?? $inputQty);
@@ -701,6 +728,11 @@ class ProductionService
 
             if (in_array($toStageCode, ['packing', 'completed'], true)) {
                 $bundle->completion_date = now()->toDateString();
+                if ($toStageCode === 'completed' && $acceptedQty > 0) {
+                    ProductionOrder::where('tenant_id', $contextTenantId)
+                        ->where('id', $bundle->production_order_id)
+                        ->increment('total_completed_quantity', $acceptedQty);
+                }
             }
 
             if ($bundle->quantity <= 0) {
@@ -782,17 +814,37 @@ class ProductionService
 
                     $totalAmount = round($acceptedQty * $rate, 4);
 
+                    $prodOrder = ProductionOrder::with('garmentModel')->find($bundle->production_order_id);
+                    $stageNamesAr = [
+                        'cutting' => 'صالة القص',
+                        'assembly' => 'التجهيز والتجميع',
+                        'sewing' => 'خط الخياطة',
+                        'finishing' => 'التشطيب وإزالة الخيوط',
+                        'ironing' => 'الكي بالبخار',
+                        'packing' => 'الفحص النهائي والتعبئة',
+                        'completed' => 'اكتملت بالكامل (جاهز للمخزن)',
+                    ];
+                    $stageName = $pieceRate?->operation_name ?? $stageNamesAr[$toStageCode] ?? $stage->name ?? $toStageCode;
+                    $cutName = ($prodOrder?->order_number ?? 'أمر تشغيل') . ' - ' . ($prodOrder?->garmentModel?->name ?? 'قصة ' . $bundle->bundle_code);
+
                     \App\Models\PieceWorkLog::create([
                         'tenant_id' => $contextTenantId,
                         'employee_id' => $workerId,
                         'production_order_id' => $bundle->production_order_id,
                         'cutting_bundle_id' => $bundle->id,
+                        'cutting_order_id' => $bundle->cutting_order_id,
                         'piece_rate_id' => $pieceRate?->id,
+                        'stage_code' => $toStageCode,
+                        'operation_name' => $stageName,
+                        'cut_name' => $cutName,
                         'work_date' => now()->toDateString(),
+                        'started_at' => $operationData['started_at'] ?? $bundle->updated_at ?? now(),
+                        'completed_at' => $operationData['completed_at'] ?? now(),
                         'completed_quantity' => $acceptedQty,
                         'unit_rate' => $rate,
                         'total_amount' => $totalAmount,
                         'status' => 'approved',
+                        'notes' => $operationData['notes'] ?? "تشغيل حزمة {$bundle->bundle_code} بمرحلة {$toStageCode}",
                     ]);
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('Bundle transfer auto piece-rate log failed: ' . $e->getMessage());

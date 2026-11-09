@@ -1984,9 +1984,12 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                     <thead>
                       <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
                         <th className="py-2.5 px-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
-                        <th className="py-2.5 px-3 text-start">{isAr ? 'الكمية المنجزة' : 'Quantity'}</th>
+                        <th className="py-2.5 px-3 text-start">{isAr ? 'القصة / أمر التشغيل' : 'Cut / Order'}</th>
+                        <th className="py-2.5 px-3 text-start">{isAr ? 'المرحلة والعملية' : 'Stage / Operation'}</th>
+                        <th className="py-2.5 px-3 text-start">{isAr ? 'الكمية' : 'Quantity'}</th>
                         <th className="py-2.5 px-3 text-start">{isAr ? 'سعر القطعة' : 'Unit Rate'}</th>
                         <th className="py-2.5 px-3 text-start">{isAr ? 'إجمالي الأجر' : 'Total Amount'}</th>
+                        <th className="py-2.5 px-3 text-start">{isAr ? 'وقت الاستلام والإنجاز' : 'Work Period'}</th>
                         <th className="py-2.5 px-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
                         <th className="py-2.5 px-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                       </tr>
@@ -1994,7 +1997,7 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {pieceLogsList.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                          <td colSpan={9} className="py-8 text-center text-slate-400">
                             {isAr ? 'لا توجد سجلات إنتاجية بالقطعة مسجلة لهذا العامل بعد.' : 'No piece work logs for this worker.'}
                           </td>
                         </tr>
@@ -2004,14 +2007,41 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                             <td className="py-2.5 px-3 font-mono text-slate-700 dark:text-slate-300">
                               {log.work_date ? log.work_date.split('T')[0] : '-'}
                             </td>
+                            <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-white">
+                              <div className="font-bold truncate max-w-[190px]">
+                                {log.cut_name || (log.production_order ? `${log.production_order.order_number} - ${log.production_order.garment_model?.name || ''}` : null) || (log.cutting_order ? log.cutting_order.cutting_order_number : null) || log.notes || '—'}
+                              </div>
+                              {log.cutting_bundle && (
+                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                                  #{log.cutting_bundle.bundle_code || log.cutting_bundle.bundle_number}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                {log.operation_name || log.stage_code || log.piece_rate?.operation_name || (isAr ? 'تشغيل عام' : 'General')}
+                              </span>
+                            </td>
                             <td className="py-2.5 px-3 font-bold font-mono text-slate-900 dark:text-white">
                               {log.completed_quantity} {isAr ? 'قطعة' : 'pcs'}
                             </td>
                             <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">
                               {Number(log.unit_rate).toFixed(2)} ج.م
                             </td>
-                            <td className="py-2.5 px-3 font-mono font-black text-emerald-600">
+                            <td className="py-2.5 px-3 font-mono font-black text-emerald-600 dark:text-emerald-400">
                               +{Number(log.total_amount).toFixed(2)} ج.م
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
+                              <div className="flex flex-col">
+                                <span title={log.started_at}>
+                                  <span className="text-slate-400 text-[10px]">{isAr ? 'بدء:' : 'Start:'}</span>{' '}
+                                  {log.started_at ? String(log.started_at).replace('T', ' ').slice(5, 16) : '—'}
+                                </span>
+                                <span title={log.completed_at}>
+                                  <span className="text-slate-400 text-[10px]">{isAr ? 'تم:' : 'End:'}</span>{' '}
+                                  {log.completed_at ? String(log.completed_at).replace('T', ' ').slice(5, 16) : '—'}
+                                </span>
+                              </div>
                             </td>
                             <td className="py-2.5 px-3 text-center">
                               {log.status === 'approved' ? (
@@ -3267,9 +3297,12 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                   <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
                     <th className="py-3 px-4 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
                     <th className="py-3 px-4 text-start">{isAr ? 'اسم العامل والكود' : 'Worker'}</th>
+                    <th className="py-3 px-4 text-start">{isAr ? 'القصة / أمر التشغيل' : 'Cut / Order'}</th>
+                    <th className="py-3 px-4 text-start">{isAr ? 'المرحلة والعملية' : 'Stage / Operation'}</th>
                     <th className="py-3 px-4 text-start">{isAr ? 'الكمية المنجزة' : 'Quantity'}</th>
                     <th className="py-3 px-4 text-start">{isAr ? 'فئة أجر القطعة' : 'Unit Rate'}</th>
                     <th className="py-3 px-4 text-start">{isAr ? 'إجمالي المستحق' : 'Total Amount'}</th>
+                    <th className="py-3 px-4 text-start">{isAr ? 'وقت الاستلام والإنجاز' : 'Work Period'}</th>
                     <th className="py-3 px-4 text-center">{isAr ? 'الحالة' : 'Status'}</th>
                     <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                   </tr>
@@ -3277,7 +3310,7 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {workLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <td colSpan={10} className="py-12 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Scissors className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                           <span className="font-semibold text-xs">
@@ -3316,6 +3349,21 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                               </div>
                             </div>
                           </td>
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900 dark:text-white truncate max-w-[190px]">
+                              {log.cut_name || (log.production_order ? `${log.production_order.order_number} - ${log.production_order.garment_model?.name || ''}` : null) || (log.cutting_order ? log.cutting_order.cutting_order_number : null) || log.notes || '—'}
+                            </div>
+                            {log.cutting_bundle && (
+                              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                                #{log.cutting_bundle.bundle_code || log.cutting_bundle.bundle_number}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                              {log.operation_name || log.stage_code || log.piece_rate?.operation_name || (isAr ? 'تشغيل عام' : 'General')}
+                            </span>
+                          </td>
                           <td className="py-3 px-4 font-bold text-slate-900 dark:text-white font-mono">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
                               <Package className="w-3 h-3 text-slate-400" />
@@ -3327,6 +3375,18 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
                           </td>
                           <td className="py-3 px-4 font-black font-mono text-emerald-600 dark:text-emerald-400">
                             {Number(log.total_amount).toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                            <div className="flex flex-col">
+                              <span title={log.started_at}>
+                                <span className="text-slate-400 text-[10px]">{isAr ? 'بدء:' : 'Start:'}</span>{' '}
+                                {log.started_at ? String(log.started_at).replace('T', ' ').slice(5, 16) : '—'}
+                              </span>
+                              <span title={log.completed_at}>
+                                <span className="text-slate-400 text-[10px]">{isAr ? 'تم:' : 'End:'}</span>{' '}
+                                {log.completed_at ? String(log.completed_at).replace('T', ' ').slice(5, 16) : '—'}
+                              </span>
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-center">
                             {log.status === 'approved' ? (

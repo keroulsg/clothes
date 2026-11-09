@@ -1062,18 +1062,31 @@ export interface PieceRate {
 
 export interface PieceWorkLog {
   id: string;
+  tenant_id?: string;
   employee_id: string;
   production_order_id?: string;
+  cutting_order_id?: string;
   cutting_bundle_id?: string;
+  piece_rate_id?: string;
+  stage_code?: string;
+  operation_name?: string;
+  cut_name?: string;
+  work_date: string;
+  started_at?: string;
+  completed_at?: string;
   completed_quantity: number;
   unit_rate: number;
   total_amount: number;
-  work_date: string;
   status: string;
+  notes?: string;
   approved_by?: number;
   approved_at?: string;
   rejection_reason?: string;
   employee?: Employee;
+  production_order?: any;
+  cutting_order?: any;
+  cutting_bundle?: any;
+  piece_rate?: any;
 }
 
 export interface QualityDefectAdjustment {

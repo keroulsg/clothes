@@ -145,6 +145,9 @@ class BundleController extends Controller
             'output_rejected_quantity' => 'nullable|integer|min:0',
             'rework_quantity' => 'nullable|integer|min:0',
             'scrap_quantity' => 'nullable|integer|min:0',
+            'unit_rate' => 'nullable|numeric|min:0',
+            'started_at' => 'nullable|date',
+            'completed_at' => 'nullable|date',
             'notes' => 'nullable|string',
         ]);
 

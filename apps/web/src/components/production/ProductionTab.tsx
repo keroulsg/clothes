@@ -93,15 +93,18 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
     ).length;
 
     // Accurate cut pieces calculation
-    const cutPiecesFromOrders = productionOrders.reduce((sum, p) => sum + (p.cut_quantity || 0), 0);
-    const cutPiecesFromCuts = cuttingOrders.reduce((sum, c) => sum + (c.total_cut_pieces || 0), 0);
+    const cutPiecesFromOrders = productionOrders.reduce(
+      (sum, p) => sum + (Number((p as any).total_cut_quantity ?? p.cut_quantity) || 0),
+      0
+    );
+    const cutPiecesFromCuts = cuttingOrders.reduce((sum, c) => sum + (Number(c.total_cut_pieces) || 0), 0);
     const totalCutPieces = Math.max(cutPiecesFromOrders, cutPiecesFromCuts);
 
     const totalBundles = cuttingBundles.length;
     const activeBundles = cuttingBundles.filter((b) => b.current_stage_code !== 'completed').length;
 
     const totalFinished = productionOrders.reduce(
-      (sum, p) => sum + (p.completed_quantity || p.qc_passed_quantity || 0),
+      (sum, p) => sum + (Number((p as any).total_completed_quantity ?? p.completed_quantity ?? p.qc_passed_quantity) || 0),
       0
     );
 
@@ -455,11 +458,33 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
                   {paginatedOrders.map((order) => {
-                    const targetQty = order.planned_quantity || order.target_quantity || 1;
-                    const cutQty = order.cut_quantity || 0;
-                    const finishedQty = order.completed_quantity || order.qc_passed_quantity || 0;
-                    const cutPct = Math.min(100, Math.round((cutQty / targetQty) * 100));
-                    const finishPct = Math.min(100, Math.round((finishedQty / targetQty) * 100));
+                    const targetQty = Number(
+                      (order as any).total_planned_quantity ??
+                      order.planned_quantity ??
+                      order.target_quantity ??
+                      0
+                    );
+                    const cutQtyFromOrder = Number(
+                      (order as any).total_cut_quantity ??
+                      order.cut_quantity ??
+                      0
+                    );
+                    const cutQtyFromCuts = cuttingOrders
+                      .filter((c) => c.production_order_id === order.id)
+                      .reduce((sum, c) => sum + (Number(c.total_cut_pieces) || 0), 0);
+                    const cutQty = Math.max(cutQtyFromOrder, cutQtyFromCuts);
+                    const finishedQty = Number(
+                      (order as any).total_completed_quantity ??
+                      order.completed_quantity ??
+                      order.qc_passed_quantity ??
+                      0
+                    );
+                    const safeTarget = targetQty > 0 ? targetQty : 1;
+                    const cutPct = targetQty > 0 ? Math.min(100, Math.round((cutQty / safeTarget) * 100)) : 0;
+                    const finishPct = targetQty > 0 ? Math.min(100, Math.round((finishedQty / safeTarget) * 100)) : 0;
+
+                    const rawDue = order.target_delivery_date || order.due_date || (order as any).delivery_date;
+                    const cleanDue = rawDue ? String(rawDue).split('T')[0].split(' ')[0] : '—';
 
                     return (
                       <tr key={order.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
@@ -500,7 +525,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400 text-[11px]">
-                          {order.target_delivery_date || order.due_date || '—'}
+                          {cleanDue}
                         </td>
                         <td className="py-3 px-4">
                           <Badge

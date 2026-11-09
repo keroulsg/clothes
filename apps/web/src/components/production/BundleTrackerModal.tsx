@@ -34,6 +34,11 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
 }) => {
   if (!bundle) return null;
 
+  const formatLocalIso = (date: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
   const [toStageCode, setToStageCode] = useState<'assembly' | 'sewing' | 'finishing' | 'ironing' | 'packing' | 'completed'>('sewing');
   const [employeesList, setEmployeesList] = useState<any[]>(propEmployees);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(bundle.assigned_employee_id || '');
@@ -45,6 +50,8 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
   const [reworkQuantity, setReworkQuantity] = useState(0);
   const [scrapQuantity, setScrapQuantity] = useState(0);
   const [unitRate, setUnitRate] = useState<number>(STAGE_DEFAULT_RATES['sewing'] || 1.50);
+  const [startedAt, setStartedAt] = useState(() => formatLocalIso(new Date(Date.now() - 60 * 60 * 1000)));
+  const [completedAt, setCompletedAt] = useState(() => formatLocalIso(new Date()));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -102,6 +109,8 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
         rework_quantity: Number(reworkQuantity),
         scrap_quantity: Number(scrapQuantity),
         unit_rate: Number(unitRate),
+        started_at: startedAt ? new Date(startedAt).toISOString() : undefined,
+        completed_at: completedAt ? new Date(completedAt).toISOString() : undefined,
       });
 
       const selectedEmp = employeesList.find(e => e.id === selectedEmployeeId);
@@ -243,6 +252,33 @@ export const BundleTrackerModal: React.FC<BundleTrackerModalProps> = ({
                 />
                 <User className={`w-4 h-4 text-slate-400 absolute ${isAr ? 'left-3' : 'right-3'} top-3 pointer-events-none`} />
               </div>
+            </div>
+          </div>
+
+          {/* Timing: Start & Completion */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'وقت استلام وبدء التشغيل' : 'Start / Handover Time'}
+              </label>
+              <input
+                type="datetime-local"
+                value={startedAt}
+                onChange={(e) => setStartedAt(e.target.value)}
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'وقت تسليم وانتهاء المرحلة' : 'Completion Time'}
+              </label>
+              <input
+                type="datetime-local"
+                value={completedAt}
+                onChange={(e) => setCompletedAt(e.target.value)}
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+              />
             </div>
           </div>
 

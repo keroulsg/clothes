@@ -20,7 +20,12 @@ class PieceWorkLog extends Model
         'cutting_order_id',
         'job_order_id',
         'piece_rate_id',
+        'stage_code',
+        'operation_name',
+        'cut_name',
         'work_date',
+        'started_at',
+        'completed_at',
         'completed_quantity',
         'unit_rate',
         'total_amount',
@@ -28,6 +33,7 @@ class PieceWorkLog extends Model
         'approved_by',
         'approved_at',
         'rejection_reason',
+        'notes',
     ];
 
     protected $casts = [
@@ -35,6 +41,8 @@ class PieceWorkLog extends Model
         'unit_rate' => 'decimal:4',
         'total_amount' => 'decimal:4',
         'work_date' => 'date',
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
 

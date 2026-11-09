@@ -66,7 +66,9 @@ class HrController extends Controller
                 'branch',
                 'assignedBundles.cuttingOrder',
                 'assignedBundles.productionOrder',
-                'pieceWorkLogs' => fn($q) => $q->latest('work_date')->limit(60),
+                'pieceWorkLogs' => fn($q) => $q->with(['productionOrder.garmentModel', 'cuttingBundle', 'cuttingOrder', 'jobOrder', 'pieceRate'])
+                    ->latest('created_at')
+                    ->limit(100),
                 'attendances' => fn($q) => $q->latest('attendance_date')->limit(60),
                 'adjustments' => fn($q) => $q->latest('adjustment_date')->limit(60),
                 'payrollItems.payroll' => fn($q) => $q->latest()->limit(20),
@@ -552,9 +554,11 @@ class HrController extends Controller
 
     public function pieceWorkLogs(): JsonResponse
     {
-        $logs = PieceWorkLog::with(['employee', 'productionOrder', 'pieceRate', 'cuttingBundle'])
-            ->latest('work_date')
-            ->paginate(20);
+        $tenantId = app('current_tenant_id');
+        $logs = PieceWorkLog::where('tenant_id', $tenantId)
+            ->with(['employee', 'productionOrder.garmentModel', 'cuttingOrder', 'pieceRate', 'cuttingBundle', 'jobOrder'])
+            ->latest('created_at')
+            ->paginate(25);
 
         return response()->json($logs);
     }

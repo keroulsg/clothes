@@ -17,6 +17,7 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { PageHeader } from '../ui/PageHeader';
 import { Pagination } from '../ui/Pagination';
+import { ProductionPrintModal, type PrintDocumentType } from './ProductionPrintModal';
 import type {
   ProductionOrder,
   CuttingOrder,
@@ -83,6 +84,17 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   const [qcDecisionFilter, setQcDecisionFilter] = useState('all');
   const [qcPage, setQcPage] = useState(1);
   const qcPerPage = 8;
+
+  // --- Dedicated Single-Document Print State ---
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printDocType, setPrintDocType] = useState<PrintDocumentType>('order');
+  const [printData, setPrintData] = useState<any>(null);
+
+  const handleOpenPrint = (type: PrintDocumentType, item: any) => {
+    setPrintDocType(type);
+    setPrintData(item);
+    setPrintModalOpen(true);
+  };
 
   // KPI Calculations
   const stats = useMemo(() => {
@@ -622,7 +634,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                             <button
                               type="button"
                               title={isAr ? 'طباعة تذكرة أمر التشغيل' : 'Print Job Ticket'}
-                              onClick={() => window.print()}
+                              onClick={() => handleOpenPrint('order', order)}
                               className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
                             >
                               <Printer className="w-4 h-4" />
@@ -824,7 +836,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                             <button
                               type="button"
                               title={isAr ? 'طباعة كارت وإذن طاولة القص' : 'Print Cutting Ticket'}
-                              onClick={() => window.print()}
+                              onClick={() => handleOpenPrint('cutting', cut)}
                               className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
                             >
                               <Printer className="w-4 h-4" />
@@ -1023,7 +1035,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                     <button
                       type="button"
                       title={isAr ? 'طباعة باركود وتكت الحزمة' : 'Print Bundle Sticker'}
-                      onClick={() => window.print()}
+                      onClick={() => handleOpenPrint('bundle', bnd)}
                       className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
                     >
                       <Printer className="w-4 h-4" />
@@ -1188,7 +1200,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                           <button
                             type="button"
                             title={isAr ? 'طباعة شهادة وتقرير الفحص' : 'Print QC Certificate'}
-                            onClick={() => window.print()}
+                            onClick={() => handleOpenPrint('qc', qc)}
                             className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <Printer className="w-4 h-4" />
@@ -1247,6 +1259,15 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Dedicated Clean Single-Document Print Modal */}
+      <ProductionPrintModal
+        isOpen={printModalOpen}
+        onClose={() => setPrintModalOpen(false)}
+        documentType={printDocType}
+        data={printData}
+        isAr={isAr}
+      />
     </div>
   );
 };

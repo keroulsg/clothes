@@ -12,10 +12,15 @@ import {
   ArrowRightLeft,
   User,
   CheckCircle2,
+  Archive,
+  FileText,
+  RotateCcw,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Pagination } from '../ui/Pagination';
 import { ProductionPrintModal, type PrintDocumentType } from './ProductionPrintModal';
+import { ArchivedCuttingDossierModal } from './ArchivedCuttingDossierModal';
+import { api } from '../../api/client';
 import type {
   ProductionOrder,
   CuttingOrder,
@@ -37,6 +42,7 @@ export interface ProductionTabProps {
   onSelectBundleForTracker: (bundle: CuttingBundle) => void;
   onSelectBundleForQc: (bundle: CuttingBundle, order?: ProductionOrder) => void;
   onApproveProdOrder: (orderId: string) => Promise<void>;
+  onCuttingOrderArchived?: (updatedCut: CuttingOrder) => void;
   onNavigateToTab?: (tab: string) => void;
 }
 
@@ -54,10 +60,11 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   onSelectBundleForTracker,
   onSelectBundleForQc,
   onApproveProdOrder,
+  onCuttingOrderArchived,
   onNavigateToTab,
 }) => {
   // Navigation Sub-Tabs
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'cutting' | 'bundles' | 'qc'>('orders');
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'cutting' | 'bundles' | 'qc' | 'archive'>('orders');
 
   // --- Sub-Tab 1: Production Orders State ---
   const [orderSearch, setOrderSearch] = useState('');
@@ -72,7 +79,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   const cutPerPage = 6;
 
   // --- Sub-Tab 3: Bundles State ---
-  const [bundleStageFilter, setBundleStageFilter] = useState('all');
+  const [bundleStageFilter, setBundleStageFilter] = useState('active');
   const [bundleSearch, setBundleSearch] = useState('');
   const [bundlePage, setBundlePage] = useState(1);
   const bundlePerPage = 9;
@@ -83,6 +90,14 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   const [qcPage, setQcPage] = useState(1);
   const qcPerPage = 8;
 
+  // --- Sub-Tab 5: Completed Cuts Archive State ---
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archivePage, setArchivePage] = useState(1);
+  const archivePerPage = 6;
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [selectedArchivedCutForDossier, setSelectedArchivedCutForDossier] = useState<any>(null);
+  const [isArchiving, setIsArchiving] = useState<string | null>(null);
+
   // --- Dedicated Single-Document Print State ---
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printDocType, setPrintDocType] = useState<PrintDocumentType>('order');
@@ -92,6 +107,96 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
     setPrintDocType(type);
     setPrintData(item);
     setPrintModalOpen(true);
+  };
+
+  // Helper: determine if cutting order is completed / archived
+  const isCuttingOrderArchived = (cut: CuttingOrder): boolean => {
+    if (cut.status === 'cut_completed' || (cut.status as any) === 'completed' || (cut as any).is_archived) {
+      return true;
+    }
+    const cutBundles = cuttingBundles.filter((b) => b.cutting_order_id === cut.id);
+    if (cutBundles.length > 0 && cutBundles.every((b) => b.current_stage_code === 'completed' || b.status === 'completed')) {
+      return true;
+    }
+    return false;
+  };
+
+  // Partition into Active and Completed/Archived Cutting Orders
+  const { activeCuttingOrders, archivedCuttingOrders } = useMemo(() => {
+    const active: CuttingOrder[] = [];
+    const archived: CuttingOrder[] = [];
+
+    cuttingOrders.forEach((cut) => {
+      if (isCuttingOrderArchived(cut)) {
+        archived.push(cut);
+      } else {
+        active.push(cut);
+      }
+    });
+
+    return { activeCuttingOrders: active, archivedCuttingOrders: archived };
+  }, [cuttingOrders, cuttingBundles]);
+
+  // Actions for Archiving, Restoring, and Opening Dossier
+  const handleArchiveCutting = async (cut: CuttingOrder) => {
+    const confirmMsg = isAr
+      ? `هل أنت متأكد من إنهاء وأرشفة القصة [${cut.cutting_order_number}]؟ سيتم نقلها فوراً إلى سجل "أرشيف القصات المكتملة" وتوثيق ملفها الرقمي الشامل.`
+      : `Are you sure you want to finish and archive cutting run [${cut.cutting_order_number}]?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsArchiving(cut.id);
+    try {
+      let updatedCut: CuttingOrder = { ...cut, status: 'cut_completed' as const };
+      try {
+        const res = await api.production.archiveCuttingOrder(cut.id);
+        if (res?.data) {
+          updatedCut = res.data;
+        }
+      } catch (err) {
+        console.warn('Backend archive failed, using client fallback:', err);
+      }
+      if (onCuttingOrderArchived) {
+        onCuttingOrderArchived(updatedCut);
+      }
+    } finally {
+      setIsArchiving(null);
+    }
+  };
+
+  const handleRestoreCutting = async (cut: CuttingOrder) => {
+    const confirmMsg = isAr
+      ? `هل تريد إعادة فتح واستئناف القصة [${cut.cutting_order_number}] وإعادتها إلى صالة القص النشطة؟`
+      : `Restore cut [${cut.cutting_order_number}] back to active cutting floor?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const restoredCut: CuttingOrder = { ...cut, status: 'spreading' as const };
+    if (onCuttingOrderArchived) {
+      onCuttingOrderArchived(restoredCut);
+    }
+  };
+
+  const handleOpenDossier = async (cut: CuttingOrder) => {
+    const relatedBundles = cuttingBundles.filter(
+      (b) => b.cutting_order_id === cut.id || b.production_order_id === cut.production_order_id
+    );
+    const enrichedCut = {
+      ...cut,
+      bundles: (cut as any).bundles && (cut as any).bundles.length > 0 ? (cut as any).bundles : relatedBundles,
+    };
+    setSelectedArchivedCutForDossier(enrichedCut);
+    setIsDossierOpen(true);
+
+    try {
+      const res = await api.production.getCuttingOrder(cut.id);
+      if (res?.data) {
+        setSelectedArchivedCutForDossier({
+          ...res.data,
+          bundles: res.data.bundles && res.data.bundles.length > 0 ? res.data.bundles : relatedBundles,
+        });
+      }
+    } catch {
+      // Fallback already set
+    }
   };
 
   // KPI Calculations
@@ -110,7 +215,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
     const totalCutPieces = Math.max(cutPiecesFromOrders, cutPiecesFromCuts);
 
     const totalBundles = cuttingBundles.length;
-    const activeBundles = cuttingBundles.filter((b) => b.current_stage_code !== 'completed').length;
+    const activeBundles = cuttingBundles.filter((b) => b.current_stage_code !== 'completed' && b.status !== 'completed').length;
 
     const totalFinished = productionOrders.reduce(
       (sum, p) => sum + (Number((p as any).total_completed_quantity ?? p.completed_quantity ?? p.qc_passed_quantity) || 0),
@@ -153,9 +258,9 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
   const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / orderPerPage));
   const paginatedOrders = filteredOrders.slice((orderPage - 1) * orderPerPage, orderPage * orderPerPage);
 
-  // Filtered Cutting Orders
+  // Filtered Active Cutting Orders
   const filteredCuttingOrders = useMemo(() => {
-    return cuttingOrders.filter((cut) => {
+    return activeCuttingOrders.filter((cut) => {
       if (cutSourceFilter !== 'all' && cut.fabric_source !== cutSourceFilter) return false;
       if (cutSearch) {
         const q = cutSearch.toLowerCase();
@@ -167,15 +272,41 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
       }
       return true;
     });
-  }, [cuttingOrders, cutSourceFilter, cutSearch]);
+  }, [activeCuttingOrders, cutSourceFilter, cutSearch]);
 
   const totalCutPages = Math.max(1, Math.ceil(filteredCuttingOrders.length / cutPerPage));
   const paginatedCuttingOrders = filteredCuttingOrders.slice((cutPage - 1) * cutPerPage, cutPage * cutPerPage);
 
+  // Filtered Archived Cutting Orders
+  const filteredArchivedCuttingOrders = useMemo(() => {
+    return archivedCuttingOrders.filter((cut) => {
+      if (archiveSearch) {
+        const q = archiveSearch.toLowerCase();
+        const matchCutNum = cut.cutting_order_number?.toLowerCase().includes(q);
+        const matchProdNum = cut.production_order_number?.toLowerCase().includes(q);
+        const matchCutter = (cut.assigned_cutter_name || '').toLowerCase().includes(q);
+        const matchFabric = (cut.fabric_name || '').toLowerCase().includes(q);
+        const matchModel = ((cut as any).productionOrder?.garmentModel?.name || '').toLowerCase().includes(q);
+        if (!matchCutNum && !matchProdNum && !matchCutter && !matchFabric && !matchModel) return false;
+      }
+      return true;
+    });
+  }, [archivedCuttingOrders, archiveSearch]);
+
+  const totalArchivePages = Math.max(1, Math.ceil(filteredArchivedCuttingOrders.length / archivePerPage));
+  const paginatedArchivedCuttingOrders = filteredArchivedCuttingOrders.slice(
+    (archivePage - 1) * archivePerPage,
+    archivePage * archivePerPage
+  );
+
   // Filtered Bundles
   const filteredBundles = useMemo(() => {
     return cuttingBundles.filter((b) => {
-      if (bundleStageFilter !== 'all' && b.current_stage_code !== bundleStageFilter) return false;
+      if (bundleStageFilter === 'active') {
+        if (b.current_stage_code === 'completed' || b.status === 'completed') return false;
+      } else if (bundleStageFilter !== 'all') {
+        if (b.current_stage_code !== bundleStageFilter) return false;
+      }
       if (bundleSearch) {
         const q = bundleSearch.toLowerCase();
         const matchCode = b.bundle_code?.toLowerCase().includes(q);
@@ -368,19 +499,25 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
             id: 'cutting',
             label: isAr ? 'صالة القص وخطط الفرش' : 'Lay & Cutting Orders',
             icon: Scissors,
-            count: cuttingOrders.length,
+            count: activeCuttingOrders.length,
           },
           {
             id: 'bundles',
             label: isAr ? 'بطاقات الحزم وتتبع الخط' : 'Bundle Floor Tracker',
             icon: QrCode,
-            count: cuttingBundles.length,
+            count: stats.activeBundles,
           },
           {
             id: 'qc',
             label: isAr ? 'فحص ومراقبة الجودة' : 'Quality Control (QC)',
             icon: ShieldCheck,
             count: qualityInspections.length,
+          },
+          {
+            id: 'archive',
+            label: isAr ? 'أرشيف القصات المكتملة' : 'Completed Cuts Archive',
+            icon: Archive,
+            count: archivedCuttingOrders.length,
           },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -848,6 +985,16 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
 
                             <button
                               type="button"
+                              title={isAr ? 'إنهاء وأرشفة القصة ونقلها للأرشيف الرقمي الشامل' : 'Archive Cut Run'}
+                              onClick={() => handleArchiveCutting(cut)}
+                              disabled={isArchiving === cut.id}
+                              className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                            >
+                              <Archive className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
                               title={isAr ? 'طباعة كارت وإذن طاولة القص' : 'Print Cutting Ticket'}
                               onClick={() => handleOpenPrint('cutting', cut)}
                               className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
@@ -896,6 +1043,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
             {/* Stage Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-1 sm:pb-0">
               {[
+                { id: 'active', label: isAr ? `النشطة بالخطوط (${stats.activeBundles})` : `Active (${stats.activeBundles})` },
                 { id: 'all', label: isAr ? `كل الحزم (${cuttingBundles.length})` : `All (${cuttingBundles.length})` },
                 { id: 'cutting', label: isAr ? 'صالة القص' : 'Cutting' },
                 { id: 'assembly', label: isAr ? 'التجهيز' : 'Assembly' },
@@ -903,7 +1051,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
                 { id: 'finishing', label: isAr ? 'التشطيب' : 'Finishing' },
                 { id: 'ironing', label: isAr ? 'الكي' : 'Ironing' },
                 { id: 'packing', label: isAr ? 'التعبئة' : 'Packing' },
-                { id: 'completed', label: isAr ? 'مكتمل' : 'Completed' },
+                { id: 'completed', label: isAr ? 'المكتملة' : 'Completed' },
               ].map((pill) => (
                 <button
                   key={pill.id}
@@ -1273,12 +1421,238 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
         </div>
       )}
 
+      {/* ============================================================== */}
+      {/* SUB-TAB 5: COMPLETED CUTS ARCHIVE (FULL DIGITAL DOSSIERS) */}
+      {/* ============================================================== */}
+      {activeSubTab === 'archive' && (
+        <div className="space-y-4">
+          {/* Header Banner */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-[#000000] via-[#150407] to-[#000000] border border-[#7F1625]/40 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#7F1625]/30 border border-[#7F1625]/50 flex items-center justify-center text-[#ff8ba0]">
+                  <Archive className="w-4 h-4" />
+                </div>
+                <h2 className="text-base sm:text-lg font-black text-white">
+                  {isAr ? 'أرشيف القصات المكتملة والملف الرقمي الشامل' : 'Completed Cuts Archive & Full Digital Dossiers'}
+                </h2>
+                <Badge variant="purple" className="text-[10px] bg-[#7F1625]/40 text-[#ff8ba0] border-[#7F1625]">
+                  {archivedCuttingOrders.length} {isAr ? 'قصة مؤرشفة' : 'archived'}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                {isAr
+                  ? 'السجل الرقمي الدائم لكافة أوامر القص المكتملة بورشة التصنيع. يتيح لك استعراض واستدعاء الملف الفني الكامل لأي قصة سابقة: الأقمشة المستخدمة بالأمتار، والكميات المقصوصة، وسجل جميع العمال والفنيين الذين اشتغلوا عليها واستحقاقات أجورهم، وزمن التشغيل الفعلي.'
+                  : 'Historical digital dossier for finished cutting runs. Track fabrics used, output pieces, all operators involved, stage wages, and duration.'}
+              </p>
+            </div>
+
+            {/* Quick Stats Pill */}
+            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 shrink-0">
+              <div className="text-center px-2">
+                <span className="block text-[10px] text-slate-400 font-semibold">{isAr ? 'إجمالي القطع المؤرشفة' : 'Total Pieces'}</span>
+                <span className="text-base font-black font-mono text-emerald-400">
+                  {archivedCuttingOrders.reduce((sum, c) => sum + (Number(c.total_cut_pieces) || 0), 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="w-px h-8 bg-white/10" />
+              <div className="text-center px-2">
+                <span className="block text-[10px] text-slate-400 font-semibold">{isAr ? 'الأقمشة المستهلكة' : 'Meters Consumed'}</span>
+                <span className="text-base font-black font-mono text-amber-400">
+                  {archivedCuttingOrders.reduce((sum, c) => sum + (Number(c.actual_fabric_meters_used) || 0), 0).toLocaleString()} {isAr ? 'م' : 'm'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <Archive className="w-4 h-4 text-[#7F1625] dark:text-[#ff8ba0]" />
+              <span>{isAr ? 'قائمة سجلات القصات المؤرشفة' : 'Archived Cutting Orders List'}</span>
+              <span className="text-slate-400 font-normal">({filteredArchivedCuttingOrders.length} {isAr ? 'سجل' : 'records'})</span>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className={`w-3.5 h-3.5 text-slate-400 absolute ${isAr ? 'right-3' : 'left-3'} top-2.5 pointer-events-none`} />
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث برقم القصة، أمر الإنتاج، المقصدار، الخامة...' : 'Search cut #, PO, cutter, fabric...'}
+                value={archiveSearch}
+                onChange={(e) => {
+                  setArchiveSearch(e.target.value);
+                  setArchivePage(1);
+                }}
+                className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl ${
+                  isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'
+                } py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 w-full sm:w-72 focus:outline-none focus:border-[#7F1625]`}
+              />
+            </div>
+          </div>
+
+          {/* Archived Cuts Table */}
+          <div className="overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-[#120406]/5 dark:bg-[#120406]/80 border-b border-slate-200 dark:border-[#2d080e] text-slate-700 dark:text-slate-300 font-semibold">
+                  <tr>
+                    <th className="py-3 px-4">{isAr ? 'رقم إذن القص' : 'Cut Order #'}</th>
+                    <th className="py-3 px-4">{isAr ? 'أمر الإنتاج والموديل' : 'PO # & Model'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الطاولة والمقصدار' : 'Table & Cutter'}</th>
+                    <th className="py-3 px-4">{isAr ? 'الخامة ومصدرها' : 'Fabric & Source'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'طول الفرشة' : 'Lay Length'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الراقات' : 'Plies'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'المستهلك' : 'Fabric Used'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'القطع الناتجة' : 'Yield Pieces'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="py-3 px-4 text-center">{isAr ? 'الإجراءات والملف' : 'Actions & Dossier'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                  {paginatedArchivedCuttingOrders.map((cut) => {
+                    const cutterEmp = cut.assigned_cutter_id ? employees.find((e) => e.id === cut.assigned_cutter_id) : null;
+                    const cutterName = cut.assigned_cutter_name || (cut as any).assignedCutter?.name || cutterEmp?.name;
+                    const prodOrder = productionOrders.find((p) => p.id === cut.production_order_id);
+                    const modelName = prodOrder?.model_name || (cut as any).productionOrder?.garmentModel?.name || (isAr ? 'موديل معتمد' : 'Garment Model');
+                    const modelCode = prodOrder?.model_code || (cut as any).productionOrder?.garmentModel?.model_code;
+
+                    return (
+                      <tr key={cut.id} className="hover:bg-slate-50/80 dark:hover:bg-[#180508]/40 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-sky-600 dark:text-sky-400">
+                          {cut.cutting_order_number}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">{modelName}</div>
+                          <div className="font-mono text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[#7F1625] dark:text-[#ff8ba0] font-semibold">{cut.production_order_number || '—'}</span>
+                            {modelCode && <span>[{modelCode}]</span>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-slate-700 dark:text-slate-300">{cut.table_number || 'Table 1'}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                            <User className="w-3 h-3 text-[#7F1625] dark:text-[#ff8ba0]" />
+                            <span>{cutterName || (isAr ? 'فني القص' : 'Master Cutter')}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-slate-800 dark:text-slate-200">{cut.fabric_name || (isAr ? 'قماش التشغيل' : 'Fabric')}</div>
+                          <Badge
+                            variant={cut.fabric_source === 'customer_deposit' ? 'purple' : 'info'}
+                            className="mt-0.5 text-[9px]"
+                          >
+                            {cut.fabric_source === 'customer_deposit'
+                              ? isAr ? 'أمانة عميل CMT' : 'CMT Custody'
+                              : isAr ? 'خامات المصنع' : 'Factory Owned'}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-slate-700 dark:text-slate-300">
+                          {cut.lay_length_meters} {isAr ? 'م' : 'm'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 dark:text-slate-100">
+                          {cut.layers_count} {isAr ? 'راقة' : 'plies'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-amber-600 dark:text-amber-400 font-bold">
+                          {cut.actual_fabric_meters_used} {isAr ? 'م' : 'm'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          {cut.total_cut_pieces} {isAr ? 'قطعة' : 'pcs'}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                            {isAr ? 'مكتملة ومؤرشفة' : 'Completed & Archived'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 justify-center">
+                            {/* 1. Main Dossier Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDossier(cut)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#7F1625] to-[#9E2A3B] hover:from-[#961b2c] hover:to-[#b03044] text-white text-[11px] font-bold shadow-md shadow-[#7F1625]/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                              title={isAr ? 'فتح ملف القصة الشامل (الأقمشة، العمال، المقاسات، الوقت)' : 'Open Full Digital Dossier'}
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>{isAr ? 'ملف القصة الشامل' : 'Dossier'}</span>
+                            </button>
+
+                            {/* 2. Print Cutting Ticket */}
+                            <button
+                              type="button"
+                              title={isAr ? 'طباعة كارت وإذن طاولة القص' : 'Print Cutting Ticket'}
+                              onClick={() => handleOpenPrint('cutting', cut)}
+                              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+
+                            {/* 3. Restore to Active Cut */}
+                            <button
+                              type="button"
+                              title={isAr ? 'إعادة فتح القصة واستئنافها بصالة القص النشطة' : 'Restore / Re-open Cut'}
+                              onClick={() => handleRestoreCutting(cut)}
+                              className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedArchivedCuttingOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-slate-400 text-xs">
+                        <div className="max-w-md mx-auto space-y-2">
+                          <Archive className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+                          <p className="font-semibold text-slate-600 dark:text-slate-300">
+                            {isAr ? 'لا توجد أوامر قص مؤرشفة مطابقة للبحث' : 'No archived cutting orders match your search'}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {isAr
+                              ? 'عند اكتمال كافة مراحل تشغيل القصة أو النقر على "إنهاء وأرشفة القصة" في صالة القص، سيتم حفظها تلقائياً هنا مع كافة بيانات عمالها وأقمشتها وأوقاتها.'
+                              : 'When all bundles complete their stages or when you click archive, the cut will be stored here with its complete digital history.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {filteredArchivedCuttingOrders.length > 0 && (
+              <Pagination
+                currentPage={archivePage}
+                totalPages={totalArchivePages}
+                totalItems={filteredArchivedCuttingOrders.length}
+                perPage={archivePerPage}
+                onPageChange={setArchivePage}
+                isAr={isAr}
+                alwaysShow={true}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Dedicated Clean Single-Document Print Modal */}
       <ProductionPrintModal
         isOpen={printModalOpen}
         onClose={() => setPrintModalOpen(false)}
         documentType={printDocType}
         data={printData}
+        isAr={isAr}
+      />
+
+      {/* Comprehensive Digital Dossier Modal for Archived Cut */}
+      <ArchivedCuttingDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        cuttingOrder={selectedArchivedCutForDossier}
         isAr={isAr}
       />
     </div>

@@ -917,6 +917,16 @@ class ApiClient {
       });
     },
 
+    archiveCuttingOrder: async (id: string): Promise<{ success: boolean; message: string; data: any }> => {
+      return this.request<{ success: boolean; message: string; data: any }>(`/cutting-orders/${id}/archive`, {
+        method: 'POST',
+      });
+    },
+
+    getCuttingOrder: async (id: string): Promise<{ success: boolean; data: any }> => {
+      return this.request<{ success: boolean; data: any }>(`/cutting-orders/${id}`);
+    },
+
     getBundles: async (params: { production_order_id?: string; cutting_order_id?: string; current_stage_code?: string; status?: string; assigned_employee_id?: string; search?: string; page?: number; per_page?: number } = {}): Promise<{ success: boolean; data: any[]; meta?: any }> => {
       const query = new URLSearchParams();
       if (params.production_order_id && params.production_order_id !== 'all') query.append('production_order_id', params.production_order_id);

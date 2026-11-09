@@ -2246,6 +2246,20 @@ export function App() {
                     alert(err.message || (isAr ? 'فشل اعتماد أمر الإنتاج' : 'Failed to approve production order'));
                   }
                 }}
+                onCuttingOrderArchived={(updatedCut) => {
+                  setCuttingOrders((prev) =>
+                    prev.map((c) => (c.id === updatedCut.id ? { ...c, ...updatedCut } : c))
+                  );
+                  if (updatedCut.status === 'cut_completed' || (updatedCut.status as any) === 'completed') {
+                    setCuttingBundles((prev) =>
+                      prev.map((b) =>
+                        b.cutting_order_id === updatedCut.id
+                          ? { ...b, current_stage_code: 'completed', status: 'completed' }
+                          : b
+                      )
+                    );
+                  }
+                }}
                 onNavigateToTab={(tab) => handleTabChange(tab)}
               />
             </Suspense>

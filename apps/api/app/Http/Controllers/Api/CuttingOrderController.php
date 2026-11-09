@@ -200,4 +200,41 @@ class CuttingOrderController extends Controller
             ], 422);
         }
     }
+
+    public function archive(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = CuttingOrder::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $order->status = 'cut_completed';
+        $order->save();
+
+        // تحديث كافة الحزم المرتبطة لتصبح مكتملة
+        \App\Models\CuttingBundle::where('tenant_id', $tenantId)
+            ->where('cutting_order_id', $order->id)
+            ->where('current_stage_code', '!=', 'completed')
+            ->update([
+                'current_stage_code' => 'completed',
+                'status' => 'completed',
+                'completion_date' => now()->toDateString(),
+            ]);
+
+        // توثيق سجل التدقيق
+        \App\Models\AuditLog::create([
+            'tenant_id' => $tenantId,
+            'user_id' => $request->user()?->id,
+            'action' => 'cutting_order_archived',
+            'auditable_type' => CuttingOrder::class,
+            'auditable_id' => $order->id,
+            'old_values' => ['status' => $order->getOriginal('status')],
+            'new_values' => ['status' => 'cut_completed'],
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إنهاء وأرشفة القصة بنجاح ونقلها إلى سجل أرشيف القصات المكتملة.',
+            'data' => $order->fresh(['productionOrder.garmentModel', 'warehouse', 'assignedCutter', 'bundles.assignedEmployee', 'bundles.stageLogs.employee']),
+        ]);
+    }
 }

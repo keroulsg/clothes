@@ -282,6 +282,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'store'])->middleware('role:production_manager');
         Route::get('/cutting-orders/{id}', [\App\Http\Controllers\Api\CuttingOrderController::class, 'show']);
         Route::post('/cutting-orders/{id}/cancel', [\App\Http\Controllers\Api\CuttingOrderController::class, 'cancel'])->middleware('role:production_manager,company_owner');
+        Route::post('/cutting-orders/{id}/archive', [\App\Http\Controllers\Api\CuttingOrderController::class, 'archive']);
 
         Route::get('/bundles', [\App\Http\Controllers\Api\BundleController::class, 'index']);
         Route::get('/bundles/{id}', [\App\Http\Controllers\Api\BundleController::class, 'show']);

@@ -326,7 +326,7 @@ input:focus, select:focus, textarea:focus {
     size: A4 portrait;
   }
 
-  html, body {
+  html, body, #root, #root > div {
     background: #ffffff !important;
     background-image: none !important;
     color: #000000 !important;

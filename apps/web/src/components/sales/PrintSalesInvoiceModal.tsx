@@ -10,6 +10,7 @@ interface PrintSalesInvoiceModalProps {
   invoice?: SalesInvoice | null;
   quotation?: Quotation | null;
   isAr?: boolean;
+  autoPrint?: boolean;
 }
 
 export const formatCleanDate = (val?: string | null): string => {
@@ -27,6 +28,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
   invoice,
   quotation,
   isAr = true,
+  autoPrint = false,
 }) => {
   if (!isOpen || (!order && !invoice && !quotation)) return null;
 
@@ -98,57 +100,97 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
     }
 
     try {
-      // 1. Try popup window print first (escapes all SPA CSS, fixed overlays, and dark mode issues)
-      const printWindow = window.open('', '_blank', 'width=900,height=950,top=40,left=40');
-      if (printWindow) {
-        printWindow.document.open();
-        printWindow.document.write(`
+      // 1. Invisible iframe print (Guaranteed no popup-blocker issues, isolates styles cleanly)
+      let iframe = document.getElementById('garmentos-print-frame') as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'garmentos-print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.top = '-9999px';
+        iframe.style.left = '-9999px';
+        iframe.style.width = '1000px';
+        iframe.style.height = '1000px';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.zIndex = '-999';
+        document.body.appendChild(iframe);
+      }
+
+      const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (frameDoc && iframe.contentWindow) {
+        const headStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+          .map(el => el.outerHTML)
+          .join('\n');
+
+        frameDoc.open();
+        frameDoc.write(`
           <!DOCTYPE html>
           <html dir="${isAr ? 'rtl' : 'ltr'}" lang="${isAr ? 'ar' : 'en'}">
           <head>
-            <title>${effectiveDocNumber} - ${factoryName}</title>
             <meta charset="utf-8">
+            <title>${effectiveDocNumber} - ${factoryName}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+            ${headStyles}
             <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', system-ui, -apple-system, sans-serif; }
-              body { background: #ffffff !important; color: #000000 !important; padding: 24px; font-size: 12px; line-height: 1.5; }
-              .border-b-2 { border-bottom: 2px solid #7F1625; }
-              table { width: 100%; border-collapse: collapse; margin-top: 14px; margin-bottom: 14px; }
-              th { background: #fdf2f4 !important; color: #7F1625 !important; border: 1px solid #cbd5e1; padding: 8px 10px; text-align: ${isAr ? 'right' : 'left'}; font-weight: bold; }
-              td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: ${isAr ? 'right' : 'left'}; }
-              .text-center { text-align: center; }
-              .text-end { text-align: ${isAr ? 'left' : 'right'}; }
-              .font-bold { font-weight: bold; }
-              .font-black { font-weight: 900; }
-              .font-mono { font-family: monospace; }
-              .total-box { background: #7F1625 !important; color: #ffffff !important; padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; margin-top: 8px; }
-              @page { size: A4 portrait; margin: 10mm; }
+              * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', system-ui, -apple-system, sans-serif !important; }
+              html, body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                margin: 0 !important;
+                padding: 16px !important;
+                font-size: 12px;
+                line-height: 1.5;
+                direction: ${isAr ? 'rtl' : 'ltr'};
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+              }
+              .border-b-2 { border-bottom: 2px solid #7F1625 !important; }
+              table { width: 100% !important; border-collapse: collapse !important; margin-top: 14px !important; margin-bottom: 14px !important; }
+              th { background: #fdf2f4 !important; color: #7F1625 !important; border: 1px solid #cbd5e1 !important; padding: 8px 10px !important; text-align: ${isAr ? 'right' : 'left'} !important; font-weight: bold !important; font-size: 11px !important; }
+              td { border: 1px solid #e2e8f0 !important; padding: 8px 10px !important; text-align: ${isAr ? 'right' : 'left'} !important; font-size: 11px !important; }
+              .text-center { text-align: center !important; }
+              .text-end { text-align: ${isAr ? 'left' : 'right'} !important; }
+              .text-start { text-align: ${isAr ? 'right' : 'left'} !important; }
+              .font-bold { font-weight: bold !important; }
+              .font-black { font-weight: 900 !important; }
+              .font-mono { font-family: monospace !important; }
+              @page { size: A4 portrait; margin: 10mm 12mm; }
               @media print {
-                body { padding: 0; }
+                body { padding: 0 !important; }
                 .no-print { display: none !important; }
               }
             </style>
           </head>
-          <body>
+          <body class="p-6">
             ${printContent.innerHTML}
           </body>
           </html>
         `);
-        printWindow.document.close();
+        frameDoc.close();
 
         setTimeout(() => {
-          printWindow.focus();
-          printWindow.print();
-        }, 350);
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            console.warn('Iframe print failed, falling back:', e);
+            fallbackPrint();
+          }
+        }, 250);
         return;
       }
     } catch (e) {
-      console.warn('Popup blocked, falling back to window.print()', e);
+      console.warn('Iframe approach encountered an error, falling back:', e);
     }
 
-    // 2. Direct fallback
+    fallbackPrint();
+  };
+
+  const fallbackPrint = () => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'visible';
     window.print();
@@ -156,6 +198,15 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
       document.body.style.overflow = prevOverflow;
     }, 1000);
   };
+
+  React.useEffect(() => {
+    if (isOpen && autoPrint) {
+      const timer = setTimeout(() => {
+        handlePrint();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoPrint]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 print:p-0 print:bg-white print:static">
@@ -230,7 +281,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
         </div>
 
         {/* PRINTABLE A4 INVOICE SHEET */}
-        <div id="sales-invoice-print-sheet" className="p-8 sm:p-12 text-slate-900 dark:text-slate-100 print:text-black print:p-6 print:bg-white space-y-6">
+        <div id="sales-invoice-print-sheet" className="printable-sheet printable-area p-8 sm:p-12 text-slate-900 dark:text-slate-100 print:text-black print:p-6 print:bg-white space-y-6">
           {/* Header & Logo */}
           <div className="flex items-start justify-between border-b-2 border-[#7F1625] pb-6 gap-4">
             <div className="space-y-1">

@@ -64,6 +64,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<SalesOrder | null>(null);
   const [selectedQuoteForPrint, setSelectedQuoteForPrint] = useState<Quotation | null>(null);
+  const [autoPrintTrigger, setAutoPrintTrigger] = useState(false);
   const [selectedQuoteForView, setSelectedQuoteForView] = useState<Quotation | null>(null);
   const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null);
   const [reservingOrderId, setReservingOrderId] = useState<string | null>(null);
@@ -1032,7 +1033,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             {/* Action 4: Official Tax Sales Invoice Print */}
                             <button
                               type="button"
-                              onClick={() => setSelectedOrderForPrint(order)}
+                              onClick={() => {
+                                setSelectedOrderForPrint(order);
+                                setAutoPrintTrigger(true);
+                              }}
                               title={isAr ? 'طباعة فاتورة مبيعات ضريبية رسمية A4' : 'Print Official Tax Invoice (A4)'}
                               className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
                             >
@@ -1068,7 +1072,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                                   id: 'print-official',
                                   label: isAr ? 'طباعة الفاتورة الضريبية الرسمية A4' : 'Print Tax Invoice (A4)',
                                   icon: <Printer className="w-3.5 h-3.5 text-[#7F1625]" />,
-                                  onClick: () => setSelectedOrderForPrint(order),
+                                  onClick: () => {
+                                    setSelectedOrderForPrint(order);
+                                    setAutoPrintTrigger(true);
+                                  },
                                 },
                                 ...(order.status === 'confirmed'
                                   ? [
@@ -1284,7 +1291,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             {/* Action 3: Print Official A4 Quotation */}
                             <button
                               type="button"
-                              onClick={() => setSelectedQuoteForPrint(q)}
+                              onClick={() => {
+                                setSelectedQuoteForPrint(q);
+                                setAutoPrintTrigger(true);
+                              }}
                               title={isAr ? 'طباعة عرض السعر الرسمي A4' : 'Print Official Quotation (A4)'}
                               className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
                             >
@@ -1306,7 +1316,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                                   id: 'print-quote-a4',
                                   label: isAr ? 'طباعة عرض السعر الرسمي A4' : 'Print Quotation (A4)',
                                   icon: <Printer className="w-3.5 h-3.5 text-[#7F1625]" />,
-                                  onClick: () => setSelectedQuoteForPrint(q),
+                                  onClick: () => {
+                                    setSelectedQuoteForPrint(q);
+                                    setAutoPrintTrigger(true);
+                                  },
                                 },
                                 ...(!isConverted
                                   ? [
@@ -2165,7 +2178,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedOrderForPrint(selectedOrderForView)}
+                  onClick={() => {
+                    setSelectedOrderForPrint(selectedOrderForView);
+                    setAutoPrintTrigger(true);
+                  }}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
@@ -2626,7 +2642,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedQuoteForPrint(selectedQuoteForView)}
+                  onClick={() => {
+                    setSelectedQuoteForPrint(selectedQuoteForView);
+                    setAutoPrintTrigger(true);
+                  }}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
@@ -2664,9 +2683,11 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       {/* OFFICIAL A4 PRINTABLE INVOICE & QUOTATION MODAL */}
       <PrintSalesInvoiceModal
         isOpen={!!selectedOrderForPrint || !!selectedQuoteForPrint}
+        autoPrint={autoPrintTrigger}
         onClose={() => {
           setSelectedOrderForPrint(null);
           setSelectedQuoteForPrint(null);
+          setAutoPrintTrigger(false);
         }}
         order={selectedOrderForPrint}
         quotation={selectedQuoteForPrint}

@@ -278,8 +278,8 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-6xl bg-white dark:bg-[#0d131f] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden text-slate-900 dark:text-slate-100">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-md p-2 sm:p-6 flex justify-center items-start animate-in fade-in duration-200">
+      <div className="relative w-full max-w-6xl bg-white dark:bg-[#0d131f] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 my-4 sm:my-8 text-slate-900 dark:text-slate-100 overflow-hidden">
         
         {/* TOP BRAND HERO HEADER */}
         <div className="relative overflow-hidden bg-gradient-to-r from-[#5a0e1a] via-[#7F1625] to-[#400810] text-white p-4 sm:p-5 shadow-md border-b border-white/10 shrink-0">
@@ -590,8 +590,8 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
           </div>
         </div>
 
-        {/* TAB NAVIGATION */}
-        <div className="flex items-center gap-1.5 px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] overflow-x-auto text-xs font-semibold shrink-0">
+        {/* TAB NAVIGATION (Sticky at top when scrolling) */}
+        <div className="sticky top-0 z-30 flex items-center gap-1.5 px-6 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0c121e]/95 backdrop-blur-md overflow-x-auto text-xs font-semibold shadow-xs">
           {[
             { id: 'overview', label: isAr ? 'نظرة عامة والملخص' : 'Overview', icon: <TrendingUp className="w-3.5 h-3.5" /> },
             { id: 'invoices', label: isAr ? 'فواتير المبيعات' : 'Invoices', count: customerInvoices.length, icon: <FileText className="w-3.5 h-3.5" /> },
@@ -627,8 +627,8 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
           ))}
         </div>
 
-        {/* TAB CONTENTS (With min-h-0 and pb-32 to guarantee complete visibility of bottom content) */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-32 bg-slate-50/50 dark:bg-[#0a0f19]/50">
+        {/* TAB CONTENTS (Full natural height, zero inner scroll trap) */}
+        <div className="p-5 sm:p-7 bg-slate-50/50 dark:bg-[#0a0f19]/50 space-y-6">
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (

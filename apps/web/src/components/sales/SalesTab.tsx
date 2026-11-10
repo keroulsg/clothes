@@ -37,7 +37,8 @@ import { RecordSalesReturnModal } from './RecordSalesReturnModal';
 import { PrintCreditNoteModal } from './PrintCreditNoteModal';
 import { ViewSalesReturnModal } from './ViewSalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
-import { PrintSalesInvoiceModal, formatCleanDate } from './PrintSalesInvoiceModal';
+import { PrintSalesInvoiceModal, formatCleanDate, getPaymentMethodLabel } from './PrintSalesInvoiceModal';
+import { PrintPaymentReceiptModal } from './PrintPaymentReceiptModal';
 import { PrintDeliveryNoteModal } from './PrintDeliveryNoteModal';
 import { ViewDeliveryNoteModal } from './ViewDeliveryNoteModal';
 import { UpdateDeliveryShippingModal } from './UpdateDeliveryShippingModal';
@@ -109,6 +110,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedVoucherForPrint, setSelectedVoucherForPrint] = useState<any | null>(null);
+  const [receiptSearchQuery, setReceiptSearchQuery] = useState('');
+  const [receiptMethodFilter, setReceiptMethodFilter] = useState<'all' | 'cash' | 'card' | 'bank_transfer' | 'check' | 'wallet'>('all');
 
   // New Order Form State
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
@@ -3647,89 +3651,387 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       })()}
 
       {/* CUSTOMER PAYMENTS VIEW */}
-      {activeSubTab === 'payments' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                {isAr ? 'سجل سندات القبض والتحصيل للعملاء (Customer Receipts)' : 'Customer Payment Receipts & Collections'}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isAr ? 'إدارة متحصلات عملاء الجملة والتجزئة وتوزيعها على الفواتير وإجراء القيود المحاسبية التلقائية.' : 'Track incoming receipts, allocations to open invoices, and double-entry postings.'}
-              </p>
-            </div>
-            <Button size="sm" onClick={() => setIsRecordPaymentOpen(true)} icon={<Plus className="w-3.5 h-3.5" />}>
-              {isAr ? 'تسجيل سند قبض' : 'Record Receipt'}
-            </Button>
-          </div>
+      {activeSubTab === 'payments' && (() => {
+        const totalReceiptsAmount = payments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const cashReceiptsAmount = payments
+          .filter((p: any) => p.payment_method === 'cash')
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const cardBankReceiptsAmount = payments
+          .filter((p: any) => ['card', 'bank_transfer', 'wallet', 'check'].includes(p.payment_method))
+          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const activeVouchersCount = payments.filter((p: any) => !p.is_reversed && p.status !== 'reversed').length;
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم السند' : 'Receipt #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Method'}</th>
-                  <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
-                  <th className="p-3 text-start">{isAr ? 'المبلغ المحصل' : 'Amount'}</th>
-                  <th className="p-3 text-start">{isAr ? 'البيان' : 'Notes'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {payments.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد سندات قبض مسجلة حتى الآن' : 'No customer receipts on record'}
-                    </td>
-                  </tr>
-                ) : (
-                  payments.map((p: any) => (
-                    <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">{p.voucher_number}</td>
-                      <td className="p-3">{p.customer?.name || p.customer_name || '—'}</td>
-                      <td className="p-3 capitalize">{p.payment_method?.replace('_', ' ')}</td>
-                      <td className="p-3 text-slate-500 font-mono text-xs">{p.payment_date}</td>
-                      <td className="p-3 font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        {Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3 text-xs text-slate-500 max-w-xs truncate">{p.notes || '—'}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant={p.status === 'posted' ? 'success' : 'danger'}>
-                          {p.status === 'posted' ? (isAr ? 'معتمد' : 'Posted') : (isAr ? 'معكوس / ملغى' : 'Reversed')}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-receipt-voucher',
-                              label: isAr ? 'طباعة سند القبض' : 'Print Receipt Voucher',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                            {
-                              id: 'reverse-receipt',
-                              label: isAr ? 'عكس / إلغاء سند القبض' : 'Reverse Payment Voucher',
-                              icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
-                              onClick: () => handleReversePayment(p.id),
-                              disabled: p.status === 'reversed',
-                            },
-                          ]}
-                        />
-                      </td>
+        const filteredPayments = payments.filter((p: any) => {
+          const q = receiptSearchQuery.trim().toLowerCase();
+          const party = (p.party_name || p.customer?.name || p.customer_name || '').toLowerCase();
+          const vNum = (p.voucher_number || '').toLowerCase();
+          const notes = (p.notes || '').toLowerCase();
+          const matchesSearch = !q || vNum.includes(q) || party.includes(q) || notes.includes(q);
+          const matchesMethod = receiptMethodFilter === 'all' || p.payment_method === receiptMethodFilter;
+          return matchesSearch && matchesMethod;
+        });
+
+        return (
+          <div className="space-y-4">
+            {/* TOP 4 KPI CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي المقبوضات والتحصيلات' : 'Total Receipts Collected'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {totalReceiptsAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr ? `${payments.length} سند قبض مسجل بالنظام` : `${payments.length} receipts registered`}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'متحصلات الخزينة النقدية' : 'Cash Treasury Receipts'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <Store className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {cashReceiptsAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr ? 'توريد نقدي فوري بصندوق الخزينة' : 'Direct cash-in-hand treasury'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'البنك والبطاقات والمحافظ' : 'Bank & Card Receipts'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {cardBankReceiptsAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr ? 'إيداعات بنكية ومدفوعات رقمية' : 'Bank deposits & e-payments'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'السندات المعتمدة والمقيدة' : 'Verified Vouchers'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-red-400 flex items-center justify-center">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {activeVouchersCount}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'سند معتمد' : 'Vouchers'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  {isAr ? 'قيود يومية آلية في شجرة الحسابات' : 'Auto journal entries posted'}
+                </p>
+              </div>
+            </div>
+
+            {/* MAIN RECEIPTS CARD */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    {isAr ? 'سجل سندات القبض والتحصيل للعملاء (Customer Receipts)' : 'Customer Payment Receipts & Collections'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إدارة متحصلات عملاء الجملة والتجزئة وتوزيعها على الفواتير وإجراء القيود المحاسبية التلقائية وطباعة إيصالات الاستلام الرسمية.' : 'Track incoming receipts, allocations to open invoices, and double-entry postings.'}
+                  </p>
+                </div>
+                <Button size="sm" onClick={() => setIsRecordPaymentOpen(true)} icon={<Plus className="w-3.5 h-3.5" />}>
+                  {isAr ? 'تسجيل سند قبض جديد' : 'Record Receipt'}
+                </Button>
+              </div>
+
+              {/* FILTER & SEARCH TOOLBAR */}
+              <div className="p-3 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="relative flex-1 min-w-[220px] max-w-md">
+                  <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={receiptSearchQuery}
+                    onChange={(e) => setReceiptSearchQuery(e.target.value)}
+                    placeholder={isAr ? 'بحث برقم السند، اسم العميل، البيان...' : 'Search by voucher #, customer, notes...'}
+                    className="w-full ps-9 pe-3 py-1.5 text-xs bg-white dark:bg-[#0d131f] border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#7F1625]"
+                  />
+                  {receiptSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setReceiptSearchQuery('')}
+                      className="absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* PAYMENT METHOD FILTER PILLS */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-slate-400 ms-1 font-medium">{isAr ? 'طريقة التحصيل:' : 'Method:'}</span>
+                  {(
+                    [
+                      { id: 'all', label: isAr ? 'الكل' : 'All' },
+                      { id: 'cash', label: isAr ? '💵 نقدي' : 'Cash' },
+                      { id: 'card', label: isAr ? '💳 فيزا وبطاقة' : 'Card' },
+                      { id: 'bank_transfer', label: isAr ? '🏦 تحويل بنكي' : 'Bank' },
+                      { id: 'check', label: isAr ? '📝 شيك' : 'Check' },
+                      { id: 'wallet', label: isAr ? '📱 محفظة' : 'Wallet' },
+                    ] as const
+                  ).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setReceiptMethodFilter(m.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        receiptMethodFilter === m.id
+                          ? 'bg-[#7F1625] text-white shadow-xs font-bold'
+                          : 'bg-white dark:bg-[#0d131f] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* RECEIPTS TABLE */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'رقم السند' : 'Receipt #'}</th>
+                      <th className="p-3 text-start">{isAr ? 'العميل التجاري' : 'Customer'}</th>
+                      <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Method'}</th>
+                      <th className="p-3 text-start">{isAr ? 'تاريخ السند' : 'Date'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المبلغ المحصل' : 'Amount'}</th>
+                      <th className="p-3 text-start">{isAr ? 'التخصيص والبيان' : 'Allocation / Notes'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الحالة المحاسبية' : 'Status'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {filteredPayments.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-400">
+                          {isAr ? 'لا توجد سندات قبض مطابقة لبحثك' : 'No customer receipts on record'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPayments.map((p: any) => {
+                        const custName =
+                          p.party_name ||
+                          p.customer?.name ||
+                          p.customer_name ||
+                          customers.find((c) => c.id === p.party_id)?.name ||
+                          (isAr ? 'عميل نقدي / غير محدد' : 'Cash / Unassigned');
+                        const linkedCust = customers.find(
+                          (c) => c.id === p.party_id || c.name === custName
+                        );
+                        const isReversed = p.is_reversed || p.status === 'reversed';
+                        const methodLabel = getPaymentMethodLabel(p.payment_method, isAr);
+
+                        let methodBadgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+                        if (p.payment_method === 'cash') {
+                          methodBadgeClass = 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20';
+                        } else if (p.payment_method === 'card') {
+                          methodBadgeClass = 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20';
+                        } else if (p.payment_method === 'bank_transfer') {
+                          methodBadgeClass = 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20';
+                        } else if (p.payment_method === 'check') {
+                          methodBadgeClass = 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20';
+                        } else if (p.payment_method === 'wallet') {
+                          methodBadgeClass = 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20';
+                        }
+
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                            {/* VOUCHER NUMBER (CLICKABLE FOR PRINT) */}
+                            <td className="p-3">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedVoucherForPrint(p)}
+                                className="inline-flex items-center gap-1.5 font-mono font-bold text-xs text-[#7F1625] dark:text-red-400 hover:underline bg-red-50 dark:bg-red-950/40 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/50 transition-colors"
+                                title={isAr ? 'عرض وطباعة سند القبض الرسمي A4' : 'View & Print Voucher'}
+                              >
+                                <Receipt className="w-3.5 h-3.5" />
+                                <span>{p.voucher_number || `RCV-${p.id?.slice(0, 8)}`}</span>
+                              </button>
+                            </td>
+
+                            {/* CUSTOMER NAME WITH AVATAR & DOSSIER LINK */}
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs shrink-0 border border-slate-200 dark:border-slate-700">
+                                  {custName.substring(0, 2)}
+                                </div>
+                                <div className="min-w-0">
+                                  {linkedCust ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedCustomerForDossier(linkedCust)}
+                                      className="font-bold text-xs text-slate-900 dark:text-white hover:text-[#7F1625] dark:hover:text-red-400 hover:underline flex items-center gap-1 text-start"
+                                      title={isAr ? 'فتح الملف التجاري للعميل' : 'Open Customer Dossier'}
+                                    >
+                                      <span>{custName}</span>
+                                      <ExternalLink className="w-3 h-3 opacity-60" />
+                                    </button>
+                                  ) : (
+                                    <span className="font-bold text-xs text-slate-900 dark:text-white">{custName}</span>
+                                  )}
+                                  {linkedCust?.code && (
+                                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">
+                                      {linkedCust.code}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* PAYMENT METHOD BADGE */}
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${methodBadgeClass}`}>
+                                {methodLabel}
+                              </span>
+                            </td>
+
+                            {/* DATE */}
+                            <td className="p-3 text-slate-600 dark:text-slate-300 font-mono text-xs">
+                              {formatCleanDate(p.voucher_date || p.payment_date || p.created_at)}
+                            </td>
+
+                            {/* AMOUNT */}
+                            <td className="p-3">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                                {Number(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+                              </span>
+                            </td>
+
+                            {/* ALLOCATION / NOTES */}
+                            <td className="p-3">
+                              <div className="space-y-0.5 text-xs max-w-xs">
+                                {p.allocations && p.allocations.length > 0 && p.allocations[0]?.sales_invoice?.invoice_number ? (
+                                  <div className="inline-flex items-center gap-1 font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                    <FileText className="w-2.5 h-2.5 text-[#7F1625]" />
+                                    <span>{p.allocations[0].sales_invoice.invoice_number}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 block">{isAr ? 'تسوية تلقائية FIFO' : 'FIFO settlement'}</span>
+                                )}
+                                <p className="text-slate-600 dark:text-slate-400 truncate text-[11px]">
+                                  {p.notes || (isAr ? 'تحصيل لحساب العميل' : 'Customer collection')}
+                                </p>
+                              </div>
+                            </td>
+
+                            {/* STATUS */}
+                            <td className="p-3 text-center">
+                              {isReversed ? (
+                                <Badge variant="danger" className="text-[11px] gap-1">
+                                  <RotateCcw className="w-3 h-3" />
+                                  {isAr ? 'معكوس / ملغى' : 'Reversed'}
+                                </Badge>
+                              ) : (
+                                <Badge variant="success" className="text-[11px] gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                                  <CheckCircle className="w-3 h-3" />
+                                  {isAr ? 'معتمد ومقيد' : 'Posted'}
+                                </Badge>
+                              )}
+                            </td>
+
+                            {/* ACTIONS */}
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedVoucherForPrint(p)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-[#7F1625] dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                  title={isAr ? 'طباعة سند القبض الرسمي A4' : 'Print Voucher'}
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                                {linkedCust && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedCustomerForDossier(linkedCust)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                    title={isAr ? 'فتح الملف التجاري للعميل' : 'Customer Dossier'}
+                                  >
+                                    <User className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <ActionsMenu
+                                  variant="icon-horizontal"
+                                  align={isAr ? 'left' : 'right'}
+                                  items={[
+                                    {
+                                      id: 'print-receipt-voucher',
+                                      label: isAr ? 'طباعة سند القبض الرسمي (A4)' : 'Print Official Voucher (A4)',
+                                      icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                                      onClick: () => setSelectedVoucherForPrint(p),
+                                    },
+                                    ...(linkedCust
+                                      ? [
+                                          {
+                                            id: 'view-customer-dossier',
+                                            label: isAr ? 'عرض الملف التجاري للعميل' : 'Customer Dossier',
+                                            icon: <Building2 className="w-3.5 h-3.5 text-blue-500" />,
+                                            onClick: () => setSelectedCustomerForDossier(linkedCust),
+                                          },
+                                        ]
+                                      : []),
+                                    {
+                                      id: 'reverse-receipt',
+                                      label: isAr ? 'عكس / إلغاء سند القبض' : 'Reverse Payment Voucher',
+                                      icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                                      onClick: () => handleReversePayment(p.id),
+                                      disabled: isReversed,
+                                    },
+                                  ]}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {/* RECORD CUSTOMER PAYMENT MODAL */}
       <Modal
@@ -4279,6 +4581,23 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
           setSelectedInvoiceForPrint(inv);
         }}
         onRefresh={loadSalesData}
+        isAr={isAr}
+      />
+
+      {/* OFFICIAL A4 PRINTABLE CUSTOMER PAYMENT RECEIPT MODAL */}
+      <PrintPaymentReceiptModal
+        isOpen={!!selectedVoucherForPrint}
+        onClose={() => setSelectedVoucherForPrint(null)}
+        voucher={selectedVoucherForPrint}
+        customer={
+          selectedVoucherForPrint
+            ? customers.find(
+                (c) =>
+                  c.id === selectedVoucherForPrint.party_id ||
+                  c.name === (selectedVoucherForPrint.party_name || selectedVoucherForPrint.customer?.name)
+              )
+            : null
+        }
         isAr={isAr}
       />
     </div>

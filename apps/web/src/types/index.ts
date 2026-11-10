@@ -776,6 +776,15 @@ export interface SalesInvoice {
   id: string;
   invoice_number: string;
   sales_order_id?: string;
+  warehouse_id?: string;
+  warehouse?: {
+    id: string;
+    name: string;
+    code?: string;
+    type?: string;
+  };
+  sales_order?: any;
+  salesOrder?: any;
   customer_name: string;
   customer_id?: string;
   invoice_type: 'standard' | 'pos_receipt' | 'tax_invoice';

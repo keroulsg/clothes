@@ -160,7 +160,7 @@ class SalesService
                 'customer_id' => $data['customer_id'] ?? null,
                 'customer_name' => $data['customer_name'],
                 'quotation_id' => $data['quotation_id'] ?? null,
-                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'warehouse_id' => $data['warehouse_id'] ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id') ?? Warehouse::where('tenant_id', $tenantId)->value('id'),
                 'order_type' => $data['order_type'] ?? 'wholesale',
                 'status' => $data['status'] ?? 'confirmed',
                 'payment_status' => 'unpaid',
@@ -300,11 +300,16 @@ class SalesService
                 throw new InvalidArgumentException("أمر البيع مكتمل أو ملغي مسبقاً");
             }
 
+            $targetWarehouseId = $order->warehouse_id
+                ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
+                ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+
             // إنشاء فاتورة المبيعات
             $invoice = SalesInvoice::create([
                 'tenant_id' => $tenantId,
                 'invoice_number' => 'INV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
                 'sales_order_id' => $order->id,
+                'warehouse_id' => $targetWarehouseId,
                 'customer_id' => $order->customer_id,
                 'customer_name' => $order->customer_name,
                 'invoice_type' => 'standard',
@@ -418,11 +423,16 @@ class SalesService
             $discount = isset($data['discount_amount']) ? (float) $data['discount_amount'] : 0.0;
             $total = max(0, round($subtotal + $taxTotal - $discount, 4));
 
+            $posWarehouseId = $data['warehouse_id']
+                ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
+                ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+
             $invoice = SalesInvoice::create([
                 'tenant_id' => $tenantId,
                 'invoice_number' => 'POS-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -5)),
                 'customer_id' => $data['customer_id'] ?? null,
                 'customer_name' => $data['customer_name'] ?? 'Walk-in Retail Customer',
+                'warehouse_id' => $posWarehouseId,
                 'invoice_type' => 'pos_receipt',
                 'status' => 'paid',
                 'payment_method' => $data['payment_method'] ?? 'cash',
@@ -444,18 +454,23 @@ class SalesService
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
 
-                // إيجاد الصنف وخصم رصيده فورياً من دفتر المخازن
+                // إيجاد الصنف وخصم رصيده فورياً من دفتر المخازن بالمخزن المحدد
                 $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
                     ->where('variant_id', $item['variant_id'])
+                    ->where('warehouse_id', $posWarehouseId)
                     ->where('is_customer_owned', false)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$inventoryItem) {
-                    $fgWarehouse = Warehouse::where('tenant_id', $tenantId)
-                        ->where('warehouse_type', 'finished_goods')
-                        ->first() ?? Warehouse::where('tenant_id', $tenantId)->first();
+                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('variant_id', $item['variant_id'])
+                        ->where('is_customer_owned', false)
+                        ->lockForUpdate()
+                        ->first();
+                }
 
+                if (!$inventoryItem) {
                     $variant = ProductVariant::with(['garmentModel', 'size', 'color'])->find($item['variant_id']);
                     $productName = $variant
                         ? (($variant->garmentModel?->name ?? 'موديل ملابس') . ' - ' . ($variant->size?->name ?? 'M') . ' / ' . ($variant->color?->name ?? 'أساسي'))
@@ -463,7 +478,7 @@ class SalesService
 
                     $inventoryItem = InventoryItem::create([
                         'tenant_id' => $tenantId,
-                        'warehouse_id' => $fgWarehouse?->id,
+                        'warehouse_id' => $posWarehouseId,
                         'variant_id' => $item['variant_id'],
                         'item_type' => 'finished_goods',
                         'code' => $variant?->sku ?? ('SKU-' . strtoupper(substr(uniqid(), -6))),
@@ -616,6 +631,25 @@ class SalesService
             $returnNumber = $data['return_number'] ?? 'SRT-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
             $isRestocked = $data['is_restocked'] ?? true;
 
+            if (empty($data['warehouse_id'])) {
+                if (!empty($data['sales_invoice_id'])) {
+                    $srcInv = SalesInvoice::with('salesOrder')->where('tenant_id', $tenantId)->find($data['sales_invoice_id']);
+                    if ($srcInv) {
+                        $data['warehouse_id'] = $srcInv->warehouse_id ?: ($srcInv->salesOrder?->warehouse_id);
+                    }
+                }
+                if (empty($data['warehouse_id']) && !empty($data['sales_order_id'])) {
+                    $srcOrd = SalesOrder::where('tenant_id', $tenantId)->find($data['sales_order_id']);
+                    if ($srcOrd && $srcOrd->warehouse_id) {
+                        $data['warehouse_id'] = $srcOrd->warehouse_id;
+                    }
+                }
+                if (empty($data['warehouse_id'])) {
+                    $data['warehouse_id'] = Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
+                        ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+                }
+            }
+
             Warehouse::where('tenant_id', $tenantId)->findOrFail($data['warehouse_id']);
 
             if (!empty($data['customer_id'])) {
@@ -763,6 +797,37 @@ class SalesService
                         ->where('warehouse_id', $data['warehouse_id'])
                         ->lockForUpdate()
                         ->first();
+
+                    if (!$invItem) {
+                        // محاولة إيجاد الصنف في أي مخزن آخر لنفس المتغير لاستنساخ البيانات
+                        $existingInvItem = InventoryItem::where('tenant_id', $tenantId)
+                            ->where('variant_id', $item['variant_id'])
+                            ->first();
+
+                        $variant = ProductVariant::with(['garmentModel', 'size', 'color'])->find($item['variant_id']);
+                        $productName = $existingInvItem?->name ?? (
+                            $variant
+                                ? (($variant->garmentModel?->name ?? 'موديل ملابس') . ' - ' . ($variant->size?->name ?? 'M') . ' / ' . ($variant->color?->name ?? 'أساسي'))
+                                : 'منتج تام مسترجع'
+                        );
+
+                        $invItem = InventoryItem::create([
+                            'tenant_id' => $tenantId,
+                            'warehouse_id' => $data['warehouse_id'],
+                            'variant_id' => $item['variant_id'],
+                            'item_type' => 'finished_goods',
+                            'code' => $existingInvItem?->code ?? $variant?->sku ?? ('SKU-' . strtoupper(substr(uniqid(), -6))),
+                            'name' => $productName,
+                            'barcode' => $existingInvItem?->barcode ?? $variant?->barcode ?? ('BAR-' . rand(100000, 999999)),
+                            'unit_of_measure' => $existingInvItem?->unit_of_measure ?? 'piece',
+                            'current_balance' => 0,
+                            'average_cost' => $existingInvItem?->average_cost ?? (float)($price * 0.7),
+                            'last_purchase_cost' => $existingInvItem?->last_purchase_cost ?? (float)($price * 0.7),
+                            'safety_stock' => 10,
+                            'reorder_point' => 20,
+                            'is_customer_owned' => false,
+                        ]);
+                    }
 
                     if ($invItem) {
                         $this->inventoryService->recordTransaction([

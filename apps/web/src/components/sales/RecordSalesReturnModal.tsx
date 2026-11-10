@@ -43,6 +43,8 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [sourceWarehouseInfo, setSourceWarehouseInfo] = useState<{ id: string; name: string } | null>(null);
+  const [internalWarehouses, setInternalWarehouses] = useState<any[]>(warehouses || []);
   const [reason, setReason] = useState<string>('مقاس غير مطابق لطلب العميل');
   const [customReason, setCustomReason] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -54,6 +56,35 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Synchronize or self-fetch warehouses if empty
+  useEffect(() => {
+    if (warehouses && warehouses.length > 0) {
+      setInternalWarehouses(warehouses);
+    } else if (isOpen) {
+      api.inventory.getWarehouses()
+        .then((res: any) => {
+          if (res?.warehouses && Array.isArray(res.warehouses) && res.warehouses.length > 0) {
+            setInternalWarehouses(res.warehouses);
+          }
+        })
+        .catch((err) => console.error('Failed to fetch warehouses for return modal:', err));
+    }
+  }, [isOpen, warehouses]);
+
+  // Combine internalWarehouses and source warehouse if not already in list
+  const activeWarehousesList = React.useMemo(() => {
+    const list = [...internalWarehouses];
+    if (sourceWarehouseInfo && sourceWarehouseInfo.id && !list.some(w => w.id === sourceWarehouseInfo.id)) {
+      list.unshift({
+        id: sourceWarehouseInfo.id,
+        name: sourceWarehouseInfo.name,
+        code: 'ORIGIN',
+        type: 'finished_goods',
+      });
+    }
+    return list;
+  }, [internalWarehouses, sourceWarehouseInfo]);
+
   // Initialize or update when modal opens or preselectedInvoice changes
   useEffect(() => {
     if (!isOpen) {
@@ -61,24 +92,42 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
       return;
     }
 
-    // Default warehouse: prefer finished_goods or showroom
-    const defaultWh = warehouses.find(w => w.type === 'finished_goods' || w.name?.includes('تامة') || w.name?.includes('معرض')) || warehouses[0];
-    if (defaultWh) {
-      setSelectedWarehouseId(defaultWh.id);
-    }
-
     if (preselectedInvoice) {
       applyInvoice(preselectedInvoice);
     } else if (invoices.length > 0 && !selectedInvoiceId) {
-      // Pick first invoice if none selected
       applyInvoice(invoices[0]);
+    } else if (!selectedWarehouseId && activeWarehousesList.length > 0) {
+      const defaultWh = activeWarehousesList.find(w => w.type === 'finished_goods' || w.name?.includes('تامة') || w.name?.includes('معرض')) || activeWarehousesList[0];
+      if (defaultWh) {
+        setSelectedWarehouseId(defaultWh.id);
+      }
     }
-  }, [isOpen, preselectedInvoice, invoices, warehouses]);
+  }, [isOpen, preselectedInvoice, invoices, activeWarehousesList]);
 
   const applyInvoice = (inv: SalesInvoice) => {
     setSelectedInvoiceId(inv.id);
     if (inv.customer_id) {
       setSelectedCustomerId(inv.customer_id);
+    }
+
+    // Determine the source warehouse from which the goods were sold/dispatched
+    const srcWhId = inv.warehouse_id || (inv as any).warehouse?.id || (inv as any).sales_order?.warehouse_id || (inv as any).salesOrder?.warehouse_id;
+    const srcWhName = (inv as any).warehouse?.name || (inv as any).sales_order?.warehouse?.name || (inv as any).salesOrder?.warehouse?.name;
+
+    if (srcWhId) {
+      setSelectedWarehouseId(srcWhId);
+      setSourceWarehouseInfo({
+        id: srcWhId,
+        name: srcWhName || (isAr ? 'المستودع الأصلي للفاتورة' : 'Original Invoice Warehouse'),
+      });
+    } else {
+      setSourceWarehouseInfo(null);
+      if (!selectedWarehouseId && activeWarehousesList.length > 0) {
+        const defaultWh = activeWarehousesList.find(w => w.type === 'finished_goods' || w.name?.includes('تامة') || w.name?.includes('معرض')) || activeWarehousesList[0];
+        if (defaultWh) {
+          setSelectedWarehouseId(defaultWh.id);
+        }
+      }
     }
 
     const draftItems: ReturnItemDraft[] = (inv.items || []).map((it: any) => {
@@ -233,20 +282,46 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              {isAr ? 'المخزن المستلم للبضاعة المرتجعة:' : 'Receiving Warehouse:'}
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+              <span>{isAr ? 'المخزن المستلم للبضاعة المرتجعة:' : 'Receiving Warehouse:'}</span>
+              {sourceWarehouseInfo && (
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                  {isAr ? 'تم تحديد مخزن البيع الأصلي تلقائياً' : 'Auto-detected origin'}
+                </span>
+              )}
             </label>
             <select
               value={selectedWarehouseId}
               onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              className="w-full text-xs p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              className="w-full text-xs p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
             >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name} {w.code ? `(${w.code})` : ''}
-                </option>
-              ))}
+              {activeWarehousesList.length === 0 ? (
+                <option value="">{isAr ? 'جاري تحميل المخازن المتاحة...' : 'Loading warehouses...'}</option>
+              ) : (
+                activeWarehousesList.map((w) => {
+                  const isOrigin = w.id === sourceWarehouseInfo?.id;
+                  return (
+                    <option key={w.id} value={w.id}>
+                      {w.name} {w.code ? `(${w.code})` : ''} {isOrigin ? (isAr ? ' ★ [المخزن الأصلي المنصرف منه]' : ' ★ [Source Warehouse]') : ''}
+                    </option>
+                  );
+                })
+              )}
             </select>
+            {sourceWarehouseInfo?.name ? (
+              <div className="mt-2 p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span>
+                  {isAr
+                    ? `المخزن الأصلي المنصرف منه: ${sourceWarehouseInfo.name} — يُعاد الرصيد المخزني إليه فوراً.`
+                    : `Original source warehouse: ${sourceWarehouseInfo.name} — stock will be returned here.`}
+                </span>
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-400 mt-1">
+                {isAr ? 'حدد المستودع الذي ستدخل إليه البضاعة المرتجعة لإعادة إثباتها دفترياً.' : 'Select warehouse where returned goods will be restocked.'}
+              </p>
+            )}
           </div>
         </div>
 

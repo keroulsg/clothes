@@ -158,6 +158,7 @@ class SalesController extends Controller
             ->with([
                 'tenant',
                 'customer',
+                'warehouse',
                 'salesOrder.warehouse',
                 'items.variant.garmentModel',
                 'items.variant.size',
@@ -176,6 +177,7 @@ class SalesController extends Controller
             ->with([
                 'tenant',
                 'customer',
+                'warehouse',
                 'salesOrder.warehouse',
                 'items.variant.garmentModel',
                 'items.variant.size',

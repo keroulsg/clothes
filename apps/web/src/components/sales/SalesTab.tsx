@@ -96,6 +96,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   // New Order Form State
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
   const [newOrderType, setNewOrderType] = useState<'wholesale' | 'retail' | 'outlet' | 'custom'>('wholesale');
+  const [newOrderWarehouseId, setNewOrderWarehouseId] = useState<string>('');
   const [newOrderVariantId, setNewOrderVariantId] = useState('');
   const [newOrderQty, setNewOrderQty] = useState<number>(50);
   const [newOrderPrice, setNewOrderPrice] = useState<number>(180);
@@ -130,6 +131,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [barcodeInput, setBarcodeInput] = useState('');
   const [posDiscount, setPosDiscount] = useState<number>(0);
   const [posCustomerName, setPosCustomerName] = useState<string>('');
+  const [posWarehouseId, setPosWarehouseId] = useState<string>('');
   const [posPaymentMethod, setPosPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer'>('cash');
   const [posSearchQuery, setPosSearchQuery] = useState<string>('');
   const [posCategoryFilter, setPosCategoryFilter] = useState<string>('all');
@@ -187,6 +189,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   useEffect(() => {
     loadSalesData();
   }, []);
+
+  useEffect(() => {
+    if (warehouses && warehouses.length > 0) {
+      const defaultWh = warehouses.find(w => w.type === 'finished_goods' || w.name?.includes('تامة') || w.name?.includes('معرض')) || warehouses[0];
+      if (defaultWh) {
+        if (!posWarehouseId) setPosWarehouseId(defaultWh.id);
+        if (!newOrderWarehouseId) setNewOrderWarehouseId(defaultWh.id);
+      }
+    }
+  }, [warehouses, posWarehouseId, newOrderWarehouseId]);
 
   useEffect(() => {
     if (variants.length > 0 && !newOrderVariantId) {
@@ -281,6 +293,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       const res = await api.sales.createOrder({
         customer_name: newOrderCustomer,
         order_type: newOrderType,
+        warehouse_id: newOrderWarehouseId || undefined,
         expected_delivery_date: newOrderDeliveryDate || undefined,
         items: [
           {
@@ -397,6 +410,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       }));
 
       const res = await api.sales.processPosSale({
+        warehouse_id: posWarehouseId || undefined,
         customer_name: posCustomerName.trim() || (isAr ? 'عميل نقدي - منفذ بيع المصنع' : 'Factory Outlet Cash Client'),
         payment_method: posPaymentMethod,
         discount_amount: posDiscount > 0 ? posDiscount : 0,
@@ -1715,6 +1729,29 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                   />
                 </div>
 
+                {/* Outlet / Warehouse Selector */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                      {isAr ? 'منفذ البيع / المخزن المنصرف منه:' : 'Dispatch Warehouse / Outlet:'}
+                    </label>
+                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {isAr ? 'يخصم المخزون فورياً' : 'Auto stock deduction'}
+                    </span>
+                  </div>
+                  <select
+                    value={posWarehouseId}
+                    onChange={(e) => setPosWarehouseId(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                  >
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} {w.code ? `(${w.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Payment Method Selector */}
                 <div className="grid grid-cols-3 gap-1.5 text-xs font-bold">
                   <button
@@ -2336,6 +2373,28 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               />
             </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {isAr ? 'مستودع حجز وصرف البضاعة التامة *' : 'Dispatch / Reserve Warehouse *'}
+              </label>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                {isAr ? 'يتم حجز الرصيد وصرفه منه' : 'Stock reserved & fulfilled from here'}
+              </span>
+            </div>
+            <select
+              value={newOrderWarehouseId}
+              onChange={(e) => setNewOrderWarehouseId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            >
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} {w.code ? `(${w.code})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

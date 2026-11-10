@@ -17,6 +17,7 @@ class SalesInvoice extends Model
         'tenant_id',
         'invoice_number',
         'sales_order_id',
+        'warehouse_id',
         'customer_id',
         'customer_name',
         'invoice_type',
@@ -55,6 +56,11 @@ class SalesInvoice extends Model
     public function salesOrder(): BelongsTo
     {
         return $this->belongsTo(SalesOrder::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function items(): HasMany

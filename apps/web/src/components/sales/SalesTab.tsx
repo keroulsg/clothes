@@ -17,6 +17,11 @@ import {
   RotateCcw,
   BookOpen,
   Pencil,
+  Trash2,
+  Minus,
+  Tag,
+  CreditCard,
+  Store,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -73,6 +78,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<SalesInvoice | null>(null);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [selectedInvoiceForReceipt, setSelectedInvoiceForReceipt] = useState<SalesInvoice | null>(null);
+  const [selectedInvoiceForPrint, setSelectedInvoiceForPrint] = useState<SalesInvoice | null>(null);
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<SalesInvoice | null>(null);
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -99,9 +107,23 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [paymentInvoiceId, setPaymentInvoiceId] = useState('');
 
   // POS State & Barcode
-  const [posCart, setPosCart] = useState<{ variantId: string; name: string; price: number; qty: number }[]>([]);
+  const [posCart, setPosCart] = useState<{
+    variantId: string;
+    name: string;
+    price: number;
+    qty: number;
+    sku?: string;
+    modelName?: string;
+    sizeName?: string;
+    colorName?: string;
+  }[]>([]);
   const [posSuccessMsg, setPosSuccessMsg] = useState<string | null>(null);
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [posDiscount, setPosDiscount] = useState<number>(0);
+  const [posCustomerName, setPosCustomerName] = useState<string>('');
+  const [posPaymentMethod, setPosPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer'>('cash');
+  const [posSearchQuery, setPosSearchQuery] = useState<string>('');
+  const [posCategoryFilter, setPosCategoryFilter] = useState<string>('all');
 
   const loadSalesData = async () => {
     setIsLoading(true);
@@ -279,7 +301,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   };
 
   const addToPosCart = (v: ProductVariant) => {
-    const name = `${v.garment_model?.name || v.sku} (${v.size?.name || v.size_name || 'Std'} - ${v.color?.name || v.color_name || 'Std'})`;
+    const modelName = v.garment_model?.name || (v as any).garmentModel?.name || v.sku;
+    const sizeName = typeof v.size === 'object' ? (v.size as any)?.name : (v.size || v.size_name || 'Std');
+    const colorName = typeof v.color === 'object' ? (v.color as any)?.name : (v.color || v.color_name || 'Std');
+    const name = `${modelName} (${sizeName} - ${colorName})`;
     const posPrice = Number(v.pos_price || v.effective_pos_price || v.product?.pos_price);
     const price = posPrice > 0 ? posPrice : (Number(v.retail_price) > 0 ? Number(v.retail_price) : 0);
 
@@ -288,12 +313,35 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       if (exist) {
         return prev.map((i) => (i.variantId === v.id ? { ...i, qty: i.qty + 1 } : i));
       }
-      return [...prev, { variantId: v.id, name, price, qty: 1 }];
+      return [...prev, { variantId: v.id, name, price, qty: 1, sku: v.sku, modelName, sizeName, colorName }];
     });
   };
 
-  const handlePosCheckout = async () => {
+  const updatePosCartQty = (variantId: string, delta: number) => {
+    setPosCart((prev) =>
+      prev
+        .map((i) => {
+          if (i.variantId === variantId) {
+            const nextQty = i.qty + delta;
+            return nextQty > 0 ? { ...i, qty: nextQty } : null;
+          }
+          return i;
+        })
+        .filter(Boolean) as any
+    );
+  };
+
+  const removePosCartItem = (variantId: string) => {
+    setPosCart((prev) => prev.filter((i) => i.variantId !== variantId));
+  };
+
+  const posSubtotal = posCart.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const posTotal = Math.max(0, posSubtotal - posDiscount);
+
+  const handlePosCheckout = async (checkoutType: 'receipt' | 'invoice' = 'receipt') => {
     if (posCart.length === 0) return;
+    setIsSubmitting(true);
+    setErrorMsg(null);
 
     try {
       const items = posCart.map((i) => ({
@@ -305,27 +353,41 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       }));
 
       const res = await api.sales.processPosSale({
-        customer_name: isAr ? 'عميل نقدي - منفذ بيع المصنع' : 'Factory Outlet Cash Client',
-        payment_method: 'cash',
+        customer_name: posCustomerName.trim() || (isAr ? 'عميل نقدي - منفذ بيع المصنع' : 'Factory Outlet Cash Client'),
+        payment_method: posPaymentMethod,
+        discount_amount: posDiscount > 0 ? posDiscount : 0,
         items,
       });
 
       if (res?.invoice) {
         setInvoices((prev) => [res.invoice, ...prev]);
-        setSelectedInvoiceForReceipt(res.invoice);
-        setIsReceiptModalOpen(true);
-        setPosSuccessMsg(isAr ? `تم إتمام عملية البيع بنجاح برقم: ${res.invoice.invoice_number}` : `POS Sale completed! Receipt: ${res.invoice.invoice_number}`);
+        if (checkoutType === 'invoice') {
+          setSelectedInvoiceForPrint(res.invoice);
+          setAutoPrintTrigger(true);
+        } else {
+          setSelectedInvoiceForReceipt(res.invoice);
+          setAutoPrintReceipt(true);
+          setIsReceiptModalOpen(true);
+        }
+        setPosSuccessMsg(
+          isAr
+            ? `تم إتمام عملية البيع النقدي وإصدار السند بنجاح! رقم: ${res.invoice.invoice_number}`
+            : `POS Sale completed! Ref: ${res.invoice.invoice_number}`
+        );
       } else {
         setPosSuccessMsg(isAr ? 'تم تسجيل الفاتورة النقدية بنجاح!' : 'POS Cash Sale completed successfully!');
       }
+
       setPosCart([]);
-      setTimeout(() => setPosSuccessMsg(null), 4000);
+      setPosDiscount(0);
+      setPosCustomerName('');
+      setTimeout(() => setPosSuccessMsg(null), 4500);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تسجيل مبيعات الـ POS' : 'Failed to process POS sale'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  const posTotal = posCart.reduce((sum, i) => sum + i.price * i.qty, 0);
 
   const handleConvertQuotation = async (quotationId: string) => {
     setConvertingQuoteId(quotationId);
@@ -1347,120 +1409,421 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
       {/* POS VIEW */}
       {activeSubTab === 'pos' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <h3 className="font-bold text-slate-900 dark:text-white">
-                  {isAr ? 'منتجات معرض المصنع الجاهزة للتسليم المباشر' : 'Factory Outlet Available Garments'}
-                </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Main Product Catalog Section */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-4">
+            <Card className="p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-3xl">
+              {/* Header: Title & Barcode Scanner */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                      {isAr ? 'منتجات معرض المصنع الجاهزة للتسليم المباشر' : 'Factory Outlet Available Garments'}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {isAr ? 'تسليم فوري، خصم تلقائي من المخزن، وطباعة إيصالات معتمدة' : 'Instant fulfillment, stock auto-deduction, and thermal receipts'}
+                    </p>
+                  </div>
+                </div>
+
                 <form onSubmit={handleBarcodeScan} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder={isAr ? 'مسح الباركود (EAN-13)...' : 'Scan barcode...'}
-                    className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-primary w-48"
-                  />
-                  <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
-                    {isAr ? 'إضافة' : 'Scan'}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={barcodeInput}
+                      onChange={(e) => setBarcodeInput(e.target.value)}
+                      placeholder={isAr ? 'مسح الباركود (EAN-13)...' : 'Scan barcode...'}
+                      className="ps-8 pe-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-[#7F1625] w-48 sm:w-56"
+                    />
+                    <Receipt className="w-4 h-4 text-slate-400 absolute start-2.5 top-2.5" />
+                  </div>
+                  <Button type="submit" size="sm" variant="outline" className="h-9 px-3 text-xs rounded-xl font-bold">
+                    {isAr ? 'مسح' : 'Scan'}
                   </Button>
                 </form>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {variants.map((v) => (
-                  <div
-                    key={v.id}
-                    onClick={() => addToPosCart(v)}
-                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:border-primary/50 hover:shadow-md cursor-pointer transition-all flex flex-col justify-between"
-                  >
-                    <div>
-                      <p className="font-semibold text-sm text-slate-900 dark:text-white line-clamp-1">
-                        {v.garment_model?.name || v.sku}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        <span>{v.size?.name || v.size_name || 'Size'}</span>
-                        <span>•</span>
-                        <span>{v.color?.name || v.color_name || 'Color'}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 font-mono mt-1">SKU: {v.sku}</p>
-                    </div>
-                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-bold text-primary text-sm">
-                          {Number(v.pos_price || v.effective_pos_price || v.product?.pos_price || v.retail_price || 0)} {isAr ? 'ج.م' : 'EGP'}
-                        </span>
-                        {(v.pos_price || v.effective_pos_price || v.product?.pos_price) ? (
-                          <span className="text-[10px] text-purple-600 dark:text-purple-400 block font-medium">
-                            {isAr ? 'سعر المعرض' : 'POS Price'}
+
+              {/* Search & Category Filter Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={posSearchQuery}
+                    onChange={(e) => setPosSearchQuery(e.target.value)}
+                    placeholder={isAr ? 'بحث باسم الموديل، المقاس، اللون، أو الكود...' : 'Search model, size, color, SKU...'}
+                    className="w-full ps-9 pe-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold">
+                  {[
+                    { id: 'all', label: isAr ? 'الكل' : 'All' },
+                    { id: 'boys', label: isAr ? 'اولادي' : 'Boys' },
+                    { id: 'girls', label: isAr ? 'بناتي' : 'Girls' },
+                    { id: 'suits', label: isAr ? 'ترينج وسوت' : 'Suits/Sets' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setPosCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                        posCategoryFilter === cat.id
+                          ? 'bg-[#7F1625] text-white shadow-xs font-bold'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Garment Variants Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 pt-4 max-h-[640px] overflow-y-auto pe-1">
+                {variants
+                  .filter((v) => {
+                    const modelName = (v.garment_model?.name || (v as any).garmentModel?.name || '').toLowerCase();
+                    const sku = (v.sku || '').toLowerCase();
+                    const sizeName = (typeof v.size === 'object' ? (v.size as any)?.name : (v.size || v.size_name || '')).toLowerCase();
+                    const colorName = (typeof v.color === 'object' ? (v.color as any)?.name : (v.color || v.color_name || '')).toLowerCase();
+                    const q = posSearchQuery.trim().toLowerCase();
+
+                    const matchesSearch = !q || modelName.includes(q) || sku.includes(q) || sizeName.includes(q) || colorName.includes(q);
+                    if (!matchesSearch) return false;
+
+                    if (posCategoryFilter === 'all') return true;
+                    if (posCategoryFilter === 'boys') return modelName.includes('اولاد') || modelName.includes('boy') || sku.includes('BOY');
+                    if (posCategoryFilter === 'girls') return modelName.includes('بنات') || modelName.includes('kid') || sku.includes('GIRL');
+                    if (posCategoryFilter === 'suits') return modelName.includes('ترينج') || modelName.includes('سوت') || modelName.includes('suit');
+                    return true;
+                  })
+                  .map((v) => {
+                    const modelName = v.garment_model?.name || (v as any).garmentModel?.name || v.sku;
+                    const sizeName = typeof v.size === 'object' ? (v.size as any)?.name : (v.size || v.size_name || 'Std');
+                    const colorName = typeof v.color === 'object' ? (v.color as any)?.name : (v.color || v.color_name || 'Std');
+                    const price = Number(v.pos_price || v.effective_pos_price || v.product?.pos_price || v.retail_price || 0);
+                    const inCartCount = posCart.find((c) => c.variantId === v.id)?.qty || 0;
+
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => addToPosCart(v)}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden ${
+                          inCartCount > 0
+                            ? 'border-[#7F1625] bg-[#7F1625]/5 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 hover:border-[#7F1625]/60 hover:shadow-md'
+                        }`}
+                      >
+                        {inCartCount > 0 && (
+                          <span className="absolute top-2 start-2 w-5 h-5 rounded-full bg-[#7F1625] text-white text-[11px] font-black flex items-center justify-center shadow-xs">
+                            {inCartCount}
                           </span>
-                        ) : null}
+                        )}
+
+                        <div>
+                          <div className="flex items-start justify-between gap-1">
+                            <p className="font-extrabold text-xs text-slate-900 dark:text-white group-hover:text-[#7F1625] transition-colors line-clamp-1">
+                              {modelName}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-bold">{sizeName}</span>
+                            <span>•</span>
+                            <span className="truncate">{colorName}</span>
+                          </div>
+
+                          <p className="text-[10px] text-slate-400 font-mono mt-1">SKU: {v.sku}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                          <div>
+                            <span className="font-black text-sm text-[#7F1625] dark:text-[#ff8ba0] font-mono">
+                              {price.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                            </span>
+                            <span className="text-[9px] text-purple-600 dark:text-purple-400 block font-semibold">
+                              {isAr ? 'سعر المعرض' : 'Outlet Price'}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToPosCart(v);
+                            }}
+                            className="p-1.5 rounded-xl bg-[#7F1625] text-white hover:bg-[#6a121e] transition-transform active:scale-95 shadow-xs cursor-pointer"
+                            title={isAr ? 'إضافة للسلة' : 'Add to cart'}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
-                        {isAr ? 'متاح' : 'In Stock'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
             </Card>
           </div>
 
-          <div className="space-y-4">
-            <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+          {/* POS Cart & Direct Discount Register */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-4">
+            <Card className="p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md rounded-3xl flex flex-col justify-between sticky top-4">
               <div>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3">
-                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-primary" />
-                    {isAr ? 'إيصال البيع النقدي' : 'Instant Cash Receipt'}
-                  </h3>
-                  <span className="text-xs bg-primary/10 text-primary font-bold px-2 py-0.5 rounded">
-                    {posCart.length} {isAr ? 'بنود' : 'items'}
-                  </span>
+                {/* Cart Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-[#7F1625]" />
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">
+                      {isAr ? 'سلة مشتريات المعرض النقدية' : 'POS Checkout Drawer'}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] font-bold px-2 py-0.5 rounded-full">
+                      {posCart.reduce((sum, i) => sum + i.qty, 0)} {isAr ? 'قطع' : 'pcs'}
+                    </span>
+                    {posCart.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPosCart([])}
+                        className="text-[11px] text-slate-400 hover:text-rose-500 font-bold transition-colors cursor-pointer"
+                        title={isAr ? 'إفراغ السلة' : 'Clear cart'}
+                      >
+                        {isAr ? 'إفراغ' : 'Clear'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
+                {/* Feedback Toast */}
                 {posSuccessMsg && (
-                  <div className="p-3 mb-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>{posSuccessMsg}</span>
+                  <div className="p-3 my-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-2xl text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span className="font-bold">{posSuccessMsg}</span>
                   </div>
                 )}
 
-                <div className="space-y-2 max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                {/* Cart Items List */}
+                <div className="space-y-2 mt-3 max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 pe-1">
                   {posCart.length === 0 ? (
-                    <p className="text-center py-8 text-sm text-slate-400">
-                      {isAr ? 'اختر المنتجات من القائمة لإضافتها للإيصال' : 'Click garments to add them to receipt'}
-                    </p>
+                    <div className="text-center py-10 space-y-2">
+                      <ShoppingBag className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto" />
+                      <p className="text-xs text-slate-400 font-medium">
+                        {isAr ? 'اختر منتجات المعرض أو امسح الباركود لإضافتها للإيصال' : 'Click garments to add them to receipt'}
+                      </p>
+                    </div>
                   ) : (
                     posCart.map((item, idx) => (
-                      <div key={idx} className="pt-2 flex items-center justify-between text-xs">
-                        <div className="flex-1 pe-2">
-                          <p className="font-semibold text-slate-900 dark:text-white">{item.name}</p>
-                          <p className="text-slate-400">{item.price} {isAr ? 'ج.م' : 'EGP'} × {item.qty}</p>
+                      <div key={idx} className="pt-2 flex items-center justify-between text-xs gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-900 dark:text-white truncate">{item.name}</p>
+                          <p className="text-[11px] text-slate-400 font-mono">
+                            {item.price.toLocaleString()} {isAr ? 'ج.م' : 'EGP'} × {item.qty}
+                          </p>
                         </div>
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          {(item.price * item.qty).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                        </span>
+
+                        {/* Quantity Stepper */}
+                        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => updatePosCartQty(item.variantId, -1)}
+                            className="w-5 h-5 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-6 text-center font-bold font-mono">{item.qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => updatePosCartQty(item.variantId, 1)}
+                            className="w-5 h-5 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        <div className="text-end shrink-0 min-w-[70px]">
+                          <span className="font-bold font-mono text-slate-900 dark:text-white block">
+                            {(item.price * item.qty).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removePosCartItem(item.variantId)}
+                            className="p-1 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer inline-flex items-center gap-1 text-[10px]"
+                            title={isAr ? 'حذف الصنف من السلة' : 'Remove item'}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>{isAr ? 'حذف' : 'Remove'}</span>
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 mt-4 space-y-3">
-                <div className="flex items-center justify-between text-base font-bold text-slate-900 dark:text-white">
-                  <span>{isAr ? 'الإجمالي المطلوب:' : 'Total Due:'}</span>
-                  <span className="text-primary text-xl">{posTotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
+              {/* Bottom Financial Drawer: Customer Name, Discount, & Checkout */}
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 mt-3 space-y-3">
+                {/* Optional Customer Name */}
+                <div>
+                  <input
+                    type="text"
+                    value={posCustomerName}
+                    onChange={(e) => setPosCustomerName(e.target.value)}
+                    placeholder={isAr ? 'اسم العميل (اختياري / افتراضي عميل نقدي)' : 'Customer Name (optional)'}
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                  />
                 </div>
 
-                <Button
-                  className="w-full justify-center text-sm py-2.5 font-bold"
-                  disabled={posCart.length === 0}
-                  onClick={handlePosCheckout}
-                >
-                  <DollarSign className="w-4 h-4 me-1" />
-                  {isAr ? 'إتمام الدفع وطباعة الإيصال' : 'Complete Cash Sale'}
-                </Button>
+                {/* Payment Method Selector */}
+                <div className="grid grid-cols-3 gap-1.5 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPosPaymentMethod('cash')}
+                    className={`p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                      posPaymentMethod === 'cash'
+                        ? 'border-[#7F1625] bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0]'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">{isAr ? 'كاش نقدي' : 'Cash'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPosPaymentMethod('card')}
+                    className={`p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                      posPaymentMethod === 'card'
+                        ? 'border-[#7F1625] bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0]'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">{isAr ? 'فيزا / بطاقة' : 'Card'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPosPaymentMethod('bank_transfer')}
+                    className={`p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                      posPaymentMethod === 'bank_transfer'
+                        ? 'border-[#7F1625] bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0]'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">{isAr ? 'تحويل بنكي' : 'Transfer'}</span>
+                  </button>
+                </div>
+
+                {/* Subtotal */}
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>{isAr ? 'المجموع قبل الخصم:' : 'Subtotal:'}</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                    {posSubtotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                  </span>
+                </div>
+
+                {/* DIRECT CASH DISCOUNT SECTION */}
+                <div className="p-3 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5" />
+                      {isAr ? 'خصم نقدي مباشر للعميل (بالفلوس EGP):' : 'Instant Cash Discount (EGP):'}
+                    </span>
+                    {posDiscount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPosDiscount(0)}
+                        className="text-[10px] text-amber-700 hover:text-rose-600 font-bold underline cursor-pointer"
+                      >
+                        {isAr ? 'إلغاء الخصم' : 'Clear'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max={posSubtotal}
+                        value={posDiscount === 0 ? '' : posDiscount}
+                        onChange={(e) => setPosDiscount(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="0.00"
+                        className="w-full ps-3 pe-12 py-1.5 text-xs font-mono font-bold bg-white dark:bg-slate-800 border border-amber-500/40 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                      <span className="absolute end-2.5 top-2 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                        {isAr ? 'ج.م' : 'EGP'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Preset Quick Discount Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    {[10, 20, 50, 100, 200].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setPosDiscount(amt)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                          posDiscount === amt
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-100'
+                        }`}
+                      >
+                        +{amt} {isAr ? 'ج.م' : 'EGP'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 leading-tight">
+                    {isAr
+                      ? '⚡ يخصم تلقائياً من الفاتورة ويطبع بالإيصال ويثبت في حساب مصاريف وخصومات المعرض.'
+                      : 'Auto-deducted from total, recorded in outlet expense ledger, and printed on receipt.'}
+                  </p>
+                </div>
+
+                {/* Net Total Due */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-900 text-white shadow-md">
+                  <div>
+                    <span className="text-xs text-slate-300 block">{isAr ? 'الصافي المطلوب تحصيله:' : 'Net Total Due:'}</span>
+                    {posDiscount > 0 && (
+                      <span className="text-[10px] text-amber-300 font-mono block">
+                        {isAr ? `(شامل خصم ${posDiscount} ج.م)` : `(Discount of ${posDiscount} EGP applied)`}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xl font-black font-mono text-[#ff8ba0]">
+                    {posTotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                  </span>
+                </div>
+
+                {/* Checkout & Direct Print Buttons */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={posCart.length === 0 || isSubmitting}
+                    onClick={() => handlePosCheckout('receipt')}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#7F1625] hover:bg-[#6a121e] text-white text-xs font-bold shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>{isSubmitting ? (isAr ? 'جاري التنفيذ...' : 'Processing...') : (isAr ? 'إتمام الدفع وطباعة إيصال كاشير (80mm)' : 'Complete & Print Receipt (80mm)')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={posCart.length === 0 || isSubmitting}
+                    onClick={() => handlePosCheckout('invoice')}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 border border-slate-200 dark:border-slate-700"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#7F1625]" />
+                    <span>{isAr ? 'إتمام البيع وطباعة فاتورة ضريبية رسمية (A4)' : 'Complete & Print Tax Invoice (A4)'}</span>
+                  </button>
+                </div>
               </div>
             </Card>
           </div>
@@ -1469,47 +1832,80 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
       {/* INVOICES VIEW */}
       {activeSubTab === 'invoices' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'فواتير المبيعات الضريبية وإيصالات نقطة البيع' : 'Tax Sales Invoices & POS Receipts'}
-            </h3>
+        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm rounded-3xl">
+          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                {isAr ? 'فواتير المبيعات الضريبية وإيصالات منفذ المعرض' : 'Tax Sales Invoices & POS Receipts'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isAr ? 'سجل شامل لجميع فواتير الجملة والتجزئة مع إمكانية الطباعة اللحظية A4 أو حراري 80mm' : 'Official invoice ledger with instant A4 & 80mm thermal reprint'}
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              {invoices.length} {isAr ? 'فواتير' : 'Invoices'}
+            </span>
           </div>
+
           <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+            <table className="w-full text-start text-xs border-collapse">
+              <thead className="bg-[#7F1625]/5 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-bold">
                 <tr>
                   <th className="p-3 text-start">{isAr ? 'رقم الفاتورة' : 'Invoice #'}</th>
                   <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
                   <th className="p-3 text-start">{isAr ? 'النوع' : 'Type'}</th>
-                  <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Payment Method'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الإجمالي' : 'Total'}</th>
+                  <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Payment'}</th>
+                  <th className="p-3 text-start">{isAr ? 'الإجمالي والخصم' : 'Total & Discount'}</th>
                   <th className="p-3 text-start">{isAr ? 'الحالة' : 'Status'}</th>
                   <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الإجراءات والطباعة' : 'Actions & Print'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {invoices.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد فواتير مبيعات مسجلة' : 'No invoices found'}
+                    <td colSpan={8} className="p-12 text-center text-slate-400">
+                      {isAr ? 'لا توجد فواتير مبيعات مسجلة حتى الآن' : 'No invoices found'}
                     </td>
                   </tr>
                 ) : (
                   invoices.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{inv.invoice_number}</td>
-                      <td className="p-3">{inv.customer_name}</td>
+                    <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
+                        <span className="text-[#7F1625] dark:text-[#ff8ba0]">{inv.invoice_number}</span>
+                      </td>
+
+                      <td className="p-3 font-bold text-slate-800 dark:text-slate-200">
+                        {inv.customer_name}
+                      </td>
+
                       <td className="p-3">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
-                          {inv.invoice_type}
+                        {inv.invoice_type === 'pos_receipt' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300">
+                            ⚡ {isAr ? 'إيصال معرض فوري' : 'POS Outlet'}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] border border-[#7F1625]/20 dark:text-[#ff8ba0]">
+                            🏢 {isAr ? 'فاتورة بيع ضريبية' : 'Tax Invoice'}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="p-3 capitalize font-semibold text-slate-600 dark:text-slate-400">
+                        {inv.payment_method === 'cash' ? (isAr ? '💵 نقدي' : 'Cash') : inv.payment_method === 'card' ? (isAr ? '💳 فيزا' : 'Card') : (inv.payment_method || '—')}
+                      </td>
+
+                      <td className="p-3">
+                        <span className="font-mono font-black text-slate-900 dark:text-white block text-sm">
+                          {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                         </span>
+                        {Number(inv.discount_amount) > 0 && (
+                          <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 block font-mono">
+                            {isAr ? `خصم: -${Number(inv.discount_amount).toLocaleString()} ج.م` : `Disc: -${inv.discount_amount} EGP`}
+                          </span>
+                        )}
                       </td>
-                      <td className="p-3 capitalize">{inv.payment_method?.replace('_', ' ')}</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
+
                       <td className="p-3">
                         <Badge
                           variant={
@@ -1519,10 +1915,6 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                               ? 'danger'
                               : inv.status === 'partially_refunded'
                               ? 'warning'
-                              : inv.status === 'credited'
-                              ? 'info'
-                              : inv.status === 'partially_credited'
-                              ? 'warning'
                               : inv.status === 'issued'
                               ? 'neutral'
                               : 'danger'
@@ -1530,71 +1922,103 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                         >
                           {isAr
                             ? inv.status === 'paid'
-                              ? 'مسددة'
+                              ? 'مسددة بالكامل'
                               : inv.status === 'refunded'
                               ? 'مستردة نقداً'
                               : inv.status === 'partially_refunded'
-                              ? 'مستردة جزئياً نقداً'
-                              : inv.status === 'credited'
-                              ? 'إشعار دائن (مرتجع)'
-                              : inv.status === 'partially_credited'
-                              ? 'إشعار دائن جزئي'
+                              ? 'مستردة جزئياً'
                               : inv.status === 'issued'
                               ? 'صادرة'
                               : inv.status === 'void'
                               ? 'ملغاة'
                               : inv.status
-                            : inv.status.replace('_', ' ').toUpperCase()}
+                            : inv.status.toUpperCase()}
                         </Badge>
                       </td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400 font-mono text-xs">{formatCleanDate(inv.invoice_date)}</td>
+
+                      <td className="p-3 text-slate-500 dark:text-slate-400 font-mono text-xs">
+                        {formatCleanDate(inv.invoice_date)}
+                      </td>
+
+                      {/* Direct Actions: 🖨️ A4 Print, 🧾 80mm Receipt, 👁️ View Dossier */}
                       <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-receipt-80mm',
-                              label: isAr ? 'طباعة إيصال حراري (80mm)' : 'Print POS Receipt (80mm)',
-                              icon: <Receipt className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />,
-                              onClick: async () => {
-                                setSelectedInvoiceForReceipt(inv);
-                                setIsReceiptModalOpen(true);
-                                try {
-                                  const fresh = await api.sales.getInvoice(inv.id);
-                                  if (fresh?.invoice) {
-                                    setSelectedInvoiceForReceipt(fresh.invoice);
-                                  }
-                                } catch {
-                                  // Fallback to currently selected invoice
-                                }
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* Action 1: View Dossier */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setSelectedInvoiceForView(inv);
+                              try {
+                                const fresh = await api.sales.getInvoice(inv.id);
+                                if (fresh?.invoice) setSelectedInvoiceForView(fresh.invoice);
+                              } catch {}
+                            }}
+                            title={isAr ? 'معاينة تفاصيل الفاتورة والبنود' : 'View Invoice Details'}
+                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Action 2: Print Official Tax Sales Invoice A4 */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setSelectedInvoiceForPrint(inv);
+                              setAutoPrintTrigger(true);
+                              try {
+                                const fresh = await api.sales.getInvoice(inv.id);
+                                if (fresh?.invoice) setSelectedInvoiceForPrint(fresh.invoice);
+                              } catch {}
+                            }}
+                            title={isAr ? 'طباعة فاتورة مبيعات ضريبية رسمية A4' : 'Print Official Tax Invoice (A4)'}
+                            className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Action 3: Print Thermal 80mm Receipt */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setSelectedInvoiceForReceipt(inv);
+                              setAutoPrintReceipt(true);
+                              setIsReceiptModalOpen(true);
+                              try {
+                                const fresh = await api.sales.getInvoice(inv.id);
+                                if (fresh?.invoice) setSelectedInvoiceForReceipt(fresh.invoice);
+                              } catch {}
+                            }}
+                            title={isAr ? 'طباعة إيصال كاشير حراري (80mm)' : 'Print POS Receipt (80mm)'}
+                            className="p-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Action 4: Dropdown Menu */}
+                          <ActionsMenu
+                            variant="icon-horizontal"
+                            align={isAr ? 'left' : 'right'}
+                            items={[
+                              {
+                                id: 'sales-return',
+                                label: isAr ? 'إرجاع مبيعات وإشعار دائن' : 'Sales Return & Credit Note',
+                                icon: <RotateCcw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />,
+                                onClick: () => {
+                                  setSelectedInvoiceForReturn(inv);
+                                  setIsReturnModalOpen(true);
+                                },
+                                disabled: inv.status === 'void',
                               },
-                            },
-                            {
-                              id: 'sales-return',
-                              label: isAr ? 'إرجاع مبيعات وإشعار دائن' : 'Sales Return & Credit Note',
-                              icon: <RotateCcw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />,
-                              onClick: () => {
-                                setSelectedInvoiceForReturn(inv);
-                                setIsReturnModalOpen(true);
+                              {
+                                id: 'cancel-inv',
+                                label: isAr ? 'إلغاء الفاتورة' : 'Cancel Invoice',
+                                icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                                onClick: () => handleCancelInvoice(inv.id),
+                                disabled: inv.status === 'void' || Number(inv.paid_amount) > 0,
                               },
-                              disabled: inv.status === 'void',
-                            },
-                            {
-                              id: 'print-inv',
-                              label: isAr ? 'طباعة الفاتورة الضريبية' : 'Print Tax Invoice',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                            {
-                              id: 'cancel-inv',
-                              label: isAr ? 'إلغاء الفاتورة' : 'Cancel Invoice',
-                              icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
-                              onClick: () => handleCancelInvoice(inv.id),
-                              disabled: inv.status === 'void' || Number(inv.paid_amount) > 0,
-                            },
-                          ]}
-                        />
+                            ]}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -2517,12 +2941,18 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       {/* 80mm POS THERMAL RECEIPT MODAL */}
       <PosReceiptModal
         isOpen={isReceiptModalOpen}
+        autoPrint={autoPrintReceipt}
         onClose={() => {
           setIsReceiptModalOpen(false);
           setSelectedInvoiceForReceipt(null);
+          setAutoPrintReceipt(false);
         }}
         invoice={selectedInvoiceForReceipt}
         lang={lang}
+        onOpenA4Invoice={(inv) => {
+          setSelectedInvoiceForPrint(inv);
+          setAutoPrintTrigger(true);
+        }}
       />
 
       {/* CREATE / EDIT CUSTOMER MODAL */}
@@ -2680,16 +3110,145 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         </Modal>
       )}
 
+      {/* Modal: View Tax Invoice Details Dossier */}
+      {selectedInvoiceForView && (
+        <Modal
+          isOpen={!!selectedInvoiceForView}
+          onClose={() => setSelectedInvoiceForView(null)}
+          title={`${isAr ? 'ملف فاتورة المبيعات الضريبية: ' : 'Sales Invoice Dossier: '}${selectedInvoiceForView.invoice_number}`}
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'اسم العميل' : 'Customer Name'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 truncate">{selectedInvoiceForView.customer_name}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'تاريخ التحرير' : 'Invoice Date'}</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1">{formatCleanDate(selectedInvoiceForView.invoice_date)}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'طريقة السداد' : 'Payment'}</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1 capitalize">{selectedInvoiceForView.payment_method?.replace('_', ' ')}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'حالة الفاتورة' : 'Status'}</p>
+                <div className="mt-1">
+                  <Badge variant={selectedInvoiceForView.status === 'paid' ? 'success' : 'neutral'}>
+                    {selectedInvoiceForView.status === 'paid' ? (isAr ? 'مسددة بالكامل' : 'Paid') : selectedInvoiceForView.status}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Line items */}
+            <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+              <table className="w-full text-start">
+                <thead className="bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] font-bold border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="p-2.5 text-start">#</th>
+                    <th className="p-2.5 text-start">{isAr ? 'بيان الصنف والموديل' : 'Item Description'}</th>
+                    <th className="p-2.5 text-center">{isAr ? 'الكمية' : 'Qty'}</th>
+                    <th className="p-2.5 text-end">{isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
+                    <th className="p-2.5 text-end">{isAr ? 'الإجمالي' : 'Total'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {((selectedInvoiceForView.items as any[]) || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-slate-400">
+                        {isAr ? 'لا توجد بنود تفصيلية مسجلة' : 'No items recorded'}
+                      </td>
+                    </tr>
+                  ) : (
+                    (selectedInvoiceForView.items as any[]).map((it: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="p-2.5 font-mono text-slate-400">{idx + 1}</td>
+                        <td className="p-2.5 font-bold text-slate-900 dark:text-white">
+                          {it.variant?.garment_model?.name || it.variant?.garmentModel?.name || it.description || (isAr ? 'صنف جاهز' : 'Garment item')}
+                          {it.variant?.sku && <span className="block font-mono text-[10px] text-slate-400 font-normal">SKU: {it.variant.sku}</span>}
+                        </td>
+                        <td className="p-2.5 text-center font-bold">{it.quantity} {isAr ? 'قطعة' : 'pcs'}</td>
+                        <td className="p-2.5 text-end font-mono">{Number(it.unit_price).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                        <td className="p-2.5 text-end font-bold font-mono text-[#7F1625]">{Number(it.total_price || (it.quantity * it.unit_price)).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals */}
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>{isAr ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
+                <span className="font-mono font-bold">{Number(selectedInvoiceForView.subtotal || selectedInvoiceForView.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
+              </div>
+              {Number(selectedInvoiceForView.discount_amount) > 0 && (
+                <div className="flex justify-between text-rose-600 font-bold">
+                  <span>{isAr ? 'خصم نقدي تجاري للعميل:' : 'Customer Discount:'}</span>
+                  <span className="font-mono">-{Number(selectedInvoiceForView.discount_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-black pt-2 border-t border-slate-200 dark:border-slate-800 text-[#7F1625] dark:text-[#ff8ba0]">
+                <span>{isAr ? 'صافي القيمة الإجمالية:' : 'Grand Total:'}</span>
+                <span className="font-mono">{Number(selectedInvoiceForView.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedInvoiceForPrint(selectedInvoiceForView);
+                    setAutoPrintTrigger(true);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>{isAr ? 'طباعة فاتورة ضريبية رسمية A4' : 'Print Tax Invoice (A4)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedInvoiceForReceipt(selectedInvoiceForView);
+                    setAutoPrintReceipt(true);
+                    setIsReceiptModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>{isAr ? 'طباعة إيصال حراري (80mm)' : 'Print POS Receipt (80mm)'}</span>
+                </button>
+              </div>
+
+              <Button type="button" variant="ghost" onClick={() => setSelectedInvoiceForView(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* OFFICIAL A4 PRINTABLE INVOICE & QUOTATION MODAL */}
       <PrintSalesInvoiceModal
-        isOpen={!!selectedOrderForPrint || !!selectedQuoteForPrint}
+        isOpen={!!selectedOrderForPrint || !!selectedQuoteForPrint || !!selectedInvoiceForPrint}
         autoPrint={autoPrintTrigger}
         onClose={() => {
           setSelectedOrderForPrint(null);
           setSelectedQuoteForPrint(null);
+          setSelectedInvoiceForPrint(null);
           setAutoPrintTrigger(false);
         }}
         order={selectedOrderForPrint}
+        invoice={selectedInvoiceForPrint}
         quotation={selectedQuoteForPrint}
         isAr={isAr}
       />

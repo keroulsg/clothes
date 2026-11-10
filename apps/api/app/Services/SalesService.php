@@ -434,7 +434,7 @@ class SalesService
                 'balance_due' => 0,
                 'invoice_date' => now()->toDateString(),
                 'due_date' => now()->toDateString(),
-                'notes' => 'Factory Outlet Immediate Checkout',
+                'notes' => ($discount > 0 ? "خصم نقدي مباشر للعميل: {$discount} ج.م | " : '') . ($data['notes'] ?? 'Factory Outlet Immediate Checkout'),
             ]);
 
             foreach ($data['items'] as $item) {
@@ -515,7 +515,39 @@ class SalesService
                 $session->save();
             }
 
-            return $invoice->load('items');
+            if ($discount > 0) {
+                try {
+                    $cashAccount = \App\Models\ChartOfAccount::where('tenant_id', $tenantId)->where('account_code', '1010')->first();
+                    $discountAccount = \App\Models\ChartOfAccount::where('tenant_id', $tenantId)
+                        ->where(function($q) {
+                            $q->where('account_code', '5100')->orWhere('account_code', '4120')->orWhere('account_type', 'expense');
+                        })->first();
+
+                    if ($cashAccount && $discountAccount) {
+                        app(AccountingService::class)->createJournalEntry([
+                            'entry_number' => 'JE-POS-DISC-' . $invoice->invoice_number,
+                            'entry_date' => now()->toDateString(),
+                            'description' => "إثبات خصم تجاري مباشر لمعرض المصنع بالفاتورة {$invoice->invoice_number} بمبلغ {$discount} ج.م",
+                            'reference_type' => 'sales_invoices',
+                            'reference_id' => $invoice->id,
+                            'lines' => [
+                                ['account_id' => $discountAccount->id, 'debit' => $discount, 'credit' => 0],
+                                ['account_id' => $cashAccount->id, 'debit' => 0, 'credit' => $discount],
+                            ],
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    // Safe fallback
+                }
+            }
+
+            return $invoice->load([
+                'tenant',
+                'customer',
+                'items.variant.garmentModel',
+                'items.variant.size',
+                'items.variant.color',
+            ]);
         });
     }
 

@@ -13,6 +13,8 @@ interface PosReceiptModalProps {
   isAr?: boolean;
   factoryName?: string;
   factoryTaxId?: string;
+  autoPrint?: boolean;
+  onOpenA4Invoice?: (inv: SalesInvoice) => void;
 }
 
 export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
@@ -23,14 +25,108 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
   isAr: propIsAr,
   factoryName,
   factoryTaxId,
+  autoPrint = false,
+  onOpenA4Invoice,
 }) => {
   const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
 
   if (!invoice) return null;
 
   const handlePrint = () => {
+    const printContent = document.getElementById('pos-thermal-receipt-print');
+    if (!printContent) {
+      window.print();
+      return;
+    }
+
+    try {
+      let iframe = document.getElementById('garmentos-receipt-print-frame') as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'garmentos-receipt-print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.top = '-9999px';
+        iframe.style.left = '-9999px';
+        iframe.style.width = '350px';
+        iframe.style.height = '600px';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.zIndex = '-999';
+        document.body.appendChild(iframe);
+      }
+
+      const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (frameDoc && iframe.contentWindow) {
+        frameDoc.open();
+        frameDoc.write(`
+          <!DOCTYPE html>
+          <html dir="${isAr ? 'rtl' : 'ltr'}" lang="${isAr ? 'ar' : 'en'}">
+          <head>
+            <meta charset="utf-8">
+            <title>${invoice.invoice_number}</title>
+            <style>
+              * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
+              body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                width: 80mm !important;
+                max-width: 80mm !important;
+                padding: 4mm !important;
+                font-size: 11px !important;
+                line-height: 1.3 !important;
+                direction: ${isAr ? 'rtl' : 'ltr'};
+              }
+              table { width: 100% !important; border-collapse: collapse !important; margin: 4px 0 !important; }
+              th, td { padding: 3px 0 !important; }
+              .text-center { text-align: center !important; }
+              .text-end { text-align: ${isAr ? 'left' : 'right'} !important; }
+              .text-start { text-align: ${isAr ? 'right' : 'left'} !important; }
+              .font-bold { font-weight: bold !important; }
+              .font-black { font-weight: 900 !important; }
+              .font-mono { font-family: monospace !important; }
+              .border-b { border-bottom: 1px dashed #000000 !important; }
+              .border-t { border-top: 1px solid #000000 !important; }
+              @page { size: 80mm auto; margin: 0; }
+              @media print {
+                body { padding: 2mm !important; width: 80mm !important; }
+                .no-print { display: none !important; }
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent.innerHTML}
+          </body>
+          </html>
+        `);
+        frameDoc.close();
+
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            console.warn('Receipt print fallback:', e);
+            window.print();
+          }
+        }, 250);
+        return;
+      }
+    } catch (e) {
+      console.warn('Receipt print error:', e);
+    }
+
     window.print();
   };
+
+  React.useEffect(() => {
+    if (isOpen && autoPrint) {
+      const timer = setTimeout(() => {
+        handlePrint();
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoPrint]);
 
   const storedTenant = api.auth.getStoredTenant();
   const effectiveFactoryName =
@@ -251,9 +347,9 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
                 </div>
               )}
               {discountAmount > 0 && (
-                <div className="flex justify-between text-zinc-600">
-                  <span>{isAr ? 'الخصم:' : 'Discount:'}</span>
-                  <span>-{discountAmount.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
+                <div className="flex justify-between font-bold text-black border-y border-dashed border-black/40 py-1 my-0.5">
+                  <span>{isAr ? 'خصم نقدي تجاري للعميل:' : 'Customer Cash Discount:'}</span>
+                  <span className="font-mono">-{discountAmount.toFixed(2)} {isAr ? 'ج.م' : 'EGP'}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-black pt-1 border-t border-black">
@@ -288,14 +384,34 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
         </div>
 
         {/* Modal Buttons */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800 gap-2">
           <Button variant="ghost" onClick={onClose}>
             {isAr ? 'إغلاق' : 'Close'}
           </Button>
 
-          <Button variant="primary" onClick={handlePrint} icon={<Printer className="w-4 h-4" />}>
-            {isAr ? 'طباعة الإيصال الفوري (80mm)' : 'Print Thermal Receipt (80mm)'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {onOpenA4Invoice && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onClose();
+                  onOpenA4Invoice(invoice);
+                }}
+                icon={<Printer className="w-4 h-4 text-[#7F1625]" />}
+              >
+                {isAr ? 'فاتورة ضريبية رسمية (A4)' : 'Official Tax Invoice (A4)'}
+              </Button>
+            )}
+
+            <Button
+              variant="primary"
+              onClick={handlePrint}
+              icon={<Printer className="w-4 h-4" />}
+              className="bg-[#7F1625] hover:bg-[#6a121e] text-white"
+            >
+              {isAr ? 'طباعة الإيصال الفوري (80mm)' : 'Print Thermal Receipt (80mm)'}
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>

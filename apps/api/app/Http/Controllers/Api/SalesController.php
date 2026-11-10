@@ -565,6 +565,31 @@ class SalesController extends Controller
     }
 
     /**
+     * تحديث بيانات شركة الشحن ورقم التتبع وحالة إذن التسليم
+     */
+    public function updateDeliveryNote(string $id, Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $deliveryNote = \App\Models\SalesDeliveryNote::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'nullable|string|in:preparing,packed,dispatched,delivered,cancelled',
+            'shipping_carrier' => 'nullable|string|max:100',
+            'tracking_number' => 'nullable|string|max:100',
+            'recipient_name' => 'nullable|string|max:255',
+            'delivery_date' => 'nullable|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        $deliveryNote->update(array_filter($validated, fn($val) => $val !== null));
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات إذن التسليم والشحن بنجاح',
+            'delivery_note' => $deliveryNote->fresh(['customer', 'salesOrder', 'warehouse', 'cartons']),
+        ]);
+    }
+
+    /**
      * قائمة سندات القبض ودفعات العملاء
      */
     public function payments(): JsonResponse

@@ -1323,7 +1323,17 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return SalesDeliveryNote::where('tenant_id', $tenantId)
-            ->with(['customer', 'salesOrder', 'warehouse', 'cartons'])
+            ->with([
+                'customer',
+                'salesOrder.items.variant.garmentModel',
+                'salesOrder.items.variant.size',
+                'salesOrder.items.variant.color',
+                'warehouse',
+                'cartons',
+                'items.salesOrderItem.variant.garmentModel',
+                'items.salesOrderItem.variant.size',
+                'items.salesOrderItem.variant.color',
+            ])
             ->latest()
             ->paginate(20);
     }

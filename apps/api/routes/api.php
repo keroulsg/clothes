@@ -342,6 +342,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/pos/sessions/{id}/close', [\App\Http\Controllers\Api\SalesController::class, 'closePosSession']);
         Route::get('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'deliveryNotes']);
         Route::post('/sales/delivery-notes', [\App\Http\Controllers\Api\SalesController::class, 'storeDeliveryNote']);
+        Route::put('/sales/delivery-notes/{id}', [\App\Http\Controllers\Api\SalesController::class, 'updateDeliveryNote']);
         Route::post('/sales/delivery-notes/{id}/cancel', [\App\Http\Controllers\Api\SalesController::class, 'cancelDeliveryNote']);
         Route::get('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'salesReturns'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::get('/sales/returns/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');

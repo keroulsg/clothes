@@ -1556,6 +1556,12 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+    updateDeliveryNote: async (id: string, payload: any): Promise<{ message: string; delivery_note: any }> => {
+      return this.request(`/sales/delivery-notes/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
     getReturns: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/sales/returns?page=${page}`);
     },

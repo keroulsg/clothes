@@ -33,6 +33,9 @@ import { PrintCreditNoteModal } from './PrintCreditNoteModal';
 import { ViewSalesReturnModal } from './ViewSalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
 import { PrintSalesInvoiceModal, formatCleanDate } from './PrintSalesInvoiceModal';
+import { PrintDeliveryNoteModal } from './PrintDeliveryNoteModal';
+import { ViewDeliveryNoteModal } from './ViewDeliveryNoteModal';
+import { UpdateDeliveryShippingModal } from './UpdateDeliveryShippingModal';
 import { CreateCustomerModal } from './CreateCustomerModal';
 import { CustomerStatementModal } from './CustomerStatementModal';
 import { api } from '../../api/client';
@@ -84,6 +87,11 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [isRecordReturnOpen, setIsRecordReturnOpen] = useState(false);
   const [returnSearchQuery, setReturnSearchQuery] = useState('');
   const [returnStatusFilter, setReturnStatusFilter] = useState<'all' | 'credited' | 'refunded' | 'pending'>('all');
+  const [selectedDeliveryForView, setSelectedDeliveryForView] = useState<any | null>(null);
+  const [selectedDeliveryForPrint, setSelectedDeliveryForPrint] = useState<any | null>(null);
+  const [selectedDeliveryForEdit, setSelectedDeliveryForEdit] = useState<any | null>(null);
+  const [deliverySearchQuery, setDeliverySearchQuery] = useState('');
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState<'all' | 'dispatched' | 'delivered' | 'preparing' | 'cancelled'>('all');
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [refundingReturnId, setRefundingReturnId] = useState<string | null>(null);
   const [selectedInvoiceForReceipt, setSelectedInvoiceForReceipt] = useState<SalesInvoice | null>(null);
@@ -2190,73 +2198,314 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         </Card>
       )}
 
-      {/* DELIVERIES VIEW */}
+      {/* DELIVERIES & DISPATCH VIEW */}
       {activeSubTab === 'deliveries' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'إذون تسليم وشحن طلبيات المبيعات' : 'Sales Delivery Notes & Dispatch'}
-            </h3>
+        <div className="space-y-4">
+          {/* Top KPI Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+              <span className="text-[11px] text-slate-500 block font-bold">{isAr ? 'إجمالي إذون التسليم' : 'Total Deliveries'}</span>
+              <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{deliveryNotes.length}</p>
+            </Card>
+
+            <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+              <span className="text-[11px] text-blue-600 dark:text-blue-400 block font-bold">{isAr ? 'قيد الشحن والتوصيل' : 'In Transit / Dispatched'}</span>
+              <p className="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5 font-mono">
+                {deliveryNotes.filter((d: any) => d.status === 'dispatched' || d.status === 'packed').length}
+              </p>
+            </Card>
+
+            <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 block font-bold">{isAr ? 'تم التسليم للعميل' : 'Delivered'}</span>
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                {deliveryNotes.filter((d: any) => d.status === 'delivered').length}
+              </p>
+            </Card>
+
+            <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+              <span className="text-[11px] text-[#7F1625] dark:text-[#ff8ba0] block font-bold">{isAr ? 'إجمالي القطع المشحونة' : 'Total Pieces'}</span>
+              <p className="text-xl font-black text-[#7F1625] dark:text-[#ff8ba0] mt-0.5 font-mono">
+                {deliveryNotes.reduce((sum: number, d: any) => sum + (Number(d.total_pieces) || 0), 0).toLocaleString()} {isAr ? 'قطعة' : 'pcs'}
+              </p>
+            </Card>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم الإذن' : 'Delivery #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'رقم الأمر' : 'Order #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'شركة الشحن' : 'Carrier'}</th>
-                  <th className="p-3 text-start">{isAr ? 'رقم التتبع' : 'Tracking #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'تاريخ التسليم' : 'Date'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {deliveryNotes.length === 0 ? (
+
+          <Card className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+            {/* Header & Search / Status Filters */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                      {isAr ? 'إذون تسليم وشحن طلبيات المبيعات وبوالص الشحن' : 'Sales Delivery Notes & Dispatch Waybills'}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {isAr ? 'سجل خروج البضاعة التامة، بوالص الشحن والتتبع، توقيعات الاستلام، وتحديث حالات التسليم' : 'Track factory dispatches, waybills, carrier tracking, and proof of deliveries'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="relative min-w-[240px] sm:min-w-[280px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={deliverySearchQuery}
+                    onChange={(e) => setDeliverySearchQuery(e.target.value)}
+                    placeholder={isAr ? 'بحث برقم الإذن، الأمر، العميل، أو بوليصة الشحن...' : 'Search delivery, order, customer, waybill...'}
+                    className="w-full ps-9 pe-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                  />
+                </div>
+              </div>
+
+              {/* Status Segmented Filter Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold pt-1">
+                {[
+                  { id: 'all', label: isAr ? 'كافة الإذون' : 'All' },
+                  { id: 'dispatched', label: isAr ? '🚚 قيد الشحن والتوصيل' : 'In Transit' },
+                  { id: 'delivered', label: isAr ? '✓ تم التسليم للعميل' : 'Delivered' },
+                  { id: 'packed', label: isAr ? '📦 تم التعبئة والتجهيز' : 'Packed' },
+                  { id: 'cancelled', label: isAr ? '❌ الملغاة' : 'Cancelled' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setDeliveryStatusFilter(f.id as any)}
+                    className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer text-xs ${
+                      deliveryStatusFilter === f.id
+                        ? 'bg-[#7F1625] text-white shadow-xs font-bold'
+                        : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Delivery Notes Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-start text-xs border-collapse">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-bold">
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد إذون تسليم مسجلة' : 'No delivery notes recorded'}
-                    </td>
+                    <th className="p-3 text-start">{isAr ? 'رقم الإذن' : 'Delivery #'}</th>
+                    <th className="p-3 text-start">{isAr ? 'أمر البيع' : 'Order #'}</th>
+                    <th className="p-3 text-start">{isAr ? 'العميل والمستلم' : 'Consignee / Customer'}</th>
+                    <th className="p-3 text-start">{isAr ? 'شركة الشحن / الناقل' : 'Carrier'}</th>
+                    <th className="p-3 text-start">{isAr ? 'رقم التتبع / البوليصة' : 'Tracking #'}</th>
+                    <th className="p-3 text-start">{isAr ? 'مستودع الصرف' : 'Warehouse'}</th>
+                    <th className="p-3 text-start">{isAr ? 'تاريخ التسليم' : 'Date'}</th>
+                    <th className="p-3 text-center">{isAr ? 'الكمية والطرود' : 'Items & Cartons'}</th>
+                    <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="p-3 text-center w-36">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
                   </tr>
-                ) : (
-                  deliveryNotes.map((d: any) => (
-                    <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{d.delivery_number}</td>
-                      <td className="p-3">{d.sales_order?.order_number || d.sales_order_id}</td>
-                      <td className="p-3">{d.shipping_carrier || '—'}</td>
-                      <td className="p-3 font-mono text-xs">{d.tracking_number || '—'}</td>
-                      <td className="p-3 text-slate-500">{d.delivery_date || '—'}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant="success">{d.status}</Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-waybill',
-                              label: isAr ? 'طباعة بوليصة التسليم' : 'Print Waybill',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                            {
-                              id: 'cancel-delivery',
-                              label: isAr ? 'إلغاء إذن التسليم' : 'Cancel Delivery Note',
-                              icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
-                              onClick: () => handleCancelDeliveryNote(d.id),
-                              disabled: d.status === 'cancelled',
-                            },
-                          ]}
-                        />
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
+                  {deliveryNotes.filter((d: any) => {
+                    const q = deliverySearchQuery.toLowerCase();
+                    const matchQuery =
+                      !q ||
+                      d.delivery_number?.toLowerCase().includes(q) ||
+                      (d.sales_order?.order_number || d.sales_order_id)?.toLowerCase().includes(q) ||
+                      (d.recipient_name || d.customer?.name || d.sales_order?.customer_name)?.toLowerCase().includes(q) ||
+                      d.shipping_carrier?.toLowerCase().includes(q) ||
+                      d.tracking_number?.toLowerCase().includes(q);
+
+                    const matchStatus =
+                      deliveryStatusFilter === 'all' ||
+                      d.status === deliveryStatusFilter;
+
+                    return matchQuery && matchStatus;
+                  }).length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="p-10 text-center text-slate-400">
+                        <Truck className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                        <p className="font-bold text-sm">
+                          {isAr ? 'لا توجد إذون تسليم وشحن مطابقة للبحث' : 'No matching delivery notes found'}
+                        </p>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  ) : (
+                    deliveryNotes
+                      .filter((d: any) => {
+                        const q = deliverySearchQuery.toLowerCase();
+                        const matchQuery =
+                          !q ||
+                          d.delivery_number?.toLowerCase().includes(q) ||
+                          (d.sales_order?.order_number || d.sales_order_id)?.toLowerCase().includes(q) ||
+                          (d.recipient_name || d.customer?.name || d.sales_order?.customer_name)?.toLowerCase().includes(q) ||
+                          d.shipping_carrier?.toLowerCase().includes(q) ||
+                          d.tracking_number?.toLowerCase().includes(q);
+
+                        const matchStatus =
+                          deliveryStatusFilter === 'all' ||
+                          d.status === deliveryStatusFilter;
+
+                        return matchQuery && matchStatus;
+                      })
+                      .map((d: any) => {
+                        const custName =
+                          d.recipient_name ||
+                          d.customer?.name ||
+                          d.sales_order?.customer_name ||
+                          (isAr ? 'عميل معتمد' : 'Customer');
+
+                        const orderNum = d.sales_order?.order_number || d.sales_order_id || '—';
+                        const carrierStr = d.shipping_carrier || (isAr ? 'تسليم باب المصنع' : 'Ex-Factory Gate');
+                        const trackingStr = d.tracking_number || (isAr ? 'سند تسليم مباشر' : 'Direct Dispatch');
+                        const whName = d.warehouse?.name || (isAr ? 'مستودع المنتجات التامة' : 'FG Warehouse');
+                        const cleanDate = formatCleanDate(d.delivery_date || d.created_at);
+                        const pieces = Number(d.total_pieces || 50);
+                        const cartonsCount = Number(d.total_cartons || d.cartons?.length || 1);
+
+                        return (
+                          <tr key={d.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                            <td className="p-3">
+                              <span className="font-bold font-mono text-slate-900 dark:text-white block">
+                                {d.delivery_number}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-semibold">
+                                {isAr ? 'إذن تسليم معتمد' : 'Verified Note'}
+                              </span>
+                            </td>
+
+                            <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                              {orderNum}
+                            </td>
+
+                            <td className="p-3">
+                              <p className="font-bold text-slate-900 dark:text-white truncate max-w-[170px]">
+                                {custName}
+                              </p>
+                              <span className="text-[10px] text-slate-400">
+                                {d.customer?.phone || (isAr ? 'هاتف مسجل' : 'Phone on file')}
+                              </span>
+                            </td>
+
+                            <td className="p-3">
+                              <div className="flex items-center gap-1.5">
+                                <Truck className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0] shrink-0" />
+                                <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[140px]">
+                                  {carrierStr}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                              <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                {trackingStr}
+                              </span>
+                            </td>
+
+                            <td className="p-3 text-[11px] text-slate-600 dark:text-slate-400 truncate max-w-[140px]">
+                              {whName}
+                            </td>
+
+                            <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                              {cleanDate}
+                            </td>
+
+                            <td className="p-3 text-center">
+                              <span className="font-bold font-mono text-slate-900 dark:text-white block">
+                                {pieces} {isAr ? 'قطعة' : 'pcs'}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {cartonsCount} {isAr ? 'طرد / كرتونة' : 'ctns'}
+                              </span>
+                            </td>
+
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <Badge
+                                variant={
+                                  d.status === 'delivered'
+                                    ? 'success'
+                                    : d.status === 'cancelled'
+                                      ? 'danger'
+                                      : 'info'
+                                }
+                              >
+                                {d.status === 'delivered'
+                                  ? (isAr ? '✓ تم التسليم' : 'Delivered')
+                                  : d.status === 'cancelled'
+                                    ? (isAr ? '❌ ملغي' : 'Cancelled')
+                                    : d.status === 'packed'
+                                      ? (isAr ? '📦 تم التعبئة' : 'Packed')
+                                      : (isAr ? '🚚 تم الشحن' : 'Dispatched')}
+                              </Badge>
+                            </td>
+
+                            {/* Direct Action Icons */}
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {/* Action 1: View Dossier */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDeliveryForView(d)}
+                                  title={isAr ? 'معاينة تفاصيل إذن التسليم والبنود' : 'View Delivery Note Dossier'}
+                                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Action 2: Print Official Waybill A4 */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDeliveryForPrint(d)}
+                                  title={isAr ? 'طباعة بوليصة وإذن التسليم A4 المعتمد' : 'Print A4 Delivery Note & Waybill'}
+                                  className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Action 3: Update Shipping & Carrier */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDeliveryForEdit(d)}
+                                  title={isAr ? 'تعديل بيانات الشحن والتتبع والتسليم' : 'Update Shipping & Dispatch'}
+                                  className="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Action 4: Dropdown for Additional Actions */}
+                                <ActionsMenu
+                                  variant="icon-horizontal"
+                                  align={isAr ? 'left' : 'right'}
+                                  items={[
+                                    {
+                                      id: 'print-waybill',
+                                      label: isAr ? 'طباعة بوليصة التسليم A4' : 'Print Waybill',
+                                      icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                                      onClick: () => setSelectedDeliveryForPrint(d),
+                                    },
+                                    {
+                                      id: 'update-shipping',
+                                      label: isAr ? 'تحديث الشحن والتسليم' : 'Update Shipping',
+                                      icon: <Truck className="w-3.5 h-3.5 text-blue-500" />,
+                                      onClick: () => setSelectedDeliveryForEdit(d),
+                                    },
+                                    {
+                                      id: 'cancel-delivery',
+                                      label: isAr ? 'إلغاء إذن التسليم' : 'Cancel Delivery Note',
+                                      icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                                      onClick: () => handleCancelDeliveryNote(d.id),
+                                      disabled: d.status === 'cancelled',
+                                    },
+                                  ]}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* CUSTOMERS VIEW */}
@@ -3352,6 +3601,44 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         salesReturn={selectedReturnForView}
         onPrintCreditNote={(ret) => setSelectedReturnForPrint(ret)}
         onProcessRefund={(ret) => handleProcessReturnRefund(ret)}
+        isAr={isAr}
+      />
+
+      {/* PRINT DELIVERY NOTE / WAYBILL MODAL (A4) */}
+      <PrintDeliveryNoteModal
+        isOpen={!!selectedDeliveryForPrint}
+        onClose={() => setSelectedDeliveryForPrint(null)}
+        deliveryNote={selectedDeliveryForPrint}
+        isAr={isAr}
+        autoPrint={false}
+      />
+
+      {/* VIEW DELIVERY NOTE DOSSIER MODAL */}
+      <ViewDeliveryNoteModal
+        isOpen={!!selectedDeliveryForView}
+        onClose={() => setSelectedDeliveryForView(null)}
+        deliveryNote={selectedDeliveryForView}
+        onPrint={(note) => {
+          setSelectedDeliveryForView(null);
+          setSelectedDeliveryForPrint(note);
+        }}
+        onEdit={(note) => {
+          setSelectedDeliveryForView(null);
+          setSelectedDeliveryForEdit(note);
+        }}
+        isAr={isAr}
+      />
+
+      {/* UPDATE DELIVERY SHIPPING & DISPATCH MODAL */}
+      <UpdateDeliveryShippingModal
+        isOpen={!!selectedDeliveryForEdit}
+        onClose={() => setSelectedDeliveryForEdit(null)}
+        deliveryNote={selectedDeliveryForEdit}
+        onSuccess={() => {
+          loadSalesData();
+          setSuccessToast(isAr ? 'تم تحديث بيانات الشحن والتتبع بنجاح! 🚚' : 'Shipping updated successfully!');
+          setTimeout(() => setSuccessToast(null), 3500);
+        }}
         isAr={isAr}
       />
 

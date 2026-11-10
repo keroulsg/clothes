@@ -22,6 +22,11 @@ import {
   Tag,
   CreditCard,
   Store,
+  Users,
+  Building2,
+  UserCheck,
+  ExternalLink,
+  User,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -38,6 +43,7 @@ import { ViewDeliveryNoteModal } from './ViewDeliveryNoteModal';
 import { UpdateDeliveryShippingModal } from './UpdateDeliveryShippingModal';
 import { CreateCustomerModal } from './CreateCustomerModal';
 import { CustomerStatementModal } from './CustomerStatementModal';
+import { CommercialCustomerDossierModal } from './CommercialCustomerDossierModal';
 import { api } from '../../api/client';
 import type { Language, SalesOrder, SalesInvoice, ProductVariant, Quotation, SalesReturn, Customer } from '../../types';
 
@@ -71,6 +77,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [selectedCustomerForStatement, setSelectedCustomerForStatement] = useState<Customer | null>(null);
   const [selectedCustomerForEdit, setSelectedCustomerForEdit] = useState<Customer | null>(null);
+  const [selectedCustomerForDossier, setSelectedCustomerForDossier] = useState<Customer | null>(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerClassificationFilter, setCustomerClassificationFilter] = useState<'all' | 'wholesale' | 'retail'>('all');
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<SalesOrder | null>(null);
   const [selectedQuoteForPrint, setSelectedQuoteForPrint] = useState<Quotation | null>(null);
@@ -120,7 +129,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   // Payment Form State
   const [paymentCustomerId, setPaymentCustomerId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer' | 'check'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer' | 'check' | 'wallet'>('cash');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentInvoiceId, setPaymentInvoiceId] = useState('');
 
@@ -2510,114 +2519,303 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
       {/* CUSTOMERS VIEW */}
       {activeSubTab === 'customers' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white">
-                {isAr ? 'دليل العملاء التجاريين وكشوف الحسابات المعتمدة' : 'Commercial Customers Directory & Statements'}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isAr ? 'متابعة حسابات عملاء الجملة والتجزئة، المديونيات، وسجل الفواتير والمرتجعات.' : 'Manage wholesale/retail customer ledgers, credit balances, and order histories.'}
+        <div className="space-y-4">
+          {/* Customers KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                <span>{isAr ? 'إجمالي العملاء المسجلين' : 'Total Customers'}</span>
+                <Users className="w-4 h-4 text-primary" />
+              </div>
+              <p className="font-black font-mono text-xl text-slate-900 dark:text-white mt-1">
+                {customers.length}
               </p>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {isAr ? 'حسابات نشطة بالمنظومة' : 'Active customer accounts'}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={() => {
-                setSelectedCustomerForEdit(null);
-                setIsCreateCustomerOpen(true);
-              }} icon={<Plus className="w-3.5 h-3.5" />}>
-                {isAr ? 'تسجيل عميل جديد' : 'New Customer'}
-              </Button>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                <span>{isAr ? 'عملاء الجملة والتوكيلات' : 'Wholesale Clients'}</span>
+                <Building2 className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="font-black font-mono text-xl text-blue-600 dark:text-blue-400 mt-1">
+                {customers.filter((c) => c.classification === 'wholesale' || c.classification === 'company' || c.name.includes('براند') || c.name.includes('شركة') || c.name.includes('مصنع') || c.name.includes('توكيل')).length}
+              </p>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {isAr ? 'حسابات عقود وتوريد كبرى' : 'B2B commercial contracts'}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                <span>{isAr ? 'إجمالي المبيعات المحققة' : 'Total Invoiced'}</span>
+                <ShoppingBag className="w-4 h-4 text-emerald-500" />
+              </div>
+              <p className="font-black font-mono text-xl text-emerald-600 dark:text-emerald-400 mt-1">
+                {customers.reduce((sum, c) => sum + Number(c.total_invoiced || 0), 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              </p>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {isAr ? 'قيمة الفواتير المعتمدة' : 'Verified sales invoices'}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                <span>{isAr ? 'صافي المديونيات المستحقة' : 'Total Receivables'}</span>
+                <DollarSign className="w-4 h-4 text-rose-500" />
+              </div>
+              <p className="font-black font-mono text-xl text-rose-600 dark:text-rose-400 mt-1">
+                {customers.reduce((sum, c) => sum + Number(c.current_balance || 0), 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              </p>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {isAr ? 'مستحقات واجبة التحصيل' : 'Pending collections'}
+              </span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'كود العميل' : 'Code'}</th>
-                  <th className="p-3 text-start">{isAr ? 'اسم العميل / المتجر' : 'Client Name'}</th>
-                  <th className="p-3 text-start">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الهاتف' : 'Phone'}</th>
-                  <th className="p-3 text-end">{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</th>
-                  <th className="p-3 text-end font-bold">{isAr ? 'الرصيد المستحق' : 'Balance Due'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
-                {customers.length === 0 ? (
+          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-primary" />
+                  {isAr ? 'دليل العملاء التجاريين وكشوف الحسابات المعتمدة' : 'Commercial Customers Directory & Statements'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isAr ? 'ملفات العملاء الشاملة، متابعة التحصيلات والدفعات النقدية والفيزا، وإدارة المديونيات.' : 'Comprehensive dossiers, cash & card collections, and credit balances.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => {
+                  setSelectedCustomerForEdit(null);
+                  setIsCreateCustomerOpen(true);
+                }} icon={<Plus className="w-3.5 h-3.5" />}>
+                  {isAr ? 'تسجيل عميل جديد' : 'New Customer'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Search & Filter Toolbar */}
+            <div className="p-3 bg-slate-50/60 dark:bg-slate-800/20 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5" />
+                <input
+                  type="text"
+                  value={customerSearchQuery}
+                  onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                  placeholder={isAr ? 'بحث بالاسم، الكود، الهاتف، أو مسؤول الاتصال...' : 'Search by name, code, phone, contact...'}
+                  className="w-full ps-9 pe-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 font-semibold">
+                {[
+                  { id: 'all', label: isAr ? 'جميع العملاء' : 'All' },
+                  { id: 'wholesale', label: isAr ? '🏢 عملاء جملة' : 'Wholesale' },
+                  { id: 'retail', label: isAr ? '🛍️ عملاء تجزئة' : 'Retail' },
+                ].map((filt) => (
+                  <button
+                    key={filt.id}
+                    onClick={() => setCustomerClassificationFilter(filt.id as any)}
+                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                      customerClassificationFilter === filt.id
+                        ? 'bg-[#7F1625] text-white shadow-xs font-bold'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {filt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-start text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400 font-sans text-xs">
-                      {isAr ? 'لا يوجد عملاء مسجلون حالياً. اضغط على "تسجيل عميل جديد" لإضافة أول عميل.' : 'No customers registered yet. Click "New Customer" to add one.'}
-                    </td>
+                    <th className="p-3 text-start">{isAr ? 'كود العميل' : 'Code'}</th>
+                    <th className="p-3 text-start">{isAr ? 'اسم العميل / المتجر' : 'Client Name'}</th>
+                    <th className="p-3 text-start">{isAr ? 'التصنيف' : 'Type'}</th>
+                    <th className="p-3 text-start">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</th>
+                    <th className="p-3 text-start">{isAr ? 'الهاتف' : 'Phone'}</th>
+                    <th className="p-3 text-end">{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</th>
+                    <th className="p-3 text-end font-bold">{isAr ? 'الرصيد المستحق' : 'Balance Due'}</th>
+                    <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                   </tr>
-                ) : (
-                  customers.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">{c.code}</td>
-                      <td className="p-3 font-sans font-medium text-slate-800 dark:text-slate-200">{c.name}</td>
-                      <td className="p-3 font-sans text-slate-600 dark:text-slate-400">{c.contact_person || '—'}</td>
-                      <td className="p-3 text-slate-600 dark:text-slate-400">{c.phone || '—'}</td>
-                      <td className="p-3 text-end text-slate-900 dark:text-white font-bold">
-                        {c.total_invoiced ? Number(c.total_invoiced).toLocaleString() : '0'} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3 text-end font-bold">
-                        <span className={c.current_balance && c.current_balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
-                          {Number(c.current_balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center font-sans">
-                        <Badge variant={c.is_active ? 'success' : 'neutral'}>
-                          {c.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-center font-sans">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs px-2"
-                            onClick={() => {
-                              setSelectedCustomerForStatement(c);
-                              setIsCustomerStatementOpen(true);
-                            }}
-                            icon={<BookOpen className="w-3 h-3 text-primary" />}
-                          >
-                            {isAr ? 'كشف الحساب' : 'Statement'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs px-2"
-                            onClick={() => {
-                              setSelectedCustomerForEdit(c);
-                              setIsCreateCustomerOpen(true);
-                            }}
-                            title={isAr ? 'تعديل بيانات العميل' : 'Edit Customer Profile'}
-                          >
-                            <Pencil className="w-3 h-3 text-slate-500" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs px-2"
-                            onClick={() => {
-                              setNewOrderCustomer(c.name);
-                              setIsOrderModalOpen(true);
-                            }}
-                            title={isAr ? 'إنشاء أمر بيع لهذا العميل' : 'New order for this customer'}
-                          >
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                        </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                  {customers.filter((c) => {
+                    const q = customerSearchQuery.trim().toLowerCase();
+                    const matchesSearch =
+                      !q ||
+                      (c.name || '').toLowerCase().includes(q) ||
+                      (c.code || '').toLowerCase().includes(q) ||
+                      (c.phone || '').toLowerCase().includes(q) ||
+                      (c.contact_person || '').toLowerCase().includes(q);
+
+                    if (!matchesSearch) return false;
+
+                    const isWhole =
+                      c.classification === 'wholesale' ||
+                      c.classification === 'company' ||
+                      c.name.includes('براند') ||
+                      c.name.includes('شركة') ||
+                      c.name.includes('مصنع') ||
+                      c.name.includes('توكيل');
+
+                    if (customerClassificationFilter === 'wholesale') return isWhole;
+                    if (customerClassificationFilter === 'retail') return !isWhole;
+                    return true;
+                  }).length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-8 text-center text-slate-400 font-sans text-xs">
+                        {isAr ? 'لا يوجد عملاء يطابقون معايير البحث الحالية.' : 'No customers match the criteria.'}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  ) : (
+                    customers
+                      .filter((c) => {
+                        const q = customerSearchQuery.trim().toLowerCase();
+                        const matchesSearch =
+                          !q ||
+                          (c.name || '').toLowerCase().includes(q) ||
+                          (c.code || '').toLowerCase().includes(q) ||
+                          (c.phone || '').toLowerCase().includes(q) ||
+                          (c.contact_person || '').toLowerCase().includes(q);
+
+                        if (!matchesSearch) return false;
+
+                        const isWhole =
+                          c.classification === 'wholesale' ||
+                          c.classification === 'company' ||
+                          c.name.includes('براند') ||
+                          c.name.includes('شركة') ||
+                          c.name.includes('مصنع') ||
+                          c.name.includes('توكيل');
+
+                        if (customerClassificationFilter === 'wholesale') return isWhole;
+                        if (customerClassificationFilter === 'retail') return !isWhole;
+                        return true;
+                      })
+                      .map((c) => {
+                        const isWhole =
+                          c.classification === 'wholesale' ||
+                          c.classification === 'company' ||
+                          c.name.includes('براند') ||
+                          c.name.includes('شركة') ||
+                          c.name.includes('مصنع') ||
+                          c.name.includes('توكيل');
+
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="p-3 font-bold text-slate-900 dark:text-white">{c.code}</td>
+                            <td className="p-3 font-sans font-medium">
+                              <button
+                                onClick={() => setSelectedCustomerForDossier(c)}
+                                className="text-start font-bold text-slate-900 dark:text-white hover:text-[#7F1625] dark:hover:text-[#ff8ba0] hover:underline flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title={isAr ? 'فتح الملف الشامل للعميل' : 'Open customer profile'}
+                              >
+                                <span>{c.name}</span>
+                                <ExternalLink className="w-3 h-3 text-slate-400 hover:text-[#7F1625]" />
+                              </button>
+                            </td>
+                            <td className="p-3 font-sans">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isWhole
+                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              }`}>
+                                {isWhole ? (isAr ? '🏢 جملة' : 'Wholesale') : (isAr ? '🛍️ تجزئة' : 'Retail')}
+                              </span>
+                            </td>
+                            <td className="p-3 font-sans text-slate-600 dark:text-slate-400">{c.contact_person || '—'}</td>
+                            <td className="p-3 text-slate-600 dark:text-slate-400">{c.phone || '—'}</td>
+                            <td className="p-3 text-end text-slate-900 dark:text-white font-bold">
+                              {c.total_invoiced ? Number(c.total_invoiced).toLocaleString() : '0'} {isAr ? 'ج.م' : 'EGP'}
+                            </td>
+                            <td className="p-3 text-end font-bold">
+                              <span className={c.current_balance && c.current_balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                                {Number(c.current_balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center font-sans">
+                              <Badge variant={c.is_active ? 'success' : 'neutral'}>
+                                {c.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-center font-sans">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => setSelectedCustomerForDossier(c)}
+                                  className="p-1.5 rounded-lg bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/20 transition-all cursor-pointer"
+                                  title={isAr ? 'الملف الشامل وبروفايل العميل' : 'Customer Dossier'}
+                                >
+                                  <User className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    handlePaymentCustomerSelect(c.id);
+                                    setIsRecordPaymentOpen(true);
+                                  }}
+                                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
+                                  title={isAr ? 'تسجيل سند قبض / تحصيل دفعة نقدية أو فيزا' : 'Record Payment Collection'}
+                                >
+                                  <DollarSign className="w-3.5 h-3.5" />
+                                </button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs px-2"
+                                  onClick={() => {
+                                    setSelectedCustomerForStatement(c);
+                                    setIsCustomerStatementOpen(true);
+                                  }}
+                                  icon={<BookOpen className="w-3 h-3 text-primary" />}
+                                  title={isAr ? 'كشف الحساب المعتمد' : 'Account Statement'}
+                                >
+                                  {isAr ? 'كشف الحساب' : 'Statement'}
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs px-2"
+                                  onClick={() => {
+                                    setSelectedCustomerForEdit(c);
+                                    setIsCreateCustomerOpen(true);
+                                  }}
+                                  title={isAr ? 'تعديل بيانات العميل' : 'Edit Customer Profile'}
+                                >
+                                  <Pencil className="w-3 h-3 text-slate-500" />
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs px-2"
+                                  onClick={() => {
+                                    setNewOrderCustomer(c.name);
+                                    setIsOrderModalOpen(true);
+                                  }}
+                                  title={isAr ? 'إنشاء أمر بيع لهذا العميل' : 'New order for this customer'}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Modal: New Sales Order */}
@@ -3506,9 +3704,11 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs"
               >
-                <option value="cash">{isAr ? 'نقدي (خزينة)' : 'Cash'}</option>
-                <option value="bank_transfer">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                <option value="check">{isAr ? 'شيك بنكي' : 'Check'}</option>
+                <option value="cash">{isAr ? '💵 نقدي (خزينة المصنع)' : 'Cash'}</option>
+                <option value="card">{isAr ? '💳 بطاقة بنكية / فيزا (POS)' : 'Card / POS'}</option>
+                <option value="bank_transfer">{isAr ? '🏦 تحويل بنكي معتمد' : 'Bank Transfer'}</option>
+                <option value="wallet">{isAr ? '📱 محفظة إلكترونية (فودافون كاش / إنستاباي)' : 'E-Wallet'}</option>
+                <option value="check">{isAr ? '📝 شيك مصرفي' : 'Check'}</option>
               </select>
             </div>
           </div>
@@ -3954,6 +4154,46 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         order={selectedOrderForPrint}
         invoice={selectedInvoiceForPrint}
         quotation={selectedQuoteForPrint}
+        isAr={isAr}
+      />
+
+      {/* COMMERCIAL CUSTOMER DOSSIER MODAL */}
+      <CommercialCustomerDossierModal
+        isOpen={!!selectedCustomerForDossier}
+        onClose={() => setSelectedCustomerForDossier(null)}
+        customer={selectedCustomerForDossier}
+        invoices={invoices}
+        orders={orders}
+        payments={payments}
+        returns={salesReturns}
+        deliveryNotes={deliveryNotes}
+        onRecordPayment={(cust, inv) => {
+          setSelectedCustomerForDossier(null);
+          handlePaymentCustomerSelect(cust.id);
+          if (inv) {
+            setPaymentInvoiceId(inv.id);
+            const due = Number(inv.balance_due ?? inv.total_amount);
+            if (due > 0) setPaymentAmount(due);
+          }
+          setIsRecordPaymentOpen(true);
+        }}
+        onNewOrder={(cust) => {
+          setSelectedCustomerForDossier(null);
+          setNewOrderCustomer(cust.name);
+          setIsOrderModalOpen(true);
+        }}
+        onOpenStatement={(cust) => {
+          setSelectedCustomerForStatement(cust);
+          setIsCustomerStatementOpen(true);
+        }}
+        onEditCustomer={(cust) => {
+          setSelectedCustomerForDossier(null);
+          setSelectedCustomerForEdit(cust);
+          setIsCreateCustomerOpen(true);
+        }}
+        onPrintInvoice={(inv) => {
+          setSelectedInvoiceForPrint(inv);
+        }}
         isAr={isAr}
       />
     </div>

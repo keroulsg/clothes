@@ -21,6 +21,29 @@ export const formatCleanDate = (val?: string | null): string => {
   return str.split('T')[0].split(' ')[0];
 };
 
+export const getPaymentMethodLabel = (method?: string | null, isAr = true): string => {
+  if (!method) return isAr ? 'نقدي (كاش)' : 'Cash';
+  switch (method.toLowerCase()) {
+    case 'cash':
+      return isAr ? '💵 نقدي (كاش خزينة)' : 'Cash';
+    case 'card':
+    case 'pos':
+    case 'visa':
+      return isAr ? '💳 بطاقة بنكية / فيزا (POS)' : 'Card / POS';
+    case 'bank_transfer':
+      return isAr ? '🏦 تحويل بنكي معتمد' : 'Bank Transfer';
+    case 'check':
+    case 'cheque':
+      return isAr ? '📝 شيك مصرفي' : 'Check';
+    case 'wallet':
+      return isAr ? '📱 محفظة إلكترونية' : 'E-Wallet';
+    case 'credit':
+      return isAr ? '⏳ بيع آجل (على الحساب)' : 'Credit (On Account)';
+    default:
+      return method;
+  }
+};
+
 export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
   isOpen,
   onClose,
@@ -102,6 +125,24 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
   const discountAmount = Number(order?.discount_amount || quotation?.discount_amount || invoice?.discount_amount || 0);
 
   const totalPieces = items.reduce((sum, item: any) => sum + (Number(item.ordered_quantity || item.quantity) || 0), 0);
+
+  const paidAmount = Number(
+    invoice?.paid_amount !== undefined
+      ? invoice.paid_amount
+      : order?.payment_status === 'paid'
+      ? totalAmount
+      : 0
+  );
+  const balanceDue = Number(
+    invoice?.balance_due !== undefined
+      ? invoice.balance_due
+      : Math.max(0, totalAmount - paidAmount)
+  );
+  const paymentMethodKey = (
+    invoice?.payment_method ||
+    (order as any)?.payment_method ||
+    (order?.payment_status === 'unpaid' ? 'credit' : 'cash')
+  );
 
   const handlePrint = () => {
     const printContent = document.getElementById('sales-invoice-print-sheet');
@@ -565,6 +606,44 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
                 <span>{isAr ? 'صافي القيمة المستحقة الإجمالية:' : 'Grand Total Due:'}</span>
                 <span className="font-mono text-base">{totalAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
               </div>
+
+              {!isQuotation && (
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 print:bg-slate-50 print:border-slate-300 space-y-1.5 text-xs">
+                  <div className="flex justify-between items-center font-bold text-slate-800 dark:text-slate-200 print:text-black">
+                    <span>{isAr ? 'المسدد نقداً / فيزا:' : 'Amount Paid:'}</span>
+                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                      {paidAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-600 dark:text-slate-400 print:text-slate-700">
+                    <span>{isAr ? 'طريقة السداد المعتمدة:' : 'Payment Method:'}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 print:text-black">
+                      {getPaymentMethodLabel(paymentMethodKey, isAr)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-black pt-1 border-t border-slate-200 dark:border-slate-700 print:border-slate-300">
+                    <span className={balanceDue > 0 ? 'text-rose-700 dark:text-rose-400 print:text-black' : 'text-emerald-700 dark:text-emerald-400 print:text-black'}>
+                      {isAr ? 'المتبقي المستحق على العميل:' : 'Remaining Balance Due:'}
+                    </span>
+                    <span className={`font-mono text-sm ${balanceDue > 0 ? 'text-rose-600 dark:text-rose-400 font-bold print:text-black' : 'text-emerald-600 dark:text-emerald-400 font-bold print:text-black'}`}>
+                      {balanceDue.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                    </span>
+                  </div>
+
+                  <div className="pt-0.5 text-[10px] text-slate-500 print:text-slate-700 flex justify-between font-semibold">
+                    <span>{isAr ? 'حالة السداد والتحصيل:' : 'Audit Status:'}</span>
+                    <span>
+                      {balanceDue <= 0 && paidAmount > 0
+                        ? (isAr ? '✓ مسددة بالكامل (خالصة)' : 'Fully Settled')
+                        : paidAmount > 0
+                        ? (isAr ? '⏳ مسددة جزئياً' : 'Partially Paid')
+                        : (isAr ? '⚠️ بيع آجل على الحساب (غير مسددة)' : 'Unpaid On Account')}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -28,7 +28,9 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
-import { SalesReturnModal } from './SalesReturnModal';
+import { RecordSalesReturnModal } from './RecordSalesReturnModal';
+import { PrintCreditNoteModal } from './PrintCreditNoteModal';
+import { ViewSalesReturnModal } from './ViewSalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
 import { PrintSalesInvoiceModal, formatCleanDate } from './PrintSalesInvoiceModal';
 import { CreateCustomerModal } from './CreateCustomerModal';
@@ -77,6 +79,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<SalesInvoice | null>(null);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [selectedReturnForView, setSelectedReturnForView] = useState<SalesReturn | null>(null);
+  const [selectedReturnForPrint, setSelectedReturnForPrint] = useState<SalesReturn | null>(null);
+  const [isRecordReturnOpen, setIsRecordReturnOpen] = useState(false);
+  const [returnSearchQuery, setReturnSearchQuery] = useState('');
+  const [returnStatusFilter, setReturnStatusFilter] = useState<'all' | 'credited' | 'refunded' | 'pending'>('all');
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [refundingReturnId, setRefundingReturnId] = useState<string | null>(null);
   const [selectedInvoiceForReceipt, setSelectedInvoiceForReceipt] = useState<SalesInvoice | null>(null);
   const [selectedInvoiceForPrint, setSelectedInvoiceForPrint] = useState<SalesInvoice | null>(null);
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<SalesInvoice | null>(null);
@@ -129,7 +138,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [ordersRes, invRes, quotesRes, delivRes, returnsRes, custRes, payRes, credRes] = await Promise.allSettled([
+      const [ordersRes, invRes, quotesRes, delivRes, returnsRes, custRes, payRes, credRes, whRes] = await Promise.allSettled([
         api.sales.getOrders(1),
         api.sales.getInvoices(1),
         api.sales.getQuotations(1),
@@ -138,6 +147,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         api.customers.getCustomers(),
         api.sales.getPayments(1),
         api.sales.getCreditNotes(1),
+        api.inventory.getWarehouses(),
       ]);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
@@ -163,6 +173,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       }
       if (credRes.status === 'fulfilled' && credRes.value?.data) {
         setCreditNotes(credRes.value.data);
+      }
+      if (whRes.status === 'fulfilled' && (whRes.value as any)?.warehouses) {
+        setWarehouses((whRes.value as any).warehouses);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المبيعات' : 'Failed to load sales data'));
@@ -237,6 +250,23 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       }
     } catch (err) {
       console.warn('Could not fetch deep order details for print, using cached order', err);
+    }
+  };
+
+  const handleProcessReturnRefund = async (salesReturn: SalesReturn) => {
+    if (!confirm(isAr ? `تأكيد صرف استرداد نقدي فوري للمرتجع (${salesReturn.return_number}) بقيمة ${Number(salesReturn.total_amount).toLocaleString()} ج.م؟` : `Confirm cash refund for ${salesReturn.return_number}?`)) {
+      return;
+    }
+    setRefundingReturnId(salesReturn.id);
+    try {
+      await api.sales.refundReturn(salesReturn.id, { payment_method: 'cash' });
+      setSuccessToast(isAr ? 'تم صرف الاسترداد النقدي بنجاح وإثبات السند المحاسبي! 💵' : 'Cash refund processed successfully!');
+      setTimeout(() => setSuccessToast(null), 4000);
+      await loadSalesData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل صرف الاسترداد النقدي' : 'Failed to process refund'));
+    } finally {
+      setRefundingReturnId(null);
     }
   };
 
@@ -2002,6 +2032,20 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             <Receipt className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Action 4: Direct Sales Return & Credit Note */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedInvoiceForReturn(inv);
+                              setIsRecordReturnOpen(true);
+                            }}
+                            disabled={inv.status === 'void'}
+                            title={isAr ? 'تسجيل مرتجع بضاعة وإشعار دائن من هذه الفاتورة' : 'Record Sales Return & Credit Note'}
+                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-40"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Action 4: Dropdown Menu */}
                           <ActionsMenu
                             variant="icon-horizontal"
@@ -2659,87 +2703,286 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       )}
 
       {/* SALES RETURNS VIEW */}
-      {activeSubTab === 'returns' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <RotateCcw className="w-4 h-4 text-[var(--brand-primary)] dark:text-[#F87171]" />
-              {isAr ? 'سجل مرتجعات المبيعات وإشعارات الدائن المعتمدة' : 'Sales Returns & Approved Credit Notes'}
-            </h3>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              {salesReturns.length} {isAr ? 'مرتجع' : 'returns'} • {creditNotes.length} {isAr ? 'إشعار دائن' : 'credit notes'}
-            </span>
-          </div>
+      {activeSubTab === 'returns' && (() => {
+        const totalReturnsCount = salesReturns.length;
+        const totalReturnsValue = salesReturns.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0);
+        const restockedCount = salesReturns.filter(r => r.is_restocked).length;
+        const creditedCount = creditNotes.length || salesReturns.filter(r => r.refund_status === 'credited').length;
+        const cashRefundedCount = salesReturns.filter(r => r.refund_status === 'refunded').length;
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم المرتجع' : 'Return #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الفاتورة الأصلية' : 'Source Invoice'}</th>
-                  <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="p-3 text-start">{isAr ? 'المخزن المستلم' : 'Warehouse'}</th>
-                  <th className="p-3 text-start">{isAr ? 'تاريخ المرتجع' : 'Date'}</th>
-                  <th className="p-3 text-start">{isAr ? 'إجمالي القيمة' : 'Credit Amount'}</th>
-                  <th className="p-3 text-center">{isAr ? 'حالة المخزن' : 'Restock'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإشعار المالي' : 'Refund / Credit'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {salesReturns.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد مرتجعات مبيعات مسجلة حتى الآن' : 'No sales returns on record'}
-                    </td>
-                  </tr>
-                ) : (
-                  salesReturns.map((ret: any) => (
-                    <tr key={ret.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">
-                        {ret.return_number}
-                      </td>
-                      <td className="p-3 font-mono text-xs text-slate-600 dark:text-slate-400">
-                        {ret.sales_invoice?.invoice_number || ret.sales_order?.order_number || '—'}
-                      </td>
-                      <td className="p-3">{ret.customer?.name || (isAr ? 'عميل تجزئة' : 'Retail Customer')}</td>
-                      <td className="p-3 text-xs">{ret.warehouse?.name || (isAr ? 'مخزن تام' : 'Finished Goods WH')}</td>
-                      <td className="p-3 text-slate-500 font-mono text-xs">{ret.return_date}</td>
-                      <td className="p-3 font-bold text-[var(--brand-primary)] dark:text-[#F87171] font-mono">
-                        {Number(ret.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant={ret.is_restocked ? 'success' : 'neutral'}>
-                          {ret.is_restocked ? (isAr ? 'مسترجع للمخزن' : 'Restocked') : (isAr ? 'خارج المخزن' : 'No restock')}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant="success">
-                          {ret.refund_status === 'credited' ? (isAr ? 'دائن معتمد' : 'Credited') : ret.refund_status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-credit-note',
-                              label: isAr ? 'طباعة إشعار الدائن (Credit Slip)' : 'Print Credit Note Slip',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                          ]}
-                        />
-                      </td>
+        const filteredReturns = salesReturns.filter(ret => {
+          const q = returnSearchQuery.toLowerCase().trim();
+          const matchesQuery = !q ||
+            ret.return_number?.toLowerCase().includes(q) ||
+            ret.customer?.name?.toLowerCase().includes(q) ||
+            (ret as any).customer_name?.toLowerCase().includes(q) ||
+            (ret as any).sales_invoice?.invoice_number?.toLowerCase().includes(q) ||
+            ret.sales_invoice_id?.toLowerCase().includes(q);
+
+          const matchesStatus = returnStatusFilter === 'all' ||
+            (returnStatusFilter === 'credited' && ret.refund_status === 'credited') ||
+            (returnStatusFilter === 'refunded' && ret.refund_status === 'refunded') ||
+            (returnStatusFilter === 'pending' && ret.refund_status === 'pending');
+
+          return matchesQuery && matchesStatus;
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* Top 4 KPI Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block font-bold">{isAr ? 'إجمالي المرتجعات' : 'Total Returns'}</span>
+                  <span className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 block">
+                    {totalReturnsCount}
+                  </span>
+                  <span className="text-[10px] text-rose-600 font-bold block mt-0.5">
+                    {isAr ? 'عمليات استرجاع مسجلة' : 'Recorded Returns'}
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center font-bold">
+                  <RotateCcw className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block font-bold">{isAr ? 'إجمالي القيمة الدائنة' : 'Total Returned Value'}</span>
+                  <span className="text-2xl font-black font-mono text-[#7F1625] dark:text-[#ff8ba0] mt-1 block">
+                    {totalReturnsValue.toLocaleString()} <span className="text-xs font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {creditedCount} {isAr ? 'إشعار دائن معتمد' : 'Credit Notes'}
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
+                  <DollarSign className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block font-bold">{isAr ? 'بضائع أُعيدت للمخزن' : 'Restocked to WH'}</span>
+                  <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
+                    {restockedCount}
+                  </span>
+                  <span className="text-[10px] text-emerald-600 block mt-0.5 font-bold">
+                    {isAr ? 'تم زيادة الرصيد بالمستودع' : 'On-hand stock updated'}
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                  <PackageCheck className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block font-bold">{isAr ? 'مستردات نقدية فورية' : 'Cash Refunds'}</span>
+                  <span className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400 mt-1 block">
+                    {cashRefundedCount}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {isAr ? 'سندات صرف نقدية من الخزينة' : 'Disbursed cash vouchers'}
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
+                  <Receipt className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+
+            {/* Main Card with Action Header & Search */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm rounded-3xl">
+              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                    <RotateCcw className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                    <span>{isAr ? 'سجل مرتجعات المبيعات وإشعارات الدائن المعتمدة' : 'Sales Returns & Approved Credit Notes'}</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {isAr ? 'إدارة وتتبع مرتجعات العملاء، فحص البضاعة، إعادة التخزين للمستودع، وإصدار إشعارات الدائن الرسمية والاسترداد النقدي.' : 'Track returns, inspect items, restock inventory, and issue official credit notes.'}
+                  </p>
+                </div>
+
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setSelectedInvoiceForReturn(null);
+                    setIsRecordReturnOpen(true);
+                  }}
+                  className="bg-[#7F1625] hover:bg-[#6a121e] text-white shadow-md hover:scale-105 transition-all"
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  {isAr ? 'تسجيل مرتجع مبيعات جديد' : 'New Sales Return'}
+                </Button>
+              </div>
+
+              {/* Search & Filter Toolbar */}
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-800/20 flex flex-wrap items-center justify-between gap-3">
+                <div className="relative flex-1 min-w-[240px] max-w-md">
+                  <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder={isAr ? 'بحث برقم المرتجع، الفاتورة الأصلية، أو اسم العميل...' : 'Search returns, invoices, customer...'}
+                    value={returnSearchQuery}
+                    onChange={(e) => setReturnSearchQuery(e.target.value)}
+                    className="w-full text-xs ps-9 pe-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">{isAr ? 'الحالة المالية:' : 'Status:'}</span>
+                  <select
+                    value={returnStatusFilter}
+                    onChange={(e) => setReturnStatusFilter(e.target.value as any)}
+                    className="text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold"
+                  >
+                    <option value="all">{isAr ? 'جميع الحالات' : 'All Statuses'}</option>
+                    <option value="credited">{isAr ? '🏷️ إشعار دائن بحساب العميل' : 'Credited to Ledger'}</option>
+                    <option value="refunded">{isAr ? '💵 مسترد نقداً للمشتري' : 'Cash Refunded'}</option>
+                    <option value="pending">{isAr ? '⏳ قيد المراجعة' : 'Pending'}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Returns Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-xs">
+                  <thead className="bg-slate-100/70 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-bold uppercase tracking-wider text-[11px]">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'رقم المرتجع' : 'Return #'}</th>
+                      <th className="p-3 text-start">{isAr ? 'الفاتورة الأصلية' : 'Source Invoice'}</th>
+                      <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المخزن المستلم' : 'Warehouse'}</th>
+                      <th className="p-3 text-start">{isAr ? 'تاريخ المرتجع' : 'Date'}</th>
+                      <th className="p-3 text-start">{isAr ? 'إجمالي القيمة' : 'Credit Amount'}</th>
+                      <th className="p-3 text-center">{isAr ? 'حالة المخزن' : 'Restock'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإشعار المالي' : 'Financial Settlement'}</th>
+                      <th className="p-3 text-center min-w-[120px]">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {filteredReturns.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-12 text-center">
+                          <div className="max-w-md mx-auto space-y-3">
+                            <div className="w-16 h-16 mx-auto rounded-3xl bg-rose-500/10 text-rose-600 flex items-center justify-center font-bold shadow-inner">
+                              <RotateCcw className="w-8 h-8" />
+                            </div>
+                            <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
+                              {isAr ? 'لا توجد مرتجعات مبيعات مسجلة حتى الآن' : 'No Sales Returns Recorded Yet'}
+                            </h4>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              {isAr
+                                ? 'يمكنك بسهولة تسجيل مرتجع مبيعات من فاتورة سابقة أو إرجاع مباشر. يقوم النظام تلقائياً بإعادة البضاعة السليمة إلى رصيد المخزن التام وإصدار إشعار دائن أو صرف نقدي معتمد.'
+                                : 'Record sales returns from existing invoices with automatic inventory restocking and credit note generation.'}
+                            </p>
+                            <div className="pt-2">
+                              <Button
+                                variant="primary"
+                                onClick={() => {
+                                  setSelectedInvoiceForReturn(null);
+                                  setIsRecordReturnOpen(true);
+                                }}
+                                className="bg-[#7F1625] hover:bg-[#6a121e] text-white shadow-md hover:scale-105 transition-all"
+                                icon={<Plus className="w-4 h-4" />}
+                              >
+                                {isAr ? 'تسجيل أول مرتجع مبيعات الآن' : 'Record First Return Now'}
+                              </Button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredReturns.map((ret: any) => (
+                        <tr key={ret.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">
+                            <span className="block font-black text-xs text-[#7F1625] dark:text-[#ff8ba0]">
+                              {ret.return_number}
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-600 dark:text-slate-400">
+                            {ret.sales_invoice?.invoice_number || ret.sales_order?.order_number || (ret.sales_invoice_id ? 'فاتورة معتمدة' : '—')}
+                          </td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-white">
+                            {ret.customer?.name || ret.customer_name || (isAr ? 'عميل تجزئة / نقدي' : 'Retail Customer')}
+                          </td>
+                          <td className="p-3 text-xs text-slate-600 dark:text-slate-400">
+                            {ret.warehouse?.name || (isAr ? 'مستودع المنتجات التامة' : 'Finished Goods WH')}
+                          </td>
+                          <td className="p-3 text-slate-500 font-mono text-xs">
+                            {formatCleanDate(ret.return_date || ret.created_at)}
+                          </td>
+                          <td className="p-3 font-bold text-[#7F1625] dark:text-[#ff8ba0] font-mono text-sm">
+                            {Number(ret.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                          </td>
+                          <td className="p-3 text-center">
+                            <Badge variant={ret.is_restocked ? 'success' : 'neutral'}>
+                              {ret.is_restocked ? (isAr ? '✓ مسترجع للمخزن' : 'Restocked') : (isAr ? 'خارج المخزن' : 'No restock')}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-center">
+                            <Badge variant={ret.refund_status === 'refunded' ? 'info' : 'success'}>
+                              {ret.refund_status === 'refunded'
+                                ? (isAr ? '💵 مسدد نقداً' : 'Cash Refunded')
+                                : ret.refund_status === 'credited'
+                                ? (isAr ? '🏷️ دائن معتمد' : 'Credited')
+                                : ret.refund_status}
+                            </Badge>
+                          </td>
+
+                          {/* Professional Action Icons */}
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Action 1: View Return Details Modal */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedReturnForView(ret)}
+                                title={isAr ? 'معاينة تفاصيل المرتجع وبنود الأصناف' : 'View Return Details'}
+                                className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-600 dark:text-blue-400 border border-blue-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Action 2: Print Official Credit Note A4 */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedReturnForPrint(ret)}
+                                title={isAr ? 'طباعة إشعار دائن رسمي وسند مرتجع A4' : 'Print Credit Note (A4)'}
+                                className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Action 3: Process Cash Refund if not yet refunded */}
+                              {ret.refund_status !== 'refunded' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleProcessReturnRefund(ret)}
+                                  disabled={refundingReturnId === ret.id}
+                                  title={isAr ? 'صرف استرداد نقدي فوري من الخزينة' : 'Disburse Cash Refund'}
+                                  className="p-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-50"
+                                >
+                                  {refundingReturnId === ret.id ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {/* CUSTOMER PAYMENTS VIEW */}
       {activeSubTab === 'payments' && (
@@ -2929,18 +3172,42 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         </form>
       </Modal>
 
-      {/* SALES RETURN MODAL */}
-      <SalesReturnModal
-        isOpen={isReturnModalOpen}
+      {/* RECORD SALES RETURN MODAL */}
+      <RecordSalesReturnModal
+        isOpen={isRecordReturnOpen || isReturnModalOpen}
         onClose={() => {
+          setIsRecordReturnOpen(false);
           setIsReturnModalOpen(false);
           setSelectedInvoiceForReturn(null);
         }}
-        invoice={selectedInvoiceForReturn}
-        lang={lang}
-        onSuccess={() => {
+        invoices={invoices}
+        customers={customers}
+        warehouses={warehouses}
+        preselectedInvoice={selectedInvoiceForReturn}
+        onSuccess={(createdReturn) => {
           loadSalesData();
+          setSelectedReturnForPrint(createdReturn);
         }}
+        isAr={isAr}
+      />
+
+      {/* PRINT OFFICIAL CREDIT NOTE MODAL (A4) */}
+      <PrintCreditNoteModal
+        isOpen={!!selectedReturnForPrint}
+        onClose={() => setSelectedReturnForPrint(null)}
+        salesReturn={selectedReturnForPrint}
+        isAr={isAr}
+        autoPrint={false}
+      />
+
+      {/* VIEW SALES RETURN DETAILS MODAL */}
+      <ViewSalesReturnModal
+        isOpen={!!selectedReturnForView}
+        onClose={() => setSelectedReturnForView(null)}
+        salesReturn={selectedReturnForView}
+        onPrintCreditNote={(ret) => setSelectedReturnForPrint(ret)}
+        onProcessRefund={(ret) => handleProcessReturnRefund(ret)}
+        isAr={isAr}
       />
 
       {/* 80mm POS THERMAL RECEIPT MODAL */}

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   User,
   Building2,
+  Phone,
+  CreditCard,
   DollarSign,
   FileText,
   ShoppingBag,
@@ -16,9 +18,15 @@ import {
   AlertCircle,
   ShieldCheck,
   TrendingUp,
+  Save,
+  Check,
+  RefreshCw,
+  Store,
+  Layers,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import { api } from '../../api/client';
 import { formatCleanDate, getPaymentMethodLabel } from './PrintSalesInvoiceModal';
 import type { Customer, SalesInvoice, SalesOrder, SalesReturn } from '../../types';
 
@@ -36,6 +44,7 @@ interface CommercialCustomerDossierModalProps {
   onOpenStatement: (customer: Customer) => void;
   onEditCustomer: (customer: Customer) => void;
   onPrintInvoice: (invoice: SalesInvoice) => void;
+  onRefresh?: () => void;
   isAr?: boolean;
 }
 
@@ -53,9 +62,34 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
   onOpenStatement,
   onEditCustomer,
   onPrintInvoice,
+  onRefresh,
   isAr = true,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'payments' | 'orders' | 'returns' | 'deliveries' | 'info'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'payments' | 'orders' | 'returns' | 'deliveries' | 'terms'>('overview');
+
+  // Interactive Payment Terms State
+  const [paymentTerms, setPaymentTerms] = useState<'cash' | 'installments'>('cash');
+  const [creditLimit, setCreditLimit] = useState<number>(0);
+  const [termsNotes, setTermsNotes] = useState<string>('');
+  const [isSavingTerms, setIsSavingTerms] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Quick Payment Modal State inside Dossier
+  const [isQuickPayOpen, setIsQuickPayOpen] = useState(false);
+  const [quickPayAmount, setQuickPayAmount] = useState<number>(0);
+  const [quickPayMethod, setQuickPayMethod] = useState<'cash' | 'card' | 'bank_transfer' | 'wallet' | 'check'>('cash');
+  const [quickPayInvoiceId, setQuickPayInvoiceId] = useState<string>('');
+  const [quickPayNotes, setQuickPayNotes] = useState<string>('');
+  const [isSubmittingQuickPay, setIsSubmittingQuickPay] = useState(false);
+  const [quickPaySuccess, setQuickPaySuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (customer) {
+      setPaymentTerms(customer.payment_terms === 'installments' ? 'installments' : 'cash');
+      setCreditLimit(Number(customer.credit_limit || 0));
+      setTermsNotes(customer.notes || '');
+    }
+  }, [customer]);
 
   if (!isOpen || !customer) return null;
 
@@ -112,14 +146,18 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
     .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
   const bankPayments = customerPayments
-    .filter((p) => p.payment_method === 'bank_transfer' || p.payment_method === 'check')
+    .filter((p) => p.payment_method === 'bank_transfer' || p.payment_method === 'check' || p.payment_method === 'wallet')
     .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
   const totalReturns = customerReturns.reduce((sum, ret) => sum + Number(ret.total_amount || 0), 0);
 
-  // Balance due
+  // Net Balance Due
   const calculatedBalanceDue = Math.max(0, totalInvoiced - totalCollected - totalReturns);
   const effectiveBalanceDue = Number(customer.current_balance ?? calculatedBalanceDue);
+
+  const totalPiecesOrdered = customerOrders.reduce((sum, ord) => {
+    return sum + (ord.items || []).reduce((s, it: any) => s + Number(it.ordered_quantity || it.quantity || 0), 0);
+  }, 0);
 
   const isWholesale =
     customer.classification === 'wholesale' ||
@@ -129,136 +167,251 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
     customer.name.includes('مصنع') ||
     customer.name.includes('توكيل');
 
-  const creditLimit = Number(customer.credit_limit || 0);
   const creditLimitPercent = creditLimit > 0 ? Math.min(100, Math.round((effectiveBalanceDue / creditLimit) * 100)) : 0;
 
+  // Handle saving payment terms
+  const handleSaveTerms = async () => {
+    if (!customer.id) return;
+    setIsSavingTerms(true);
+    setSaveSuccess(false);
+    try {
+      await api.customers.updateCustomer(customer.id, {
+        payment_terms: paymentTerms,
+        credit_limit: creditLimit,
+        notes: termsNotes,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      onRefresh?.();
+    } catch (err: any) {
+      alert(err?.message || (isAr ? 'فشل حفظ شروط السداد' : 'Failed to update payment terms'));
+    } finally {
+      setIsSavingTerms(false);
+    }
+  };
+
+  // Handle Quick Payment Submit
+  const handleQuickPaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quickPayAmount <= 0) return;
+    setIsSubmittingQuickPay(true);
+    try {
+      await api.sales.recordPayment({
+        customer_id: customer.id,
+        amount: Number(quickPayAmount),
+        payment_method: quickPayMethod,
+        sales_invoice_id: quickPayInvoiceId || undefined,
+        notes: quickPayNotes || undefined,
+      });
+      setQuickPaySuccess(isAr ? 'تم تسجيل وتخصيص سند القبض بنجاح' : 'Payment recorded successfully');
+      setTimeout(() => {
+        setQuickPaySuccess(null);
+        setIsQuickPayOpen(false);
+        setQuickPayAmount(0);
+        setQuickPayNotes('');
+        setQuickPayInvoiceId('');
+      }, 1500);
+      onRefresh?.();
+    } catch (err: any) {
+      alert(err?.message || (isAr ? 'فشل تسجيل سند القبض' : 'Failed to record payment'));
+    } finally {
+      setIsSubmittingQuickPay(false);
+    }
+  };
+
+  const openInvoicePayment = (inv: SalesInvoice) => {
+    const due = Number(inv.balance_due ?? inv.total_amount);
+    setQuickPayInvoiceId(inv.id);
+    setQuickPayAmount(due > 0 ? due : Number(inv.total_amount));
+    setIsQuickPayOpen(true);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-6xl bg-white dark:bg-[#0c121e] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
-        {/* MODAL HEADER */}
-        <div className="px-6 py-5 bg-linear-to-r from-[#7F1625] via-[#9e1c31] to-[#5a101b] text-white flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-inner">
-              {isWholesale ? <Building2 className="w-6 h-6 text-white" /> : <User className="w-6 h-6 text-white" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight">{customer.name}</h2>
-                <span className="font-mono text-xs px-2 py-0.5 rounded-full bg-white/20 border border-white/20 text-white font-bold">
-                  {customer.code || 'CUST'}
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-[10px] font-bold">
-                  {customer.is_active ? (isAr ? '✓ عميل معتمد نشط' : 'Active') : (isAr ? 'حساب غير نشط' : 'Inactive')}
-                </span>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+      <div className="relative w-full max-w-6xl bg-white dark:bg-[#0d131f] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh] text-slate-900 dark:text-slate-100">
+        
+        {/* TOP BRAND HERO HEADER */}
+        <div className="relative overflow-hidden bg-linear-to-r from-[#7F1625] via-[#941b2e] to-[#4e0c16] text-white p-5 sm:p-6 shadow-md">
+          {/* Subtle background ambient glow */}
+          <div className="absolute -top-24 -end-24 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -start-24 w-72 h-72 bg-black/20 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            {/* Customer Identity */}
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-16 h-16 rounded-3xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg shrink-0">
+                {isWholesale ? <Building2 className="w-8 h-8 text-white" /> : <Store className="w-8 h-8 text-white" />}
               </div>
-              <p className="text-xs text-rose-100 flex items-center gap-3 mt-1">
-                <span>{isWholesale ? (isAr ? '🏢 عميل تجاري / جملة' : 'Wholesale') : (isAr ? '🛍️ عميل تجزئة' : 'Retail')}</span>
-                {customer.phone && <span>• 📞 {customer.phone}</span>}
-                {customer.contact_person && <span>• 👤 {customer.contact_person}</span>}
-              </p>
+
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-black tracking-tight drop-shadow-xs">
+                    {customer.name}
+                  </h1>
+                  <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-white/20 border border-white/30 text-white font-bold backdrop-blur-xs">
+                    {customer.code || 'CUST'}
+                  </span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border backdrop-blur-xs ${
+                    paymentTerms === 'cash'
+                      ? 'bg-emerald-400/20 text-emerald-100 border-emerald-300/40'
+                      : 'bg-amber-400/20 text-amber-100 border-amber-300/40'
+                  }`}>
+                    {paymentTerms === 'cash'
+                      ? (isAr ? '💵 نظام السداد: كاش فوري' : 'Cash System')
+                      : (isAr ? '📑 نظام السداد: دفعات وتسهيلات' : 'Installments System')}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-[10px] font-bold">
+                    {customer.is_active ? (isAr ? '✓ عميل معتمد' : 'Verified') : (isAr ? 'غير نشط' : 'Inactive')}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-rose-100/90 mt-2 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    {isWholesale ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                    <span>{isWholesale ? (isAr ? '🏢 عميل تجاري / توكيلات جملة' : 'Wholesale') : (isAr ? '🛍️ عميل تجزئة ومعارض' : 'Retail')}</span>
+                  </span>
+
+                  {customer.phone && (
+                    <span className="flex items-center gap-1.5 font-mono">
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>{customer.phone}</span>
+                    </span>
+                  )}
+
+                  {customer.contact_person && (
+                    <span className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5" />
+                      <span>{customer.contact_person}</span>
+                    </span>
+                  )}
+
+                  {customer.tax_id && (
+                    <span className="font-mono text-[11px] bg-black/20 px-2 py-0.5 rounded-md border border-white/10">
+                      {isAr ? 'الرقم الضريبي:' : 'Tax ID:'} {customer.tax_id}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Quick Top Actions */}
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/30 text-xs font-bold"
-              onClick={() => onRecordPayment(customer)}
-              icon={<DollarSign className="w-3.5 h-3.5 text-emerald-300" />}
-            >
-              {isAr ? 'تسجيل سند قبض / دفعة' : 'Record Payment'}
-            </Button>
+            {/* Header Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold border-0 shadow-md text-xs"
+                onClick={() => {
+                  setQuickPayInvoiceId('');
+                  setQuickPayAmount(effectiveBalanceDue > 0 ? effectiveBalanceDue : 0);
+                  setIsQuickPayOpen(true);
+                }}
+                icon={<DollarSign className="w-3.5 h-3.5" />}
+              >
+                {isAr ? 'تسجيل سند قبض / تحصيل' : 'Collect Payment'}
+              </Button>
 
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/30 text-xs font-bold"
-              onClick={() => onNewOrder(customer)}
-              icon={<Plus className="w-3.5 h-3.5" />}
-            >
-              {isAr ? 'أمر بيع جديد' : 'New Order'}
-            </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-white/15 hover:bg-white/25 text-white border-white/30 font-bold text-xs"
+                onClick={() => onNewOrder(customer)}
+                icon={<Plus className="w-3.5 h-3.5" />}
+              >
+                {isAr ? 'أمر بيع جديد' : 'New Order'}
+              </Button>
 
-            <Button
-              size="sm"
-              variant="outline"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/30 text-xs font-bold"
-              onClick={() => onOpenStatement(customer)}
-              icon={<BookOpen className="w-3.5 h-3.5 text-amber-300" />}
-            >
-              {isAr ? 'كشف حساب معتمد' : 'Statement'}
-            </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-white/15 hover:bg-white/25 text-white border-white/30 font-bold text-xs"
+                onClick={() => onOpenStatement(customer)}
+                icon={<BookOpen className="w-3.5 h-3.5 text-amber-200" />}
+              >
+                {isAr ? 'كشف الحساب A4' : 'Statement'}
+              </Button>
 
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer ms-2"
-              title={isAr ? 'إغلاق النافذة' : 'Close'}
-            >
-              <X className="w-5 h-5" />
-            </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-white hover:bg-white/15 text-xs"
+                onClick={onRefresh}
+                icon={<RefreshCw className="w-3.5 h-3.5" />}
+                title={isAr ? 'تحديث البيانات' : 'Refresh'}
+              >
+                {isAr ? 'تحديث' : 'Refresh'}
+              </Button>
+
+              <button
+                onClick={onClose}
+                className="p-2 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer ms-1 hover:rotate-90 duration-200"
+                title={isAr ? 'إغلاق' : 'Close'}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* 4 FINANCIAL KPI CARDS */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-[#111927] border-b border-slate-200 dark:border-slate-800">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-            {/* Total Invoiced */}
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+        {/* 5 FINANCIAL & OPERATIONS METRIC CARDS */}
+        <div className="p-4 sm:p-5 bg-slate-50 dark:bg-[#101726] border-b border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            
+            {/* Card 1: Total Invoiced */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-[#7F1625]/40 transition-all">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
                 <span>{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</span>
-                <ShoppingBag className="w-4 h-4 text-primary" />
+                <ShoppingBag className="w-4 h-4 text-[#7F1625]" />
               </div>
-              <p className="font-black font-mono text-base text-slate-900 dark:text-white mt-1.5">
-                {totalInvoiced.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              <p className="mt-1.5 text-xl font-black font-mono text-slate-900 dark:text-white">
+                {totalInvoiced.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
-                {customerInvoices.length} {isAr ? 'فاتورة صادرة' : 'invoices issued'}
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {customerInvoices.length} {isAr ? 'فواتير محررة' : 'invoices issued'}
               </span>
             </div>
 
-            {/* Total Collected & Methods */}
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
-                <span>{isAr ? 'إجمالي المقبوضات' : 'Total Collected'}</span>
+            {/* Card 2: Total Paid & Breakdown */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-emerald-500/40 transition-all">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                <span>{isAr ? 'المسدد والمقبوض' : 'Total Collected'}</span>
                 <DollarSign className="w-4 h-4 text-emerald-500" />
               </div>
-              <p className="font-black font-mono text-base text-emerald-600 dark:text-emerald-400 mt-1.5">
-                {totalCollected.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              <p className="mt-1.5 text-xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                {totalCollected.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                <span title="كاش">💵 {cashPayments.toLocaleString()}</span>
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                <span title={isAr ? 'كاش خزينة' : 'Cash'} className="text-emerald-700 dark:text-emerald-300">
+                  💵 {cashPayments.toLocaleString()}
+                </span>
                 <span>•</span>
-                <span title="فيزا / بنك">💳 {(cardPayments + bankPayments).toLocaleString()}</span>
+                <span title={isAr ? 'بطاقة فيزا وبنك' : 'Card / Bank'} className="text-blue-700 dark:text-blue-300">
+                  💳 {(cardPayments + bankPayments).toLocaleString()}
+                </span>
               </div>
             </div>
 
-            {/* Returns & Credit Notes */}
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+            {/* Card 3: Returns & Credits */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-amber-500/40 transition-all">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
                 <span>{isAr ? 'المرتجعات وإشعارات الدائن' : 'Returns & Credits'}</span>
                 <RotateCcw className="w-4 h-4 text-amber-500" />
               </div>
-              <p className="font-black font-mono text-base text-amber-600 dark:text-amber-400 mt-1.5">
-                {totalReturns.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              <p className="mt-1.5 text-xl font-black font-mono text-amber-600 dark:text-amber-400">
+                {totalReturns.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
-                {customerReturns.length} {isAr ? 'سند مرتجع معتمد' : 'returns approved'}
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {customerReturns.length} {isAr ? 'سندات مرتجع معتمدة' : 'approved returns'}
               </span>
             </div>
 
-            {/* Net Balance Due */}
-            <div
-              className={`p-3.5 rounded-2xl border shadow-xs ${
-                effectiveBalanceDue > 0
-                  ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50'
-                  : 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50'
-              }`}
-            >
+            {/* Card 4: Net Balance Due */}
+            <div className={`p-3.5 rounded-2xl border shadow-xs transition-all ${
+              effectiveBalanceDue > 0
+                ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60'
+                : 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/60'
+            }`}>
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className={effectiveBalanceDue > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}>
-                  {isAr ? 'صافي المديونية المستحقة' : 'Current Balance Due'}
+                  {isAr ? 'صافي المديونية المستحقة' : 'Balance Due'}
                 </span>
                 {effectiveBalanceDue > 0 ? (
                   <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
@@ -266,32 +419,124 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 )}
               </div>
-              <p
-                className={`font-black font-mono text-base mt-1.5 ${
-                  effectiveBalanceDue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
-                }`}
-              >
-                {effectiveBalanceDue.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              <p className={`mt-1.5 text-xl font-black font-mono ${
+                effectiveBalanceDue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {effectiveBalanceDue.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">
                 {effectiveBalanceDue > 0
-                  ? (isAr ? 'مستحق في ذمة العميل' : 'Receivable outstanding')
-                  : (isAr ? 'الحساب خالص بالكامل ✓' : 'Account fully settled')}
+                  ? (isAr ? 'مستحق في ذمة العميل' : 'outstanding debt')
+                  : (isAr ? 'الحساب خالص بالكامل ✓' : 'fully cleared')}
               </span>
+            </div>
+
+            {/* Card 5: Orders & Total Pieces */}
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-blue-500/40 transition-all col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                <span>{isAr ? 'الطلبيات وحجم التوريد' : 'Orders & Pieces'}</span>
+                <Layers className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="mt-1.5 text-xl font-black font-mono text-blue-600 dark:text-blue-400">
+                {totalPiecesOrdered.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
+              </p>
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {customerOrders.length} {isAr ? 'أمر بيع معتمد' : 'orders placed'}
+              </span>
+            </div>
+
+          </div>
+        </div>
+
+        {/* INTERACTIVE PAYMENT TERMS & CONTRACT SETUP BANNER */}
+        <div className="px-5 py-3.5 bg-slate-100/70 dark:bg-[#0f1624] border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-[#7F1625] dark:text-[#ff8ba0]" />
+              <div>
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  {isAr ? 'نظام السداد والتعاقد المعتمد للعميل (Cash vs Installments):' : 'Client Payment & Terms Setup:'}
+                </span>
+                <span className="text-[11px] text-slate-500 ms-2 hidden sm:inline">
+                  {isAr ? 'حدد ما إذا كان العميل يتعامل كاش فوري أو نظام دفعات وأقساط مجدولة' : 'Configure payment rules & credit limit'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Cash vs Installments Toggle */}
+              <div className="flex items-center p-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setPaymentTerms('cash')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    paymentTerms === 'cash'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  {isAr ? '💵 كاش فوري' : 'Cash'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentTerms('installments')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    paymentTerms === 'installments'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  {isAr ? '📑 دفعات وأقساط' : 'Installments'}
+                </button>
+              </div>
+
+              {/* Credit Limit Input */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">{isAr ? 'الحد الائتماني:' : 'Limit:'}</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={creditLimit || ''}
+                  onChange={(e) => setCreditLimit(Number(e.target.value))}
+                  placeholder="0.00"
+                  className="w-24 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Save Terms Button */}
+              <div className="flex items-center gap-2">
+                {saveSuccess && (
+                  <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" />
+                    {isAr ? 'تم الحفظ' : 'Saved'}
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSaveTerms}
+                  disabled={isSavingTerms}
+                  className="h-7 text-xs font-bold"
+                  icon={<Save className="w-3.5 h-3.5" />}
+                >
+                  {isSavingTerms ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ الشروط' : 'Save')}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* TAB NAVIGATION */}
-        <div className="flex items-center gap-1 px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] overflow-x-auto text-xs font-semibold">
+        <div className="flex items-center gap-1.5 px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] overflow-x-auto text-xs font-semibold">
           {[
             { id: 'overview', label: isAr ? 'نظرة عامة والملخص' : 'Overview', icon: <TrendingUp className="w-3.5 h-3.5" /> },
             { id: 'invoices', label: isAr ? 'فواتير المبيعات' : 'Invoices', count: customerInvoices.length, icon: <FileText className="w-3.5 h-3.5" /> },
-            { id: 'payments', label: isAr ? 'الدفعات والتحصيلات' : 'Payments', count: customerPayments.length, icon: <DollarSign className="w-3.5 h-3.5" /> },
-            { id: 'orders', label: isAr ? 'طلبيات البيع' : 'Orders', count: customerOrders.length, icon: <ShoppingBag className="w-3.5 h-3.5" /> },
+            { id: 'payments', label: isAr ? 'سجل الدفعات والتحصيلات' : 'Payments Ledger', count: customerPayments.length, icon: <DollarSign className="w-3.5 h-3.5" /> },
+            { id: 'orders', label: isAr ? 'طلبيات البيع والشحن' : 'Sales Orders', count: customerOrders.length, icon: <ShoppingBag className="w-3.5 h-3.5" /> },
             { id: 'returns', label: isAr ? 'المرتجعات وإشعارات الدائن' : 'Returns & Credits', count: customerReturns.length, icon: <RotateCcw className="w-3.5 h-3.5" /> },
             { id: 'deliveries', label: isAr ? 'أذون التسليم والشحن' : 'Delivery Notes', count: customerDeliveries.length, icon: <Truck className="w-3.5 h-3.5" /> },
-            { id: 'info', label: isAr ? 'بيانات التعاقد والشحن' : 'Profile & Terms', icon: <User className="w-3.5 h-3.5" /> },
+            { id: 'terms', label: isAr ? 'بيانات التعاقد والشحن' : 'Profile & Terms', icon: <User className="w-3.5 h-3.5" /> },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -320,16 +565,18 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
         </div>
 
         {/* TAB CONTENTS */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-[#0a0f19]/50">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/50 dark:bg-[#0a0f19]/50">
+          
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Credit Limit & Terms Alert */}
+              
+              {/* Credit Limit utilization progress */}
               {creditLimit > 0 && (
-                <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 space-y-2 shadow-2xs">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-700 dark:text-slate-300">
-                      {isAr ? 'الحد الائتماني المعتمد للعميل (Credit Limit):' : 'Credit Limit:'}
+                      {isAr ? 'الحد الائتماني المعتمد للعميل (Credit Limit):' : 'Credit Limit Utilization:'}
                     </span>
                     <span className="font-mono font-bold text-slate-900 dark:text-white">
                       {effectiveBalanceDue.toLocaleString()} / {creditLimit.toLocaleString()} {isAr ? 'ج.م' : 'EGP'} ({creditLimitPercent}%)
@@ -337,7 +584,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className={`h-2.5 rounded-full transition-all ${
+                      className={`h-2.5 rounded-full transition-all duration-500 ${
                         creditLimitPercent > 90 ? 'bg-rose-500' : creditLimitPercent > 70 ? 'bg-amber-500' : 'bg-emerald-500'
                       }`}
                       style={{ width: `${creditLimitPercent}%` }}
@@ -346,14 +593,14 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                 </div>
               )}
 
-              {/* Recent Invoices & Recent Payments Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Invoices & Collections Side-by-Side */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Recent Invoices */}
-                <div className="bg-white dark:bg-[#0c121e] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                <div className="bg-white dark:bg-[#0c121e] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
                     <h3 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-primary" />
-                      {isAr ? 'أحدث فواتير المبيعات' : 'Recent Invoices'}
+                      <FileText className="w-4 h-4 text-[#7F1625]" />
+                      {isAr ? 'أحدث فواتير المبيعات الصادرة' : 'Recent Invoices'}
                     </h3>
                     <button
                       onClick={() => setActiveTab('invoices')}
@@ -364,44 +611,66 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                   </div>
 
                   {customerInvoices.length === 0 ? (
-                    <p className="text-xs text-slate-400 py-4 text-center">{isAr ? 'لا توجد فواتير مسجلة' : 'No invoices'}</p>
+                    <p className="text-xs text-slate-400 py-6 text-center">{isAr ? 'لا توجد فواتير صادرة حتى الآن' : 'No invoices issued'}</p>
                   ) : (
                     <div className="space-y-2">
-                      {customerInvoices.slice(0, 4).map((inv) => (
-                        <div
-                          key={inv.id}
-                          className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono font-bold text-slate-900 dark:text-white">{inv.invoice_number}</span>
-                              <span className="text-[10px] text-slate-400">({formatCleanDate(inv.invoice_date)})</span>
-                            </div>
-                            <span className="text-[10px] text-slate-500 block">
-                              {getPaymentMethodLabel(inv.payment_method, isAr)}
-                            </span>
-                          </div>
+                      {customerInvoices.slice(0, 4).map((inv) => {
+                        const paid = Number(inv.paid_amount || 0);
+                        const due = Number(inv.balance_due ?? (inv.total_amount - paid));
 
-                          <div className="text-end">
-                            <span className="font-mono font-bold text-slate-900 dark:text-white block">
-                              {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold ${
-                                inv.status === 'paid' ? 'text-emerald-600' : 'text-amber-600'
-                              }`}
-                            >
-                              {inv.status === 'paid' ? (isAr ? 'مسددة' : 'Paid') : (isAr ? `متبقي: ${Number(inv.balance_due ?? inv.total_amount).toLocaleString()}` : 'Unpaid')}
-                            </span>
+                        return (
+                          <div
+                            key={inv.id}
+                            className="p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-800/30 flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-900 dark:text-white">{inv.invoice_number}</span>
+                                <span className="text-[10px] text-slate-400">({formatCleanDate(inv.invoice_date)})</span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 mt-0.5 block">
+                                {getPaymentMethodLabel(inv.payment_method, isAr)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="text-end">
+                                <span className="font-mono font-bold text-slate-900 dark:text-white block">
+                                  {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                                </span>
+                                <span className={`text-[10px] font-bold ${due > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                  {due > 0 ? (isAr ? `متبقي: ${due.toLocaleString()}` : `Due: ${due}`) : (isAr ? 'مسددة بالكامل ✓' : 'Paid')}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => onPrintInvoice(inv)}
+                                  className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                                  title={isAr ? 'طباعة الفاتورة A4' : 'Print Invoice'}
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+                                {due > 0 && (
+                                  <button
+                                    onClick={() => openInvoicePayment(inv)}
+                                    className="p-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 transition-colors cursor-pointer"
+                                    title={isAr ? 'تسجيل دفعة لهذه الفاتورة' : 'Record payment'}
+                                  >
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
                 {/* Recent Collections */}
-                <div className="bg-white dark:bg-[#0c121e] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                <div className="bg-white dark:bg-[#0c121e] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
                     <h3 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-emerald-500" />
@@ -422,7 +691,11 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                         size="sm"
                         variant="outline"
                         className="text-xs"
-                        onClick={() => onRecordPayment(customer)}
+                        onClick={() => {
+                          setQuickPayInvoiceId('');
+                          setQuickPayAmount(effectiveBalanceDue > 0 ? effectiveBalanceDue : 0);
+                          setIsQuickPayOpen(true);
+                        }}
                         icon={<DollarSign className="w-3.5 h-3.5 text-emerald-600" />}
                       >
                         {isAr ? 'تسجيل أول سند قبض' : 'Record First Payment'}
@@ -433,22 +706,22 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                       {customerPayments.slice(0, 4).map((pay) => (
                         <div
                           key={pay.id}
-                          className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between text-xs"
+                          className="p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-800/30 flex items-center justify-between text-xs"
                         >
                           <div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-slate-900 dark:text-white">
                                 {pay.voucher_number || pay.reference_number || 'RC-PAY'}
                               </span>
                               <span className="text-[10px] text-slate-400">({formatCleanDate(pay.voucher_date || pay.created_at)})</span>
                             </div>
-                            <span className="text-[10px] text-slate-500 block">
+                            <span className="text-[10px] text-slate-500 mt-0.5 block">
                               {getPaymentMethodLabel(pay.payment_method, isAr)}
                             </span>
                           </div>
 
                           <div className="text-end">
-                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block text-sm">
                               +{Number(pay.amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                             </span>
                             <span className="text-[10px] text-slate-400">{isAr ? 'سند تحصيل معتمد' : 'Voucher verified'}</span>
@@ -460,8 +733,8 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                 </div>
               </div>
 
-              {/* Customer Quick Info Card */}
-              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 text-xs grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Customer Legal & Commercial Profile Grid */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 text-xs grid grid-cols-2 md:grid-cols-4 gap-4 shadow-2xs">
                 <div>
                   <span className="text-slate-400 block text-[10px]">{isAr ? 'مسؤول الاتصال والمشتريات' : 'Contact Person'}</span>
                   <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">{customer.contact_person || '—'}</span>
@@ -483,6 +756,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                   </span>
                 </div>
               </div>
+
             </div>
           )}
 
@@ -500,7 +774,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e]">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] shadow-2xs">
                 <table className="w-full text-start text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                     <tr>
@@ -577,7 +851,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
 
                                 {due > 0 && (
                                   <button
-                                    onClick={() => onRecordPayment(customer, inv)}
+                                    onClick={() => openInvoicePayment(inv)}
                                     className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-colors cursor-pointer"
                                     title={isAr ? 'تسجيل سند تحصيل لهذه الفاتورة' : 'Collect Payment'}
                                   >
@@ -608,16 +882,32 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                     {isAr ? 'جميع سندات القبض والدفعات النقدية والبنكية المسجلة لحساب هذا العميل.' : 'All verified vouchers & installment payments.'}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => onRecordPayment(customer)}
-                  icon={<Plus className="w-3.5 h-3.5" />}
-                >
-                  {isAr ? 'تسجيل سند قبض جديد' : 'New Payment Voucher'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onRecordPayment(customer)}
+                    icon={<FileText className="w-3.5 h-3.5 text-slate-500" />}
+                    title={isAr ? 'فتح نموذج القبض المحاسبي المتقدم وتوزيع FIFO' : 'Advanced Voucher Form'}
+                  >
+                    {isAr ? 'النموذج المتقدم / FIFO' : 'Advanced Form'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    onClick={() => {
+                      setQuickPayInvoiceId('');
+                      setQuickPayAmount(effectiveBalanceDue > 0 ? effectiveBalanceDue : 0);
+                      setIsQuickPayOpen(true);
+                    }}
+                    icon={<Plus className="w-3.5 h-3.5" />}
+                  >
+                    {isAr ? 'تسجيل سند قبض سريع' : 'Quick Payment'}
+                  </Button>
+                </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e]">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] shadow-2xs">
                 <table className="w-full text-start text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                     <tr>
@@ -645,7 +935,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                           </td>
                           <td className="p-3 text-slate-600 dark:text-slate-400">{formatCleanDate(pay.voucher_date || pay.created_at)}</td>
                           <td className="p-3 font-sans">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
                               {getPaymentMethodLabel(pay.payment_method, isAr)}
                             </span>
                           </td>
@@ -687,7 +977,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                 </Button>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e]">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] shadow-2xs">
                 <table className="w-full text-start text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                     <tr>
@@ -783,7 +1073,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e]">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] shadow-2xs">
                 <table className="w-full text-start text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                     <tr>
@@ -818,7 +1108,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                             -{Number(ret.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                           </td>
                           <td className="p-3 text-center font-sans">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 text-[10px] font-bold">
                               {ret.refund_status === 'refunded'
                                 ? (isAr ? '💵 استرداد نقدي' : 'Cash Refund')
                                 : (isAr ? '🏷️ إشعار دائن (خصم مديونية)' : 'Credit Note')}
@@ -852,7 +1142,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e]">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] shadow-2xs">
                 <table className="w-full text-start text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                     <tr>
@@ -908,8 +1198,8 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
           )}
 
           {/* TAB 7: PROFILE INFO & TERMS */}
-          {activeTab === 'info' && (
-            <div className="bg-white dark:bg-[#0c121e] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+          {activeTab === 'terms' && (
+            <div className="bg-white dark:bg-[#0c121e] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6 shadow-2xs">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
                 <div>
                   <h3 className="font-bold text-sm text-slate-900 dark:text-white">
@@ -997,19 +1287,142 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
               </div>
             </div>
           )}
+
         </div>
 
         {/* MODAL FOOTER */}
         <div className="px-6 py-4 bg-slate-50 dark:bg-[#111927] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>{isAr ? 'ملف تجاري مدقق ومطابق للقيود المحاسبية' : 'Audited commercial client dossier'}</span>
+            <span>{isAr ? 'ملف تجاري معتمد ومربوط آلياً بدفاتر الحسابات' : 'Verified commercial dossier with automated ledger sync'}</span>
           </div>
           <Button variant="outline" size="sm" onClick={onClose}>
-            {isAr ? 'إغلاق النافذة' : 'Close'}
+            {isAr ? 'إغلاق الملف' : 'Close'}
           </Button>
         </div>
+
       </div>
+
+      {/* EMBEDDED QUICK PAYMENT MODAL INSIDE DOSSIER */}
+      {isQuickPayOpen && (
+        <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-[#111927] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden text-slate-900 dark:text-white">
+            <div className="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                <h3 className="font-bold text-sm">
+                  {isAr ? `تحصيل دفعة • ${customer.name}` : `Record Payment • ${customer.name}`}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuickPayOpen(false)}
+                className="p-1 rounded-lg hover:bg-emerald-700 text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickPaySubmit} className="p-5 space-y-4 text-xs">
+              {quickPaySuccess ? (
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-center space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <p className="font-bold text-emerald-700 dark:text-emerald-300 text-sm">{quickPaySuccess}</p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      {isAr ? 'المبلغ المحصل (ج.م) *' : 'Amount (EGP) *'}
+                    </label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={quickPayAmount || ''}
+                      onChange={(e) => setQuickPayAmount(Number(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      {isAr ? 'طريقة التحصيل المعتمدة *' : 'Payment Method *'}
+                    </label>
+                    <select
+                      value={quickPayMethod}
+                      onChange={(e) => setQuickPayMethod(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
+                    >
+                      <option value="cash">{isAr ? '💵 نقدي (خزينة المصنع)' : 'Cash'}</option>
+                      <option value="card">{isAr ? '💳 بطاقة بنكية / فيزا (POS)' : 'Card / POS'}</option>
+                      <option value="bank_transfer">{isAr ? '🏦 تحويل بنكي معتمد' : 'Bank Transfer'}</option>
+                      <option value="wallet">{isAr ? '📱 محفظة إلكترونية (فودافون كاش / إنستاباي)' : 'E-Wallet'}</option>
+                      <option value="check">{isAr ? '📝 شيك مصرفي' : 'Check'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      {isAr ? 'تخصيص لفاتورة محددة (اختياري)' : 'Allocate to Invoice'}
+                    </label>
+                    <select
+                      value={quickPayInvoiceId}
+                      onChange={(e) => setQuickPayInvoiceId(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    >
+                      <option value="">{isAr ? '— تسوية تلقائية بأقدم الفواتير (FIFO) —' : '— Auto FIFO Allocation —'}</option>
+                      {customerInvoices
+                        .filter((inv) => inv.status !== 'void' && inv.status !== 'paid')
+                        .map((inv) => (
+                          <option key={inv.id} value={inv.id}>
+                            {inv.invoice_number} - {isAr ? 'المتبقي:' : 'Due:'} {Number(inv.balance_due ?? inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      {isAr ? 'ملاحظات وسند الإيداع' : 'Notes / Reference'}
+                    </label>
+                    <input
+                      type="text"
+                      value={quickPayNotes}
+                      onChange={(e) => setQuickPayNotes(e.target.value)}
+                      placeholder={isAr ? 'رقم الإيصال أو مرجع الدفعة...' : 'Receipt # or reference...'}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsQuickPayOpen(false)}
+                    >
+                      {isAr ? 'إلغاء' : 'Cancel'}
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isSubmittingQuickPay}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                      icon={<Check className="w-3.5 h-3.5" />}
+                    >
+                      {isSubmittingQuickPay ? (isAr ? 'جاري التسجيل...' : 'Recording...') : (isAr ? 'تأكيد وقيد التحصيل' : 'Confirm')}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

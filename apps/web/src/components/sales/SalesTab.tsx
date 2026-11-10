@@ -2522,68 +2522,76 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         <div className="space-y-4">
           {/* Customers KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+            <div className="p-4 rounded-3xl bg-linear-to-br from-indigo-50/70 via-white to-transparent dark:from-indigo-950/20 dark:via-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold">
                 <span>{isAr ? 'إجمالي العملاء المسجلين' : 'Total Customers'}</span>
-                <Users className="w-4 h-4 text-primary" />
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <Users className="w-4 h-4" />
+                </div>
               </div>
-              <p className="font-black font-mono text-xl text-slate-900 dark:text-white mt-1">
+              <p className="font-black font-mono text-2xl text-slate-900 dark:text-white mt-2">
                 {customers.length}
               </p>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
-                {isAr ? 'حسابات نشطة بالمنظومة' : 'Active customer accounts'}
+              <span className="text-[11px] text-slate-400 block mt-1">
+                {isAr ? 'حسابات تجارية معتمدة' : 'Registered commercial accounts'}
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+            <div className="p-4 rounded-3xl bg-linear-to-br from-blue-50/70 via-white to-transparent dark:from-blue-950/20 dark:via-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold">
                 <span>{isAr ? 'عملاء الجملة والتوكيلات' : 'Wholesale Clients'}</span>
-                <Building2 className="w-4 h-4 text-blue-500" />
+                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Building2 className="w-4 h-4" />
+                </div>
               </div>
-              <p className="font-black font-mono text-xl text-blue-600 dark:text-blue-400 mt-1">
+              <p className="font-black font-mono text-2xl text-blue-600 dark:text-blue-400 mt-2">
                 {customers.filter((c) => c.classification === 'wholesale' || c.classification === 'company' || c.name.includes('براند') || c.name.includes('شركة') || c.name.includes('مصنع') || c.name.includes('توكيل')).length}
               </p>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
-                {isAr ? 'حسابات عقود وتوريد كبرى' : 'B2B commercial contracts'}
+              <span className="text-[11px] text-slate-400 block mt-1">
+                {isAr ? 'عقود توريد وتسهيلات' : 'B2B commercial contracts'}
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+            <div className="p-4 rounded-3xl bg-linear-to-br from-emerald-50/70 via-white to-transparent dark:from-emerald-950/20 dark:via-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold">
                 <span>{isAr ? 'إجمالي المبيعات المحققة' : 'Total Invoiced'}</span>
-                <ShoppingBag className="w-4 h-4 text-emerald-500" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
               </div>
-              <p className="font-black font-mono text-xl text-emerald-600 dark:text-emerald-400 mt-1">
-                {customers.reduce((sum, c) => sum + Number(c.total_invoiced || 0), 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              <p className="font-black font-mono text-2xl text-emerald-600 dark:text-emerald-400 mt-2">
+                {customers.reduce((sum, c) => sum + Number(c.total_invoiced || 0), 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
+              <span className="text-[11px] text-slate-400 block mt-1">
                 {isAr ? 'قيمة الفواتير المعتمدة' : 'Verified sales invoices'}
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+            <div className="p-4 rounded-3xl bg-linear-to-br from-rose-50/70 via-white to-transparent dark:from-rose-950/20 dark:via-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold">
                 <span>{isAr ? 'صافي المديونيات المستحقة' : 'Total Receivables'}</span>
-                <DollarSign className="w-4 h-4 text-rose-500" />
+                <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                  <DollarSign className="w-4 h-4" />
+                </div>
               </div>
-              <p className="font-black font-mono text-xl text-rose-600 dark:text-rose-400 mt-1">
-                {customers.reduce((sum, c) => sum + Number(c.current_balance || 0), 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              <p className="font-black font-mono text-2xl text-rose-600 dark:text-rose-400 mt-2">
+                {customers.reduce((sum, c) => sum + Number(c.current_balance || 0), 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
+              <span className="text-[11px] text-slate-400 block mt-1">
                 {isAr ? 'مستحقات واجبة التحصيل' : 'Pending collections'}
               </span>
             </div>
           </div>
 
-          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-primary" />
-                  {isAr ? 'دليل العملاء التجاريين وكشوف الحسابات المعتمدة' : 'Commercial Customers Directory & Statements'}
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
+                  <UserCheck className="w-5 h-5 text-[#7F1625]" />
+                  {isAr ? 'دليل العملاء التجاريين والملفات الشاملة المعتمدة' : 'Commercial Customers Directory & Profiles'}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {isAr ? 'ملفات العملاء الشاملة، متابعة التحصيلات والدفعات النقدية والفيزا، وإدارة المديونيات.' : 'Comprehensive dossiers, cash & card collections, and credit balances.'}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {isAr ? 'ملفات العملاء الشاملة، متابعة التحصيلات النقدية والفيزا، كشوف الحسابات المعتمدة، وإدارة حدود الائتمان.' : 'Customer dossiers, cash & card collections, and credit limits.'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -2597,34 +2605,47 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
             </div>
 
             {/* Search & Filter Toolbar */}
-            <div className="p-3 bg-slate-50/60 dark:bg-slate-800/20 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="relative flex-1 min-w-[220px]">
-                <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5" />
+            <div className="p-3.5 bg-slate-50/70 dark:bg-slate-800/20 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="w-4 h-4 text-slate-400 absolute start-3.5 top-2.5" />
                 <input
                   type="text"
                   value={customerSearchQuery}
                   onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                  placeholder={isAr ? 'بحث بالاسم، الكود، الهاتف، أو مسؤول الاتصال...' : 'Search by name, code, phone, contact...'}
-                  className="w-full ps-9 pe-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625]"
+                  placeholder={isAr ? 'بحث سريع باسم العميل، الكود، الهاتف، أو مسؤول الاتصال...' : 'Search by client name, code, phone, contact...'}
+                  className="w-full ps-10 pe-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] shadow-2xs"
                 />
               </div>
 
               <div className="flex items-center gap-1.5 font-semibold">
                 {[
-                  { id: 'all', label: isAr ? 'جميع العملاء' : 'All' },
-                  { id: 'wholesale', label: isAr ? '🏢 عملاء جملة' : 'Wholesale' },
-                  { id: 'retail', label: isAr ? '🛍️ عملاء تجزئة' : 'Retail' },
+                  { id: 'all', label: isAr ? 'جميع العملاء' : 'All', count: customers.length },
+                  {
+                    id: 'wholesale',
+                    label: isAr ? '🏢 عملاء جملة' : 'Wholesale',
+                    count: customers.filter((c) => c.classification === 'wholesale' || c.classification === 'company' || c.name.includes('براند') || c.name.includes('شركة') || c.name.includes('مصنع') || c.name.includes('توكيل')).length,
+                  },
+                  {
+                    id: 'retail',
+                    label: isAr ? '🛍️ عملاء تجزئة' : 'Retail',
+                    count: customers.filter((c) => !(c.classification === 'wholesale' || c.classification === 'company' || c.name.includes('براند') || c.name.includes('شركة') || c.name.includes('مصنع') || c.name.includes('توكيل'))).length,
+                  },
                 ].map((filt) => (
                   <button
                     key={filt.id}
                     onClick={() => setCustomerClassificationFilter(filt.id as any)}
-                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                       customerClassificationFilter === filt.id
                         ? 'bg-[#7F1625] text-white shadow-xs font-bold'
                         : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    {filt.label}
+                    <span>{filt.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                      customerClassificationFilter === filt.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
+                    }`}>
+                      {filt.count}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -2632,17 +2653,15 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
             <div className="overflow-x-auto">
               <table className="w-full text-start text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-sans">
                   <tr>
-                    <th className="p-3 text-start">{isAr ? 'كود العميل' : 'Code'}</th>
-                    <th className="p-3 text-start">{isAr ? 'اسم العميل / المتجر' : 'Client Name'}</th>
-                    <th className="p-3 text-start">{isAr ? 'التصنيف' : 'Type'}</th>
-                    <th className="p-3 text-start">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</th>
-                    <th className="p-3 text-start">{isAr ? 'الهاتف' : 'Phone'}</th>
-                    <th className="p-3 text-end">{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</th>
-                    <th className="p-3 text-end font-bold">{isAr ? 'الرصيد المستحق' : 'Balance Due'}</th>
-                    <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                    <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                    <th className="p-3.5 text-start font-bold">{isAr ? 'العميل والكود' : 'Client & Code'}</th>
+                    <th className="p-3.5 text-start font-bold">{isAr ? 'التصنيف ونظام السداد' : 'Type & Payment Terms'}</th>
+                    <th className="p-3.5 text-start font-bold">{isAr ? 'مسؤول الاتصال والتواصل' : 'Contact & Phone'}</th>
+                    <th className="p-3.5 text-end font-bold">{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</th>
+                    <th className="p-3.5 text-end font-bold">{isAr ? 'الرصيد المستحق' : 'Balance Due'}</th>
+                    <th className="p-3.5 text-center font-bold">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="p-3.5 text-center font-bold">{isAr ? 'إجراءات الحساب والبروفايل' : 'Actions & Profile'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
@@ -2670,7 +2689,8 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                     return true;
                   }).length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400 font-sans text-xs">
+                      <td colSpan={7} className="p-12 text-center text-slate-400 font-sans text-xs">
+                        <Users className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                         {isAr ? 'لا يوجد عملاء يطابقون معايير البحث الحالية.' : 'No customers match the criteria.'}
                       </td>
                     </tr>
@@ -2708,103 +2728,167 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                           c.name.includes('مصنع') ||
                           c.name.includes('توكيل');
 
+                        const initialChar = (c.name || 'ع').trim().charAt(0);
+                        const isInstallments = c.payment_terms === 'installments';
+                        const balanceDue = Number(c.current_balance ?? 0);
+
                         return (
-                          <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="p-3 font-bold text-slate-900 dark:text-white">{c.code}</td>
-                            <td className="p-3 font-sans font-medium">
-                              <button
-                                onClick={() => setSelectedCustomerForDossier(c)}
-                                className="text-start font-bold text-slate-900 dark:text-white hover:text-[#7F1625] dark:hover:text-[#ff8ba0] hover:underline flex items-center gap-1.5 transition-colors cursor-pointer"
-                                title={isAr ? 'فتح الملف الشامل للعميل' : 'Open customer profile'}
-                              >
-                                <span>{c.name}</span>
-                                <ExternalLink className="w-3 h-3 text-slate-400 hover:text-[#7F1625]" />
-                              </button>
+                          <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
+                            {/* Client & Code */}
+                            <td className="p-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-linear-to-br from-[#7F1625] to-[#4e0c16] text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0 border border-white/20">
+                                  {initialChar}
+                                </div>
+                                <div>
+                                  <button
+                                    onClick={() => setSelectedCustomerForDossier(c)}
+                                    className="text-start font-bold text-slate-900 dark:text-white hover:text-[#7F1625] dark:hover:text-[#ff8ba0] flex items-center gap-1.5 transition-colors cursor-pointer group-hover:underline"
+                                    title={isAr ? 'فتح الملف الشامل للعميل' : 'Open customer dossier'}
+                                  >
+                                    <span className="text-sm">{c.name}</span>
+                                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#7F1625] transition-colors" />
+                                  </button>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold">
+                                      {c.code || 'CUST'}
+                                    </span>
+                                    {c.tax_id && (
+                                      <span className="font-mono text-[10px] text-slate-400">
+                                        {isAr ? 'ض:' : 'Tax:'} {c.tax_id}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </td>
-                            <td className="p-3 font-sans">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                                isWhole
-                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+
+                            {/* Classification & Terms */}
+                            <td className="p-3.5 font-sans">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                  isWhole
+                                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60'
+                                    : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60'
+                                }`}>
+                                  {isWhole ? (isAr ? '🏢 عميل جملة' : 'Wholesale') : (isAr ? '🛍️ عميل تجزئة' : 'Retail')}
+                                </span>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-semibold ${
+                                  isInstallments
+                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60'
+                                }`}>
+                                  {isInstallments
+                                    ? (isAr ? '📑 تسهيلات ودفعات' : 'Installments')
+                                    : (isAr ? '💵 سداد كاش فوري' : 'Cash')}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Contact Person & Phone */}
+                            <td className="p-3.5 font-sans">
+                              <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {c.contact_person || '—'}
+                              </div>
+                              {c.phone && (
+                                <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                                  <span>{c.phone}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Total Invoiced */}
+                            <td className="p-3.5 text-end">
+                              <div className="font-mono font-bold text-slate-900 dark:text-white text-xs">
+                                {c.total_invoiced ? Number(c.total_invoiced).toLocaleString() : '0'}
+                                <span className="text-[10px] text-slate-400 ms-1 font-sans">{isAr ? 'ج.م' : 'EGP'}</span>
+                              </div>
+                            </td>
+
+                            {/* Net Balance Due */}
+                            <td className="p-3.5 text-end">
+                              <div className={`inline-flex flex-col items-end px-2.5 py-1 rounded-xl font-mono ${
+                                balanceDue > 0
+                                  ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40'
+                                  : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40'
                               }`}>
-                                {isWhole ? (isAr ? '🏢 جملة' : 'Wholesale') : (isAr ? '🛍️ تجزئة' : 'Retail')}
-                              </span>
+                                <span className="font-black text-xs">
+                                  {balanceDue.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                                </span>
+                                <span className="text-[9px] font-sans font-medium">
+                                  {balanceDue > 0 ? (isAr ? 'مستحق في ذمته' : 'Due') : (isAr ? 'خالص ✓' : 'Settled')}
+                                </span>
+                              </div>
                             </td>
-                            <td className="p-3 font-sans text-slate-600 dark:text-slate-400">{c.contact_person || '—'}</td>
-                            <td className="p-3 text-slate-600 dark:text-slate-400">{c.phone || '—'}</td>
-                            <td className="p-3 text-end text-slate-900 dark:text-white font-bold">
-                              {c.total_invoiced ? Number(c.total_invoiced).toLocaleString() : '0'} {isAr ? 'ج.م' : 'EGP'}
-                            </td>
-                            <td className="p-3 text-end font-bold">
-                              <span className={c.current_balance && c.current_balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
-                                {Number(c.current_balance || 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                              </span>
-                            </td>
-                            <td className="p-3 text-center font-sans">
+
+                            {/* Status */}
+                            <td className="p-3.5 text-center font-sans">
                               <Badge variant={c.is_active ? 'success' : 'neutral'}>
                                 {c.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
                               </Badge>
                             </td>
-                            <td className="p-3 text-center font-sans">
-                              <div className="flex items-center justify-center gap-1">
+
+                            {/* Actions Bar */}
+                            <td className="p-3.5 text-center font-sans">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {/* Profile Dossier Button */}
                                 <button
                                   onClick={() => setSelectedCustomerForDossier(c)}
-                                  className="p-1.5 rounded-lg bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/20 transition-all cursor-pointer"
-                                  title={isAr ? 'الملف الشامل وبروفايل العميل' : 'Customer Dossier'}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#7F1625] hover:bg-[#6b121f] text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer"
+                                  title={isAr ? 'فتح البروفايل والملف الشامل للعميل' : 'Customer Dossier'}
                                 >
-                                  <User className="w-3.5 h-3.5" />
+                                  <User className="w-3 h-3" />
+                                  <span>{isAr ? 'البروفايل' : 'Dossier'}</span>
                                 </button>
 
+                                {/* Collect Payment Button */}
                                 <button
                                   onClick={() => {
                                     handlePaymentCustomerSelect(c.id);
                                     setIsRecordPaymentOpen(true);
                                   }}
-                                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
-                                  title={isAr ? 'تسجيل سند قبض / تحصيل دفعة نقدية أو فيزا' : 'Record Payment Collection'}
+                                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[11px] font-bold transition-all cursor-pointer"
+                                  title={isAr ? 'تسجيل سند قبض / تحصيل دفعة' : 'Record Payment Collection'}
                                 >
-                                  <DollarSign className="w-3.5 h-3.5" />
+                                  <DollarSign className="w-3 h-3" />
+                                  <span>{isAr ? 'قبض' : 'Pay'}</span>
                                 </button>
 
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs px-2"
+                                {/* Account Statement A4 */}
+                                <button
                                   onClick={() => {
                                     setSelectedCustomerForStatement(c);
                                     setIsCustomerStatementOpen(true);
                                   }}
-                                  icon={<BookOpen className="w-3 h-3 text-primary" />}
-                                  title={isAr ? 'كشف الحساب المعتمد' : 'Account Statement'}
+                                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all cursor-pointer"
+                                  title={isAr ? 'طباعة كشف الحساب A4' : 'Account Statement'}
                                 >
-                                  {isAr ? 'كشف الحساب' : 'Statement'}
-                                </Button>
+                                  <BookOpen className="w-3.5 h-3.5 text-primary" />
+                                </button>
 
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-xs px-2"
+                                {/* Edit Customer */}
+                                <button
                                   onClick={() => {
                                     setSelectedCustomerForEdit(c);
                                     setIsCreateCustomerOpen(true);
                                   }}
+                                  className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all cursor-pointer"
                                   title={isAr ? 'تعديل بيانات العميل' : 'Edit Customer Profile'}
                                 >
-                                  <Pencil className="w-3 h-3 text-slate-500" />
-                                </Button>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
 
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-xs px-2"
+                                {/* New Sales Order */}
+                                <button
                                   onClick={() => {
                                     setNewOrderCustomer(c.name);
                                     setIsOrderModalOpen(true);
                                   }}
-                                  title={isAr ? 'إنشاء أمر بيع لهذا العميل' : 'New order for this customer'}
+                                  className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all cursor-pointer"
+                                  title={isAr ? 'إنشاء أمر بيع جديد' : 'New Sales Order'}
                                 >
-                                  <Plus className="w-3 h-3" />
-                                </Button>
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -4194,6 +4278,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         onPrintInvoice={(inv) => {
           setSelectedInvoiceForPrint(inv);
         }}
+        onRefresh={loadSalesData}
         isAr={isAr}
       />
     </div>

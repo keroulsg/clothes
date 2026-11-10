@@ -66,6 +66,27 @@ class SalesController extends Controller
         return response()->json($orders);
     }
 
+    public function showSalesOrder(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = SalesOrder::where('tenant_id', $tenantId)
+            ->with([
+                'customer',
+                'warehouse',
+                'items.variant.garmentModel',
+                'items.variant.size',
+                'items.variant.color',
+                'invoices',
+                'deliveryNotes',
+            ])
+            ->findOrFail($id);
+
+        return response()->json([
+            'order' => $order,
+            'sales_order' => $order,
+        ]);
+    }
+
     public function storeSalesOrder(Request $request): JsonResponse
     {
         if ($request->has('customer_id') && !$request->has('customer_name')) {

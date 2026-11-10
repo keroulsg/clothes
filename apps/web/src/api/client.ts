@@ -1456,6 +1456,9 @@ class ApiClient {
     getOrders: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/sales/orders?page=${page}`);
     },
+    getOrder: async (id: string): Promise<{ order: any; sales_order?: any }> => {
+      return this.request(`/sales/orders/${id}`);
+    },
     createOrder: async (payload: any): Promise<{ message: string; order: any }> => {
       return this.request('/sales/orders', {
         method: 'POST',

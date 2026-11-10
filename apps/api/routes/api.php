@@ -325,6 +325,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/quotations', [\App\Http\Controllers\Api\SalesController::class, 'storeQuotation']);
         Route::post('/sales/quotations/{id}/convert', [\App\Http\Controllers\Api\SalesController::class, 'convertQuotation']);
         Route::get('/sales/orders', [\App\Http\Controllers\Api\SalesController::class, 'salesOrders']);
+        Route::get('/sales/orders/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showSalesOrder']);
         Route::post('/sales/orders', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesOrder'])->middleware('quota:sales_orders');
         Route::post('/sales/orders/{id}/cancel', [\App\Http\Controllers\Api\SalesController::class, 'cancelSalesOrder']);
         Route::post('/sales/orders/{id}/deliver', [\App\Http\Controllers\Api\SalesController::class, 'deliverOrder']);

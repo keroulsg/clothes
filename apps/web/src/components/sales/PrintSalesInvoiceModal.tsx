@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, X, ShieldCheck } from 'lucide-react';
+import { Printer, X, ShieldCheck, Building2, Store } from 'lucide-react';
 import { api } from '../../api/client';
 import type { SalesOrder, SalesInvoice, Quotation } from '../../types';
 
@@ -16,7 +16,7 @@ interface PrintSalesInvoiceModalProps {
 export const formatCleanDate = (val?: string | null): string => {
   if (!val) return '—';
   const str = String(val).trim();
-  if (!str || str === 'null' || str === 'undefined') return '—';
+  if (!str || str === 'null' || str === 'undefined' || str === '—') return '—';
   // Strip out ISO time e.g. 2026-11-10T00:00:00.000000Z -> 2026-11-10
   return str.split('T')[0].split(' ')[0];
 };
@@ -37,7 +37,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
   const factoryName =
     storedTenant?.name ||
     (invoice as any)?.tenant?.name ||
-    (isAr ? 'مصنع الملابس الجاهزة المتطور' : 'Advanced Garments Factory');
+    (isAr ? 'منظومة مصانع ومعارض الملابس الجاهزة' : 'Advanced Garments Factory');
 
   const factoryTaxId =
     storedTenant?.settings?.tax_number ||
@@ -65,24 +65,35 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
     new Date().toISOString()
   );
 
-  const deliveryOrValidDate = formatCleanDate(
+  const rawDeliveryDate =
     order?.expected_delivery_date ||
     quotation?.valid_until ||
-    invoice?.due_date
-  );
+    invoice?.due_date;
 
+  const deliveryOrValidDate = formatCleanDate(rawDeliveryDate);
+  const displayDeliveryDate =
+    deliveryOrValidDate !== '—'
+      ? deliveryOrValidDate
+      : (isAr ? 'تسليم فوري (باب المصنع)' : 'Immediate Ex-Factory');
+
+  const customer = order?.customer || quotation?.customer || invoice?.customer;
   const customerName =
     order?.customer_name ||
+    customer?.name ||
     quotation?.customer_name ||
     invoice?.customer_name ||
     (isAr ? 'عميل معتمد' : 'Authorized Customer');
 
-  const customer = order?.customer || quotation?.customer || invoice?.customer;
   const isWholesale =
     order?.order_type === 'wholesale' ||
     customer?.classification === 'wholesale' ||
     customer?.classification === 'company' ||
-    !order?.order_type;
+    (order?.order_type !== 'retail' && (
+      customerName.includes('براند') ||
+      customerName.includes('شركة') ||
+      customerName.includes('مصنع') ||
+      customerName.includes('توكيل')
+    ));
 
   const items = (order?.items as any[]) || (quotation?.items as any[]) || (invoice?.items as any[]) || [];
   const totalAmount = Number(order?.total_amount || quotation?.total_amount || invoice?.total_amount || 0);
@@ -100,29 +111,29 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
     }
 
     try {
-      // 1. Invisible iframe print (Guaranteed no popup-blocker issues, isolates styles cleanly)
+      // Create or reuse the print frame.
+      // Crucial: Must be positioned inside viewport with opacity 1 & visibility visible
+      // but placed behind with zIndex -99999 so Chromium's layout engine renders all content without blank pages!
       let iframe = document.getElementById('garmentos-print-frame') as HTMLIFrameElement;
       if (!iframe) {
         iframe = document.createElement('iframe');
         iframe.id = 'garmentos-print-frame';
         iframe.style.position = 'fixed';
-        iframe.style.top = '-9999px';
-        iframe.style.left = '-9999px';
-        iframe.style.width = '1000px';
-        iframe.style.height = '1000px';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        iframe.style.width = '100vw';
+        iframe.style.height = '100vh';
         iframe.style.border = '0';
-        iframe.style.opacity = '0';
+        iframe.style.opacity = '1';
+        iframe.style.visibility = 'visible';
         iframe.style.pointerEvents = 'none';
-        iframe.style.zIndex = '-999';
+        iframe.style.zIndex = '-99999';
+        iframe.style.backgroundColor = '#ffffff';
         document.body.appendChild(iframe);
       }
 
       const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
       if (frameDoc && iframe.contentWindow) {
-        const headStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-          .map(el => el.outerHTML)
-          .join('\n');
-
         frameDoc.open();
         frameDoc.write(`
           <!DOCTYPE html>
@@ -130,25 +141,34 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
           <head>
             <meta charset="utf-8">
             <title>${effectiveDocNumber} - ${factoryName}</title>
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-            ${headStyles}
             <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', system-ui, -apple-system, sans-serif !important; }
+              * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+                font-family: 'Cairo', system-ui, -apple-system, 'Segoe UI', Tahoma, Arial, sans-serif !important;
+                visibility: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
               html, body {
                 background: #ffffff !important;
                 color: #000000 !important;
                 margin: 0 !important;
-                padding: 16px !important;
+                padding: 10mm 12mm !important;
                 font-size: 12px;
                 line-height: 1.5;
                 direction: ${isAr ? 'rtl' : 'ltr'};
                 width: 100% !important;
                 height: auto !important;
-                overflow: visible !important;
+                visibility: visible !important;
               }
               .border-b-2 { border-bottom: 2px solid #7F1625 !important; }
+              .border-t-2 { border-top: 2px solid #7F1625 !important; }
+              .border-b { border-bottom: 1px solid #cbd5e1 !important; }
+              .border-t { border-top: 1px solid #cbd5e1 !important; }
+              .border { border: 1px solid #cbd5e1 !important; }
+              .border-slate-200, .border-slate-300, .border-slate-800 { border-color: #cbd5e1 !important; }
               table { width: 100% !important; border-collapse: collapse !important; margin-top: 14px !important; margin-bottom: 14px !important; }
               th { background: #fdf2f4 !important; color: #7F1625 !important; border: 1px solid #cbd5e1 !important; padding: 8px 10px !important; text-align: ${isAr ? 'right' : 'left'} !important; font-weight: bold !important; font-size: 11px !important; }
               td { border: 1px solid #e2e8f0 !important; padding: 8px 10px !important; text-align: ${isAr ? 'right' : 'left'} !important; font-size: 11px !important; }
@@ -157,16 +177,68 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
               .text-start { text-align: ${isAr ? 'right' : 'left'} !important; }
               .font-bold { font-weight: bold !important; }
               .font-black { font-weight: 900 !important; }
+              .font-extrabold { font-weight: 800 !important; }
               .font-mono { font-family: monospace !important; }
+              .bg-\\[\\#7F1625\\] { background-color: #7F1625 !important; color: #ffffff !important; }
+              .bg-\\[\\#7F1625\\]\\/10 { background-color: rgba(127, 22, 37, 0.08) !important; }
+              .text-\\[\\#7F1625\\] { color: #7F1625 !important; }
+              .flex { display: flex !important; }
+              .justify-between { justify-content: space-between !important; }
+              .items-center { align-items: center !important; }
+              .items-start { align-items: flex-start !important; }
+              .grid { display: grid !important; }
+              .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
+              .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+              .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+              .gap-1 { gap: 0.25rem !important; }
+              .gap-2 { gap: 0.5rem !important; }
+              .gap-4 { gap: 1rem !important; }
+              .gap-6 { gap: 1.5rem !important; }
+              .p-3 { padding: 0.75rem !important; }
+              .p-4 { padding: 1rem !important; }
+              .p-4\\.5 { padding: 1.125rem !important; }
+              .p-8 { padding: 1.5rem !important; }
+              .pb-6 { padding-bottom: 1.5rem !important; }
+              .pt-2 { padding-top: 0.5rem !important; }
+              .pt-8 { padding-top: 2rem !important; }
+              .py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+              .px-2 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+              .px-3 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+              .rounded-xl { border-radius: 0.75rem !important; }
+              .rounded-2xl { border-radius: 1rem !important; }
+              .rounded-full { border-radius: 9999px !important; }
+              .space-y-0\\.5 > * + * { margin-top: 0.125rem !important; }
+              .space-y-1 > * + * { margin-top: 0.25rem !important; }
+              .space-y-1\\.5 > * + * { margin-top: 0.375rem !important; }
+              .space-y-2 > * + * { margin-top: 0.5rem !important; }
+              .space-y-3 > * + * { margin-top: 0.75rem !important; }
+              .space-y-6 > * + * { margin-top: 1.5rem !important; }
+              .space-y-8 > * + * { margin-top: 2rem !important; }
+              .inline-block { display: inline-block !important; }
+              .w-full { width: 100% !important; }
+              .w-10 { width: 2.5rem !important; }
+              .w-11 { width: 2.75rem !important; }
+              .h-11 { height: 2.75rem !important; }
+              .w-24 { width: 6rem !important; }
+              .h-16 { height: 4rem !important; }
+              .text-xs { font-size: 0.75rem !important; }
+              .text-sm { font-size: 0.875rem !important; }
+              .text-base { font-size: 1rem !important; }
+              .text-xl { font-size: 1.25rem !important; }
+              .text-2xl { font-size: 1.5rem !important; }
+              .border-dashed { border-style: dashed !important; }
               @page { size: A4 portrait; margin: 10mm 12mm; }
               @media print {
-                body { padding: 0 !important; }
+                * { visibility: visible !important; }
+                body { padding: 0 !important; visibility: visible !important; }
                 .no-print { display: none !important; }
               }
             </style>
           </head>
-          <body class="p-6">
-            ${printContent.innerHTML}
+          <body>
+            <div id="sales-invoice-print-sheet" class="p-8 print:p-0 space-y-6 text-slate-900 bg-white">
+              ${printContent.innerHTML}
+            </div>
           </body>
           </html>
         `);
@@ -180,7 +252,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
             console.warn('Iframe print failed, falling back:', e);
             fallbackPrint();
           }
-        }, 250);
+        }, 200);
         return;
       }
     } catch (e) {
@@ -191,50 +263,61 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
   };
 
   const fallbackPrint = () => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'visible';
     window.print();
-    setTimeout(() => {
-      document.body.style.overflow = prevOverflow;
-    }, 1000);
   };
 
   React.useEffect(() => {
     if (isOpen && autoPrint) {
       const timer = setTimeout(() => {
         handlePrint();
-      }, 200);
+      }, 250);
       return () => clearTimeout(timer);
     }
   }, [isOpen, autoPrint]);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 print:p-0 print:bg-white print:static">
+    <div className="print-modal-backdrop fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 print:p-0 print:bg-white print:static">
       <style>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm 12mm;
+          }
           html, body {
             overflow: visible !important;
             height: auto !important;
             background: white !important;
+            color: black !important;
           }
           body * {
-            visibility: hidden !important;
+            visibility: hidden;
           }
-          #sales-invoice-print-sheet, #sales-invoice-print-sheet * {
+          .print-modal-container,
+          .print-modal-container * {
             visibility: visible !important;
           }
-          #sales-invoice-print-sheet {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 24px !important;
+          .print-modal-backdrop {
+            position: static !important;
             background: white !important;
-            color: black !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+          .print-modal-content {
             box-shadow: none !important;
             border: none !important;
-            z-index: 9999999 !important;
+            width: 100% !important;
+            max-width: none !important;
+            border-radius: 0 !important;
+            overflow: visible !important;
+          }
+          #sales-invoice-print-sheet {
+            display: block !important;
+            position: static !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            color: black !important;
           }
           .no-print {
             display: none !important;
@@ -242,7 +325,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
         }
       `}</style>
 
-      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden print:border-none print:shadow-none print:w-full print:max-w-none print:rounded-none">
+      <div className="print-modal-container print-modal-content relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden print:border-none print:shadow-none print:w-full print:max-w-none print:rounded-none">
         {/* Action Header - Hidden on Print */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white print:hidden no-print">
           <div className="flex items-center gap-3">
@@ -250,65 +333,61 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm">
+              <h3 className="text-base font-bold text-white">
                 {isQuotation
-                  ? (isAr ? 'معاينة وطباعة عرض السعر الرسمي المعتمد (A4)' : 'Official Quotation Sheet (A4)')
-                  : (isAr ? 'معاينة وطباعة الفاتورة الضريبية الرسمية (A4)' : 'Official Tax Sales Invoice (A4)')}
+                  ? (isAr ? 'معاينة وطباعة عرض الأسعار الرسمي' : 'Print Official Quotation')
+                  : (isAr ? 'معاينة وطباعة فاتورة المبيعات الضريبية الرسمية (A4)' : 'Print Official Tax Sales Invoice (A4)')}
               </h3>
               <p className="text-xs text-slate-400 font-mono">
-                {effectiveDocNumber} • {docDate}
+                {effectiveDocNumber} • {customerName}
               </p>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-lg transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#6a121e] text-white text-xs font-bold transition-all shadow-md cursor-pointer hover:scale-105"
             >
               <Printer className="w-4 h-4" />
-              <span>{isAr ? 'طباعة الفاتورة الآن' : 'Print Document Now'}</span>
+              <span>{isAr ? 'طباعة الفاتورة الآن (A4)' : 'Print Invoice Now'}</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
-              title={isAr ? 'إغلاق' : 'Close'}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* PRINTABLE A4 INVOICE SHEET */}
-        <div id="sales-invoice-print-sheet" className="printable-sheet printable-area p-8 sm:p-12 text-slate-900 dark:text-slate-100 print:text-black print:p-6 print:bg-white space-y-6">
+        {/* Printable Sheet */}
+        <div id="sales-invoice-print-sheet" className="p-8 print:p-0 space-y-6 text-slate-900 dark:text-slate-100 print:text-black print:bg-white bg-white dark:bg-slate-900">
           {/* Header & Logo */}
-          <div className="flex items-start justify-between border-b-2 border-[#7F1625] pb-6 gap-4">
+          <div className="flex justify-between items-start pb-6 border-b-2 border-[#7F1625] gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
-                <div className="w-11 h-11 rounded-2xl bg-[#7F1625] text-white flex items-center justify-center font-black text-xl shadow-md print:bg-black">
-                  G
+              <div className="flex items-center gap-2">
+                <div className="w-11 h-11 rounded-xl bg-[#7F1625] text-white flex items-center justify-center font-black text-xl shadow-xs">
+                  {factoryName.charAt(0) || 'G'}
                 </div>
                 <div>
-                  <h1 className="text-xl font-extrabold text-slate-900 dark:text-white print:text-black">
+                  <h1 className="text-xl font-black text-slate-900 dark:text-white print:text-black tracking-tight">
                     {factoryName}
                   </h1>
-                  <p className="text-xs text-slate-500 font-medium print:text-slate-700">
-                    {isAr ? 'منظومة إدارة تصنيع وتجارة الملابس الجاهزة' : 'Garment Manufacturing & Apparel Trading'}
+                  <p className="text-xs text-slate-500 print:text-slate-700">
+                    {factoryAddress} • {factoryPhone}
                   </p>
                 </div>
               </div>
-              <div className="text-[11px] text-slate-500 print:text-slate-600 space-y-0.5 pt-2">
-                <p>📍 {factoryAddress}</p>
-                <p>📞 {factoryPhone}</p>
-              </div>
             </div>
 
-            <div className="text-end space-y-1.5">
-              <span className="inline-block px-3 py-1 rounded-full text-xs font-black bg-[#7F1625]/10 text-[#7F1625] border border-[#7F1625]/30 print:border-black print:text-black">
+            <div className="text-end space-y-1">
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-black bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] print:border print:border-[#7F1625] print:text-black">
                 {isQuotation
-                  ? (isAr ? 'عرض سعر تجاري معتمد' : 'OFFICIAL COMMERCIAL QUOTATION')
-                  : (isAr ? 'فاتورة بيع ضريبية معتمدة' : 'OFFICIAL TAX SALES INVOICE')}
+                  ? (isAr ? 'عرض أسعار معتمد' : 'OFFICIAL QUOTATION')
+                  : (isAr ? 'فاتورة مبيعات ضريبية رسمية' : 'OFFICIAL TAX SALES INVOICE')}
               </span>
               <div className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 print:text-black">
                 {isAr ? 'رقم السند: ' : 'Ref #: '}
@@ -316,7 +395,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
               </div>
               <div className="text-[11px] text-slate-500 print:text-slate-700 font-mono space-y-0.5">
                 <p>{isAr ? 'تاريخ التحرير: ' : 'Date: '}{docDate}</p>
-                <p>{isQuotation ? (isAr ? 'صالح حتى: ' : 'Valid Until: ') : (isAr ? 'تاريخ التسليم: ' : 'Delivery: ')}{deliveryOrValidDate}</p>
+                <p>{isQuotation ? (isAr ? 'صالح حتى: ' : 'Valid Until: ') : (isAr ? 'تاريخ التسليم: ' : 'Delivery: ')}{displayDeliveryDate}</p>
                 <p>{isAr ? 'س.ت: ' : 'CR: '}{commercialRegistry} | {isAr ? 'ب.ض: ' : 'Tax ID: '}{factoryTaxId}</p>
               </div>
             </div>
@@ -333,12 +412,14 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
                   {customerName}
                 </p>
                 {isWholesale ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] border border-[#7F1625]/20 print:border-black print:text-black">
-                    🏢 {isAr ? 'عميل جملة' : 'Wholesale'}
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] border border-[#7F1625]/20 print:border-black print:text-black flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    <span>{isAr ? 'عميل جملة وتوكيلات' : 'Wholesale Brand'}</span>
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 print:border-black print:text-black">
-                    🛍️ {isAr ? 'عميل تجزئة' : 'Retail'}
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 print:border-black print:text-black flex items-center gap-1">
+                    <Store className="w-3 h-3" />
+                    <span>{isAr ? 'عميل تجزئة / قطاعي' : 'Retail Customer'}</span>
                   </span>
                 )}
               </div>

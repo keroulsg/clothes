@@ -226,6 +226,20 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
     }
   };
 
+  const handlePrintOrder = async (order: SalesOrder) => {
+    setSelectedOrderForPrint(order);
+    setAutoPrintTrigger(true);
+    try {
+      const res = await api.sales.getOrder(order.id);
+      const full = res.order || res.sales_order || res;
+      if (full && full.id === order.id) {
+        setSelectedOrderForPrint(full);
+      }
+    } catch (err) {
+      console.warn('Could not fetch deep order details for print, using cached order', err);
+    }
+  };
+
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOrderCustomer || !newOrderVariantId || newOrderQty <= 0) return;
@@ -1095,10 +1109,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             {/* Action 4: Official Tax Sales Invoice Print */}
                             <button
                               type="button"
-                              onClick={() => {
-                                setSelectedOrderForPrint(order);
-                                setAutoPrintTrigger(true);
-                              }}
+                              onClick={() => handlePrintOrder(order)}
                               title={isAr ? 'طباعة فاتورة مبيعات ضريبية رسمية A4' : 'Print Official Tax Invoice (A4)'}
                               className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
                             >
@@ -1134,10 +1145,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                                   id: 'print-official',
                                   label: isAr ? 'طباعة الفاتورة الضريبية الرسمية A4' : 'Print Tax Invoice (A4)',
                                   icon: <Printer className="w-3.5 h-3.5 text-[#7F1625]" />,
-                                  onClick: () => {
-                                    setSelectedOrderForPrint(order);
-                                    setAutoPrintTrigger(true);
-                                  },
+                                  onClick: () => handlePrintOrder(order),
                                 },
                                 ...(order.status === 'confirmed'
                                   ? [
@@ -2602,10 +2610,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedOrderForPrint(selectedOrderForView);
-                    setAutoPrintTrigger(true);
-                  }}
+                  onClick={() => handlePrintOrder(selectedOrderForView)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />

@@ -993,13 +993,13 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                               </button>
                             ) : null}
 
-                            {/* Action 3: Fulfill & Deliver */}
-                            {order.status === 'reserved' ? (
+                            {/* Action 3: Fulfill & Deliver (Immediate Stock Deduction & Invoice) */}
+                            {order.status !== 'fulfilled' ? (
                               <button
                                 type="button"
                                 onClick={() => handleFulfillOrder(order.id)}
                                 disabled={deliveringOrderId === order.id}
-                                title={isAr ? 'صرف البضاعة التامة وإصدار فاتورة المبيعات' : 'Fulfill & Dispatch'}
+                                title={isAr ? 'صرف البضاعة وخصم المخزن وإصدار الفاتورة' : 'Fulfill & Dispatch (Deduct Stock)'}
                                 className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-600 dark:text-blue-400 border border-blue-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-50"
                               >
                                 {deliveringOrderId === order.id ? (
@@ -2026,7 +2026,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                   </button>
                 )}
 
-                {selectedOrderForView.status === 'reserved' && (
+                {selectedOrderForView.status !== 'fulfilled' && (
                   <button
                     type="button"
                     onClick={() => handleFulfillOrder(selectedOrderForView.id)}
@@ -2038,7 +2038,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                     ) : (
                       <Truck className="w-4 h-4" />
                     )}
-                    <span>{isAr ? 'صرف المخزن وفوترة الطلب' : 'Fulfill & Invoice'}</span>
+                    <span>{isAr ? 'صرف وخصم المخزن وفوترة الطلب' : 'Fulfill & Deduct Stock'}</span>
                   </button>
                 )}
               </div>

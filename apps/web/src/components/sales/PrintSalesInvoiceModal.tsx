@@ -60,14 +60,119 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
   const totalPieces = items.reduce((sum, item: any) => sum + (Number(item.ordered_quantity || item.quantity) || 0), 0);
 
   const handlePrint = () => {
-    window.print();
+    try {
+      const printContent = document.getElementById('sales-invoice-print-sheet');
+      if (!printContent) {
+        window.print();
+        return;
+      }
+
+      // Create an isolated hidden iframe for clean, instant, unclipped printing
+      const iframe = document.createElement('iframe');
+      iframe.id = 'print-invoice-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.zIndex = '-9999';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        window.print();
+        return;
+      }
+
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html dir="${isAr ? 'rtl' : 'ltr'}" lang="${isAr ? 'ar' : 'en'}">
+        <head>
+          <title>${effectiveOrderNumber} - ${factoryName}</title>
+          <meta charset="utf-8">
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', system-ui, -apple-system, sans-serif; }
+            body { background: #ffffff !important; color: #000000 !important; padding: 24px; font-size: 12px; line-height: 1.5; }
+            .border-b-2 { border-bottom: 2px solid #7F1625; }
+            table { width: 100%; border-collapse: collapse; margin-top: 14px; margin-bottom: 14px; }
+            th { background: #fdf2f4 !important; color: #7F1625 !important; border: 1px solid #cbd5e1; padding: 8px 10px; text-align: ${isAr ? 'right' : 'left'}; font-weight: bold; }
+            td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: ${isAr ? 'right' : 'left'}; }
+            .text-center { text-align: center; }
+            .text-end { text-align: ${isAr ? 'left' : 'right'}; }
+            .font-bold { font-weight: bold; }
+            .font-black { font-weight: 900; }
+            .font-mono { font-family: monospace; }
+            .total-box { background: #7F1625 !important; color: white !important; padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; margin-top: 8px; }
+            @page { size: A4 portrait; margin: 10mm; }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+        </html>
+      `);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          window.print();
+        } finally {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 3000);
+        }
+      }, 400);
+    } catch (err) {
+      window.print();
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 print:p-0 print:bg-white print:static">
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #sales-invoice-print-sheet, #sales-invoice-print-sheet * {
+            visibility: visible !important;
+          }
+          #sales-invoice-print-sheet {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 24px !important;
+            background: white !important;
+            color: black !important;
+            box-shadow: none !important;
+            border: none !important;
+            z-index: 9999999 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden print:border-none print:shadow-none print:w-full print:max-w-none print:rounded-none">
         {/* Action Header - Hidden on Print */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white print:hidden">
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white print:hidden no-print">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#7F1625] flex items-center justify-center text-white font-bold shadow-md">
               <Printer className="w-5 h-5" />
@@ -102,7 +207,7 @@ export const PrintSalesInvoiceModal: React.FC<PrintSalesInvoiceModalProps> = ({
         </div>
 
         {/* PRINTABLE A4 INVOICE SHEET */}
-        <div className="p-8 sm:p-12 text-slate-900 dark:text-slate-100 print:text-black print:p-6 print:bg-white space-y-6">
+        <div id="sales-invoice-print-sheet" className="p-8 sm:p-12 text-slate-900 dark:text-slate-100 print:text-black print:p-6 print:bg-white space-y-6">
           {/* Header & Logo */}
           <div className="flex items-start justify-between border-b-2 border-[#7F1625] pb-6 gap-4">
             <div className="space-y-1">

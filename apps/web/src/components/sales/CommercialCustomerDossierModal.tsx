@@ -279,10 +279,10 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-6xl bg-white dark:bg-[#0d131f] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh] text-slate-900 dark:text-slate-100">
+      <div className="relative w-full max-w-6xl bg-white dark:bg-[#0d131f] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden text-slate-900 dark:text-slate-100">
         
         {/* TOP BRAND HERO HEADER */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-[#5a0e1a] via-[#7F1625] to-[#400810] text-white p-5 sm:p-6 shadow-md border-b border-white/10">
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#5a0e1a] via-[#7F1625] to-[#400810] text-white p-4 sm:p-5 shadow-md border-b border-white/10 shrink-0">
           {/* Subtle background ambient glow */}
           <div className="absolute -top-24 -end-24 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -start-24 w-72 h-72 bg-black/30 rounded-full blur-3xl pointer-events-none" />
@@ -395,11 +395,11 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
         </div>
 
         {/* 4 CORE FINANCIAL & OPERATIONS METRIC CARDS */}
-        <div className="p-4 sm:p-5 bg-slate-50 dark:bg-[#101726] border-b border-slate-200 dark:border-slate-800">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="p-3 sm:p-3.5 bg-slate-50 dark:bg-[#101726] border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             
             {/* Card 1: Net Balance Due */}
-            <div className={`p-4 rounded-2xl border shadow-xs transition-all ${
+            <div className={`p-3 rounded-2xl border shadow-xs transition-all ${
               effectiveBalanceDue > 0
                 ? 'bg-rose-50/70 dark:bg-rose-950/25 border-rose-200 dark:border-rose-900/60'
                 : 'bg-emerald-50/70 dark:bg-emerald-950/25 border-emerald-200 dark:border-emerald-900/60'
@@ -409,17 +409,17 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
                   {isAr ? 'صافي المديونية المستحقة' : 'Balance Due'}
                 </span>
                 {effectiveBalanceDue > 0 ? (
-                  <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 )}
               </div>
-              <p className={`mt-2 text-2xl font-black font-mono ${
+              <p className={`mt-1 text-xl font-black font-mono ${
                 effectiveBalanceDue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
               }`}>
                 {effectiveBalanceDue.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
                 {effectiveBalanceDue > 0
                   ? (isAr ? 'مستحق في ذمة العميل' : 'outstanding debt')
                   : (isAr ? 'الحساب خالص ومسدد بالكامل ✓' : 'fully cleared')}
@@ -427,29 +427,29 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
             </div>
 
             {/* Card 2: Total Invoiced */}
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-[#7F1625]/40 transition-all">
+            <div className="p-3 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-[#7F1625]/40 transition-all">
               <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
                 <span>{isAr ? 'إجمالي المبيعات' : 'Total Invoiced'}</span>
-                <ShoppingBag className="w-4 h-4 text-[#7F1625]" />
+                <ShoppingBag className="w-3.5 h-3.5 text-[#7F1625]" />
               </div>
-              <p className="mt-2 text-2xl font-black font-mono text-slate-900 dark:text-white">
+              <p className="mt-1 text-xl font-black font-mono text-slate-900 dark:text-white">
                 {totalInvoiced.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <span className="text-[11px] text-slate-400 mt-1 block">
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
                 {customerInvoices.length} {isAr ? 'فواتير محررة' : 'invoices issued'}
               </span>
             </div>
 
             {/* Card 3: Total Collected & Accurate Breakdown */}
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-emerald-500/40 transition-all">
+            <div className="p-3 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-emerald-500/40 transition-all">
               <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
                 <span>{isAr ? 'المسدد والمقبوض' : 'Total Collected'}</span>
-                <DollarSign className="w-4 h-4 text-emerald-500" />
+                <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
               </div>
-              <p className="mt-2 text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+              <p className="mt-1 text-xl font-black font-mono text-emerald-600 dark:text-emerald-400">
                 {totalCollected.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
               </p>
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
                 {totalCollected === 0 ? (
                   <span className="text-slate-400">{isAr ? 'لم يتم تحصيل أي مبالغ' : 'No payments yet'}</span>
                 ) : (
@@ -471,15 +471,15 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
             </div>
 
             {/* Card 4: Orders & Total Pieces */}
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-blue-500/40 transition-all">
+            <div className="p-3 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-blue-500/40 transition-all">
               <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
                 <span>{isAr ? 'الطلبيات وحجم التوريد' : 'Orders & Volume'}</span>
-                <Layers className="w-4 h-4 text-blue-500" />
+                <Layers className="w-3.5 h-3.5 text-blue-500" />
               </div>
-              <p className="mt-2 text-2xl font-black font-mono text-blue-600 dark:text-blue-400">
+              <p className="mt-1 text-xl font-black font-mono text-blue-600 dark:text-blue-400">
                 {totalPiecesOrdered.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'قطعة' : 'pcs'}</span>
               </p>
-              <span className="text-[11px] text-slate-400 mt-1 block">
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
                 {customerOrders.length} {isAr ? 'أمر بيع معتمد' : 'orders placed'}
                 {totalReturns > 0 && (
                   <span className="text-amber-500 ms-1 font-bold">
@@ -493,10 +493,10 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
         </div>
 
         {/* COMPACT & SLEEK CLASSIFICATION & TERMS TOOLBAR */}
-        <div className="px-5 py-3 bg-slate-100/90 dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="px-4 py-2.5 bg-slate-100/90 dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5 text-xs shrink-0">
           
           {/* Left: Quick Classification & Terms pills */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5">
               <CreditCard className="w-3.5 h-3.5 text-[#7F1625] dark:text-[#ff8ba0]" />
               <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
@@ -509,7 +509,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
               <button
                 type="button"
                 onClick={() => setCustomerClassification('wholesale')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   customerClassification === 'wholesale'
                     ? 'bg-[#7F1625] text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -520,7 +520,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
               <button
                 type="button"
                 onClick={() => setCustomerClassification('retail')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   customerClassification === 'retail'
                     ? 'bg-purple-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -535,7 +535,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
               <button
                 type="button"
                 onClick={() => setPaymentTerms('cash')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   paymentTerms === 'cash'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -546,7 +546,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
               <button
                 type="button"
                 onClick={() => setPaymentTerms('installments')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   paymentTerms === 'installments'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -559,7 +559,7 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
 
           {/* Right: Credit Limit & Save Button */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
               <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">
                 {isAr ? 'الحد الائتماني:' : 'Credit Limit:'}
               </span>
@@ -578,20 +578,20 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
             <button
               onClick={handleSaveTerms}
               disabled={isSavingTerms}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 saveSuccess
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-[#7F1625] hover:bg-[#68121e] text-white shadow-xs'
               }`}
             >
               {saveSuccess ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-              <span>{saveSuccess ? (isAr ? 'تم الحفظ بنجاح' : 'Saved') : (isAr ? 'حفظ الشروط' : 'Save')}</span>
+              <span>{saveSuccess ? (isAr ? 'تم الحفظ' : 'Saved') : (isAr ? 'حفظ الشروط' : 'Save')}</span>
             </button>
           </div>
         </div>
 
         {/* TAB NAVIGATION */}
-        <div className="flex items-center gap-1.5 px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] overflow-x-auto text-xs font-semibold">
+        <div className="flex items-center gap-1.5 px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0c121e] overflow-x-auto text-xs font-semibold shrink-0">
           {[
             { id: 'overview', label: isAr ? 'نظرة عامة والملخص' : 'Overview', icon: <TrendingUp className="w-3.5 h-3.5" /> },
             { id: 'invoices', label: isAr ? 'فواتير المبيعات' : 'Invoices', count: customerInvoices.length, icon: <FileText className="w-3.5 h-3.5" /> },
@@ -627,8 +627,8 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
           ))}
         </div>
 
-        {/* TAB CONTENTS */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/50 dark:bg-[#0a0f19]/50">
+        {/* TAB CONTENTS (With min-h-0 and pb-32 to guarantee complete visibility of bottom content) */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-32 bg-slate-50/50 dark:bg-[#0a0f19]/50">
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
@@ -1364,14 +1364,14 @@ export const CommercialCustomerDossierModal: React.FC<CommercialCustomerDossierM
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-[#111927] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-5 py-2.5 bg-slate-50 dark:bg-[#0f172a] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>{isAr ? 'ملف تجاري معتمد ومربوط آلياً بدفاتر الحسابات' : 'Verified commercial dossier with automated ledger sync'}</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer"
           >
             {isAr ? 'إغلاق الملف' : 'Close'}
           </button>

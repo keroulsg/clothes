@@ -43,8 +43,25 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($data, $tenantId) {
-            if (!empty($data['customer_id'])) {
-                Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            $customerId = $data['customer_id'] ?? null;
+            if (!empty($customerId)) {
+                Customer::where('tenant_id', $tenantId)->findOrFail($customerId);
+            } elseif (!empty($data['customer_name'])) {
+                $cName = trim($data['customer_name']);
+                if ($cName !== 'Walk-in Retail Customer' && $cName !== 'عميل نقدي - منفذ بيع المصنع') {
+                    $foundCust = Customer::where('tenant_id', $tenantId)->where('name', $cName)->first();
+                    if (!$foundCust) {
+                        $custCount = Customer::where('tenant_id', $tenantId)->count() + 101;
+                        $foundCust = Customer::create([
+                            'tenant_id' => $tenantId,
+                            'name' => $cName,
+                            'code' => 'CUST-' . $custCount,
+                            'customer_type' => 'wholesale',
+                            'is_active' => true,
+                        ]);
+                    }
+                    $customerId = $foundCust->id;
+                }
             }
 
             $tenant = Tenant::find($tenantId);
@@ -75,7 +92,7 @@ class SalesService
             $quotation = Quotation::create([
                 'tenant_id' => $tenantId,
                 'quotation_number' => $data['quotation_number'] ?? ('QT-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
-                'customer_id' => $data['customer_id'] ?? null,
+                'customer_id' => $customerId,
                 'customer_name' => $data['customer_name'],
                 'status' => 'draft',
                 'subtotal' => $subtotal,
@@ -118,8 +135,25 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($data, $tenantId) {
-            if (!empty($data['customer_id'])) {
-                Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            $customerId = $data['customer_id'] ?? null;
+            if (!empty($customerId)) {
+                Customer::where('tenant_id', $tenantId)->findOrFail($customerId);
+            } elseif (!empty($data['customer_name'])) {
+                $cName = trim($data['customer_name']);
+                if ($cName !== 'Walk-in Retail Customer' && $cName !== 'عميل نقدي - منفذ بيع المصنع') {
+                    $foundCust = Customer::where('tenant_id', $tenantId)->where('name', $cName)->first();
+                    if (!$foundCust) {
+                        $custCount = Customer::where('tenant_id', $tenantId)->count() + 101;
+                        $foundCust = Customer::create([
+                            'tenant_id' => $tenantId,
+                            'name' => $cName,
+                            'code' => 'CUST-' . $custCount,
+                            'customer_type' => 'wholesale',
+                            'is_active' => true,
+                        ]);
+                    }
+                    $customerId = $foundCust->id;
+                }
             }
             if (!empty($data['warehouse_id'])) {
                 Warehouse::where('tenant_id', $tenantId)->findOrFail($data['warehouse_id']);
@@ -157,7 +191,7 @@ class SalesService
             $order = SalesOrder::create([
                 'tenant_id' => $tenantId,
                 'order_number' => $data['order_number'] ?? ('SO-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
-                'customer_id' => $data['customer_id'] ?? null,
+                'customer_id' => $customerId,
                 'customer_name' => $data['customer_name'],
                 'quotation_id' => $data['quotation_id'] ?? null,
                 'warehouse_id' => $data['warehouse_id'] ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id') ?? Warehouse::where('tenant_id', $tenantId)->value('id'),

@@ -40,6 +40,7 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
   onSuccess,
   isAr = true,
 }) => {
+  const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
@@ -55,6 +56,9 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
   const [itemsDraft, setItemsDraft] = useState<ReturnItemDraft[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const invoicePaidAmount = Number(selectedInvoice?.paid_amount || 0);
+  const isInvoiceUnpaid = invoicePaidAmount <= 0;
 
   // Synchronize or self-fetch warehouses if empty
   useEffect(() => {
@@ -105,9 +109,16 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
   }, [isOpen, preselectedInvoice, invoices, activeWarehousesList]);
 
   const applyInvoice = (inv: SalesInvoice) => {
+    setSelectedInvoice(inv);
     setSelectedInvoiceId(inv.id);
     if (inv.customer_id) {
       setSelectedCustomerId(inv.customer_id);
+    }
+
+    // Default settlement type: If invoice has 0 paid cash, it must be settled via credit note
+    const paid = Number(inv.paid_amount || 0);
+    if (paid <= 0) {
+      setSettlementType('credit');
     }
 
     // Determine the source warehouse from which the goods were sold/dispatched
@@ -161,6 +172,7 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
     if (inv) {
       applyInvoice(inv);
     } else {
+      setSelectedInvoice(null);
       setSelectedInvoiceId('');
       setItemsDraft([]);
     }
@@ -202,6 +214,15 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
 
     if (!selectedWarehouseId) {
       setErrorMsg(isAr ? 'برجاء اختيار المخزن المستلم للبضاعة المرتجعة.' : 'Please select receiving warehouse.');
+      return;
+    }
+
+    if (settlementType === 'instant_cash' && isInvoiceUnpaid) {
+      setErrorMsg(
+        isAr
+          ? 'لا يمكن صرف استرداد نقدي فوري لفاتورة بيع آجل لم يتم سداد أي مبالغ نقدية منها بعد بالخزينة (المدفوع: 0 ج.م). يرجى اختيار "إشعار دائن بحساب العميل" لتسوية مديونية العميل.'
+          : 'Cannot disburse cash refund for an unpaid credit invoice. Please select Credit Note to offset customer balance.'
+      );
       return;
     }
 
@@ -485,11 +506,16 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                {isAr ? 'التسوية المالية للعميل:' : 'Financial Settlement Method:'}
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                <span>{isAr ? 'التسوية المالية للعميل:' : 'Financial Settlement Method:'}</span>
+                {!isInvoiceUnpaid && (
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                    {isAr ? 'المدفوع نقداً مسبقاً: ' : 'Paid: '}{invoicePaidAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                  </span>
+                )}
               </label>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${settlementType === 'credit' ? 'border-[#7F1625] bg-[#7F1625]/10 text-[#7F1625] font-bold' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'}`}>
+                <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${settlementType === 'credit' ? 'border-[#7F1625] bg-[#7F1625]/10 text-[#7F1625] font-bold shadow-xs' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'}`}>
                   <input
                     type="radio"
                     name="settlement"
@@ -500,32 +526,65 @@ export const RecordSalesReturnModal: React.FC<RecordSalesReturnModalProps> = ({
                   <span>🏷️ {isAr ? 'إشعار دائن بحساب العميل' : 'Credit Note'}</span>
                 </label>
 
-                <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${settlementType === 'instant_cash' ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-bold' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'}`}>
+                <label className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${
+                  isInvoiceUnpaid
+                    ? 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/40 text-slate-400'
+                    : settlementType === 'instant_cash'
+                      ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-bold cursor-pointer'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer'
+                }`}>
                   <input
                     type="radio"
                     name="settlement"
+                    disabled={isInvoiceUnpaid}
                     checked={settlementType === 'instant_cash'}
-                    onChange={() => setSettlementType('instant_cash')}
-                    className="text-emerald-600 focus:ring-emerald-600"
+                    onChange={() => !isInvoiceUnpaid && setSettlementType('instant_cash')}
+                    className="text-emerald-600 focus:ring-emerald-600 disabled:opacity-30"
                   />
-                  <span>💵 {isAr ? 'استرداد نقدي فوري' : 'Instant Cash Refund'}</span>
+                  <div className="flex flex-col">
+                    <span>💵 {isAr ? 'استرداد نقدي فوري' : 'Instant Cash Refund'}</span>
+                    {isInvoiceUnpaid && (
+                      <span className="text-[9px] text-slate-400 font-normal">({isAr ? 'متاح فقط للفواتير المسددة' : 'Paid invoices only'})</span>
+                    )}
+                  </div>
                 </label>
               </div>
 
-              {settlementType === 'instant_cash' && (
-                <div className="pt-2 flex items-center gap-2">
-                  <span className="text-xs text-slate-500">{isAr ? 'طريقة الصرف:' : 'Method:'}</span>
-                  <select
-                    value={refundPaymentMethod}
-                    onChange={(e) => setRefundPaymentMethod(e.target.value as any)}
-                    className="text-xs p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-emerald-700"
-                  >
-                    <option value="cash">{isAr ? 'نقدي من الخزينة' : 'Cash'}</option>
-                    <option value="card">{isAr ? 'بطاقة بنكية / نقطة بيع' : 'Card'}</option>
-                    <option value="bank_transfer">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                  </select>
+              {isInvoiceUnpaid ? (
+                <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/80 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold">
+                      {isAr
+                        ? 'هذه الفاتورة بيع آجل لم يُسدد منها نقدية بعد (المدفوع: 0 ج.م).'
+                        : 'This invoice is on credit with 0 cash paid.'}
+                    </p>
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                      {isAr
+                        ? 'اختر "إشعار دائن بحساب العميل" لتخفيض وإلغاء مديونية الفاتورة تلقائياً وإعادة البضاعة للمخزن فوراً. (إذا كان العميل قد دفع نقداً في الواقع، سجل أولاً "سند قبض" للفاتورة لتتمكن الخزينة من إثبات رد النقدية).'
+                        : 'Credit note will offset the client debt. If the client already paid, record a payment receipt first.'}
+                    </p>
+                  </div>
                 </div>
-              )}
+              ) : settlementType === 'instant_cash' ? (
+                <div className="pt-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">{isAr ? 'طريقة الصرف:' : 'Method:'}</span>
+                    <select
+                      value={refundPaymentMethod}
+                      onChange={(e) => setRefundPaymentMethod(e.target.value as any)}
+                      className="text-xs p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-emerald-700"
+                    >
+                      <option value="cash">{isAr ? 'نقدي من الخزينة' : 'Cash'}</option>
+                      <option value="card">{isAr ? 'بطاقة بنكية / نقطة بيع' : 'Card'}</option>
+                      <option value="bank_transfer">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
+                    </select>
+                  </div>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium font-mono">
+                    {isAr ? 'الحد الأقصى المتاح للاسترداد: ' : 'Max refundable: '} {invoicePaidAmount.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

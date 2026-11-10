@@ -549,6 +549,50 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
     }
   };
 
+  const paymentCustomerOptions = React.useMemo(() => {
+    const map = new Map<string, { id: string; name: string; code?: string; balance?: number }>();
+    customers.forEach((c) => {
+      map.set(c.id, { id: c.id, name: c.name, code: c.code, balance: c.current_balance });
+    });
+    invoices.forEach((inv) => {
+      if (inv.customer_id && !map.has(inv.customer_id)) {
+        map.set(inv.customer_id, {
+          id: inv.customer_id,
+          name: inv.customer_name || 'عميل مسجل بالفاتورة',
+          code: 'CUST',
+          balance: Number(inv.balance_due ?? inv.total_amount),
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [customers, invoices]);
+
+  const handlePaymentInvoiceSelect = (invId: string) => {
+    setPaymentInvoiceId(invId);
+    if (!invId) return;
+    const inv = invoices.find((i) => i.id === invId);
+    if (inv) {
+      if (inv.customer_id) {
+        setPaymentCustomerId(inv.customer_id);
+      }
+      const due = Number(inv.balance_due ?? inv.total_amount);
+      if (due > 0) {
+        setPaymentAmount(due);
+      }
+    }
+  };
+
+  const handlePaymentCustomerSelect = (custId: string) => {
+    setPaymentCustomerId(custId);
+    if (!custId) return;
+    const custInvoices = invoices.filter((i) => i.customer_id === custId && i.status !== 'paid' && i.status !== 'void');
+    if (custInvoices.length > 0 && !paymentInvoiceId) {
+      setPaymentInvoiceId(custInvoices[0].id);
+      const due = Number(custInvoices[0].balance_due ?? custInvoices[0].total_amount);
+      if (due > 0) setPaymentAmount(due);
+    }
+  };
+
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentCustomerId || paymentAmount <= 0) {
@@ -2083,11 +2127,39 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             <RotateCcw className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Action 4: Dropdown Menu */}
+                          {/* Action 5: Direct Payment Receipt / Collection */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPaymentInvoiceId(inv.id);
+                              setPaymentCustomerId(inv.customer_id || '');
+                              setPaymentAmount(Number(inv.balance_due ?? inv.total_amount));
+                              setIsRecordPaymentOpen(true);
+                            }}
+                            disabled={inv.status === 'paid' || inv.status === 'void'}
+                            title={isAr ? 'تسجيل سند قبض وتحصيل نقدية لهذه الفاتورة' : 'Record Payment Receipt'}
+                            className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-40"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Action 6: Dropdown Menu */}
                           <ActionsMenu
                             variant="icon-horizontal"
                             align={isAr ? 'left' : 'right'}
                             items={[
+                              {
+                                id: 'record-payment',
+                                label: isAr ? 'تسجيل سند قبض وتحصيل نقدية' : 'Record Payment Receipt',
+                                icon: <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />,
+                                onClick: () => {
+                                  setPaymentInvoiceId(inv.id);
+                                  setPaymentCustomerId(inv.customer_id || '');
+                                  setPaymentAmount(Number(inv.balance_due ?? inv.total_amount));
+                                  setIsRecordPaymentOpen(true);
+                                },
+                                disabled: inv.status === 'paid' || inv.status === 'void',
+                              },
                               {
                                 id: 'sales-return',
                                 label: isAr ? 'إرجاع مبيعات وإشعار دائن' : 'Sales Return & Credit Note',
@@ -3136,19 +3208,24 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       >
         <form onSubmit={handleRecordPayment} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {isAr ? 'العميل *' : 'Customer *'}
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+              <span>{isAr ? 'العميل *' : 'Customer *'}</span>
+              {paymentCustomerId && (
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                  {paymentCustomerOptions.find(c => c.id === paymentCustomerId)?.name}
+                </span>
+              )}
             </label>
             <select
               value={paymentCustomerId}
-              onChange={(e) => setPaymentCustomerId(e.target.value)}
+              onChange={(e) => handlePaymentCustomerSelect(e.target.value)}
               required
-              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs"
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs font-medium"
             >
               <option value="">{isAr ? '— اختر العميل —' : '— Select Customer —'}</option>
-              {customers.map((c) => (
+              {paymentCustomerOptions.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.code} - {c.name} {c.current_balance ? `(${isAr ? 'مديونية:' : 'Bal:'} ${Number(c.current_balance).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'})` : ''}
+                  {c.code ? `${c.code} - ` : ''}{c.name} {c.balance ? `(${isAr ? 'مديونية:' : 'Bal:'} ${Number(c.balance).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'})` : ''}
                 </option>
               ))}
             </select>
@@ -3193,18 +3270,27 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
             </label>
             <select
               value={paymentInvoiceId}
-              onChange={(e) => setPaymentInvoiceId(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs"
+              onChange={(e) => handlePaymentInvoiceSelect(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-xs font-medium"
             >
               <option value="">{isAr ? '— تسوية تلقائية بأقدم الفواتير المستحقة (FIFO) —' : '— Auto FIFO Allocation —'}</option>
               {invoices
                 .filter((inv) => inv.status !== 'void' && inv.status !== 'paid')
                 .map((inv) => (
                   <option key={inv.id} value={inv.id}>
-                    {inv.invoice_number} ({inv.customer_name}) - {isAr ? 'إجمالي:' : 'Total:'} {Number(inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                    {inv.invoice_number} ({inv.customer_name}) - {isAr ? 'المتبقي:' : 'Due:'} {Number(inv.balance_due ?? inv.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                   </option>
                 ))}
             </select>
+            {paymentInvoiceId && (
+              <div className="mt-1.5 p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                <span>{isAr ? 'تم ربط سند القبض بالفاتورة المحددة وتخصيص السداد إليها مباشرة' : 'Allocated to selected invoice'}</span>
+                <span className="font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                  {isAr ? 'المبلغ المستحق: ' : 'Due: '}
+                  {Number(invoices.find(i => i.id === paymentInvoiceId)?.balance_due ?? invoices.find(i => i.id === paymentInvoiceId)?.total_amount ?? 0).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                </span>
+              </div>
+            )}
           </div>
 
           <div>

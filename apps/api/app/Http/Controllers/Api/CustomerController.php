@@ -94,7 +94,7 @@ class CustomerController extends Controller
                 },
             ],
             'name' => 'required|string|max:255',
-            'classification' => 'nullable|string|in:individual,company',
+            'classification' => 'nullable|string|in:individual,company,wholesale,retail',
             'company_name' => 'nullable|string|max:255',
             'contact_person' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:50',
@@ -199,7 +199,7 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'classification' => 'nullable|string|in:individual,company',
+            'classification' => 'nullable|string|in:individual,company,wholesale,retail',
             'company_name' => 'nullable|string|max:255',
             'contact_person' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:50',

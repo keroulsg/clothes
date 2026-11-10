@@ -52,7 +52,14 @@ class SalesController extends Controller
 
     public function salesOrders(): JsonResponse
     {
-        $orders = SalesOrder::with(['customer', 'warehouse', 'items.variant.garmentModel', 'invoices'])
+        $orders = SalesOrder::with([
+            'customer',
+            'warehouse',
+            'items.variant.garmentModel',
+            'items.variant.size',
+            'items.variant.color',
+            'invoices'
+        ])
             ->latest()
             ->paginate(20);
 

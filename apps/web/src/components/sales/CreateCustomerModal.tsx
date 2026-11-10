@@ -22,7 +22,7 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
 }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [classification, setClassification] = useState<'company' | 'individual'>('company');
+  const [classification, setClassification] = useState<'company' | 'individual' | 'wholesale' | 'retail'>('company');
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [phone, setPhone] = useState('');
@@ -152,6 +152,50 @@ export const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
             <span>{errorMsg}</span>
           </div>
         )}
+
+        {/* Customer Classification: Wholesale vs Retail */}
+        <div className="space-y-1.5">
+          <label className="block font-semibold text-slate-700 dark:text-slate-300 text-xs">
+            {isAr ? 'تصنيف ونوع العميل *' : 'Customer Category *'}
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setClassification('company')}
+              className={`flex items-center gap-2.5 p-3 rounded-2xl border text-xs font-bold transition-all text-start cursor-pointer ${
+                classification === 'company' || classification === 'wholesale'
+                  ? 'bg-[#7F1625]/10 border-[#7F1625] text-[#7F1625] dark:text-[#ff8ba0] shadow-sm ring-1 ring-[#7F1625]/30'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+              }`}
+            >
+              <span className="w-8 h-8 rounded-xl bg-[#7F1625]/15 text-[#7F1625] flex items-center justify-center text-sm font-black shrink-0">
+                🏢
+              </span>
+              <div>
+                <p className="font-bold">{isAr ? 'عميل جملة وتوزيع' : 'Wholesale / Corporate'}</p>
+                <p className="text-[10px] font-normal text-slate-500">{isAr ? 'محلات، وكلاء، براندات تجارية' : 'Bulk stores & dealers'}</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setClassification('individual')}
+              className={`flex items-center gap-2.5 p-3 rounded-2xl border text-xs font-bold transition-all text-start cursor-pointer ${
+                classification === 'individual' || classification === 'retail'
+                  ? 'bg-[#7F1625]/10 border-[#7F1625] text-[#7F1625] dark:text-[#ff8ba0] shadow-sm ring-1 ring-[#7F1625]/30'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+              }`}
+            >
+              <span className="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-600 flex items-center justify-center text-sm font-black shrink-0">
+                🛍️
+              </span>
+              <div>
+                <p className="font-bold">{isAr ? 'عميل قطاعي وتجزئة' : 'Retail / Individual'}</p>
+                <p className="text-[10px] font-normal text-slate-500">{isAr ? 'مستهلك مباشر، منافذ البيع' : 'Direct consumer & cash'}</p>
+              </div>
+            </button>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div>

@@ -25,6 +25,7 @@ import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
 import { SalesReturnModal } from './SalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
+import { PrintSalesInvoiceModal } from './PrintSalesInvoiceModal';
 import { CreateCustomerModal } from './CreateCustomerModal';
 import { CustomerStatementModal } from './CustomerStatementModal';
 import { api } from '../../api/client';
@@ -61,6 +62,10 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [selectedCustomerForStatement, setSelectedCustomerForStatement] = useState<Customer | null>(null);
   const [selectedCustomerForEdit, setSelectedCustomerForEdit] = useState<Customer | null>(null);
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
+  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<SalesOrder | null>(null);
+  const [reservingOrderId, setReservingOrderId] = useState<string | null>(null);
+  const [deliveringOrderId, setDeliveringOrderId] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<SalesInvoice | null>(null);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [selectedInvoiceForReceipt, setSelectedInvoiceForReceipt] = useState<SalesInvoice | null>(null);
@@ -153,36 +158,45 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   }, [variants, newOrderVariantId]);
 
   const handleReserveStock = async (orderId: string) => {
+    setReservingOrderId(orderId);
+    setErrorMsg(null);
     try {
       const res = await api.sales.reserveOrderStock(orderId);
-      if (res?.order) {
-        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.order : o)));
-      } else {
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: 'reserved' as const } : o))
-        );
+      const updatedOrder = res?.order || { id: orderId, status: 'reserved' as const };
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updatedOrder, status: 'reserved' as const } : o)));
+      if (selectedOrderForView?.id === orderId) {
+        setSelectedOrderForView((prev) => prev ? { ...prev, ...updatedOrder, status: 'reserved' as const } : null);
       }
+      setSuccessToast(isAr ? 'تم تأكيد حجز رصيد المخزون التام للطلب بنجاح! 🔒' : 'Stock reserved successfully! 🔒');
+      setTimeout(() => setSuccessToast(null), 4000);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل حجز المخزون' : 'Failed to reserve stock'));
+    } finally {
+      setReservingOrderId(null);
     }
   };
 
   const handleFulfillOrder = async (orderId: string) => {
+    setDeliveringOrderId(orderId);
+    setErrorMsg(null);
     try {
       const res = await api.sales.fulfillOrder(orderId);
-      if (res?.order) {
-        setOrders((prev) => prev.map((o) => (o.id === orderId ? res.order : o)));
-      } else {
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: 'fulfilled' as const } : o))
-        );
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'fulfilled' as const } : o)));
+      if (selectedOrderForView?.id === orderId) {
+        setSelectedOrderForView((prev) => prev ? { ...prev, status: 'fulfilled' as const } : null);
       }
-      // Reload invoices
-      api.sales.getInvoices(1).then((invRes) => {
-        if (invRes?.data) setInvoices(invRes.data);
-      }).catch(() => {});
+      if (res?.invoice) {
+        setInvoices((prev) => [res.invoice, ...prev]);
+        setSuccessToast(isAr ? `تم صرف البضاعة من المخزن وإصدار فاتورة المبيعات (${res.invoice.invoice_number}) بنجاح! 🚚` : 'Order fulfilled and invoiced successfully!');
+      } else {
+        setSuccessToast(isAr ? 'تم صرف البضاعة من المخزن التام بنجاح! 🚚' : 'Order fulfilled successfully!');
+      }
+      setTimeout(() => setSuccessToast(null), 4000);
+      await loadSalesData();
     } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل إتمام تسليم الطلب' : 'Failed to fulfill order'));
+      setErrorMsg(err?.message || (isAr ? 'فشل إتمام تسليم وصرف الطلب' : 'Failed to fulfill order'));
+    } finally {
+      setDeliveringOrderId(null);
     }
   };
 
@@ -522,6 +536,16 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
           </div>
         </div>
       </div>
+      {successToast && (
+        <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+          <div className="flex items-center gap-2 font-bold">
+            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{successToast}</span>
+          </div>
+          <button onClick={() => setSuccessToast(null)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">✕</button>
+        </div>
+      )}
+
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -776,150 +800,300 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
       </div>
 
       {/* ORDERS VIEW */}
+      {/* ORDERS VIEW */}
       {activeSubTab === 'orders' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'سجل أوامر البيع وحالة حجز البضاعة التامة' : 'Sales Orders & Finished Stock Reservation'}
-            </h3>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={isAr ? 'بحث برقم الأمر أو العميل...' : 'Search by order # or client...'}
-                className="ps-9 pe-4 py-1.5 text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
+        <Card className="bg-white dark:bg-[#000000] border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm relative">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#7F1625] via-amber-500 to-[#7F1625]"></div>
+          
+          <div className="p-5 border-b border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <span className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:bg-[#7F1625]/20 dark:text-[#ff8ba0] flex items-center justify-center font-black">
+                  <ShoppingBag className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                    {isAr ? 'سجل أوامر البيع وحالة حجز البضاعة التامة' : 'Sales Orders & Finished Stock Reservation'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isAr ? 'تتبع طلبيات الجملة والقطاعي، تأكيد حجز رصيد المخزن، صرف الشحنات، وطباعة الفواتير الرسمية' : 'Manage wholesale & retail orders, reserve stock, fulfill deliveries, and print tax invoices'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="relative min-w-[260px]">
+                <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={isAr ? 'بحث برقم الأمر أو العميل أو الموديل...' : 'Search by order #, client, or model...'}
+                  className="w-full ps-9 pe-4 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#7F1625]/40"
+                />
+              </div>
+
+              <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                {filteredOrders.length} {isAr ? 'أمر بيع' : 'orders'}
+              </span>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+            <table className="w-full text-start text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-bold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم الأمر' : 'Order #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="p-3 text-start">{isAr ? 'النوع' : 'Type'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الإجمالي' : 'Total'}</th>
-                  <th className="p-3 text-start">{isAr ? 'حالة المخزون' : 'Stock Status'}</th>
-                  <th className="p-3 text-start">{isAr ? 'تاريخ التسليم' : 'Delivery Date'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'رقم وتاريخ الأمر' : 'Order # & Date'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'العميل والنشاط' : 'Customer & Class'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'الموديلات والكمية' : 'Garments & Qty'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'النوع' : 'Type'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'الإجمالي الصافي' : 'Net Total'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'حالة المخزون' : 'Stock Status'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'موعد التسليم' : 'Delivery Date'}</th>
+                  <th className="p-3.5 text-center">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد أوامر بيع مسجلة حالياً' : 'No sales orders found'}
+                    <td colSpan={8} className="p-12 text-center text-slate-400">
+                      <ShoppingBag className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                      <p className="font-bold">{isAr ? 'لا توجد أوامر بيع مطابقة للبحث' : 'No sales orders found'}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{isAr ? 'يمكنك إنشاء أمر بيع جديد من زر (+ أمر بيع جديد) بالأعلى' : 'You can create a new sales order above'}</p>
                     </td>
                   </tr>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{order.order_number}</td>
-                      <td className="p-3">{order.customer_name}</td>
-                      <td className="p-3">
-                        <span className="capitalize text-xs font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                          {order.order_type}
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(order.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3">
-                        {order.status === 'confirmed' && (
-                          <Badge variant="warning">{isAr ? 'بانتظار الحجز' : 'Pending Reservation'}</Badge>
-                        )}
-                        {order.status === 'reserved' && (
-                          <Badge variant="info">{isAr ? 'محجوز بالمخزن' : 'Stock Reserved'}</Badge>
-                        )}
-                        {order.status === 'fulfilled' && (
-                          <Badge variant="success">{isAr ? 'تم الصرف والفوترة' : 'Fulfilled'}</Badge>
-                        )}
-                      </td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400">{order.expected_delivery_date || '—'}</td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                  filteredOrders.map((order) => {
+                    const isWholesale =
+                      order.order_type === 'wholesale' ||
+                      order.customer?.classification === 'wholesale' ||
+                      order.customer?.classification === 'company' ||
+                      (!order.order_type && true);
+
+                    const itemsCount = order.items?.reduce((s, it: any) => s + (Number(it.ordered_quantity || it.quantity) || 0), 0) || 0;
+                    const firstItem = order.items?.[0];
+                    const v = firstItem?.variant;
+                    const modelName =
+                      v?.garment_model?.name ||
+                      v?.garmentModel?.name ||
+                      firstItem?.description ||
+                      (isAr ? 'موديل ملابس جاهز' : 'Standard Garment');
+
+                    return (
+                      <tr key={order.id} className="hover:bg-[#7F1625]/5 dark:hover:bg-[#7F1625]/10 transition-colors group">
+                        {/* 1. Order Number & Date */}
+                        <td className="p-3.5 font-semibold text-slate-900 dark:text-white">
+                          <span className="font-mono font-bold text-[#7F1625] dark:text-[#ff8ba0] block group-hover:underline cursor-pointer" onClick={() => setSelectedOrderForView(order)}>
+                            {order.order_number}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                            {order.order_date || '2026-11-10'}
+                          </span>
+                        </td>
+
+                        {/* 2. Customer & Classification */}
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-900 dark:text-slate-100 max-w-[200px] truncate">
+                            {order.customer_name}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {isWholesale ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] dark:bg-[#7F1625]/25 dark:text-[#ff8ba0] border border-[#7F1625]/30">
+                                🏢 {isAr ? 'عميل جملة' : 'Wholesale'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200">
+                                🛍️ {isAr ? 'عميل قطاعي' : 'Retail'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 3. Items & Qty */}
+                        <td className="p-3.5">
+                          <div className="font-medium text-slate-900 dark:text-slate-200 truncate max-w-[180px]">
+                            {modelName}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {itemsCount > 0 ? `${itemsCount} ${isAr ? 'قطعة' : 'pcs'}` : (isAr ? 'بند محدد' : '1 item')}
+                            {order.items && order.items.length > 1 ? ` • +${order.items.length - 1} ${isAr ? 'موديلات أخرى' : 'more'}` : ''}
+                          </div>
+                        </td>
+
+                        {/* 4. Type */}
+                        <td className="p-3.5">
+                          <span className="capitalize text-[11px] font-medium px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {order.order_type === 'wholesale' ? (isAr ? 'بيع جملة' : 'Wholesale') :
+                             order.order_type === 'retail' ? (isAr ? 'بيع قطاعي' : 'Retail') :
+                             order.order_type === 'outlet' ? (isAr ? 'منفذ المصنع' : 'Outlet') :
+                             (order.order_type || (isAr ? 'جملة' : 'Wholesale'))}
+                          </span>
+                        </td>
+
+                        {/* 5. Total */}
+                        <td className="p-3.5 font-bold font-mono text-slate-900 dark:text-white text-sm">
+                          {Number(order.total_amount).toLocaleString()} <span className="text-[11px] font-normal text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                        </td>
+
+                        {/* 6. Stock Status */}
+                        <td className="p-3.5">
                           {order.status === 'confirmed' && (
-                            <Button size="sm" onClick={() => handleReserveStock(order.id)}>
-                              <PackageCheck className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'حجز المخزون' : 'Reserve Stock'}
-                            </Button>
-                          )}
-                          {order.status === 'reserved' && (
-                            <Button size="sm" variant="outline" onClick={() => handleFulfillOrder(order.id)}>
-                              <Truck className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'صرف وفوترة' : 'Fulfill & Invoice'}
-                            </Button>
-                          )}
-                          {order.status === 'fulfilled' && (
-                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center justify-center">
-                              <CheckCircle className="w-4 h-4 me-1" />
-                              {isAr ? 'مكتمل' : 'Completed'}
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              ⏳ {isAr ? 'بانتظار الحجز' : 'Pending Reservation'}
                             </span>
                           )}
-                          <ActionsMenu
-                            variant="icon-horizontal"
-                            align={isAr ? 'left' : 'right'}
-                            items={[
-                              {
-                                id: 'view',
-                                label: isAr ? 'معاينة تفاصيل الأمر' : 'View Details',
-                                icon: <Eye className="w-3.5 h-3.5 text-blue-500" />,
-                                onClick: () => setSelectedOrderForView(order),
-                              },
-                              {
-                                id: 'print',
-                                label: isAr ? 'طباعة بطاقة التعبئة والأمر' : 'Print Order / Slip',
-                                icon: <Printer className="w-3.5 h-3.5 text-slate-500" />,
-                                onClick: () => {
-                                  setSelectedOrderForView(order);
-                                  setTimeout(() => window.print(), 300);
+                          {order.status === 'reserved' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                              🔒 {isAr ? 'محجوز بالمخزن' : 'Stock Reserved'}
+                            </span>
+                          )}
+                          {order.status === 'fulfilled' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              🚚 {isAr ? 'تم الصرف والفوترة' : 'Fulfilled'}
+                            </span>
+                          )}
+                          {order.status !== 'confirmed' && order.status !== 'reserved' && order.status !== 'fulfilled' && (
+                            <Badge variant="neutral">{order.status}</Badge>
+                          )}
+                        </td>
+
+                        {/* 7. Delivery Date */}
+                        <td className="p-3.5 text-slate-600 dark:text-slate-400 font-mono text-xs">
+                          {order.expected_delivery_date || '—'}
+                        </td>
+
+                        {/* 8. Direct Icon Actions */}
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Action 1: View Details */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrderForView(order)}
+                              title={isAr ? 'معاينة تفاصيل أمر البيع والأصناف' : 'View Order Details'}
+                              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Action 2: Reserve Stock (Active when confirmed or re-verifying) */}
+                            {order.status === 'confirmed' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleReserveStock(order.id)}
+                                disabled={reservingOrderId === order.id}
+                                title={isAr ? 'تأكيد حجز رصيد المخزون التام فوراً' : 'Reserve Stock Now'}
+                                className="p-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-50"
+                              >
+                                {reservingOrderId === order.id ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <PackageCheck className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            ) : null}
+
+                            {/* Action 3: Fulfill & Deliver */}
+                            {order.status === 'reserved' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleFulfillOrder(order.id)}
+                                disabled={deliveringOrderId === order.id}
+                                title={isAr ? 'صرف البضاعة التامة وإصدار فاتورة المبيعات' : 'Fulfill & Dispatch'}
+                                className="p-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-600 dark:text-blue-400 border border-blue-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-50"
+                              >
+                                {deliveringOrderId === order.id ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Truck className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            ) : null}
+
+                            {/* Action 4: Official Tax Sales Invoice Print */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrderForPrint(order)}
+                              title={isAr ? 'طباعة فاتورة مبيعات ضريبية رسمية A4' : 'Print Official Tax Invoice (A4)'}
+                              className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Action 5: Payment Receipt */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentCustomerId(order.customer_id || '');
+                                setPaymentAmount(Number(order.total_amount));
+                                setIsRecordPaymentOpen(true);
+                              }}
+                              title={isAr ? 'تسجيل سند قبض وتحصيل نقدية' : 'Record Payment Receipt'}
+                              className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Action 6: Dropdown for Additional Actions */}
+                            <ActionsMenu
+                              variant="icon-horizontal"
+                              align={isAr ? 'left' : 'right'}
+                              items={[
+                                {
+                                  id: 'view',
+                                  label: isAr ? 'معاينة تفاصيل الأصناف والمخزن' : 'View Details',
+                                  icon: <Eye className="w-3.5 h-3.5 text-blue-500" />,
+                                  onClick: () => setSelectedOrderForView(order),
                                 },
-                              },
-                              ...(order.status === 'confirmed'
-                                ? [
-                                    {
-                                      id: 'reserve-action',
-                                      label: isAr ? 'تأكيد حجز المخزون التام' : 'Reserve Finished Stock',
-                                      icon: <PackageCheck className="w-3.5 h-3.5 text-emerald-500" />,
-                                      onClick: () => handleReserveStock(order.id),
-                                    },
-                                  ]
-                                : []),
-                              ...(order.status === 'confirmed' || order.status === 'reserved'
-                                ? [
-                                    {
-                                      id: 'deliver-action',
-                                      label: isAr ? 'تسليم وشحن الطلب' : 'Deliver & Dispatch',
-                                      icon: <Truck className="w-3.5 h-3.5 text-blue-500" />,
-                                      onClick: () => handleDeliverOrder(order.id),
-                                    },
-                                    {
-                                      id: 'cancel-order',
-                                      label: isAr ? 'إلغاء أمر البيع' : 'Cancel Sales Order',
-                                      icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
-                                      onClick: () => handleCancelOrder(order.id),
-                                    },
-                                  ]
-                                : []),
-                              ...(order.status === 'reserved'
-                                ? [
-                                    {
-                                      id: 'fulfill-action',
-                                      label: isAr ? 'إصدار إذن الصرف والفاتورة' : 'Fulfill & Invoice',
-                                      icon: <Truck className="w-3.5 h-3.5 text-primary" />,
-                                      onClick: () => handleFulfillOrder(order.id),
-                                    },
-                                  ]
-                                : []),
-                            ]}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                                {
+                                  id: 'print-official',
+                                  label: isAr ? 'طباعة الفاتورة الضريبية الرسمية A4' : 'Print Tax Invoice (A4)',
+                                  icon: <Printer className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                  onClick: () => setSelectedOrderForPrint(order),
+                                },
+                                ...(order.status === 'confirmed'
+                                  ? [
+                                      {
+                                        id: 'reserve-action',
+                                        label: isAr ? 'تأكيد حجز المخزون التام' : 'Reserve Finished Stock',
+                                        icon: <PackageCheck className="w-3.5 h-3.5 text-emerald-500" />,
+                                        onClick: () => handleReserveStock(order.id),
+                                      },
+                                    ]
+                                  : []),
+                                ...(order.status === 'reserved'
+                                  ? [
+                                      {
+                                        id: 'fulfill-action',
+                                        label: isAr ? 'صرف المخزن وإصدار الفاتورة' : 'Fulfill & Invoice',
+                                        icon: <Truck className="w-3.5 h-3.5 text-blue-500" />,
+                                        onClick: () => handleFulfillOrder(order.id),
+                                      },
+                                    ]
+                                  : []),
+                                ...(order.status === 'confirmed' || order.status === 'reserved'
+                                  ? [
+                                      {
+                                        id: 'deliver-action',
+                                        label: isAr ? 'تسليم وشحن الطلب' : 'Deliver & Dispatch',
+                                        icon: <Truck className="w-3.5 h-3.5 text-blue-500" />,
+                                        onClick: () => handleDeliverOrder(order.id),
+                                      },
+                                      {
+                                        id: 'cancel-order',
+                                        label: isAr ? 'إلغاء أمر البيع' : 'Cancel Sales Order',
+                                        icon: <RotateCcw className="w-3.5 h-3.5 text-rose-500" />,
+                                        onClick: () => handleCancelOrder(order.id),
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1689,87 +1863,187 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         <Modal
           isOpen={!!selectedOrderForView}
           onClose={() => setSelectedOrderForView(null)}
-          title={`${isAr ? 'تفاصيل أمر البيع رقم: ' : 'Sales Order Details: '}${selectedOrderForView.order_number}`}
+          title={`${isAr ? 'ملف أمر البيع الرقمي الشامل: ' : 'Sales Order File: '}${selectedOrderForView.order_number}`}
           maxWidth="lg"
         >
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{isAr ? 'اسم العميل' : 'Customer Name'}</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{selectedOrderForView.customer_name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{isAr ? 'نوع الطلب' : 'Order Type'}</p>
-                <span className="capitalize text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 mt-1 inline-block">
-                  {selectedOrderForView.order_type}
-                </span>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{isAr ? 'حالة التجهيز والمخزون' : 'Status'}</p>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'اسم العميل' : 'Customer Name'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 truncate">{selectedOrderForView.customer_name}</p>
                 <div className="mt-1">
-                  {selectedOrderForView.status === 'confirmed' && <Badge variant="warning">{isAr ? 'بانتظار الحجز' : 'Pending'}</Badge>}
-                  {selectedOrderForView.status === 'reserved' && <Badge variant="info">{isAr ? 'محجوز بالمخزن' : 'Reserved'}</Badge>}
-                  {selectedOrderForView.status === 'fulfilled' && <Badge variant="success">{isAr ? 'تم الصرف والفوترة' : 'Fulfilled'}</Badge>}
+                  {selectedOrderForView.order_type === 'wholesale' || selectedOrderForView.customer?.classification === 'wholesale' || selectedOrderForView.customer?.classification === 'company' ? (
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/20">
+                      🏢 {isAr ? 'عميل جملة' : 'Wholesale'}
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:text-blue-300 border border-blue-200">
+                      🛍️ {isAr ? 'عميل قطاعي' : 'Retail'}
+                    </span>
+                  )}
                 </div>
               </div>
+
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{isAr ? 'تاريخ التسليم' : 'Delivery Date'}</p>
-                <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">{selectedOrderForView.expected_delivery_date || '—'}</p>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'نوع المعاملة' : 'Order Type'}</p>
+                <span className="capitalize text-xs font-semibold px-2 py-0.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 mt-1 inline-block">
+                  {selectedOrderForView.order_type === 'wholesale' ? (isAr ? 'بيع جملة' : 'Wholesale') :
+                   selectedOrderForView.order_type === 'retail' ? (isAr ? 'بيع قطاعي' : 'Retail') :
+                   (selectedOrderForView.order_type || (isAr ? 'جملة' : 'Wholesale'))}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'حالة حجز المخزون' : 'Status'}</p>
+                <div className="mt-1">
+                  {selectedOrderForView.status === 'confirmed' && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                      ⏳ {isAr ? 'بانتظار الحجز' : 'Pending'}
+                    </span>
+                  )}
+                  {selectedOrderForView.status === 'reserved' && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                      🔒 {isAr ? 'محجوز بالمخزن' : 'Reserved'}
+                    </span>
+                  )}
+                  {selectedOrderForView.status === 'fulfilled' && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/10 text-blue-600 border border-blue-500/30">
+                      🚚 {isAr ? 'تم الصرف والفوترة' : 'Fulfilled'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'موعد التسليم المتوقع' : 'Delivery Date'}</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1">{selectedOrderForView.expected_delivery_date || '—'}</p>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-                {isAr ? 'بنود الطلبية المحجوزة' : 'Order Items & Variants'}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center justify-between">
+                <span>{isAr ? 'بنود وموديلات الطلبية المحجوزة' : 'Order Items & Variants'}</span>
+                <span className="font-mono text-[11px] text-slate-400 font-normal">
+                  {selectedOrderForView.items?.length || 0} {isAr ? 'أصناف مسجلة' : 'items'}
+                </span>
               </h4>
               {selectedOrderForView.items && selectedOrderForView.items.length > 0 ? (
                 <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                  {selectedOrderForView.items.map((it, idx) => (
-                    <div key={idx} className="py-2.5 flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-slate-900 dark:text-white">
-                          {it.variant ? `${it.variant.size} - ${it.variant.color}` : `Variant #${it.variant_id}`}
-                        </span>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          {isAr ? 'مطلوب: ' : 'Qty: '}{it.ordered_quantity} • {isAr ? 'محجوز: ' : 'Reserved: '}{it.reserved_quantity}
+                  {selectedOrderForView.items.map((it: any, idx: number) => {
+                    const v = it.variant;
+                    const modelName =
+                      v?.garment_model?.name ||
+                      v?.garmentModel?.name ||
+                      it.description ||
+                      (isAr ? 'موديل ملابس جاهز' : 'Garment Model');
+
+                    const sizeName = typeof v?.size === 'object' ? v.size?.name : (v?.size || 'M');
+                    const colorName = typeof v?.color === 'object' ? v.color?.name : (v?.color || 'أساسي');
+                    const qty = Number(it.ordered_quantity || it.quantity || 0);
+                    const reserved = Number(it.reserved_quantity || 0);
+                    const fulfilled = Number(it.fulfilled_quantity || 0);
+                    const unitPrice = Number(it.unit_price || 0);
+                    const lineTotal = Number(it.total_price || (qty * unitPrice));
+
+                    return (
+                      <div key={idx} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-slate-900 dark:text-white text-sm">
+                            {modelName}
+                          </p>
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                              {sizeName} / {colorName}
+                            </span>
+                            {v?.sku && (
+                              <span className="font-mono text-slate-400">
+                                SKU: {v.sku}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono pt-1">
+                            {isAr ? 'مطلوب: ' : 'Ordered: '}<span className="font-bold text-slate-800 dark:text-slate-200">{qty}</span> • {isAr ? 'محجوز: ' : 'Reserved: '}<span className="font-bold text-emerald-600">{reserved}</span> • {isAr ? 'مستلم/مصروف: ' : 'Fulfilled: '}<span className="font-bold text-blue-600">{fulfilled}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-end">
+                          <span className="font-bold font-mono text-sm text-slate-900 dark:text-white block">
+                            {lineTotal.toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            @{unitPrice.toLocaleString()} {isAr ? 'ج.م' : 'EGP'} / {isAr ? 'قطعة' : 'pc'}
+                          </span>
                         </div>
                       </div>
-                      <div className="text-end">
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          {Number(it.total_price || (it.ordered_quantity * it.unit_price)).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                        </span>
-                        <div className="text-[11px] text-slate-400">@{Number(it.unit_price).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 py-2">
+                <p className="text-xs text-slate-400 py-3 text-center">
                   {isAr ? 'بند طلبية شامل مخصص للموديلات الجاهزة' : 'Standard catalog line item'}
                 </p>
               )}
             </div>
 
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-primary/10 border border-primary/20">
-              <span className="text-sm font-bold text-slate-900 dark:text-white">
-                {isAr ? 'إجمالي قيمة الأمر المستحقة:' : 'Total Order Amount:'}
-              </span>
-              <span className="text-xl font-extrabold text-primary">
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/25">
+              <div>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block">
+                  {isAr ? 'صافي القيمة المستحقة الإجمالية للطلب:' : 'Total Order Net Amount:'}
+                </span>
+                <span className="text-xs font-mono text-slate-400">
+                  {isAr ? 'شامل الضرائب والخصومات المعتمدة' : 'Tax & discounts included'}
+                </span>
+              </div>
+              <span className="text-2xl font-black font-mono text-[#7F1625] dark:text-[#ff8ba0]">
                 {Number(selectedOrderForView.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
               </span>
             </div>
 
-            <div className="flex justify-between items-center pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" />
-                {isAr ? 'طباعة أمر البيع والتسليم' : 'Print Sales Slip'}
-              </Button>
-              <Button type="button" variant="primary" onClick={() => setSelectedOrderForView(null)}>
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderForPrint(selectedOrderForView)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>{isAr ? 'طباعة الفاتورة الضريبية الرسمية A4' : 'Print Tax Invoice (A4)'}</span>
+                </button>
+
+                {selectedOrderForView.status === 'confirmed' && (
+                  <button
+                    type="button"
+                    onClick={() => handleReserveStock(selectedOrderForView.id)}
+                    disabled={reservingOrderId === selectedOrderForView.id}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {reservingOrderId === selectedOrderForView.id ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <PackageCheck className="w-4 h-4" />
+                    )}
+                    <span>{isAr ? 'تأكيد حجز المخزون الآن' : 'Reserve Stock Now'}</span>
+                  </button>
+                )}
+
+                {selectedOrderForView.status === 'reserved' && (
+                  <button
+                    type="button"
+                    onClick={() => handleFulfillOrder(selectedOrderForView.id)}
+                    disabled={deliveringOrderId === selectedOrderForView.id}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {deliveringOrderId === selectedOrderForView.id ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Truck className="w-4 h-4" />
+                    )}
+                    <span>{isAr ? 'صرف المخزن وفوترة الطلب' : 'Fulfill & Invoice'}</span>
+                  </button>
+                )}
+              </div>
+
+              <Button type="button" variant="ghost" onClick={() => setSelectedOrderForView(null)}>
                 {isAr ? 'إغلاق' : 'Close'}
               </Button>
             </div>
@@ -2103,6 +2377,14 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         }}
         customerId={selectedCustomerForStatement?.id || null}
         customer={selectedCustomerForStatement}
+        isAr={isAr}
+      />
+
+      {/* OFFICIAL A4 PRINTABLE SALES INVOICE MODAL */}
+      <PrintSalesInvoiceModal
+        isOpen={!!selectedOrderForPrint}
+        onClose={() => setSelectedOrderForPrint(null)}
+        order={selectedOrderForPrint}
         isAr={isAr}
       />
     </div>

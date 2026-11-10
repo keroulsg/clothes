@@ -1473,7 +1473,7 @@ class ApiClient {
         method: 'POST',
       });
     },
-    fulfillOrder: async (id: string): Promise<{ message: string; order: any }> => {
+    fulfillOrder: async (id: string): Promise<{ message: string; order?: any; invoice?: any }> => {
       return this.request(`/sales/orders/${id}/fulfill`, {
         method: 'POST',
       });

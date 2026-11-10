@@ -99,6 +99,7 @@ export interface ProductVariant {
   stock_visibility?: string;
   product?: any;
   garment_model?: GarmentModel;
+  garmentModel?: GarmentModel;
   size?: { id: string; name: string };
   color?: { id: string; name: string };
 }
@@ -392,7 +393,7 @@ export interface Customer {
   id: string;
   code: string;
   name: string;
-  classification?: 'company' | 'individual';
+  classification?: 'company' | 'individual' | 'wholesale' | 'retail';
   company_name?: string;
   contact_person?: string;
   phone?: string;
@@ -686,6 +687,7 @@ export interface SalesOrderItem {
   id: string;
   variant_id: string;
   inventory_item_id?: string;
+  description?: string;
   ordered_quantity: number;
   reserved_quantity: number;
   fulfilled_quantity: number;
@@ -701,8 +703,12 @@ export interface SalesOrder {
   order_number: string;
   customer_name: string;
   customer_id?: string;
+  customer?: Customer;
+  order_date?: string;
+  created_at?: string;
   quotation_id?: string;
   warehouse_id?: string;
+  warehouse?: any;
   order_type: 'wholesale' | 'retail' | 'outlet' | 'custom';
   status: 'draft' | 'confirmed' | 'reserved' | 'in_fulfillment' | 'fulfilled' | 'cancelled';
   payment_status: 'unpaid' | 'partially_paid' | 'paid';
@@ -713,6 +719,7 @@ export interface SalesOrder {
   expected_delivery_date?: string;
   notes?: string;
   items?: SalesOrderItem[];
+  invoices?: any[];
 }
 
 export interface SalesInvoiceItem {
@@ -780,6 +787,7 @@ export interface SalesInvoice {
   balance_due: number;
   invoice_date: string;
   due_date?: string;
+  customer?: Customer;
   items?: SalesInvoiceItem[];
   tenant?: {
     id: string;

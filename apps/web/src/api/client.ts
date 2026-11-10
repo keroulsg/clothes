@@ -1448,7 +1448,7 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
-    convertQuotation: async (id: string): Promise<{ message: string; sales_order: any }> => {
+    convertQuotation: async (id: string): Promise<{ message: string; sales_order?: any; order?: any }> => {
       return this.request(`/sales/quotations/${id}/convert`, {
         method: 'POST',
       });

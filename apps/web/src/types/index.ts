@@ -673,12 +673,14 @@ export interface Quotation {
   quotation_number: string;
   customer_name: string;
   customer_id?: string;
+  customer?: Customer;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
   total_amount: number;
   valid_until?: string;
+  created_at?: string;
   notes?: string;
   items?: QuotationItem[];
 }

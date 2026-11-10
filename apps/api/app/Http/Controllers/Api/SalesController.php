@@ -426,6 +426,7 @@ class SalesController extends Controller
             return response()->json([
                 'message' => 'تم تحويل عرض السعر إلى أمر بيع بنجاح',
                 'sales_order' => $order,
+                'order' => $order,
             ], 201);
         } catch (\InvalidArgumentException $e) {
             return response()->json([

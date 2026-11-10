@@ -25,7 +25,7 @@ import { Modal } from '../ui/Modal';
 import { ActionsMenu } from '../ui/ActionsMenu';
 import { SalesReturnModal } from './SalesReturnModal';
 import { PosReceiptModal } from './PosReceiptModal';
-import { PrintSalesInvoiceModal } from './PrintSalesInvoiceModal';
+import { PrintSalesInvoiceModal, formatCleanDate } from './PrintSalesInvoiceModal';
 import { CreateCustomerModal } from './CreateCustomerModal';
 import { CustomerStatementModal } from './CustomerStatementModal';
 import { api } from '../../api/client';
@@ -63,6 +63,9 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const [selectedCustomerForEdit, setSelectedCustomerForEdit] = useState<Customer | null>(null);
   const [selectedOrderForView, setSelectedOrderForView] = useState<SalesOrder | null>(null);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<SalesOrder | null>(null);
+  const [selectedQuoteForPrint, setSelectedQuoteForPrint] = useState<Quotation | null>(null);
+  const [selectedQuoteForView, setSelectedQuoteForView] = useState<Quotation | null>(null);
+  const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null);
   const [reservingOrderId, setReservingOrderId] = useState<string | null>(null);
   const [deliveringOrderId, setDeliveringOrderId] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -324,17 +327,33 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
   const posTotal = posCart.reduce((sum, i) => sum + i.price * i.qty, 0);
 
   const handleConvertQuotation = async (quotationId: string) => {
-    if (!confirm(isAr ? 'هل تريد تأكيد تحويل عرض السعر إلى أمر بيع رسمي؟' : 'Convert this quotation into a sales order?')) {
-      return;
-    }
-    setIsLoading(true);
+    setConvertingQuoteId(quotationId);
+    setErrorMsg(null);
     try {
-      await api.sales.convertQuotation(quotationId);
+      const res = await api.sales.convertQuotation(quotationId);
+      const newOrder = res?.sales_order || res?.order;
+      
+      setQuotations((prev) =>
+        prev.map((q) => (q.id === quotationId ? { ...q, status: 'converted' as const } : q))
+      );
+
+      if (newOrder) {
+        setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
+        setSuccessToast(
+          isAr
+            ? `تم تحويل عرض السعر وتأكيد أمر البيع الرسمي بنجاح (${newOrder.order_number})! 📑`
+            : `Quotation confirmed & converted to sales order (${newOrder.order_number})!`
+        );
+      } else {
+        setSuccessToast(isAr ? 'تم تأكيد تحويل عرض السعر إلى أمر بيع رسمي بنجاح! 📑' : 'Quotation converted successfully!');
+      }
+
+      setTimeout(() => setSuccessToast(null), 5000);
       await loadSalesData();
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تحويل عرض السعر إلى أمر بيع' : 'Failed to convert quotation'));
     } finally {
-      setIsLoading(false);
+      setConvertingQuoteId(null);
     }
   };
 
@@ -888,7 +907,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             {order.order_number}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
-                            {order.order_date || '2026-11-10'}
+                            {formatCleanDate(order.order_date || order.created_at)}
                           </span>
                         </td>
 
@@ -960,7 +979,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
                         {/* 7. Delivery Date */}
                         <td className="p-3.5 text-slate-600 dark:text-slate-400 font-mono text-xs">
-                          {order.expected_delivery_date || '—'}
+                          {formatCleanDate(order.expected_delivery_date)}
                         </td>
 
                         {/* 8. Direct Icon Actions */}
@@ -1103,66 +1122,209 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
       {/* QUOTATIONS VIEW */}
       {activeSubTab === 'quotations' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'سجل عروض الأسعار الصادرة للعملاء' : 'Customer Quotations Register'}
-            </h3>
+        <Card className="bg-white dark:bg-[#000000] border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm relative">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-[#7F1625] to-amber-500"></div>
+
+          <div className="p-5 border-b border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:bg-[#7F1625]/20 dark:text-[#ff8ba0] flex items-center justify-center font-black">
+                <FileText className="w-5 h-5" />
+              </span>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                  {isAr ? 'سجل عروض الأسعار الصادرة للعملاء' : 'Customer Quotations Register'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {isAr ? 'إصدار ومتابعة عروض أسعار الجملة، اعتمادها وتحويلها بنقرة واحدة إلى أوامر بيع رسمية، وطباعتها' : 'Manage wholesale quotes, approve & convert them directly to sales orders, and print official slips'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                {quotations.length} {isAr ? 'عرض سعر' : 'quotes'}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setIsQuotationModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isAr ? '+ عرض سعر جديد' : '+ New Quote'}</span>
+              </button>
+            </div>
           </div>
+
           <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+            <table className="w-full text-start text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-bold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم العرض' : 'Quote #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'العميل' : 'Customer'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الإجمالي' : 'Total'}</th>
-                  <th className="p-3 text-start">{isAr ? 'صالح حتى' : 'Valid Until'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'رقم وتاريخ العرض' : 'Quote # & Date'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'العميل' : 'Customer'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'البيان والكمية' : 'Description & Qty'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'الإجمالي الصافي' : 'Net Total'}</th>
+                  <th className="p-3.5 text-start">{isAr ? 'صالح حتى' : 'Valid Until'}</th>
+                  <th className="p-3.5 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="p-3.5 text-center">{isAr ? 'الإجراءات والعمليات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {quotations.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد عروض أسعار مسجلة' : 'No quotations recorded'}
+                    <td colSpan={7} className="p-12 text-center text-slate-400">
+                      <FileText className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                      <p className="font-bold">{isAr ? 'لا توجد عروض أسعار مسجلة حالياً' : 'No quotations recorded'}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{isAr ? 'يمكنك إنشاء عرض سعر جديد بنقرة واحدة من الزر بالأعلى' : 'You can issue a new quote from the button above'}</p>
                     </td>
                   </tr>
                 ) : (
-                  quotations.map((q) => (
-                    <tr key={q.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{q.quotation_number}</td>
-                      <td className="p-3">{q.customer_name}</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(q.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3 text-slate-500">{q.valid_until || '—'}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant="info">{q.status}</Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-quote',
-                              label: isAr ? 'طباعة عرض السعر' : 'Print Quotation',
-                              icon: <Printer className="w-3.5 h-3.5 text-slate-500" />,
-                              onClick: () => window.print(),
-                            },
-                            {
-                              id: 'convert-order',
-                              label: isAr ? 'تحويل لأمر بيع رسمي' : 'Convert to Sales Order',
-                              icon: <FileText className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => handleConvertQuotation(q.id),
-                              disabled: q.status === 'converted' || q.status === 'rejected',
-                            },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  ))
+                  quotations.map((q) => {
+                    const firstItem = q.items?.[0];
+                    const totalPieces = q.items?.reduce((s, it: any) => s + (Number(it.quantity) || 0), 0) || 0;
+                    const isConverted = q.status === 'converted';
+
+                    return (
+                      <tr key={q.id} className="hover:bg-[#7F1625]/5 dark:hover:bg-[#7F1625]/10 transition-colors group">
+                        {/* 1. Quote Number & Date */}
+                        <td className="p-3.5 font-semibold text-slate-900 dark:text-white">
+                          <span
+                            className="font-mono font-bold text-[#7F1625] dark:text-[#ff8ba0] block group-hover:underline cursor-pointer"
+                            onClick={() => setSelectedQuoteForView(q)}
+                          >
+                            {q.quotation_number}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                            {formatCleanDate(q.created_at)}
+                          </span>
+                        </td>
+
+                        {/* 2. Customer */}
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-900 dark:text-slate-100 max-w-[200px] truncate">
+                            {q.customer_name}
+                          </div>
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/20 mt-1">
+                            🏢 {isAr ? 'عميل جملة' : 'Wholesale'}
+                          </span>
+                        </td>
+
+                        {/* 3. Items & Qty */}
+                        <td className="p-3.5">
+                          <div className="font-medium text-slate-900 dark:text-slate-200 truncate max-w-[200px]">
+                            {firstItem?.description || (isAr ? 'تشكيلة موديلات ملابس' : 'Garments Selection')}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {totalPieces > 0 ? `${totalPieces} ${isAr ? 'قطعة مطلوبة' : 'pcs'}` : (isAr ? 'بند محدد' : '1 item')}
+                            {q.items && q.items.length > 1 ? ` • +${q.items.length - 1} ${isAr ? 'بنود أخرى' : 'more'}` : ''}
+                          </div>
+                        </td>
+
+                        {/* 4. Total Amount */}
+                        <td className="p-3.5 font-bold font-mono text-slate-900 dark:text-white text-sm">
+                          {Number(q.total_amount).toLocaleString()} <span className="text-[11px] font-normal text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                        </td>
+
+                        {/* 5. Valid Until */}
+                        <td className="p-3.5 text-slate-600 dark:text-slate-400 font-mono text-xs">
+                          {formatCleanDate(q.valid_until)}
+                        </td>
+
+                        {/* 6. Status Badge */}
+                        <td className="p-3.5 text-center">
+                          {isConverted ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30">
+                              📑 {isAr ? 'محول لأمر بيع' : 'Converted to Order'}
+                            </span>
+                          ) : q.status === 'accepted' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                              ✅ {isAr ? 'معتمد ومقبول' : 'Accepted'}
+                            </span>
+                          ) : q.status === 'sent' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              📤 {isAr ? 'مرسل للعميل' : 'Sent'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              📝 {isAr ? 'مسودة جاهزة' : 'Draft'}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 7. Direct Icon Actions */}
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Action 1: View Details */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedQuoteForView(q)}
+                              title={isAr ? 'معاينة تفاصيل عرض السعر' : 'View Quote Details'}
+                              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Action 2: Convert to Sales Order */}
+                            {!isConverted ? (
+                              <button
+                                type="button"
+                                onClick={() => handleConvertQuotation(q.id)}
+                                disabled={convertingQuoteId === q.id}
+                                title={isAr ? 'تأكيد وتحويل لعرض السعر إلى أمر بيع رسمي' : 'Confirm & Convert to Sales Order'}
+                                className="p-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all hover:scale-105 cursor-pointer shadow-xs disabled:opacity-50"
+                              >
+                                {convertingQuoteId === q.id ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <FileText className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            ) : null}
+
+                            {/* Action 3: Print Official A4 Quotation */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedQuoteForPrint(q)}
+                              title={isAr ? 'طباعة عرض السعر الرسمي A4' : 'Print Official Quotation (A4)'}
+                              className="p-2 rounded-xl bg-[#7F1625]/10 hover:bg-[#7F1625]/20 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30 transition-all hover:scale-105 cursor-pointer shadow-xs"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Action 4: Dropdown Menu */}
+                            <ActionsMenu
+                              variant="icon-horizontal"
+                              align={isAr ? 'left' : 'right'}
+                              items={[
+                                {
+                                  id: 'view-quote',
+                                  label: isAr ? 'معاينة تفاصيل البنود والأسعار' : 'View Details',
+                                  icon: <Eye className="w-3.5 h-3.5 text-blue-500" />,
+                                  onClick: () => setSelectedQuoteForView(q),
+                                },
+                                {
+                                  id: 'print-quote-a4',
+                                  label: isAr ? 'طباعة عرض السعر الرسمي A4' : 'Print Quotation (A4)',
+                                  icon: <Printer className="w-3.5 h-3.5 text-[#7F1625]" />,
+                                  onClick: () => setSelectedQuoteForPrint(q),
+                                },
+                                ...(!isConverted
+                                  ? [
+                                      {
+                                        id: 'convert-order-action',
+                                        label: isAr ? 'تأكيد وتحويل لأمر بيع رسمي' : 'Convert to Sales Order',
+                                        icon: <FileText className="w-3.5 h-3.5 text-emerald-500" />,
+                                        onClick: () => handleConvertQuotation(q.id),
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1372,7 +1534,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
                             : inv.status.replace('_', ' ').toUpperCase()}
                         </Badge>
                       </td>
-                      <td className="p-3 text-slate-500 dark:text-slate-400">{inv.invoice_date}</td>
+                      <td className="p-3 text-slate-500 dark:text-slate-400 font-mono text-xs">{formatCleanDate(inv.invoice_date)}</td>
                       <td className="p-3 text-center">
                         <ActionsMenu
                           variant="icon-horizontal"
@@ -1916,7 +2078,7 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
 
               <div>
                 <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'موعد التسليم المتوقع' : 'Delivery Date'}</p>
-                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1">{selectedOrderForView.expected_delivery_date || '—'}</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1">{formatCleanDate(selectedOrderForView.expected_delivery_date)}</p>
               </div>
             </div>
 
@@ -2380,11 +2542,134 @@ export const SalesTab: React.FC<SalesTabProps> = ({ lang = 'ar', isAr: propIsAr,
         isAr={isAr}
       />
 
-      {/* OFFICIAL A4 PRINTABLE SALES INVOICE MODAL */}
+      {/* Modal: View Quotation Details */}
+      {selectedQuoteForView && (
+        <Modal
+          isOpen={!!selectedQuoteForView}
+          onClose={() => setSelectedQuoteForView(null)}
+          title={`${isAr ? 'ملف عرض السعر الرسمي: ' : 'Quotation Dossier: '}${selectedQuoteForView.quotation_number}`}
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'اسم العميل' : 'Customer Name'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 truncate">{selectedQuoteForView.customer_name}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'تاريخ التحرير' : 'Issue Date'}</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1">{formatCleanDate(selectedQuoteForView.created_at)}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'صالح حتى موعد' : 'Valid Until'}</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-1">{formatCleanDate(selectedQuoteForView.valid_until)}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold">{isAr ? 'حالة العرض' : 'Status'}</p>
+                <div className="mt-1">
+                  {selectedQuoteForView.status === 'converted' ? (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] border border-[#7F1625]/30">
+                      📑 {isAr ? 'محول لأمر بيع' : 'Converted'}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                      📝 {selectedQuoteForView.status}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                {isAr ? 'بنود ومواصفات عرض السعر' : 'Quotation Line Items'}
+              </h4>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {selectedQuoteForView.items && selectedQuoteForView.items.length > 0 ? (
+                  selectedQuoteForView.items.map((it: any, idx: number) => (
+                    <div key={idx} className="py-2.5 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-slate-900 dark:text-white">
+                          {it.description || (isAr ? 'موديل ملابس معتمد' : 'Garment Line')}
+                        </span>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          {isAr ? 'الكمية: ' : 'Qty: '}{it.quantity} {isAr ? 'قطعة' : 'pcs'}
+                        </div>
+                      </div>
+                      <div className="text-end">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {Number(it.total_price || (it.quantity * it.unit_price)).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+                        </span>
+                        <div className="text-[11px] text-slate-400">@{Number(it.unit_price).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-400 py-2">{isAr ? 'لا توجد بنود تفصيلية' : 'No items'}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-[#7F1625]/10 border border-[#7F1625]/25">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {isAr ? 'إجمالي قيمة عرض السعر:' : 'Total Amount:'}
+              </span>
+              <span className="text-2xl font-black font-mono text-[#7F1625] dark:text-[#ff8ba0]">
+                {Number(selectedQuoteForView.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedQuoteForPrint(selectedQuoteForView)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7F1625] hover:bg-[#961b2d] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>{isAr ? 'طباعة عرض السعر الرسمي A4' : 'Print Quotation (A4)'}</span>
+                </button>
+
+                {selectedQuoteForView.status !== 'converted' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleConvertQuotation(selectedQuoteForView.id);
+                      setSelectedQuoteForView(null);
+                    }}
+                    disabled={convertingQuoteId === selectedQuoteForView.id}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {convertingQuoteId === selectedQuoteForView.id ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FileText className="w-4 h-4" />
+                    )}
+                    <span>{isAr ? 'تأكيد وتحويل لأمر بيع الآن' : 'Confirm & Convert to Order'}</span>
+                  </button>
+                )}
+              </div>
+
+              <Button type="button" variant="ghost" onClick={() => setSelectedQuoteForView(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* OFFICIAL A4 PRINTABLE INVOICE & QUOTATION MODAL */}
       <PrintSalesInvoiceModal
-        isOpen={!!selectedOrderForPrint}
-        onClose={() => setSelectedOrderForPrint(null)}
+        isOpen={!!selectedOrderForPrint || !!selectedQuoteForPrint}
+        onClose={() => {
+          setSelectedOrderForPrint(null);
+          setSelectedQuoteForPrint(null);
+        }}
         order={selectedOrderForPrint}
+        quotation={selectedQuoteForPrint}
         isAr={isAr}
       />
     </div>

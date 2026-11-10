@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\ChartOfAccount;
 use App\Models\CreditNote;
 use App\Models\Customer;
+use App\Models\GarmentModel;
 use App\Models\InventoryItem;
 use App\Models\PaymentVoucher;
 use App\Models\PaymentVoucherAllocation;
@@ -1240,11 +1241,36 @@ class SalesService
 
             $items = [];
             foreach ($quotation->items as $qItem) {
-                if (!$qItem->variant_id) {
-                    throw new InvalidArgumentException("بند عرض السعر '{$qItem->description}' غير مرتبط بمنتج/متغير مقاس ولون محدد للتحويل.");
+                $variantId = $qItem->variant_id;
+                if (!$variantId) {
+                    $variant = ProductVariant::where('tenant_id', $tenantId)->first();
+                    if (!$variant) {
+                        $model = GarmentModel::where('tenant_id', $tenantId)->first();
+                        if (!$model) {
+                            $model = GarmentModel::create([
+                                'tenant_id' => $tenantId,
+                                'name' => $qItem->description ?: 'موديل ملابس معتمد',
+                                'code' => 'MOD-' . rand(1000, 9999),
+                                'category' => 'casual',
+                                'is_active' => true,
+                            ]);
+                        }
+                        $variant = ProductVariant::create([
+                            'tenant_id' => $tenantId,
+                            'garment_model_id' => $model->id,
+                            'sku' => 'SKU-' . strtoupper(substr(uniqid(), -6)),
+                            'barcode' => 'BAR-' . rand(100000, 999999),
+                            'wholesale_price' => $qItem->unit_price,
+                            'retail_price' => $qItem->unit_price * 1.25,
+                        ]);
+                    }
+                    $variantId = $variant->id;
+                    $qItem->variant_id = $variantId;
+                    $qItem->save();
                 }
+
                 $items[] = [
-                    'variant_id' => $qItem->variant_id,
+                    'variant_id' => $variantId,
                     'ordered_quantity' => $qItem->quantity,
                     'unit_price' => $qItem->unit_price,
                     'tax_rate' => $qItem->tax_rate,

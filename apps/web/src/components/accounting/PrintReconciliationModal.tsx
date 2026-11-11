@@ -119,30 +119,30 @@ export const PrintReconciliationModal: React.FC<PrintReconciliationModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="relative w-full max-w-4xl bg-[#111217] border border-amber-900/30 rounded-2xl shadow-2xl overflow-hidden my-8 print:border-none print:shadow-none print:my-0 print:w-full print:max-w-none print:bg-white print:text-black">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:p-0 print:bg-white print:static">
+      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-6 print:border-none print:shadow-none print:my-0 print:w-full print:max-w-none print:bg-white print:text-black">
         {/* Modal Top Actions (Hidden in Print) */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 print:hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 print:hidden">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">معاينة وطباعة تقرير التدقيق والمطابقة المحاسبية (A4)</h2>
-              <p className="text-xs text-neutral-400">شهادة مطابقة حسابات المراقبة بالأستاذ العام مع الكشوف الفرعية</p>
+              <h2 className="text-base font-black text-slate-950 dark:text-white">معاينة وطباعة تقرير التدقيق والمطابقة المحاسبية (A4)</h2>
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">شهادة مطابقة حسابات المراقبة بالأستاذ العام مع الكشوف الفرعية</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-medium rounded-xl text-sm shadow-lg shadow-amber-900/20 flex items-center gap-2 transition"
+              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-900/20 flex items-center gap-2 transition cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               طباعة التقرير (Print A4)
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-neutral-400 hover:text-white hover:bg-white/10 rounded-xl transition"
+              className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -152,49 +152,49 @@ export const PrintReconciliationModal: React.FC<PrintReconciliationModalProps> =
         {/* Printable Paper Canvas */}
         <div
           ref={printRef}
-          className="p-8 sm:p-10 space-y-6 text-neutral-200 bg-[#0c0d12] print:bg-white print:text-black print:p-6 print:space-y-4"
+          className="p-6 sm:p-8 space-y-6 text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-950 print:bg-white print:text-black print:p-6 print:space-y-4"
           dir="rtl"
         >
           {/* Header */}
-          <div className="border-b-2 border-amber-500/30 pb-6 print:border-black flex flex-row items-center justify-between">
+          <div className="border-b-2 border-slate-200 dark:border-slate-800 pb-5 print:border-black flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-amber-400 print:border-black print:text-black">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 border-2 border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 print:border-black print:text-black">
                 <Building2 className="w-8 h-8" />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-white print:text-black tracking-tight">{factoryName}</h1>
-                <p className="text-xs font-semibold text-amber-400 print:text-neutral-700 mt-0.5">
+                <h1 className="text-2xl font-black text-slate-950 dark:text-white print:text-black tracking-tight">{factoryName}</h1>
+                <p className="text-xs font-black text-amber-700 dark:text-amber-400 print:text-neutral-700 mt-0.5">
                   الإدارة المالية والحسابات العامة • قسم المراجعة والرقابة الداخلية
                 </p>
-                <p className="text-[11px] text-neutral-400 print:text-neutral-600">
+                <p className="text-xs text-slate-600 dark:text-slate-300 print:text-neutral-600 font-semibold">
                   نظام GarmentOS الصناعي المتكامل لإدارة مصانع الملابس الجاهزة
                 </p>
               </div>
             </div>
 
-            <div className="text-left text-xs space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 print:border-black print:text-black print:bg-neutral-100">
+            <div className="text-left text-xs space-y-1 font-bold">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 print:border-black print:text-black print:bg-neutral-100">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 تقرير تدقيق رسمي معتمد
               </div>
-              <div className="text-neutral-400 print:text-neutral-600 pt-1">
-                التاريخ: <span className="font-semibold text-white print:text-black">{currentDate}</span>
+              <div className="text-slate-600 dark:text-slate-400 print:text-neutral-600 pt-1">
+                التاريخ: <span className="font-extrabold text-slate-900 dark:text-white print:text-black">{currentDate}</span>
               </div>
-              <div className="text-neutral-400 print:text-neutral-600">
-                الوقت: <span className="font-semibold text-white print:text-black">{currentTime}</span>
+              <div className="text-slate-600 dark:text-slate-400 print:text-neutral-600">
+                الوقت: <span className="font-extrabold text-slate-900 dark:text-white print:text-black">{currentTime}</span>
               </div>
-              <div className="text-neutral-400 print:text-neutral-600 font-mono text-[10px]">
+              <div className="text-slate-500 dark:text-slate-400 print:text-neutral-600 font-mono text-xs">
                 Ref: AUD-REC-{new Date().toISOString().slice(0, 10).replace(/-/g, '')}-GL
               </div>
             </div>
           </div>
 
           {/* Title Banner */}
-          <div className="text-center py-2 bg-gradient-to-r from-transparent via-amber-950/20 to-transparent border-y border-amber-500/20 print:border-neutral-300 print:bg-neutral-50">
-            <h2 className="text-lg font-black text-amber-400 print:text-black">
+          <div className="text-center py-3 bg-amber-50/70 dark:bg-amber-950/20 border-y border-amber-200 dark:border-amber-500/20 print:border-neutral-300 print:bg-neutral-50 rounded-xl">
+            <h2 className="text-base font-black text-amber-900 dark:text-amber-400 print:text-black">
               محضر مطابقة حسابات المراقبة بالأستاذ العام مع الدفاتر المساعدة (Subledger Reconciliation)
             </h2>
-            <p className="text-xs text-neutral-400 print:text-neutral-600 mt-0.5">
+            <p className="text-xs text-slate-600 dark:text-slate-300 print:text-neutral-600 mt-0.5 font-semibold">
               فحص التوازن المالي ومطابقة ذمم العملاء والموردين وأرصدة السيولة النقدية والمخزون
             </p>
           </div>
@@ -202,17 +202,17 @@ export const PrintReconciliationModal: React.FC<PrintReconciliationModalProps> =
           {/* KPI Summary 4 Bento Blocks */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {/* AR Card */}
-            <div className="p-3.5 rounded-xl border border-white/10 bg-white/5 print:border-neutral-300 print:bg-neutral-50">
-              <div className="text-[11px] font-semibold text-neutral-400 print:text-neutral-700">مراقبة العملاء (AR)</div>
-              <div className="text-xs font-bold text-neutral-300 print:text-black mt-1">
+            <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 print:border-neutral-300 print:bg-neutral-50">
+              <div className="text-xs font-black text-slate-700 dark:text-slate-300 print:text-neutral-700">مراقبة العملاء (AR)</div>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black mt-1">
                 الأستاذ: {formatEGP(arData?.control_account?.gl_balance)}
               </div>
-              <div className="text-xs font-bold text-neutral-300 print:text-black">
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black">
                 الكشوف: {formatEGP(arData?.subledger_total)}
               </div>
               <div
-                className={`text-xs font-black mt-1.5 pt-1 border-t border-white/10 print:border-neutral-300 flex items-center justify-between ${
-                  arData?.is_matched ? 'text-emerald-400 print:text-emerald-700' : 'text-rose-400 print:text-rose-700'
+                className={`text-xs font-black mt-1.5 pt-1 border-t border-slate-200 dark:border-slate-800 print:border-neutral-300 flex items-center justify-between ${
+                  arData?.is_matched ? 'text-emerald-600 dark:text-emerald-400 print:text-emerald-700' : 'text-rose-600 dark:text-rose-400 print:text-rose-700'
                 }`}
               >
                 <span>الانحراف:</span>
@@ -221,17 +221,17 @@ export const PrintReconciliationModal: React.FC<PrintReconciliationModalProps> =
             </div>
 
             {/* AP Card */}
-            <div className="p-3.5 rounded-xl border border-white/10 bg-white/5 print:border-neutral-300 print:bg-neutral-50">
-              <div className="text-[11px] font-semibold text-neutral-400 print:text-neutral-700">مراقبة الموردين (AP)</div>
-              <div className="text-xs font-bold text-neutral-300 print:text-black mt-1">
+            <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 print:border-neutral-300 print:bg-neutral-50">
+              <div className="text-xs font-black text-slate-700 dark:text-slate-300 print:text-neutral-700">مراقبة الموردين (AP)</div>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black mt-1">
                 الأستاذ: {formatEGP(apData?.control_account?.gl_balance)}
               </div>
-              <div className="text-xs font-bold text-neutral-300 print:text-black">
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black">
                 الكشوف: {formatEGP(apData?.subledger_total)}
               </div>
               <div
-                className={`text-xs font-black mt-1.5 pt-1 border-t border-white/10 print:border-neutral-300 flex items-center justify-between ${
-                  apData?.is_matched ? 'text-emerald-400 print:text-emerald-700' : 'text-rose-400 print:text-rose-700'
+                className={`text-xs font-black mt-1.5 pt-1 border-t border-slate-200 dark:border-slate-800 print:border-neutral-300 flex items-center justify-between ${
+                  apData?.is_matched ? 'text-emerald-600 dark:text-emerald-400 print:text-emerald-700' : 'text-rose-600 dark:text-rose-400 print:text-rose-700'
                 }`}
               >
                 <span>الانحراف:</span>
@@ -240,19 +240,19 @@ export const PrintReconciliationModal: React.FC<PrintReconciliationModalProps> =
             </div>
 
             {/* Treasury Card */}
-            <div className="p-3.5 rounded-xl border border-white/10 bg-white/5 print:border-neutral-300 print:bg-neutral-50">
-              <div className="text-[11px] font-semibold text-neutral-400 print:text-neutral-700">الخزائن والبنوك (Treasury)</div>
-              <div className="text-xs font-bold text-neutral-300 print:text-black mt-1">
+            <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 print:border-neutral-300 print:bg-neutral-50">
+              <div className="text-xs font-black text-slate-700 dark:text-slate-300 print:text-neutral-700">الخزائن والبنوك (Treasury)</div>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black mt-1">
                 الأستاذ: {formatEGP(treasuryData?.gl_total)}
               </div>
-              <div className="text-xs font-bold text-neutral-300 print:text-black">
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black">
                 الفعلي: {formatEGP(treasuryData?.actual_treasury_total)}
               </div>
               <div
-                className={`text-xs font-black mt-1.5 pt-1 border-t border-white/10 print:border-neutral-300 flex items-center justify-between ${
+                className={`text-xs font-black mt-1.5 pt-1 border-t border-slate-200 dark:border-slate-800 print:border-neutral-300 flex items-center justify-between ${
                   treasuryData?.is_matched
-                    ? 'text-emerald-400 print:text-emerald-700'
-                    : 'text-amber-400 print:text-amber-700'
+                    ? 'text-emerald-600 dark:text-emerald-400 print:text-emerald-700'
+                    : 'text-amber-600 dark:text-amber-400 print:text-amber-700'
                 }`}
               >
                 <span>الانحراف:</span>

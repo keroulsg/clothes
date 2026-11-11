@@ -235,28 +235,28 @@ export const CostCenterStatementModal: React.FC<CostCenterStatementModalProps> =
         }
       `}</style>
 
-      <div className="relative w-full max-w-4xl bg-[#0f1523] border border-amber-600/30 rounded-2xl shadow-2xl overflow-hidden my-4 print:border-none print:shadow-none print:my-0 print:w-full print:max-w-none print:bg-white text-slate-100">
+      <div className="relative w-full max-w-4xl bg-white dark:bg-[#0f1523] text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-amber-600/30 rounded-3xl shadow-2xl overflow-hidden my-4 print:border-none print:shadow-none print:my-0 print:w-full print:max-w-none print:bg-white">
         {/* Modal Top Bar (High Contrast & Clear) */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/70 bg-slate-900/90 no-print">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-900/90 no-print">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white flex items-center gap-2">
+              <h2 className="text-base font-black text-slate-950 dark:text-white flex items-center gap-2">
                 <span>{isAr ? 'كشف الحساب التحليلي لمركز التكلفة' : 'Cost Center Analytical Statement'}</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-black bg-amber-500 text-slate-950 shadow-sm">
                   {costCenter.code}
                 </span>
               </h2>
-              <p className="text-xs font-semibold text-slate-300 mt-0.5">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-0.5">
                 {costCenter.name}{' '}
                 {costCenter.parent ? (
-                  <span className="text-amber-400/90 font-normal">
+                  <span className="text-amber-700 dark:text-amber-400 font-bold">
                     ({isAr ? 'تابع لـ:' : 'Parent:'} {costCenter.parent.name})
                   </span>
                 ) : (
-                  <span className="text-emerald-400/90 font-normal">({isAr ? 'مركز رئيسي' : 'Main Center'})</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">({isAr ? 'مركز رئيسي' : 'Main Center'})</span>
                 )}
               </p>
             </div>
@@ -265,14 +265,14 @@ export const CostCenterStatementModal: React.FC<CostCenterStatementModalProps> =
           <div className="flex items-center gap-2.5">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-900/30 flex items-center gap-2 transition cursor-pointer"
+              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-900/20 flex items-center gap-2 transition cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               {isAr ? 'طباعة كشف الحساب (Print A4)' : 'Print Statement'}
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer"
+              className="p-2 text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -280,40 +280,40 @@ export const CostCenterStatementModal: React.FC<CostCenterStatementModalProps> =
         </div>
 
         {/* Filter Bar (High-Contrast, Visible Labels) */}
-        <div className="px-6 py-3.5 border-b border-slate-700/70 bg-slate-900/50 flex flex-wrap items-center justify-between gap-3 no-print">
+        <div className="px-6 py-3.5 border-b border-slate-200 dark:border-slate-700/70 bg-slate-100/70 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-3 no-print">
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <div className="flex items-center gap-2 text-slate-200 font-semibold">
-              <Calendar className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold">
+              <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span>{isAr ? 'من تاريخ:' : 'From:'}</span>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-white font-medium focus:border-amber-500 focus:outline-none"
+                className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-bold focus:border-amber-500 focus:outline-none"
               />
             </div>
-            <div className="flex items-center gap-2 text-slate-200 font-semibold">
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold">
               <span>{isAr ? 'إلى تاريخ:' : 'To:'}</span>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-white font-medium focus:border-amber-500 focus:outline-none"
+                className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-bold focus:border-amber-500 focus:outline-none"
               />
             </div>
             <button
               onClick={loadStatement}
               disabled={loading}
-              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-amber-700 dark:text-amber-300 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600 dark:text-amber-400' : ''}`} />
               {isAr ? 'تصفية الفترات' : 'Apply Filter'}
             </button>
           </div>
 
-          <div className="text-xs font-semibold text-slate-300">
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
             {isAr ? 'إجمالي الحركات المسجلة:' : 'Recorded Transactions:'}{' '}
-            <span className="font-bold text-amber-400 font-mono text-sm px-2 py-0.5 bg-amber-500/10 rounded border border-amber-500/30">
+            <span className="font-black text-amber-700 dark:text-amber-400 font-mono text-sm px-2 py-0.5 bg-amber-100 dark:bg-amber-500/10 rounded border border-amber-300 dark:border-amber-500/30">
               {lines.length}
             </span>
           </div>
@@ -323,35 +323,35 @@ export const CostCenterStatementModal: React.FC<CostCenterStatementModalProps> =
         <div
           ref={printSheetRef}
           id="cost-center-print-sheet"
-          className="print-statement-canvas p-6 sm:p-8 space-y-6 bg-[#0f1523] text-slate-100 print:bg-white print:text-slate-900 print:p-0 print:space-y-4"
+          className="print-statement-canvas p-6 sm:p-8 space-y-6 bg-white dark:bg-[#0f1523] text-slate-900 dark:text-slate-100 print:bg-white print:text-slate-900 print:p-0 print:space-y-4"
           dir="rtl"
         >
           {/* Header */}
-          <div className="border-b-2 border-amber-500/40 pb-5 print:border-black flex flex-row items-center justify-between">
+          <div className="border-b-2 border-slate-200 dark:border-amber-500/40 pb-5 print:border-black flex flex-row items-center justify-between">
             <div className="flex items-center gap-3.5">
-              <div className="w-13 h-13 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 flex items-center justify-center text-amber-400 print:border-black print:text-black">
+              <div className="w-13 h-13 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border-2 border-amber-500/30 dark:border-amber-500/40 flex items-center justify-center text-amber-600 dark:text-amber-400 print:border-black print:text-black">
                 <Building2 className="w-7 h-7" />
               </div>
               <div>
-                <h1 className="text-xl font-black text-white print:text-black tracking-tight">مصنع البطل الروماني للملابس الجاهزة</h1>
-                <p className="text-xs font-bold text-amber-400 print:text-slate-700 mt-0.5">
+                <h1 className="text-xl font-black text-slate-950 dark:text-white print:text-black tracking-tight">مصنع البطل الروماني للملابس الجاهزة</h1>
+                <p className="text-xs font-black text-amber-700 dark:text-amber-400 print:text-slate-700 mt-0.5">
                   الإدارة المالية والحسابات العامة • منظومة محاسبة التكاليف الصناعية
                 </p>
-                <p className="text-[11px] text-slate-300 print:text-slate-600 font-medium">
+                <p className="text-xs text-slate-600 dark:text-slate-300 print:text-slate-600 font-semibold mt-0.5">
                   تقرير تحليلي لمصروفات وتكاليف الأنشطة والأقسام التشغيلية
                 </p>
               </div>
             </div>
 
-            <div className="text-left text-xs space-y-1 font-medium">
-              <div className="text-slate-300 print:text-slate-700">
-                كود المركز: <span className="font-bold text-amber-400 print:text-black font-mono text-sm">[{costCenter.code}]</span>
+            <div className="text-left text-xs space-y-1 font-bold">
+              <div className="text-slate-600 dark:text-slate-300 print:text-slate-700">
+                كود المركز: <span className="font-black text-amber-700 dark:text-amber-400 print:text-black font-mono text-sm">[{costCenter.code}]</span>
               </div>
-              <div className="text-slate-300 print:text-slate-700">
-                اسم المركز: <span className="font-bold text-white print:text-black">{costCenter.name}</span>
+              <div className="text-slate-600 dark:text-slate-300 print:text-slate-700">
+                اسم المركز: <span className="font-black text-slate-950 dark:text-white print:text-black">{costCenter.name}</span>
               </div>
-              <div className="text-slate-300 print:text-slate-700">
-                تاريخ الإصدار: <span className="font-semibold text-white print:text-black">{currentDate}</span>
+              <div className="text-slate-600 dark:text-slate-300 print:text-slate-700">
+                تاريخ الإصدار: <span className="font-extrabold text-slate-950 dark:text-white print:text-black">{currentDate}</span>
               </div>
             </div>
           </div>
@@ -359,84 +359,84 @@ export const CostCenterStatementModal: React.FC<CostCenterStatementModalProps> =
           {/* 3 KPI Summary Cards (Crisp High Contrast) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             {/* 1. Debited Expenses */}
-            <div className="p-4 rounded-xl border border-amber-500/30 bg-slate-900/80 print:border-slate-300 print:bg-slate-50 flex items-center justify-between shadow-sm">
+            <div className="p-4 rounded-2xl border border-slate-200 dark:border-amber-500/30 bg-slate-50 dark:bg-slate-900/80 print:border-slate-300 print:bg-slate-50 flex items-center justify-between shadow-sm">
               <div>
-                <div className="text-xs font-bold text-slate-300 print:text-slate-700">
+                <div className="text-xs font-black text-slate-700 dark:text-slate-300 print:text-slate-700">
                   {isAr ? 'إجمالي المصروفات المحملة (مدين)' : 'Total Debited Expenses'}
                 </div>
-                <div className="text-lg font-black font-mono text-amber-400 print:text-black mt-1">
+                <div className="text-lg font-black font-mono text-amber-700 dark:text-amber-400 print:text-black mt-1">
                   {totalDebit.toLocaleString()} ج.م
                 </div>
               </div>
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                 <ArrowDownRight className="w-5 h-5" />
               </div>
             </div>
 
             {/* 2. Credits / Adjustments */}
-            <div className="p-4 rounded-xl border border-blue-500/30 bg-slate-900/80 print:border-slate-300 print:bg-slate-50 flex items-center justify-between shadow-sm">
+            <div className="p-4 rounded-2xl border border-slate-200 dark:border-blue-500/30 bg-slate-50 dark:bg-slate-900/80 print:border-slate-300 print:bg-slate-50 flex items-center justify-between shadow-sm">
               <div>
-                <div className="text-xs font-bold text-slate-300 print:text-slate-700">
+                <div className="text-xs font-black text-slate-700 dark:text-slate-300 print:text-slate-700">
                   {isAr ? 'التسويات والاسترداد (دائن)' : 'Credits & Adjustments'}
                 </div>
-                <div className="text-lg font-black font-mono text-blue-400 print:text-black mt-1">
+                <div className="text-lg font-black font-mono text-blue-700 dark:text-blue-400 print:text-black mt-1">
                   {totalCredit.toLocaleString()} ج.م
                 </div>
               </div>
-              <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                 <ArrowUpRight className="w-5 h-5" />
               </div>
             </div>
 
             {/* 3. Net Cost */}
-            <div className="p-4 rounded-xl border border-emerald-500/30 bg-slate-900/80 print:border-slate-300 print:bg-slate-50 flex items-center justify-between shadow-sm">
+            <div className="p-4 rounded-2xl border border-slate-200 dark:border-emerald-500/30 bg-slate-50 dark:bg-slate-900/80 print:border-slate-300 print:bg-slate-50 flex items-center justify-between shadow-sm">
               <div>
-                <div className="text-xs font-bold text-slate-300 print:text-slate-700">
+                <div className="text-xs font-black text-slate-700 dark:text-slate-300 print:text-slate-700">
                   {isAr ? 'صافي التكلفة الفعلية للمركز' : 'Net Allocated Cost'}
                 </div>
-                <div className="text-lg font-black font-mono text-emerald-400 print:text-black mt-1">
+                <div className="text-lg font-black font-mono text-emerald-700 dark:text-emerald-400 print:text-black mt-1">
                   {netExpense.toLocaleString()} ج.م
                 </div>
               </div>
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
             </div>
           </div>
 
           {/* Statement Table */}
-          <div className="border border-slate-700 print:border-slate-300 rounded-xl overflow-hidden shadow-sm">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-800/90 print:bg-slate-100 text-slate-200 print:text-slate-900 font-bold border-b border-slate-700 print:border-slate-300">
+              <thead className="bg-slate-100 dark:bg-slate-800/90 print:bg-slate-100 text-slate-900 dark:text-white font-black border-b border-slate-200 dark:border-slate-700 print:border-slate-300">
                 <tr>
-                  <th className="py-2.5 px-3.5">التاريخ</th>
-                  <th className="py-2.5 px-3.5">رقم القيد / السند</th>
-                  <th className="py-2.5 px-3.5">الحساب المحاسبي</th>
-                  <th className="py-2.5 px-3.5">البيان والشرح التفصيلي</th>
-                  <th className="py-2.5 px-3.5 text-left">مدين (مصروف)</th>
-                  <th className="py-2.5 px-3.5 text-left">دائن</th>
+                  <th className="py-3 px-3.5">التاريخ</th>
+                  <th className="py-3 px-3.5">رقم القيد / السند</th>
+                  <th className="py-3 px-3.5">الحساب المحاسبي</th>
+                  <th className="py-3 px-3.5">البيان والشرح التفصيلي</th>
+                  <th className="py-3 px-3.5 text-left">مدين (مصروف)</th>
+                  <th className="py-3 px-3.5 text-left">دائن</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/60 print:divide-slate-200 bg-slate-900/40 print:bg-white text-slate-200 print:text-slate-900 font-medium">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60 print:divide-slate-200 bg-white dark:bg-slate-900/40 text-slate-900 dark:text-slate-200 font-medium">
                 {lines.length > 0 ? (
                   lines.map((l: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-800/40 print:hover:bg-transparent">
-                      <td className="py-2.5 px-3.5 font-mono text-slate-300 print:text-slate-800">
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 print:hover:bg-transparent">
+                      <td className="py-3 px-3.5 font-mono font-bold text-slate-600 dark:text-slate-300 print:text-slate-800">
                         {formatCleanDate(l.journal_entry?.entry_date || l.created_at)}
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono font-bold text-amber-400 print:text-black">
+                      <td className="py-3 px-3.5 font-mono font-black text-amber-700 dark:text-amber-400 print:text-black">
                         {l.journal_entry?.entry_number || '-'}
                       </td>
-                      <td className="py-2.5 px-3.5 font-bold text-white print:text-black">
+                      <td className="py-3 px-3.5 font-black text-slate-950 dark:text-white print:text-black">
                         {l.account ? `[${l.account.code}] ${l.account.name}` : '-'}
                       </td>
-                      <td className="py-2.5 px-3.5 text-slate-200 print:text-slate-700 max-w-sm">
+                      <td className="py-3 px-3.5 text-slate-700 dark:text-slate-200 print:text-slate-700 font-semibold max-w-sm">
                         {l.description || l.journal_entry?.description || '-'}
                       </td>
-                      <td className="py-2.5 px-3.5 text-left font-mono font-bold text-amber-400 print:text-black">
+                      <td className="py-3 px-3.5 text-left font-mono font-black text-amber-700 dark:text-amber-400 print:text-black">
                         {Number(l.debit) > 0 ? `${Number(l.debit).toLocaleString()} ج.م` : '-'}
                       </td>
-                      <td className="py-2.5 px-3.5 text-left font-mono text-slate-400 print:text-slate-600">
+                      <td className="py-3 px-3.5 text-left font-mono font-bold text-slate-600 dark:text-slate-400 print:text-slate-600">
                         {Number(l.credit) > 0 ? `${Number(l.credit).toLocaleString()} ج.م` : '-'}
                       </td>
                     </tr>

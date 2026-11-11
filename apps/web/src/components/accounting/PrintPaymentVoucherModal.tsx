@@ -321,28 +321,28 @@ export const PrintPaymentVoucherModal: React.FC<PrintPaymentVoucherModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="relative w-full max-w-3xl bg-[#111217] border border-amber-900/40 rounded-2xl shadow-2xl overflow-hidden my-8 print:border-none print:shadow-none print:my-0 print:w-full print:max-w-none print:bg-white print:text-black">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:p-0 print:bg-white print:static">
+      <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-6 print:border-none print:shadow-none print:my-0 print:w-full print:max-w-none print:bg-white print:text-black">
         {/* Top Control Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 print:hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 print:hidden">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
               isRcv
-                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30'
                 : isDisc
-                ? 'bg-purple-500/10 border border-purple-500/20 text-purple-400'
-                : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-500/30'
+                : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30'
             }`}>
               <Receipt className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <span>{voucherTitle}</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-white/10 text-white border border-white/20">
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
                   {voucher.voucher_number}
                 </span>
               </h2>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 {voucher.party_name} • {formattedDate}
               </p>
             </div>
@@ -351,14 +351,14 @@ export const PrintPaymentVoucherModal: React.FC<PrintPaymentVoucherModalProps> =
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-900/30 flex items-center gap-2 transition cursor-pointer"
+              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-900/20 flex items-center gap-2 transition cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               {isAr ? 'طباعة السند الرسمي (A5)' : 'Print Voucher (A5)'}
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-neutral-400 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer"
+              className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -368,46 +368,46 @@ export const PrintPaymentVoucherModal: React.FC<PrintPaymentVoucherModalProps> =
         {/* Voucher Content Area */}
         <div
           id="printable-voucher-document"
-          className="p-6 sm:p-8 space-y-5 text-neutral-200 bg-[#0c0d12] print:bg-white print:text-black print:p-0"
+          className="p-6 sm:p-8 space-y-5 text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-950 print:bg-white print:text-black print:p-0"
           dir={isAr ? 'rtl' : 'ltr'}
         >
           {/* Official Factory Header */}
-          <div className="border-b-2 border-amber-500/30 pb-4 print:border-black flex flex-row items-center justify-between">
+          <div className="border-b-2 border-slate-200 dark:border-slate-800 pb-4 print:border-black flex flex-row items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-amber-400 print:border-black print:text-black">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border-2 border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 print:border-black print:text-black">
                 <Building2 className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl font-black text-white print:text-black">
+                <h1 className="text-xl font-black text-slate-950 dark:text-white print:text-black">
                   {isAr ? 'مصنع البطل الروماني للملابس الجاهزة' : 'Al-Batal Al-Romany Apparel Factory'}
                 </h1>
-                <p className="text-xs text-amber-400 print:text-neutral-700 font-bold">
+                <p className="text-xs text-amber-700 dark:text-amber-400 print:text-neutral-700 font-extrabold">
                   {voucherTitle}
                 </p>
               </div>
             </div>
-            <div className="text-left text-xs space-y-1 print:text-left">
-              <div className="text-neutral-400 print:text-neutral-600">
+            <div className="text-left text-xs space-y-1 print:text-left font-medium">
+              <div className="text-slate-600 dark:text-slate-400 print:text-neutral-600">
                 {isAr ? 'رقم السند:' : 'Voucher No:'}{' '}
-                <span className="font-bold text-white print:text-black font-mono">
+                <span className="font-bold text-slate-900 dark:text-white print:text-black font-mono">
                   {voucher.voucher_number}
                 </span>
               </div>
-              <div className="text-neutral-400 print:text-neutral-600">
+              <div className="text-slate-600 dark:text-slate-400 print:text-neutral-600">
                 {isAr ? 'تاريخ المعاملة:' : 'Date:'}{' '}
-                <span className="font-bold text-white print:text-black">{formattedDate}</span>
+                <span className="font-bold text-slate-900 dark:text-white print:text-black">{formattedDate}</span>
               </div>
             </div>
           </div>
 
           {/* Party and Transaction Info Grid */}
-          <div className="grid grid-cols-2 gap-3 p-4 rounded-xl border border-white/10 bg-white/5 print:border-neutral-300 print:bg-neutral-50 text-xs">
+          <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 print:border-neutral-300 print:bg-neutral-50 text-xs">
             <div>
-              <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mb-0.5">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400 print:text-neutral-600 block mb-1">
                 {isRcv ? (isAr ? 'استلمنا من السيد / الشركة:' : 'Received From:') : (isAr ? 'يصرف إلى السيد / الشركة:' : 'Paid To:')}
               </span>
-              <strong className="text-base text-white print:text-black font-bold block">{voucher.party_name}</strong>
-              <span className="text-[10px] text-amber-400 print:text-neutral-700 font-semibold mt-0.5 block">
+              <strong className="text-base text-slate-950 dark:text-white print:text-black font-black block">{voucher.party_name}</strong>
+              <span className="text-xs text-amber-700 dark:text-amber-400 print:text-neutral-700 font-bold mt-1 block">
                 {voucher.party_type === 'supplier'
                   ? (isAr ? 'مورد معتمد للخامات والتشغيل' : 'Approved Supplier')
                   : voucher.party_type === 'customer'
@@ -419,10 +419,10 @@ export const PrintPaymentVoucherModal: React.FC<PrintPaymentVoucherModalProps> =
             </div>
 
             <div>
-              <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mb-0.5">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400 print:text-neutral-600 block mb-1">
                 {isAr ? 'طريقة السداد والتسوية:' : 'Payment Method:'}
               </span>
-              <strong className="text-sm text-white print:text-black font-bold block">
+              <strong className="text-sm text-slate-950 dark:text-white print:text-black font-extrabold block">
                 {voucher.payment_method === 'cash'
                   ? (isAr ? 'نقداً من خزينة المصنع' : 'Cash on Hand')
                   : voucher.payment_method?.includes('bank')
@@ -436,7 +436,7 @@ export const PrintPaymentVoucherModal: React.FC<PrintPaymentVoucherModalProps> =
                   : voucher.payment_method}
               </strong>
               {voucher.account && (
-                <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mt-0.5">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400 print:text-neutral-600 block mt-1">
                   {isAr ? 'الحساب المحاسبي:' : 'Account:'} {voucher.account.code} - {voucher.account.name}
                 </span>
               )}
@@ -444,61 +444,61 @@ export const PrintPaymentVoucherModal: React.FC<PrintPaymentVoucherModalProps> =
           </div>
 
           {/* Amount Box with Arabic Number to Words */}
-          <div className="p-4 rounded-xl border-2 border-emerald-500/40 bg-emerald-950/20 print:border-black print:bg-neutral-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="p-5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/60 dark:bg-emerald-950/30 print:border-black print:bg-neutral-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <span className="text-[10px] font-bold text-neutral-400 print:text-neutral-600 block uppercase">
+              <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 print:text-neutral-600 block uppercase">
                 {isAr ? 'المبلغ المستحق والمسدد' : 'Disbursed / Received Amount'}
               </span>
-              <div className="text-2xl font-black font-mono text-emerald-400 print:text-black mt-0.5">
-                {amountNumber.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-sm font-bold text-neutral-300 print:text-black">{isAr ? 'ج.م' : 'EGP'}</span>
+              <div className="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400 print:text-black mt-1">
+                {amountNumber.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-sm font-black text-slate-700 dark:text-slate-200 print:text-black">{isAr ? 'ج.م' : 'EGP'}</span>
               </div>
             </div>
             <div className="text-right sm:text-left">
-              <span className="text-[10px] font-bold text-neutral-400 print:text-neutral-600 block uppercase">
+              <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 print:text-neutral-600 block uppercase">
                 {isAr ? 'المبلغ تفقيطاً كتابةً:' : 'Amount in Words:'}
               </span>
-              <div className="text-xs font-bold text-emerald-300 print:text-black mt-0.5 max-w-md">
+              <div className="text-sm font-extrabold text-slate-900 dark:text-white print:text-black mt-1 max-w-md">
                 {arabicWords}
               </div>
             </div>
           </div>
 
           {/* Clean Description / Notes */}
-          <div className="p-3.5 rounded-xl border border-white/10 bg-white/5 print:border-neutral-300 print:bg-transparent text-xs">
-            <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mb-1 font-bold">
+          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 print:border-neutral-300 print:bg-transparent text-xs">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 print:text-neutral-600 block mb-1">
               {isAr ? 'وذلك نظير / البيان المحاسبي:' : 'Description & Notes:'}
             </span>
-            <p className="text-neutral-200 print:text-black font-medium leading-relaxed">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 print:text-black leading-relaxed">
               {cleanText}
             </p>
           </div>
 
           {/* Triplet Signatures for Voucher */}
-          <div className="grid grid-cols-3 gap-6 pt-5 border-t border-white/10 print:border-black text-center text-xs">
+          <div className="grid grid-cols-3 gap-6 pt-5 border-t border-slate-200 dark:border-slate-800 print:border-black text-center text-xs font-bold">
             <div>
-              <span className="font-bold text-neutral-300 print:text-black block mb-10">
+              <span className="text-slate-900 dark:text-white print:text-black block mb-12 font-black">
                 {isRcv ? (isAr ? 'توقيع المسدد / العميل' : 'Customer Signature') : (isAr ? 'توقيع المستلم / المورد' : 'Recipient Signature')}
               </span>
-              <div className="border-b border-dashed border-neutral-500 print:border-black w-3/4 mx-auto"></div>
-              <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mt-1">
+              <div className="border-b-2 border-dashed border-slate-300 dark:border-slate-700 print:border-black w-3/4 mx-auto"></div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 print:text-neutral-600 block mt-1.5 font-semibold">
                 {isAr ? 'أقر باستلام / سداد القيمة أعلاه' : 'Acknowledged'}
               </span>
             </div>
             <div>
-              <span className="font-bold text-neutral-300 print:text-black block mb-10">
+              <span className="text-slate-900 dark:text-white print:text-black block mb-12 font-black">
                 {isAr ? 'أمين الخزينة / الحسابات' : 'Cashier Signature'}
               </span>
-              <div className="border-b border-dashed border-neutral-500 print:border-black w-3/4 mx-auto"></div>
-              <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mt-1">
+              <div className="border-b-2 border-dashed border-slate-300 dark:border-slate-700 print:border-black w-3/4 mx-auto"></div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 print:text-neutral-600 block mt-1.5 font-semibold">
                 {isAr ? 'تم تقييد الحركة بالدفاتر' : 'Posted to Treasury'}
               </span>
             </div>
             <div>
-              <span className="font-bold text-neutral-300 print:text-black block mb-10">
+              <span className="text-slate-900 dark:text-white print:text-black block mb-12 font-black">
                 {isAr ? 'اعتماد المدير المالي / المصنع' : 'Managing Director'}
               </span>
-              <div className="border-b border-dashed border-neutral-500 print:border-black w-3/4 mx-auto"></div>
-              <span className="text-[10px] text-neutral-400 print:text-neutral-600 block mt-1">
+              <div className="border-b-2 border-dashed border-slate-300 dark:border-slate-700 print:border-black w-3/4 mx-auto"></div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 print:text-neutral-600 block mt-1.5 font-semibold">
                 {isAr ? 'معتمد رسمي للصرف والتحصيل' : 'Authorized'}
               </span>
             </div>

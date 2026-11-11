@@ -25,6 +25,74 @@ export const PrintReconciliationModal: React.FC<PrintReconciliationModalProps> =
   if (!isOpen) return null;
 
   const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) {
+      window.print();
+      return;
+    }
+
+    try {
+      const existingFrame = document.getElementById('print-reconciliation-iframe');
+      if (existingFrame) existingFrame.remove();
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'print-reconciliation-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const frameDoc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(`
+          <!DOCTYPE html>
+          <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="utf-8" />
+            <title>شهادة ومحضر التدقيق المالي والمطابقة المحاسبية</title>
+            <style>
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+                background: #ffffff !important;
+                color: #0f172a !important;
+                padding: 15mm 12mm;
+                line-height: 1.5;
+                font-size: 11px;
+              }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+              th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: right; }
+              th { background: #f1f5f9 !important; font-weight: bold; }
+              tfoot td { background: #f8fafc !important; font-weight: bold; }
+              @page { size: A4 portrait; margin: 10mm; }
+              @media print { body { padding: 0 !important; } }
+            </style>
+          </head>
+          <body>
+            ${printContent.innerHTML}
+          </body>
+          </html>
+        `);
+        frameDoc.close();
+
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            window.print();
+          }
+        }, 200);
+        return;
+      }
+    } catch (e) {
+      console.warn('Iframe print failed:', e);
+    }
+
     window.print();
   };
 

@@ -30,6 +30,7 @@ import {
   Sparkles,
   ShieldAlert,
   Layers,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
@@ -41,6 +42,8 @@ import { api } from '../../api/client';
 import { FinancialReportsView } from './FinancialReportsView';
 import { AccountStatementModal } from './AccountStatementModal';
 import { CalculateCostModal } from './CalculateCostModal';
+import { PrintJournalVoucherModal } from './PrintJournalVoucherModal';
+import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
   ChartOfAccount,
@@ -76,6 +79,31 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [isFiscalYearModalOpen, setIsFiscalYearModalOpen] = useState(false);
   const [isReversalModalOpen, setIsReversalModalOpen] = useState(false);
   const [isPeriodReopenModalOpen, setIsPeriodReopenModalOpen] = useState(false);
+
+  // Journal Entries States & Modals
+  const [selectedJournalForPrint, setSelectedJournalForPrint] = useState<JournalEntry | null>(null);
+  const [journalSearchQuery, setJournalSearchQuery] = useState('');
+  const [journalFilterType, setJournalFilterType] = useState<'all' | 'system' | 'expenses' | 'opening' | 'manual' | 'reversed'>('all');
+
+  // Mode 1: Quick Daily Expense Modal
+  const [isQuickExpenseModalOpen, setIsQuickExpenseModalOpen] = useState(false);
+  const [expenseAccountId, setExpenseAccountId] = useState('');
+  const [expensePaymentAccountId, setExpensePaymentAccountId] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState<number>(500);
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [expenseCostCenterId, setExpenseCostCenterId] = useState('');
+
+  // Mode 2: Advanced Multi-Line Journal Entry Modal
+  const [isAdvancedJournalModalOpen, setIsAdvancedJournalModalOpen] = useState(false);
+  const [advJournalDesc, setAdvJournalDesc] = useState('');
+  const [advJournalDate, setAdvJournalDate] = useState(new Date().toISOString().split('T')[0]);
+  const [advJournalLines, setAdvJournalLines] = useState<
+    Array<{ account_id: string; debit: number; credit: number; description: string; cost_center_id?: string }>
+  >([
+    { account_id: '', debit: 0, credit: 0, description: '' },
+    { account_id: '', debit: 0, credit: 0, description: '' },
+  ]);
 
   const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
@@ -212,6 +240,22 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
     }
   }, [accounts, debitAcc]);
 
+  useEffect(() => {
+    if (accounts.length > 0) {
+      if (!expenseAccountId) {
+        const exp = accounts.find((a) => a.type === 'expense' && a.is_postable !== false);
+        if (exp) setExpenseAccountId(exp.id);
+      }
+      if (!expensePaymentAccountId) {
+        const pay =
+          accounts.find((a) => a.is_cash_bank && a.is_postable !== false) ||
+          accounts.find((a) => a.code === '1011' || a.code === '1010' || a.code === '1012') ||
+          accounts.find((a) => a.type === 'asset' && a.is_postable !== false);
+        if (pay) setExpensePaymentAccountId(pay.id);
+      }
+    }
+  }, [accounts, expenseAccountId, expensePaymentAccountId]);
+
   // Modal State for Payment Voucher
   const [voucherType, setVoucherType] = useState<'receipt' | 'payment'>('receipt');
   const [voucherPartyType, setVoucherPartyType] = useState<'customer' | 'supplier' | 'employee' | 'other'>('customer');
@@ -290,6 +334,170 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setIsSubmitting(false);
     }
   };
+
+  const handleCreateQuickExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (expenseAmount <= 0 || !expenseAccountId || !expensePaymentAccountId) {
+      setErrorMsg(isAr ? 'يرجى اختيار بند المصروف وحساب السداد والمبلغ' : 'Please select expense account, payment vault/bank, and amount');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const expAcc = accounts.find((a) => a.id === expenseAccountId);
+      const payAcc = accounts.find((a) => a.id === expensePaymentAccountId);
+      const defaultDesc =
+        expenseNotes ||
+        (isAr
+          ? `إثبات مصروف: ${expAcc?.name || 'مصروفات تشغيل'}`
+          : `Expense: ${expAcc?.name || 'Operating expense'}`);
+
+      const res = await api.accounting.createJournalEntry({
+        description: defaultDesc,
+        entry_date: expenseDate || new Date().toISOString().split('T')[0],
+        reference_type: 'expense_voucher',
+        lines: [
+          {
+            account_id: expenseAccountId,
+            debit: Number(expenseAmount),
+            credit: 0,
+            description: defaultDesc,
+            cost_center_id: expenseCostCenterId || undefined,
+          },
+          {
+            account_id: expensePaymentAccountId,
+            debit: 0,
+            credit: Number(expenseAmount),
+            description: isAr
+              ? `صرف من: ${payAcc?.name || 'الخزينة النقدية'}`
+              : `Paid from: ${payAcc?.name || 'Vault'}`,
+          },
+        ],
+      });
+
+      if (res?.journal_entry) {
+        setJournals((prev) => [res.journal_entry, ...prev]);
+      } else {
+        await loadAccountingData();
+      }
+
+      setIsQuickExpenseModalOpen(false);
+      setExpenseNotes('');
+      setExpenseAmount(500);
+      setSuccessMsg(isAr ? 'تم تسجيل وترحيل المصروف بنجاح وتحديث أرصدة الخزينة والحسابات' : 'Expense posted successfully');
+      setTimeout(() => setSuccessMsg(null), 4000);
+
+      api.accounting.getAccounts().then((accs) => {
+        if (Array.isArray(accs)) setAccounts(accs);
+      }).catch(() => {});
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل المصروف' : 'Failed to record expense'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateAdvancedJournal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const validLines = advJournalLines.filter(
+      (l) => l.account_id && (Number(l.debit) > 0 || Number(l.credit) > 0)
+    );
+    if (validLines.length < 2) {
+      setErrorMsg(isAr ? 'يجب إدخال طرفين على الأقل للقيد المحاسبي' : 'At least two lines required');
+      return;
+    }
+
+    const totalDeb = validLines.reduce((sum, l) => sum + Number(l.debit || 0), 0);
+    const totalCred = validLines.reduce((sum, l) => sum + Number(l.credit || 0), 0);
+    if (Math.abs(totalDeb - totalCred) > 0.01) {
+      setErrorMsg(
+        isAr
+          ? `القيد غير متوازن! إجمالي المدين: ${totalDeb.toLocaleString()} ≠ إجمالي الدائن: ${totalCred.toLocaleString()}`
+          : 'Journal entry is unbalanced!'
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.accounting.createJournalEntry({
+        description: advJournalDesc || (isAr ? 'قيد محاسبي عام متوازن' : 'General Balanced Journal Entry'),
+        entry_date: advJournalDate || new Date().toISOString().split('T')[0],
+        reference_type: 'manual_journal',
+        lines: validLines.map((l) => ({
+          account_id: l.account_id,
+          debit: Number(l.debit || 0),
+          credit: Number(l.credit || 0),
+          description: l.description || advJournalDesc,
+          cost_center_id: l.cost_center_id || undefined,
+        })),
+      });
+
+      if (res?.journal_entry) {
+        setJournals((prev) => [res.journal_entry, ...prev]);
+      } else {
+        await loadAccountingData();
+      }
+
+      setIsAdvancedJournalModalOpen(false);
+      setAdvJournalDesc('');
+      setAdvJournalLines([
+        { account_id: '', debit: 0, credit: 0, description: '' },
+        { account_id: '', debit: 0, credit: 0, description: '' },
+      ]);
+      setSuccessMsg(isAr ? 'تم ترحيل قيد اليومية المركب بنجاح' : 'Journal entry posted successfully');
+      setTimeout(() => setSuccessMsg(null), 4000);
+
+      api.accounting.getAccounts().then((accs) => {
+        if (Array.isArray(accs)) setAccounts(accs);
+      }).catch(() => {});
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل ترحيل القيد' : 'Failed to post journal entry'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const addAdvLine = () => {
+    setAdvJournalLines((prev) => [
+      ...prev,
+      { account_id: '', debit: 0, credit: 0, description: '' },
+    ]);
+  };
+
+  const removeAdvLine = (index: number) => {
+    if (advJournalLines.length <= 2) return;
+    setAdvJournalLines((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const updateAdvLine = (index: number, field: string, value: any) => {
+    setAdvJournalLines((prev) =>
+      prev.map((line, idx) => {
+        if (idx !== index) return line;
+        const updated = { ...line, [field]: value };
+        if (field === 'debit' && Number(value) > 0) updated.credit = 0;
+        if (field === 'credit' && Number(value) > 0) updated.debit = 0;
+        return updated;
+      })
+    );
+  };
+
+  const advTotalDebit = advJournalLines.reduce((acc, curr) => acc + (Number(curr.debit) || 0), 0);
+  const advTotalCredit = advJournalLines.reduce((acc, curr) => acc + (Number(curr.credit) || 0), 0);
+  const advDiff = Math.abs(advTotalDebit - advTotalCredit);
+  const isAdvBalanced = advTotalDebit > 0 && advDiff < 0.01;
+
+  const expenseAccountsList = accounts.filter(
+    (a) => a.type === 'expense' || a.category === 'cost_of_goods_sold' || a.code.startsWith('5') || a.code.startsWith('6')
+  );
+  const availableExpenseAccounts = expenseAccountsList.length > 0 ? expenseAccountsList : accounts;
+
+  const paymentAccountsList = accounts.filter(
+    (a) => a.is_cash_bank || a.category === 'cash_and_banks' || a.code.startsWith('1010') || a.code.startsWith('1020')
+  );
+  const availablePaymentAccounts = paymentAccountsList.length > 0 ? paymentAccountsList : accounts.filter((a) => a.type === 'asset');
 
   const handleReverseAction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1530,82 +1738,478 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       })()}
 
       {/* 2. JOURNALS VIEW */}
-      {activeSubTab === 'journals' && (
-        <div className="space-y-4">
-          {journals.length === 0 ? (
-            <Card className="p-8 text-center text-slate-400 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
-              {isAr ? 'لا توجد قيود يومية مسجلة حالياً' : 'No journal entries found'}
-            </Card>
-          ) : (
-            journals.map((j) => (
-              <Card key={j.id} className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-primary text-sm">{j.entry_number}</span>
-                    <span className="text-xs text-slate-400">{j.entry_date}</span>
-                    <Badge variant={j.status === 'reversed' ? 'danger' : 'success'}>
-                      {j.status === 'reversed' ? (isAr ? 'معكوس ملغي' : 'REVERSED') : (isAr ? 'مرحل نهائي' : 'POSTED')}
-                    </Badge>
-                    {j.reversal_reason && (
-                      <span className="text-xs text-rose-500 font-medium">({j.reversal_reason})</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 text-xs font-bold text-slate-900 dark:text-white">
-                    <span>{isAr ? 'المدين:' : 'Debit:'} {Number(j.total_debit).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
-                    <span>=</span>
-                    <span>{isAr ? 'الدائن:' : 'Credit:'} {Number(j.total_credit).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</span>
-                    <CheckCircle className="w-4 h-4 text-emerald-500" />
-                    <ActionsMenu
-                      variant="icon-horizontal"
-                      align={isAr ? 'left' : 'right'}
-                      items={[
-                        {
-                          id: 'print-journal',
-                          label: isAr ? 'طباعة سند القيد اليومي' : 'Print Journal Voucher',
-                          icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                          onClick: () => window.print(),
-                        },
-                        ...(j.status === 'posted' && !j.reversed_entry_id
-                          ? [
-                              {
-                                id: 'reverse-journal',
-                                label: isAr ? 'عكس القيد المحاسبي' : 'Reverse Journal Entry',
-                                icon: <RotateCw className="w-3.5 h-3.5 text-rose-500" />,
-                                onClick: () => {
-                                  setReversalTarget({ type: 'journal', id: j.id, number: j.entry_number });
-                                  setIsReversalModalOpen(true);
-                                },
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
+      {activeSubTab === 'journals' && (() => {
+        // Calculations
+        const totalDebitVolume = journals.reduce((sum, j) => sum + Number(j.total_debit || 0), 0);
+        const activeJournalsCount = journals.filter((j) => j.status !== 'reversed').length;
+        const autoSystemCount = journals.filter(
+          (j) =>
+            (j.reference_type &&
+              !['manual_journal', 'expense_voucher'].includes(j.reference_type)) ||
+            j.entry_number?.startsWith('JE-')
+        ).length;
+        const manualExpenseCount = journals.length - autoSystemCount;
+
+        // Filtering
+        const q = journalSearchQuery.trim().toLowerCase();
+        const filteredJournals = journals.filter((j) => {
+          const num = (j.entry_number || '').toLowerCase();
+          const desc = (j.description || '').toLowerCase();
+          const ref = (j.reference_type || '').toLowerCase();
+          const linesMatch = j.lines?.some(
+            (l) =>
+              (l.account?.code || '').toLowerCase().includes(q) ||
+              (l.account?.name || '').toLowerCase().includes(q) ||
+              (l.description || '').toLowerCase().includes(q)
+          );
+
+          const matchesSearch = !q || num.includes(q) || desc.includes(q) || ref.includes(q) || linesMatch;
+
+          let matchesType = true;
+          const isRev = j.status === 'reversed';
+          const isOpening = j.reference_type === 'opening_balance' || desc.includes('افتتاحي') || num.includes('OPENING');
+          const isExpense = j.reference_type === 'expense_voucher' || desc.includes('مصروف') || desc.includes('سداد');
+          const isSystem = (j.reference_type && !['manual_journal', 'expense_voucher'].includes(j.reference_type)) || num.startsWith('JE-');
+
+          if (journalFilterType === 'system') matchesType = isSystem && !isOpening;
+          else if (journalFilterType === 'expenses') matchesType = isExpense;
+          else if (journalFilterType === 'opening') matchesType = isOpening;
+          else if (journalFilterType === 'manual') matchesType = !isSystem && !isOpening && !isExpense;
+          else if (journalFilterType === 'reversed') matchesType = isRev;
+
+          return matchesSearch && matchesType;
+        });
+
+        // Helper for Journal Badge
+        const getJournalBadge = (j: JournalEntry) => {
+          const desc = (j.description || '').toLowerCase();
+          const ref = (j.reference_type || '').toLowerCase();
+          const num = (j.entry_number || '').toUpperCase();
+
+          if (ref === 'opening_balance' || desc.includes('افتتاحي') || num.includes('OPENING')) {
+            return {
+              label: isAr ? '🏛️ قيد افتتاحي' : 'Opening Entry',
+              badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+            };
+          }
+          if (ref === 'cutting_order' || num.includes('CUT') || desc.includes('قص')) {
+            return {
+              label: isAr ? '✂️ صرف خامات أمر قص' : 'Cutting Order Issue',
+              badgeClass: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
+            };
+          }
+          if (ref === 'maintenance' || num.includes('MNT') || desc.includes('صيانة')) {
+            return {
+              label: isAr ? '🔧 مصروفات صيانة' : 'Maintenance Expense',
+              badgeClass: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20',
+            };
+          }
+          if (ref === 'receipt_voucher' || num.includes('RCV') || desc.includes('قبض') || desc.includes('تحصيل')) {
+            return {
+              label: isAr ? '💵 سند تحصيل وقبض' : 'Customer Receipt',
+              badgeClass: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+            };
+          }
+          if (ref === 'sales_return' || num.includes('SRT') || desc.includes('مرتجع')) {
+            return {
+              label: isAr ? '↩️ مرتجع مبيعات' : 'Sales Return',
+              badgeClass: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20',
+            };
+          }
+          if (ref === 'refund' || num.includes('REF') || desc.includes('استرداد')) {
+            return {
+              label: isAr ? '💸 صرف استرداد نقدي' : 'Cash Refund',
+              badgeClass: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20',
+            };
+          }
+          if (ref === 'expense_voucher' || desc.includes('مصروف') || desc.includes('سداد')) {
+            return {
+              label: isAr ? '💸 مصروف وسداد يومي' : 'Daily Expense',
+              badgeClass: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20',
+            };
+          }
+          return {
+            label: isAr ? '📑 قيد تسوية عام' : 'Journal Entry',
+            badgeClass: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+          };
+        };
+
+        return (
+          <div className="space-y-4">
+            {/* ─── TOP 4 KPI CARDS ─── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي حركة القيود اليومية' : 'Total Journal Turnover'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Scale className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="text-sm text-slate-700 dark:text-slate-300 py-2">{j.description}</p>
-                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-2 text-xs divide-y divide-slate-200/50 dark:divide-slate-700/50">
-                  {j.lines?.map((line, idx) => (
-                    <div key={idx} className="py-1.5 flex items-center justify-between">
-                      <span className="text-slate-600 dark:text-slate-300">
-                        {line.account ? `${line.account.code} - ${line.account.name}` : line.description || 'Account line'}
-                        {line.cost_center_id && <span className="text-primary font-mono text-[11px] ms-2">[مركز تكلفة]</span>}
-                      </span>
-                      <div className="flex items-center gap-6">
-                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                          {Number(line.debit) > 0 ? `+${Number(line.debit).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'}` : '-'}
-                        </span>
-                        <span className="font-mono text-amber-600 dark:text-amber-400 font-semibold">
-                          {Number(line.credit) > 0 ? `-${Number(line.credit).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'}` : '-'}
-                        </span>
-                      </div>
-                    </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {totalDebitVolume.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr ? `${journals.length} قيد مسجل في الأستاذ العام` : `${journals.length} total entries`}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'القيود المعتمدة والمقيدة' : 'Active Verified Entries'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {activeJournalsCount}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'قيد ساري' : 'Entries'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  {isAr ? 'جميعها متوازنة (المدين = الدائن)' : 'All entries 100% balanced'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'قيود النظام التلقائية' : 'Automated System Entries'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {autoSystemCount}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'قيد آلي' : 'Auto Entries'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr ? 'مبيعات، قص، صيانة، وتحصيلات' : 'Sales, cutting, maintenance'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {isAr ? 'المصروفات والقيود اليومية' : 'Daily Expenses & Manual'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-red-400 flex items-center justify-center">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-slate-900 dark:text-white">
+                    {manualExpenseCount}
+                  </span>
+                  <span className="text-xs text-slate-400">{isAr ? 'قيد' : 'Entries'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {isAr ? 'سدادات ومصروفات ونثريات المصنع' : 'Factory payments & adjustments'}
+                </p>
+              </div>
+            </div>
+
+            {/* ─── MAIN JOURNALS CARD ─── */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              {/* HEADER TOOLBAR WITH 2 ADD BUTTONS */}
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-[#7F1625] dark:text-red-400" />
+                    <span>{isAr ? 'دفتر قيود اليومية العامة (General Journal Ledger)' : 'General Journal Ledger'}</span>
+                    <span className="text-xs font-mono font-medium text-slate-500">({filteredJournals.length} قيد)</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {isAr
+                      ? 'سجل القيود المحاسبية المزدوجة المتوازنة، القيود الآلية من خطوط الإنتاج والمبيعات، وطباعة سندات القيد الرسمية A4.'
+                      : 'Double-entry ledger with automated factory postings and official A4 voucher printing.'}
+                  </p>
+                </div>
+
+                {/* THE TWO BUTTONS FOR ADDING */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* METHOD 1: QUICK EXPENSE */}
+                  <Button
+                    size="sm"
+                    onClick={() => setIsQuickExpenseModalOpen(true)}
+                    className="bg-[#7F1625] hover:bg-[#961b2c] text-white shadow-xs font-bold"
+                    icon={<Plus className="w-3.5 h-3.5" />}
+                  >
+                    {isAr ? '+ تسجيل مصروف وسداد يومي' : '+ Quick Expense'}
+                  </Button>
+
+                  {/* METHOD 2: ADVANCED BALANCED JOURNAL ENTRY */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAdvancedJournalModalOpen(true)}
+                    icon={<Receipt className="w-3.5 h-3.5" />}
+                  >
+                    {isAr ? '+ قيد محاسبي مركب' : '+ Advanced Journal'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* SEARCH & FILTERS BAR */}
+              <div className="p-3 bg-white dark:bg-[#0c121e] border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                {/* SEARCH */}
+                <div className="relative flex-1 min-w-[220px] max-w-sm">
+                  <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={journalSearchQuery}
+                    onChange={(e) => setJournalSearchQuery(e.target.value)}
+                    placeholder={isAr ? 'بحث برقم القيد، البيان، اسم الحساب...' : 'Search by entry #, desc, account...'}
+                    className="w-full ps-9 pe-8 py-1.5 text-xs bg-slate-50 dark:bg-[#0d131f] border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#7F1625]"
+                  />
+                  {journalSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setJournalSearchQuery('')}
+                      className="absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* FILTER PILLS */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-slate-400 font-medium me-1">{isAr ? 'نوع القيد:' : 'Filter:'}</span>
+                  {(
+                    [
+                      { id: 'all', label: isAr ? 'الكل' : 'All' },
+                      { id: 'system', label: isAr ? '⚡ قيود النظام الآلية' : 'Auto System' },
+                      { id: 'expenses', label: isAr ? '💸 مصروفات وسدادات' : 'Expenses' },
+                      { id: 'opening', label: isAr ? '🏛️ قيود افتتاحية' : 'Opening' },
+                      { id: 'manual', label: isAr ? '✏️ قيود يدوية' : 'Manual' },
+                      { id: 'reversed', label: isAr ? '↩️ معكوس ملغي' : 'Reversed' },
+                    ] as const
+                  ).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setJournalFilterType(f.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        journalFilterType === f.id
+                          ? 'bg-[#7F1625] text-white shadow-xs font-bold'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
                   ))}
                 </div>
-              </Card>
-            ))
-          )}
-        </div>
-      )}
+              </div>
+
+              {/* ─── JOURNAL ENTRY BENTO CARDS ─── */}
+              <div className="p-4 space-y-4 bg-slate-50/40 dark:bg-[#0a0f19]/40">
+                {filteredJournals.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400">
+                    <p className="font-bold text-slate-600 dark:text-slate-300">
+                      {isAr ? 'لا توجد قيود يومية مطابقة لمعايير البحث' : 'No journal entries found'}
+                    </p>
+                    <p className="text-xs mt-1">
+                      {isAr
+                        ? 'يمكنك تسجيل مصروف وسداد سريع من زر «+ تسجيل مصروف وسداد يومي» بالأعلى.'
+                        : 'Record a quick expense using the button above.'}
+                    </p>
+                  </div>
+                ) : (
+                  filteredJournals.map((j) => {
+                    const badge = getJournalBadge(j);
+                    const isReversed = j.status === 'reversed';
+                    const cleanDate = formatCleanDate(j.entry_date || (j as any).created_at);
+                    const totalDebit = Number(j.total_debit || 0);
+                    const totalCredit = Number(j.total_credit || 0);
+
+                    return (
+                      <div
+                        key={j.id}
+                        className="rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden transition-all hover:border-[#7F1625]/40"
+                      >
+                        {/* CARD HEADER */}
+                        <div className="p-3.5 bg-slate-50/70 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            {/* ENTRY NUMBER (CLICKABLE TO PRINT) */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedJournalForPrint(j)}
+                              className="font-mono font-black text-xs text-[#7F1625] dark:text-red-400 hover:underline px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 flex items-center gap-1.5 transition-colors"
+                              title={isAr ? 'معاينة وطباعة سند قيد اليومية A4' : 'Print Voucher'}
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              <span>{j.entry_number}</span>
+                            </button>
+
+                            {/* TYPE BADGE */}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${badge.badgeClass}`}>
+                              {badge.label}
+                            </span>
+
+                            {/* DATE */}
+                            <span className="text-xs font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>{cleanDate}</span>
+                            </span>
+
+                            {/* STATUS BADGE */}
+                            {isReversed ? (
+                              <Badge variant="danger" className="text-[11px] gap-1">
+                                <RotateCw className="w-3 h-3" />
+                                <span>{isAr ? 'معكوس / ملغي' : 'Reversed'}</span>
+                              </Badge>
+                            ) : (
+                              <Badge variant="success" className="text-[11px] gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                                <CheckCircle className="w-3 h-3" />
+                                <span>{isAr ? 'معتمد ومقيد' : 'Posted'}</span>
+                              </Badge>
+                            )}
+
+                            {j.reversal_reason && (
+                              <span className="text-xs text-rose-500 font-medium truncate max-w-xs">
+                                ({j.reversal_reason})
+                              </span>
+                            )}
+                          </div>
+
+                          {/* ACTIONS & TOTALS ON HEADER */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 font-mono text-xs">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                {totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-slate-400">=</span>
+                              <span className="font-bold text-blue-600 dark:text-blue-400">
+                                {totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[10px] text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </div>
+
+                            {/* QUICK PRINT BUTTON */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedJournalForPrint(j)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#7F1625] dark:hover:text-red-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                              title={isAr ? 'طباعة سند القيد A4' : 'Print Voucher A4'}
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+
+                            {/* DROPDOWN ACTIONS */}
+                            <ActionsMenu
+                              variant="icon-horizontal"
+                              align={isAr ? 'left' : 'right'}
+                              items={[
+                                {
+                                  id: 'print-voucher',
+                                  label: isAr ? 'طباعة سند القيد الرسمي (A4)' : 'Print Official Voucher (A4)',
+                                  icon: <Printer className="w-3.5 h-3.5 text-primary" />,
+                                  onClick: () => setSelectedJournalForPrint(j),
+                                },
+                                ...(j.status === 'posted' && !j.reversed_entry_id
+                                  ? [
+                                      {
+                                        id: 'reverse-journal',
+                                        label: isAr ? 'عكس وإلغاء القيد المحاسبي' : 'Reverse Journal Entry',
+                                        icon: <RotateCw className="w-3.5 h-3.5 text-rose-500" />,
+                                        onClick: () => {
+                                          setReversalTarget({ type: 'journal', id: j.id, number: j.entry_number });
+                                          setIsReversalModalOpen(true);
+                                        },
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                            />
+                          </div>
+                        </div>
+
+                        {/* GENERAL DESCRIPTION */}
+                        <div className="px-4 py-2.5 text-xs text-slate-800 dark:text-slate-200 bg-white dark:bg-[#0c121e]">
+                          <span className="font-bold text-slate-500 dark:text-slate-400 me-1.5">{isAr ? 'البيان:' : 'Desc:'}</span>
+                          <span className="font-medium">{j.description || '—'}</span>
+                        </div>
+
+                        {/* BALANCED LINES TABLE */}
+                        <div className="overflow-x-auto border-t border-slate-100 dark:border-slate-800/80">
+                          <table className="w-full text-start text-xs">
+                            <thead className="bg-slate-50/80 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                              <tr>
+                                <th className="p-2.5 text-start w-32">{isAr ? 'كود الحساب' : 'Code'}</th>
+                                <th className="p-2.5 text-start">{isAr ? 'اسم الحساب في الدليل' : 'Account'}</th>
+                                <th className="p-2.5 text-start">{isAr ? 'البيان وملاحظات السطر' : 'Line Notes'}</th>
+                                <th className="p-2.5 text-end w-36">{isAr ? 'الطرف المدين (+)' : 'Debit (+)'}</th>
+                                <th className="p-2.5 text-end w-36">{isAr ? 'الطرف الدائن (-)' : 'Credit (-)'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                              {j.lines?.map((line, idx) => {
+                                const debit = Number(line.debit || 0);
+                                const credit = Number(line.credit || 0);
+                                const accCode = line.account?.code || (line as any).account_code || '—';
+                                const accName = line.account?.name || (line as any).account_name || line.description || '—';
+
+                                return (
+                                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                    <td className="p-2.5 font-mono font-bold text-slate-900 dark:text-white">
+                                      {accCode}
+                                    </td>
+                                    <td className="p-2.5 font-semibold text-slate-900 dark:text-white">
+                                      {accName}
+                                      {line.cost_center_id && (
+                                        <span className="text-[10px] text-[#7F1625] dark:text-red-400 ms-1.5 font-mono">
+                                          [مركز تكلفة]
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-2.5 text-slate-500 dark:text-slate-400 text-[11px] truncate max-w-xs">
+                                      {line.description || j.description || '—'}
+                                    </td>
+                                    <td className="p-2.5 text-end font-mono">
+                                      {debit > 0 ? (
+                                        <span className="inline-block px-2 py-0.5 rounded-md font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                                          +{debit.toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300 dark:text-slate-600">—</span>
+                                      )}
+                                    </td>
+                                    <td className="p-2.5 text-end font-mono">
+                                      {credit > 0 ? (
+                                        <span className="inline-block px-2 py-0.5 rounded-md font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20">
+                                          {credit.toLocaleString(undefined, { minimumFractionDigits: 2 })} {isAr ? 'ج.م' : 'EGP'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300 dark:text-slate-600">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* 3. FINANCIAL ACCOUNTS (CASH & BANKS & TRANSFERS) */}
       {activeSubTab === 'financial_accounts' && (
@@ -2889,6 +3493,381 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         accountId={selectedAccountForStatement?.id || null}
         accountName={selectedAccountForStatement?.name}
         accountCode={selectedAccountForStatement?.code}
+        isAr={isAr}
+      />
+
+      {/* Mode 1: Quick Daily Expense Modal */}
+      <Modal
+        isOpen={isQuickExpenseModalOpen}
+        onClose={() => setIsQuickExpenseModalOpen(false)}
+        title={isAr ? 'تسجيل مصروف وسداد يومي سريع (Direct Expense)' : 'Record Quick Daily Expense'}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCreateQuickExpense} className="space-y-4">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+            <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p>
+              {isAr
+                ? 'نموذج الصرف السريع لغير المحاسبين: حدد بند المصروف (كهرباء، بوفيه، بنزين، صيانة...) والخزينة أو البنك المسدد منه، وسيتم إنشاء وترحيل قيد اليومية المزدوج المتوازن تلقائياً.'
+                : 'Direct cash-out form: Select expense account, payment vault/bank, and amount. Double-entry journal voucher is automatically created and posted.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'بند المصروف المستحق (الطرف المدين) *' : 'Expense Account (Debit) *'}
+              </label>
+              <select
+                required
+                value={expenseAccountId}
+                onChange={(e) => setExpenseAccountId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              >
+                <option value="">{isAr ? '-- اختر بند المصروف --' : '-- Select Expense Account --'}</option>
+                {availableExpenseAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.code} - {isAr ? acc.name : (acc.name_en || acc.name)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'وسيلة أو حساب الدفع (الطرف الدائن) *' : 'Paid From / Vault (Credit) *'}
+              </label>
+              <select
+                required
+                value={expensePaymentAccountId}
+                onChange={(e) => setExpensePaymentAccountId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              >
+                <option value="">{isAr ? '-- اختر الخزينة أو البنك --' : '-- Select Vault / Bank --'}</option>
+                {availablePaymentAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.code} - {isAr ? acc.name : (acc.name_en || acc.name)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'المبلغ المنصرف (ج.م) *' : 'Amount (EGP) *'}
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                value={expenseAmount}
+                onChange={(e) => setExpenseAmount(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تاريخ السداد والصرف *' : 'Payment Date *'}
+              </label>
+              <input
+                type="date"
+                required
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'مركز التكلفة التحليلي (اختياري)' : 'Cost Center (Optional)'}
+              </label>
+              <select
+                value={expenseCostCenterId}
+                onChange={(e) => setExpenseCostCenterId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              >
+                <option value="">{isAr ? 'بدون مركز تكلفة محدد' : 'None / General'}</option>
+                {costCenters.map((cc) => (
+                  <option key={cc.id} value={cc.id}>
+                    {cc.code} - {cc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'شرح وبيان المصروف *' : 'Expense Memo / Notes *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={expenseNotes}
+              onChange={(e) => setExpenseNotes(e.target.value)}
+              placeholder={isAr ? 'مثال: فاتورة كهرباء عنابر التشغيل لشهر نوفمبر / سلفة بوفيه / صيانة مقص' : 'e.g. Electricity bill / Factory lunch buffet / Machine parts'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          {/* Double entry live preview */}
+          {expenseAmount > 0 && (
+            <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200/60 dark:border-slate-700/60 pb-1.5">
+                <span>{isAr ? 'المعاينة المحاسبية للقيد المزدوج الآلي:' : 'Automatic Double-Entry Preview:'}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {isAr ? 'متوازن تلقائياً 100%' : '100% Balanced'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between font-mono">
+                <span className="text-emerald-700 dark:text-emerald-300 font-bold">
+                  [من حـ/ {accounts.find((a) => a.id === expenseAccountId)?.name || (isAr ? 'حساب المصروف' : 'Expense')}]:
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  +{Number(expenseAmount).toLocaleString()} ج.م (مدين)
+                </span>
+              </div>
+              <div className="flex items-center justify-between font-mono">
+                <span className="text-rose-700 dark:text-rose-300 font-bold">
+                  [إلى حـ/ {accounts.find((a) => a.id === expensePaymentAccountId)?.name || (isAr ? 'حساب الخزينة/البنك' : 'Payment Vault')}]:
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  -{Number(expenseAmount).toLocaleString()} ج.م (دائن)
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="ghost" onClick={() => setIsQuickExpenseModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !expenseAccountId || !expensePaymentAccountId || expenseAmount <= 0}
+              className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold"
+            >
+              {isSubmitting ? (isAr ? 'جاري الترحيل...' : 'Posting...') : (isAr ? 'ترحيل المصروف وإثبات القيد' : 'Post Expense Voucher')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Mode 2: Advanced Multi-Line Journal Entry Modal */}
+      <Modal
+        isOpen={isAdvancedJournalModalOpen}
+        onClose={() => setIsAdvancedJournalModalOpen(false)}
+        title={isAr ? 'قيد محاسبي مركب متوازن (Advanced Multi-Line Journal Entry)' : 'New Multi-Line Journal Entry'}
+        maxWidth="xl"
+      >
+        <form onSubmit={handleCreateAdvancedJournal} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'البيان العام للقيد *' : 'General Journal Memo *'}
+              </label>
+              <input
+                type="text"
+                required
+                value={advJournalDesc}
+                onChange={(e) => setAdvJournalDesc(e.target.value)}
+                placeholder={isAr ? 'مثال: تسوية فروق الجرد / قيد استحقاق رواتب وأجور نوفمبر / سداد موردين متعدد' : 'e.g. End of month inventory adjustment / Payroll allocation'}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تاريخ القيد *' : 'Entry Date *'}
+              </label>
+              <input
+                type="date"
+                required
+                value={advJournalDate}
+                onChange={(e) => setAdvJournalDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Dynamic Lines Table */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                {isAr ? 'أطراف القيد اليومية (المدين والدائن):' : 'Journal Entry Lines (Debits & Credits):'}
+              </span>
+              <button
+                type="button"
+                onClick={addAdvLine}
+                className="text-xs font-bold text-[#7F1625] dark:text-[#ff8ba0] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {isAr ? 'إضافة سطر طرف جديد' : 'Add Line'}
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
+              <table className="w-full text-xs text-start">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="p-2.5 text-start font-bold w-[34%]">{isAr ? 'الحساب المالي *' : 'Account *'}</th>
+                    <th className="p-2.5 text-start font-bold w-[16%]">{isAr ? 'مدين (+)' : 'Debit (+)'}</th>
+                    <th className="p-2.5 text-start font-bold w-[16%]">{isAr ? 'دائن (-)' : 'Credit (-)'}</th>
+                    <th className="p-2.5 text-start font-bold w-[22%]">{isAr ? 'شرح السطر' : 'Line Memo'}</th>
+                    <th className="p-2.5 text-center font-bold w-[8%]">{isAr ? 'مركز تكلفة' : 'CC'}</th>
+                    <th className="p-2.5 text-center font-bold w-[4%]"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {advJournalLines.map((line, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <td className="p-2">
+                        <select
+                          required
+                          value={line.account_id}
+                          onChange={(e) => updateAdvLine(idx, 'account_id', e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white"
+                        >
+                          <option value="">{isAr ? '-- اختر الحساب --' : '-- Select Account --'}</option>
+                          {accounts.map((acc) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.code} - {acc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.debit || ''}
+                          onChange={(e) => updateAdvLine(idx, 'debit', Number(e.target.value))}
+                          placeholder="0.00"
+                          className="w-full px-2 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-emerald-600 dark:text-emerald-400 text-end"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.credit || ''}
+                          onChange={(e) => updateAdvLine(idx, 'credit', Number(e.target.value))}
+                          placeholder="0.00"
+                          className="w-full px-2 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-rose-600 dark:text-rose-400 text-end"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={line.description || ''}
+                          onChange={(e) => updateAdvLine(idx, 'description', e.target.value)}
+                          placeholder={isAr ? 'شرح خاص بالسطر...' : 'Line description...'}
+                          className="w-full px-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <select
+                          value={line.cost_center_id || ''}
+                          onChange={(e) => updateAdvLine(idx, 'cost_center_id', e.target.value)}
+                          className="w-full px-1.5 py-1.5 text-[11px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white"
+                        >
+                          <option value="">-</option>
+                          {costCenters.map((cc) => (
+                            <option key={cc.id} value={cc.id}>
+                              {cc.code}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-2 text-center">
+                        {advJournalLines.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => removeAdvLine(idx)}
+                            className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Real-time verification box */}
+          <div className="p-3.5 rounded-xl border bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/60">
+            <div className="grid grid-cols-3 gap-3 text-center text-xs">
+              <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40">
+                <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold block">
+                  {isAr ? 'إجمالي المدين' : 'Total Debit'}
+                </span>
+                <span className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
+                  {advTotalDebit.toLocaleString()} ج.م
+                </span>
+              </div>
+              <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-800/40">
+                <span className="text-[11px] text-rose-800 dark:text-rose-300 font-bold block">
+                  {isAr ? 'إجمالي الدائن' : 'Total Credit'}
+                </span>
+                <span className="font-mono text-sm font-black text-rose-600 dark:text-rose-400">
+                  {advTotalCredit.toLocaleString()} ج.م
+                </span>
+              </div>
+              <div
+                className={`p-2 rounded-lg border flex flex-col justify-center items-center ${
+                  isAdvBalanced
+                    ? 'bg-emerald-100/50 dark:bg-emerald-900/30 border-emerald-400 text-emerald-800 dark:text-emerald-200'
+                    : 'bg-rose-100/50 dark:bg-rose-900/30 border-rose-400 text-rose-800 dark:text-rose-200'
+                }`}
+              >
+                <span className="text-[11px] font-bold">
+                  {isAdvBalanced ? (isAr ? 'حالة التوازن: متطابق ✓' : 'Balanced ✓') : (isAr ? 'فارق عدم التوازن' : 'Imbalance')}
+                </span>
+                <span className="font-mono text-xs font-bold">
+                  {isAdvBalanced ? (isAr ? '0.00 ج.م' : '0.00 EGP') : `${advDiff.toLocaleString()} ج.م`}
+                </span>
+              </div>
+            </div>
+            {!isAdvBalanced && advTotalDebit > 0 && (
+              <p className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-2 flex items-center justify-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {isAr
+                  ? 'لا يمكن ترحيل القيد لأن أطراف المدين لا تتساوى مع أطراف الدائن.'
+                  : 'Total Debits must equal Total Credits before posting.'}
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="ghost" onClick={() => setIsAdvancedJournalModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !isAdvBalanced}
+              className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold"
+            >
+              {isSubmitting ? (isAr ? 'جاري الاعتماد...' : 'Posting...') : (isAr ? 'ترحيل واعتماد قيد اليومية' : 'Post Journal Entry')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Official A4 Print Journal Voucher Modal */}
+      <PrintJournalVoucherModal
+        isOpen={!!selectedJournalForPrint}
+        onClose={() => setSelectedJournalForPrint(null)}
+        journalEntry={selectedJournalForPrint}
         isAr={isAr}
       />
     </div>

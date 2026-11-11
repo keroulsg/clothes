@@ -38,43 +38,85 @@ class AccountingService
     public function initializeDefaultChartOfAccounts(string $tenantId): void
     {
         $defaultAccounts = [
-            // Level 1: الأصول (Assets)
+            // 1: الأصول
             ['code' => '1', 'name' => 'الأصول', 'name_en' => 'Assets', 'type' => 'asset', 'category' => 'asset', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
             ['code' => '11', 'name' => 'الأصول المتداولة', 'name_en' => 'Current Assets', 'type' => 'asset', 'category' => 'current_asset', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '1'],
-            ['code' => '1010', 'name' => 'نقدية بالصندوق والخزينة', 'name_en' => 'Cash on Hand', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_cash_bank' => true, 'is_postable' => true, 'parent_code' => '11'],
-            ['code' => '1020', 'name' => 'حسابات البنوك الجارية', 'name_en' => 'Bank Accounts', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_cash_bank' => true, 'is_postable' => true, 'parent_code' => '11'],
+            
+            // 1010: الخزائن النقدية
+            ['code' => '1010', 'name' => 'نقدية بالصندوق والخزينة', 'name_en' => 'Cash on Hand', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_cash_bank' => true, 'is_postable' => false, 'parent_code' => '11'],
+            ['code' => '1011', 'name' => 'خزينة المعرض والمبيعات النقدية', 'name_en' => 'Showroom Cash Desk', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_cash_bank' => true, 'is_postable' => true, 'parent_code' => '1010'],
+            ['code' => '1012', 'name' => 'خزينة المصنع الرئيسية والعهد النثرية', 'name_en' => 'Factory Main Vault & Petty Cash', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_cash_bank' => true, 'is_postable' => true, 'parent_code' => '1010'],
+            
+            // 1020: البنوك والمحافظ
+            ['code' => '1020', 'name' => 'حسابات البنوك والمحافظ الإلكترونية', 'name_en' => 'Bank & E-Wallets', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_cash_bank' => true, 'is_postable' => false, 'parent_code' => '11'],
+            ['code' => '1021', 'name' => 'حساب البنك الأهلي المصري (جاري)', 'name_en' => 'NBE Current Bank Account', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_cash_bank' => true, 'is_postable' => true, 'parent_code' => '1020'],
+            ['code' => '1022', 'name' => 'محافظ إلكترونية وفودافون كاش مبيعات', 'name_en' => 'Vodafone Cash & Mobile Wallets', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_cash_bank' => true, 'is_postable' => true, 'parent_code' => '1020'],
+            
+            // 1110: العملاء والمدينون
             ['code' => '1110', 'name' => 'العملاء والمدينون التجاريون', 'name_en' => 'Accounts Receivable', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => true, 'parent_code' => '11'],
-            ['code' => '1210', 'name' => 'مخزون الأقمشة والخامات', 'name_en' => 'Raw Materials Inventory', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '11'],
-            ['code' => '1220', 'name' => 'مخزون الإنتاج تحت التشغيل (WIP)', 'name_en' => 'Work in Progress (WIP)', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '11'],
-            ['code' => '1230', 'name' => 'مخزون المنتجات التامة الجاهزة للبيع', 'name_en' => 'Finished Goods Inventory', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '11'],
+            ['code' => '1111', 'name' => 'عملاء جملة وتوكيلات ملابس كبرى', 'name_en' => 'Wholesale Commercial Clients', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
+            ['code' => '1112', 'name' => 'عملاء تجزئة ومعارض أفراد', 'name_en' => 'Retail Customers', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
+            ['code' => '1113', 'name' => 'عملاء تشغيل وقص للغير (CMT)', 'name_en' => 'CMT Subcontracting Clients', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
+            
+            // 1200: المخزون والمستودعات
+            ['code' => '1200', 'name' => 'مخزون المستودعات والمهمات', 'name_en' => 'Inventory & Stock Warehouses', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '11'],
+            ['code' => '1210', 'name' => 'مخزون الأقمشة والخامات وتريكو قطن', 'name_en' => 'Raw Fabrics & Knits Inventory', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
+            ['code' => '1213', 'name' => 'مخزون مستلزمات إنتاج (سوست، زراير، خيوط، حشو)', 'name_en' => 'Accessories, Trims & Threads', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
+            ['code' => '1220', 'name' => 'مخزون الإنتاج تحت التشغيل (WIP)', 'name_en' => 'Work in Progress (WIP)', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
+            ['code' => '1230', 'name' => 'مخزون المنتجات التامة الجاهزة للبيع', 'name_en' => 'Finished Garments Inventory', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
+            ['code' => '1232', 'name' => 'مخزون استوكات وعيوب وفرز ثانِ', 'name_en' => 'Seconds & Stock Clearance', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
+            ['code' => '1240', 'name' => 'مخزون قطع غيار ماكينات وزيوت صيانة', 'name_en' => 'Machine Spare Parts & Lubricants', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
 
-            // Level 1: الالتزامات (Liabilities)
+            // 13: الأصول الثابتة
+            ['code' => '13', 'name' => 'الأصول الثابتة والماكينات', 'name_en' => 'Fixed Assets & Machinery', 'type' => 'asset', 'category' => 'fixed_asset', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '1'],
+            ['code' => '1301', 'name' => 'ماكينات خياطة وقص وتجهيز صناعي', 'name_en' => 'Industrial Sewing & Cutting Machines', 'type' => 'asset', 'category' => 'fixed_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '13'],
+            ['code' => '1302', 'name' => 'مكابس بخار ومحطات كي وتجهيز', 'name_en' => 'Pressing & Steam Ironing Stations', 'type' => 'asset', 'category' => 'fixed_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '13'],
+            ['code' => '1303', 'name' => 'أجهزة كمبيوتر وسيرفرات وطابعات باركود', 'name_en' => 'IT Equipment & Barcode Printers', 'type' => 'asset', 'category' => 'fixed_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '13'],
+            ['code' => '1309', 'name' => 'مجمع إهلاك الأصول والماكينات', 'name_en' => 'Accumulated Depreciation', 'type' => 'asset', 'category' => 'fixed_asset', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '13'],
+
+            // 2: الالتزامات
             ['code' => '2', 'name' => 'الالتزامات', 'name_en' => 'Liabilities', 'type' => 'liability', 'category' => 'liability', 'level' => 1, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
             ['code' => '21', 'name' => 'الالتزامات المتداولة', 'name_en' => 'Current Liabilities', 'type' => 'liability', 'category' => 'current_liability', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '2'],
+            
+            // 2010: الموردون
             ['code' => '2010', 'name' => 'الموردون والدائنون التجاريون', 'name_en' => 'Accounts Payable', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => true, 'parent_code' => '21'],
-            ['code' => '2020', 'name' => 'مستحقات أجور عمال الإنتاج', 'name_en' => 'Accrued Payroll', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '21'],
-            ['code' => '2030', 'name' => 'ضريبة القيمة المضافة المستحقة', 'name_en' => 'VAT Payable', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '21'],
+            ['code' => '2011', 'name' => 'موردو الأقمشة والغزول والمنسوجات', 'name_en' => 'Fabric & Yarn Suppliers', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2010'],
+            ['code' => '2012', 'name' => 'موردو الإكسسوارات ومستلزمات الإنتاج', 'name_en' => 'Accessories & Trims Suppliers', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2010'],
+            ['code' => '2013', 'name' => 'ورش التشغيل الخارجي (طباعة، تطريز، صباغة)', 'name_en' => 'Subcontractors (Print, Embroidery)', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2010'],
+            
+            // 2020: أجور العمال
+            ['code' => '2020', 'name' => 'مستحقات أجور عمال الإنتاج والرواتب', 'name_en' => 'Accrued Payroll & Wages', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => true, 'parent_code' => '21'],
+            ['code' => '2021', 'name' => 'أجور عمال الخياطة والقص (بالقطعة)', 'name_en' => 'Piece-Rate Workers Wages', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2020'],
+            ['code' => '2022', 'name' => 'رواتب الإشراف والإدارة الشهرية', 'name_en' => 'Monthly Supervisory & Staff Salaries', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2020'],
+            ['code' => '2030', 'name' => 'ضريبة القيمة المضافة المستحقة (VAT)', 'name_en' => 'VAT Payable', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '21'],
 
-            // Level 1: حقوق الملكية (Equity)
+            // 3: حقوق الملكية
             ['code' => '3', 'name' => 'حقوق الملكية', 'name_en' => 'Equity', 'type' => 'equity', 'category' => 'equity', 'level' => 1, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
-            ['code' => '3010', 'name' => 'رأس المال', 'name_en' => 'Capital', 'type' => 'equity', 'category' => 'equity', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '3'],
+            ['code' => '3010', 'name' => 'رأس المال المدفوع', 'name_en' => 'Paid-in Capital', 'type' => 'equity', 'category' => 'equity', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '3'],
+            ['code' => '3012', 'name' => 'جاري الشركاء / صاحب المصنع', 'name_en' => 'Owner / Partners Current Account', 'type' => 'equity', 'category' => 'equity', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '3'],
             ['code' => '3020', 'name' => 'الأرباح المحتجزة / المرحلة', 'name_en' => 'Retained Earnings', 'type' => 'equity', 'category' => 'equity', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '3'],
 
-            // Level 1: الإيرادات (Revenue)
+            // 4: الإيرادات
             ['code' => '4', 'name' => 'الإيرادات', 'name_en' => 'Revenue', 'type' => 'revenue', 'category' => 'revenue', 'level' => 1, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
             ['code' => '4010', 'name' => 'إيراد مبيعات الملابس والإنتاج التام', 'name_en' => 'Finished Goods Sales Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
+            ['code' => '4012', 'name' => 'إيراد مبيعات استوكات وتصفيات', 'name_en' => 'Stock Clearance Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
             ['code' => '4020', 'name' => 'إيراد خدمات التشغيل والقص للغير (CMT)', 'name_en' => 'CMT Service Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
 
-            // Level 1: المصروفات والتكاليف المباشرة (Expenses / Direct Costs)
+            // 5: تكاليف الإنتاج المباشرة
             ['code' => '5', 'name' => 'تكاليف الإنتاج المباشرة', 'name_en' => 'Direct Production Costs', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
             ['code' => '5010', 'name' => 'تكلفة البضاعة المباعة (COGS)', 'name_en' => 'Cost of Goods Sold', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
-            ['code' => '5020', 'name' => 'أجور عمال الإنتاج المباشرة (أجر القطعة)', 'name_en' => 'Direct Labor Expense', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
-            ['code' => '5030', 'name' => 'مصاريف تشغيل صناعي خارجي (تطريز/طباعة)', 'name_en' => 'Subcontracting Expense', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
+            ['code' => '5011', 'name' => 'تكلفة خامات الأقمشة المستهلكة في الإنتاج', 'name_en' => 'Direct Fabric Consumption Cost', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
+            ['code' => '5012', 'name' => 'تكلفة مستلزمات الإنتاج والإكسسوار المستهلك', 'name_en' => 'Direct Accessories & Trims Cost', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
+            ['code' => '5020', 'name' => 'أجور عمال الإنتاج المباشرة (أجر القطعة)', 'name_en' => 'Direct Labor Expense (Piece-Rate)', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
+            ['code' => '5030', 'name' => 'مصاريف تشغيل صناعي خارجي (تطريز/طباعة)', 'name_en' => 'Outwork & Subcontracting Services', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
 
-            // Level 1: المصروفات غير المباشرة والتشغيلية (Indirect Costs / Operating Expenses)
+            // 6: المصروفات غير المباشرة والتشغيلية
             ['code' => '6', 'name' => 'المصروفات الصناعية والتشغيلية', 'name_en' => 'Operating & Overhead Expenses', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
-            ['code' => '6010', 'name' => 'مصاريف صناعية غير مباشرة واستهلاك ماكينات', 'name_en' => 'Factory Overhead & Depreciation', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
-            ['code' => '6020', 'name' => 'مصاريف بيع وتوزيع ونقل', 'name_en' => 'Selling & Distribution Expenses', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
+            ['code' => '6010', 'name' => 'مصاريف صناعية غير مباشرة (كهرباء ومياه وصيانة)', 'name_en' => 'Factory Utilities & Overheads', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
+            ['code' => '6012', 'name' => 'صيانة ماكينات الخياطة وقطع الغيار', 'name_en' => 'Sewing Machine Maintenance', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
+            ['code' => '6013', 'name' => 'إهلاك ماكينات ومعدات المصنع', 'name_en' => 'Machinery Depreciation Expense', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
+            ['code' => '6020', 'name' => 'مصاريف بيع وتوزيع وشحن', 'name_en' => 'Selling, Shipping & Marketing', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
+            ['code' => '6030', 'name' => 'مصاريف إدارية وعمومية واتصالات', 'name_en' => 'Administrative & General Expenses', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
         ];
 
         // Step 1: Create accounts in order
@@ -109,8 +151,8 @@ class AccountingService
         $defaultMappings = [
             'ar_control' => '1110',
             'ap_control' => '2010',
-            'default_cash' => '1010',
-            'default_bank' => '1020',
+            'default_cash' => isset($createdMap['1011']) ? '1011' : '1010',
+            'default_bank' => isset($createdMap['1021']) ? '1021' : '1020',
             'sales_revenue' => '4010',
             'cmt_revenue' => '4020',
             'cogs' => '5010',
@@ -118,7 +160,7 @@ class AccountingService
             'wip_inventory' => '1220',
             'finished_goods_inventory' => '1230',
             'direct_labor_expense' => '5020',
-            'payroll_payable' => '2020',
+            'payroll_payable' => isset($createdMap['2021']) ? '2021' : '2020',
             'retained_earnings' => '3020',
             'sales_tax_payable' => '2030',
         ];

@@ -558,6 +558,58 @@ class AccountingController extends Controller
         return response()->json($reconciliation);
     }
 
+    public function reconcileTreasury(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $reconciliation = $this->accountingService->reconcileTreasury($tenantId);
+
+        return response()->json($reconciliation);
+    }
+
+    public function reconcileInventory(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $reconciliation = $this->accountingService->reconcileInventory($tenantId);
+
+        return response()->json($reconciliation);
+    }
+
+    public function autoReconcileAR(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $validated = $request->validate([
+            'offset_account_id' => 'nullable|uuid',
+        ]);
+
+        $res = $this->accountingService->autoReconcileAR($tenantId, $validated['offset_account_id'] ?? null);
+
+        return response()->json($res);
+    }
+
+    public function autoReconcileAP(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $validated = $request->validate([
+            'offset_account_id' => 'nullable|uuid',
+        ]);
+
+        $res = $this->accountingService->autoReconcileAP($tenantId, $validated['offset_account_id'] ?? null);
+
+        return response()->json($res);
+    }
+
+    public function autoReconcileTreasury(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $validated = $request->validate([
+            'offset_account_id' => 'nullable|uuid',
+        ]);
+
+        $res = $this->accountingService->autoReconcileTreasury($tenantId, $validated['offset_account_id'] ?? null);
+
+        return response()->json($res);
+    }
+
     // ==========================================
     // سندات القبض والصرف
     // ==========================================

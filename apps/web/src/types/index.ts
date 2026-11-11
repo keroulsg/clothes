@@ -965,6 +965,7 @@ export interface ReconciliationResult {
   variance: number;
   is_matched: boolean;
   reconciled_at: string;
+  breakdown?: any[];
 }
 
 export interface JournalEntryLine {

@@ -40,6 +40,8 @@ import {
   Smartphone,
   CreditCard,
   Calendar,
+  Boxes,
+  Zap,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -53,6 +55,7 @@ import { CalculateCostModal } from './CalculateCostModal';
 import { PrintJournalVoucherModal } from './PrintJournalVoucherModal';
 import { PrintTransferVoucherModal } from './PrintTransferVoucherModal';
 import { PrintLoanScheduleModal } from './PrintLoanScheduleModal';
+import { PrintReconciliationModal } from './PrintReconciliationModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -216,6 +219,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [arReconciliation, setArReconciliation] = useState<ReconciliationResult | null>(null);
   const [apReconciliation, setApReconciliation] = useState<ReconciliationResult | null>(null);
+  const [treasuryReconciliation, setTreasuryReconciliation] = useState<any | null>(null);
+  const [inventoryReconciliation, setInventoryReconciliation] = useState<any | null>(null);
+  const [isPrintReconciliationOpen, setIsPrintReconciliationOpen] = useState(false);
+  const [isAutoReconciling, setIsAutoReconciling] = useState<string | null>(null);
+  const [reconcileSuccessMsg, setReconcileSuccessMsg] = useState<string | null>(null);
+  const [reconciliationActiveTab, setReconciliationActiveTab] = useState<'ar' | 'ap' | 'treasury' | 'inventory'>('ar');
 
   // COA Interactive States & Filters
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
@@ -292,13 +301,43 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
   const loadReconciliation = async () => {
     try {
-      const [ar, ap] = await Promise.all([
+      const [ar, ap, treasury, inventory] = await Promise.all([
         api.accounting.reconcileAR(),
         api.accounting.reconcileAP(),
+        api.accounting.reconcileTreasury(),
+        api.accounting.reconcileInventory(),
       ]);
       setArReconciliation(ar);
       setApReconciliation(ap);
+      setTreasuryReconciliation(treasury);
+      setInventoryReconciliation(inventory);
     } catch (err) {}
+  };
+
+  const handleAutoReconcile = async (type: 'ar' | 'ap' | 'treasury') => {
+    try {
+      setIsAutoReconciling(type);
+      setReconcileSuccessMsg(null);
+      let res: any;
+      if (type === 'ar') {
+        res = await api.accounting.autoReconcileAR();
+      } else if (type === 'ap') {
+        res = await api.accounting.autoReconcileAP();
+      } else if (type === 'treasury') {
+        res = await api.accounting.autoReconcileTreasury();
+      }
+      if (res?.message) {
+        setReconcileSuccessMsg(res.message);
+      }
+      await Promise.all([
+        loadReconciliation(),
+        loadAccountingData(),
+      ]);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || 'فشلت عملية التسوية');
+    } finally {
+      setIsAutoReconciling(null);
+    }
   };
 
   useEffect(() => {
@@ -3403,79 +3442,713 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       {/* 4. GENERAL LEDGER RECONCILIATION VIEW */}
       {activeSubTab === 'reconciliation' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* AR Reconciliation */}
-            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                  <h4 className="font-bold text-slate-900 dark:text-white">
-                    {isAr ? 'مطابقة مراقبة العملاء (AR Reconciliation)' : 'Accounts Receivable Reconciliation'}
-                  </h4>
+          {/* Top Control & Audit Action Bar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950/90 border border-amber-900/30 shadow-xl backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>{isAr ? 'مركز التدقيق والمطابقة المحاسبية والرقابة الداخلية' : 'Financial Reconciliation & Audit Control'}</span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Subledger vs GL
+                  </span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {isAr
+                    ? 'مطابقة الأستاذ العام آلياً مع كشوف حسابات العملاء والموردين وأرصدة الخزائن والبنوك والمخزون'
+                    : 'Reconcile General Ledger control balances against customer/vendor subledgers, treasury, and inventory'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Button
+                variant="outline"
+                onClick={() => setIsPrintReconciliationOpen(true)}
+                className="border-amber-600/40 text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 text-xs font-bold py-2 px-3.5"
+              >
+                <Printer className="w-4 h-4" />
+                {isAr ? 'طباعة تقرير المطابقة A4' : 'Print Audit Report'}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={loadReconciliation}
+                className="border-slate-700 text-slate-300 hover:bg-slate-800 flex items-center gap-2 text-xs font-bold py-2 px-3.5"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {isAr ? 'تحديث الفحص الآن' : 'Refresh Audit'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Success Banner */}
+          {reconcileSuccessMsg && (
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-between text-sm animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                <span>{reconcileSuccessMsg}</span>
+              </div>
+              <button
+                onClick={() => setReconcileSuccessMsg(null)}
+                className="text-emerald-400 hover:text-white text-xs font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* 4 Bento Pillar Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 1. AR Reconciliation Card */}
+            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <Receipt className="w-4 h-4" />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      {isAr ? 'مراقبة العملاء (1110)' : 'AR Control (1110)'}
+                    </h4>
+                  </div>
+                  {arReconciliation && (
+                    <Badge variant={arReconciliation.is_matched ? 'success' : 'danger'}>
+                      {arReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
+                    </Badge>
+                  )}
                 </div>
+
                 {arReconciliation && (
-                  <Badge variant={arReconciliation.is_matched ? 'success' : 'danger'}>
-                    {arReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
-                  </Badge>
+                  <div className="mt-3.5 space-y-2.5 text-xs">
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'رصيد الأستاذ (1110):' : 'GL Control:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(arReconciliation.control_account.gl_balance).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'إجمالي كشوف العملاء:' : 'Subledger:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(arReconciliation.subledger_total).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'قيمة الفرق:' : 'Variance:'}</span>
+                      <span
+                        className={`font-mono font-black text-sm ${
+                          arReconciliation.is_matched ? 'text-emerald-500' : 'text-rose-500'
+                        }`}
+                      >
+                        {Number(arReconciliation.variance).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {arReconciliation && (
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">{isAr ? 'رصيد حساب المراقبة بالأستاذ (1110):' : 'GL Control Balance (1110):'}</span>
-                    <span className="font-mono font-bold">{Number(arReconciliation.control_account.gl_balance).toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">{isAr ? 'إجمالي كشوف العملاء الفرعية:' : 'Subledger Total:'}</span>
-                    <span className="font-mono font-bold">{Number(arReconciliation.subledger_total).toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5">
-                    <span className="text-slate-500 font-semibold">{isAr ? 'قيمة الفرق والانحراف:' : 'Variance Amount:'}</span>
-                    <span className={`font-mono font-bold ${Math.abs(arReconciliation.variance) < 0.001 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {Number(arReconciliation.variance).toLocaleString()} ج.م
-                    </span>
-                  </div>
+              {arReconciliation && !arReconciliation.is_matched && (
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    size="sm"
+                    disabled={isAutoReconciling === 'ar'}
+                    onClick={() => handleAutoReconcile('ar')}
+                    className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 py-1.5"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    {isAutoReconciling === 'ar' ? (isAr ? 'جاري التسوية...' : 'Reconciling...') : (isAr ? 'تسوية ومطابقة آلياً ⚡' : 'Auto-Reconcile')}
+                  </Button>
                 </div>
               )}
             </Card>
 
-            {/* AP Reconciliation */}
-            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-amber-500" />
-                  <h4 className="font-bold text-slate-900 dark:text-white">
-                    {isAr ? 'مطابقة مراقبة الموردين (AP Reconciliation)' : 'Accounts Payable Reconciliation'}
-                  </h4>
+            {/* 2. AP Reconciliation Card */}
+            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                      <Scale className="w-4 h-4" />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      {isAr ? 'مراقبة الموردين (2010)' : 'AP Control (2010)'}
+                    </h4>
+                  </div>
+                  {apReconciliation && (
+                    <Badge variant={apReconciliation.is_matched ? 'success' : 'danger'}>
+                      {apReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
+                    </Badge>
+                  )}
                 </div>
+
                 {apReconciliation && (
-                  <Badge variant={apReconciliation.is_matched ? 'success' : 'danger'}>
-                    {apReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
-                  </Badge>
+                  <div className="mt-3.5 space-y-2.5 text-xs">
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'رصيد الأستاذ (2010):' : 'GL Control:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(apReconciliation.control_account.gl_balance).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'إجمالي كشوف الموردين:' : 'Subledger:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(apReconciliation.subledger_total).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'قيمة الفرق:' : 'Variance:'}</span>
+                      <span
+                        className={`font-mono font-black text-sm ${
+                          apReconciliation.is_matched ? 'text-emerald-500' : 'text-rose-500'
+                        }`}
+                      >
+                        {Number(apReconciliation.variance).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {apReconciliation && (
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">{isAr ? 'رصيد حساب المراقبة بالأستاذ (2010):' : 'GL Control Balance (2010):'}</span>
-                    <span className="font-mono font-bold">{Number(apReconciliation.control_account.gl_balance).toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">{isAr ? 'إجمالي كشوف الموردين الفرعية:' : 'Subledger Total:'}</span>
-                    <span className="font-mono font-bold">{Number(apReconciliation.subledger_total).toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5">
-                    <span className="text-slate-500 font-semibold">{isAr ? 'قيمة الفرق والانحراف:' : 'Variance Amount:'}</span>
-                    <span className={`font-mono font-bold ${Math.abs(apReconciliation.variance) < 0.001 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {Number(apReconciliation.variance).toLocaleString()} ج.م
-                    </span>
-                  </div>
+              {apReconciliation && !apReconciliation.is_matched && (
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    size="sm"
+                    disabled={isAutoReconciling === 'ap'}
+                    onClick={() => handleAutoReconcile('ap')}
+                    className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 py-1.5"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    {isAutoReconciling === 'ap' ? (isAr ? 'جاري التسوية...' : 'Reconciling...') : (isAr ? 'تسوية ومطابقة آلياً ⚡' : 'Auto-Reconcile')}
+                  </Button>
                 </div>
               )}
+            </Card>
+
+            {/* 3. Treasury Reconciliation Card */}
+            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                      <Wallet className="w-4 h-4" />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      {isAr ? 'الخزائن والبنوك' : 'Treasury & Banks'}
+                    </h4>
+                  </div>
+                  {treasuryReconciliation && (
+                    <Badge variant={treasuryReconciliation.is_matched ? 'success' : 'warning'}>
+                      {treasuryReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'يوجد انحراف' : 'Discrepancy')}
+                    </Badge>
+                  )}
+                </div>
+
+                {treasuryReconciliation && (
+                  <div className="mt-3.5 space-y-2.5 text-xs">
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'رصيد الأستاذ (1010-1021):' : 'GL Treasury:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(treasuryReconciliation.gl_total).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'إجمالي الحسابات الفعلية:' : 'Actual Accounts:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(treasuryReconciliation.actual_treasury_total).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'قيمة الفرق:' : 'Variance:'}</span>
+                      <span
+                        className={`font-mono font-black text-sm ${
+                          treasuryReconciliation.is_matched ? 'text-emerald-500' : 'text-amber-500'
+                        }`}
+                      >
+                        {Number(treasuryReconciliation.variance).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {treasuryReconciliation && !treasuryReconciliation.is_matched && (
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    size="sm"
+                    disabled={isAutoReconciling === 'treasury'}
+                    onClick={() => handleAutoReconcile('treasury')}
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 py-1.5"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    {isAutoReconciling === 'treasury' ? (isAr ? 'جاري التسوية...' : 'Reconciling...') : (isAr ? 'تسوية ومطابقة آلياً ⚡' : 'Auto-Reconcile')}
+                  </Button>
+                </div>
+              )}
+            </Card>
+
+            {/* 4. Inventory Valuation Card */}
+            <Card className="p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                      <Boxes className="w-4 h-4" />
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      {isAr ? 'المخزون الصناعي' : 'Inventory & WIP'}
+                    </h4>
+                  </div>
+                  {inventoryReconciliation && (
+                    <Badge variant={inventoryReconciliation.is_matched ? 'success' : 'warning'}>
+                      {inventoryReconciliation.is_matched ? (isAr ? 'متطابق 100%' : 'Matched') : (isAr ? 'فرق تقييم' : 'Variance')}
+                    </Badge>
+                  )}
+                </div>
+
+                {inventoryReconciliation && (
+                  <div className="mt-3.5 space-y-2.5 text-xs">
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'أستاذ المخزون (1210-1230):' : 'GL Inventory:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(inventoryReconciliation.gl_inventory_total).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                      <span>{isAr ? 'تقييم الجرد المستودعي:' : 'Warehouse Value:'}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {Number(inventoryReconciliation.warehouse_valuation_total).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'قيمة الفرق:' : 'Variance:'}</span>
+                      <span
+                        className={`font-mono font-black text-sm ${
+                          inventoryReconciliation.is_matched ? 'text-emerald-500' : 'text-amber-500'
+                        }`}
+                      >
+                        {Number(inventoryReconciliation.variance).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
+                <span>{isAr ? 'يشمل الخامات والـ WIP والتام' : 'Fabrics, Accessories & FG'}</span>
+                <span className="text-emerald-500 font-bold">✓ {isAr ? 'مُحدّث' : 'Updated'}</span>
+              </div>
             </Card>
           </div>
+
+          {/* Interactive Drill-down Subledger Breakdown Tabs */}
+          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            {/* Tab Pill Headers */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setReconciliationActiveTab('ar')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                    reconciliationActiveTab === 'ar'
+                      ? 'bg-primary text-white shadow-md'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'كشوف العملاء الفرعية' : 'Customers AR'}</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+                    {arReconciliation?.breakdown?.length || 0}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setReconciliationActiveTab('ap')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                    reconciliationActiveTab === 'ap'
+                      ? 'bg-amber-600 text-white shadow-md'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'كشوف الموردين والمستحقات' : 'Suppliers AP'}</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+                    {apReconciliation?.breakdown?.length || 0}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setReconciliationActiveTab('treasury')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                    reconciliationActiveTab === 'treasury'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'الخزائن والبنوك' : 'Treasury Accounts'}</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+                    {treasuryReconciliation?.breakdown?.length || 0}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setReconciliationActiveTab('inventory')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                    reconciliationActiveTab === 'inventory'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Boxes className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'جرد وتقييم المخزون' : 'Inventory Stock'}</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 font-mono">
+                    {inventoryReconciliation?.breakdown?.length || 0}
+                  </span>
+                </button>
+              </div>
+
+              {/* Subtab quick helper */}
+              <div className="text-xs text-slate-500 font-medium">
+                {reconciliationActiveTab === 'ar' && (isAr ? 'العملاء المكونين لرصيد حساب المراقبة (1110)' : 'Accounts forming AR balance')}
+                {reconciliationActiveTab === 'ap' && (isAr ? 'الموردين المكونين لرصيد حساب المراقبة (2010)' : 'Suppliers forming AP balance')}
+                {reconciliationActiveTab === 'treasury' && (isAr ? 'الخزائن النقدية وحسابات البنوك المفتوحة' : 'Cash vaults and bank accounts')}
+                {reconciliationActiveTab === 'inventory' && (isAr ? 'أرصدة حسابات المخزون مقابل تقييم المستودعات' : 'Inventory accounts vs valuation')}
+              </div>
+            </div>
+
+            {/* TAB 1: AR CUSTOMERS BREAKDOWN */}
+            {reconciliationActiveTab === 'ar' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'كود العميل' : 'Customer Code'}</th>
+                      <th className="p-3 text-start">{isAr ? 'اسم العميل / الشركة' : 'Customer Name'}</th>
+                      <th className="p-3 text-start">{isAr ? 'هاتف الاتصال' : 'Phone'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المسؤول' : 'Contact Person'}</th>
+                      <th className="p-3 text-start">{isAr ? 'فواتير مستحقة' : 'Due Invoices'}</th>
+                      <th className="p-3 text-start">{isAr ? 'رصيد أول' : 'Opening Bal'}</th>
+                      <th className="p-3 text-start">{isAr ? 'إجمالي المديونية' : 'Total Due'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإجراء' : 'Action'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {arReconciliation?.breakdown && arReconciliation.breakdown.length > 0 ? (
+                      arReconciliation.breakdown.map((c: any) => (
+                        <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                          <td className="p-3 font-mono font-bold text-xs text-amber-500">{c.code}</td>
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white">{c.name}</td>
+                          <td className="p-3 font-mono text-xs text-slate-500">{c.phone || '-'}</td>
+                          <td className="p-3 text-xs text-slate-500">{c.contact_person || '-'}</td>
+                          <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {Number(c.invoices_due).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {Number(c.opening_balance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 font-mono font-bold text-primary">
+                            {Number(c.total_balance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              {isAr ? 'مديونية قائمة' : 'Outstanding'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-500">
+                          {isAr ? 'لا توجد مديونيات عملاء مستحقة حالياً (كشوف العملاء 0.00 ج.م)' : 'No outstanding customer balances found'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-slate-50/70 dark:bg-slate-900/70 font-bold border-t border-slate-200 dark:border-slate-800 text-xs">
+                    <tr>
+                      <td colSpan={6} className="p-3 text-start text-slate-700 dark:text-slate-300">
+                        {isAr ? 'إجمالي كشوف حسابات العملاء المساعدة (Subledger Total):' : 'Total Customers Subledger:'}
+                      </td>
+                      <td className="p-3 font-mono text-sm text-primary">
+                        {Number(arReconciliation?.subledger_total || 0).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 text-center">
+                        {arReconciliation && !arReconciliation.is_matched && (
+                          <Button
+                            size="sm"
+                            disabled={isAutoReconciling === 'ar'}
+                            onClick={() => handleAutoReconcile('ar')}
+                            className="bg-primary hover:bg-primary/90 text-white font-bold text-xs py-1 px-3"
+                          >
+                            <Zap className="w-3 h-3 ml-1" />
+                            {isAr ? 'تسوية الفارق' : 'Reconcile'}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+
+            {/* TAB 2: AP SUPPLIERS BREAKDOWN */}
+            {reconciliationActiveTab === 'ap' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'كود المورد' : 'Supplier Code'}</th>
+                      <th className="p-3 text-start">{isAr ? 'اسم المورد والشركة' : 'Supplier Name'}</th>
+                      <th className="p-3 text-start">{isAr ? 'هاتف الاتصال' : 'Phone'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المسؤول' : 'Contact Person'}</th>
+                      <th className="p-3 text-start">{isAr ? 'فواتير غير مسددة' : 'Unpaid Invoices'}</th>
+                      <th className="p-3 text-start">{isAr ? 'رصيد الحساب' : 'Current Bal'}</th>
+                      <th className="p-3 text-start">{isAr ? 'إجمالي المستحق' : 'Total Due'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإجراء' : 'Action'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {apReconciliation?.breakdown && apReconciliation.breakdown.length > 0 ? (
+                      apReconciliation.breakdown.map((s: any) => (
+                        <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                          <td className="p-3 font-mono font-bold text-xs text-amber-500">{s.code}</td>
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white">{s.name}</td>
+                          <td className="p-3 font-mono text-xs text-slate-500">{s.phone || '-'}</td>
+                          <td className="p-3 text-xs text-slate-500">{s.contact_person || '-'}</td>
+                          <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {Number(s.invoices_due).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {Number(s.current_balance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 font-mono font-bold text-amber-500">
+                            {Number(s.total_balance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              {isAr ? 'مستحق للمورد' : 'Payable'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-500">
+                          {isAr ? 'لا توجد مستحقات موردين معلقة حالياً' : 'No outstanding supplier balances found'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-slate-50/70 dark:bg-slate-900/70 font-bold border-t border-slate-200 dark:border-slate-800 text-xs">
+                    <tr>
+                      <td colSpan={6} className="p-3 text-start text-slate-700 dark:text-slate-300">
+                        {isAr ? 'إجمالي كشوف حسابات الموردين المساعدة (Subledger Total):' : 'Total Suppliers Subledger:'}
+                      </td>
+                      <td className="p-3 font-mono text-sm text-amber-500">
+                        {Number(apReconciliation?.subledger_total || 0).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 text-center">
+                        {apReconciliation && !apReconciliation.is_matched && (
+                          <Button
+                            size="sm"
+                            disabled={isAutoReconciling === 'ap'}
+                            onClick={() => handleAutoReconcile('ap')}
+                            className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-1 px-3"
+                          >
+                            <Zap className="w-3 h-3 ml-1" />
+                            {isAr ? 'تسوية الفارق' : 'Reconcile'}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+
+            {/* TAB 3: TREASURY BREAKDOWN */}
+            {reconciliationActiveTab === 'treasury' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'اسم الحساب المالي' : 'Account Name'}</th>
+                      <th className="p-3 text-start">{isAr ? 'النوع' : 'Type'}</th>
+                      <th className="p-3 text-start">{isAr ? 'رقم الحساب / الآيبان' : 'Account / IBAN'}</th>
+                      <th className="p-3 text-start">{isAr ? 'حساب الأستاذ العام' : 'GL Account'}</th>
+                      <th className="p-3 text-start">{isAr ? 'الرصيد الفعلي' : 'Actual Balance'}</th>
+                      <th className="p-3 text-start">{isAr ? 'رصيد الأستاذ' : 'GL Balance'}</th>
+                      <th className="p-3 text-start">{isAr ? 'الفارق والانحراف' : 'Variance'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {treasuryReconciliation?.breakdown && treasuryReconciliation.breakdown.length > 0 ? (
+                      treasuryReconciliation.breakdown.map((t: any) => (
+                        <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                            {t.type === 'bank' ? (
+                              <Landmark className="w-4 h-4 text-blue-400" />
+                            ) : (
+                              <Wallet className="w-4 h-4 text-amber-400" />
+                            )}
+                            <span>{t.name}</span>
+                          </td>
+                          <td className="p-3 text-xs text-slate-500">
+                            {t.type === 'bank' ? (isAr ? 'حساب بنكي' : 'Bank') : (isAr ? 'خزينة نقدية' : 'Cash Vault')}
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-500">{t.account_number || '-'}</td>
+                          <td className="p-3 font-mono text-xs text-amber-500">
+                            {t.gl_account_code ? `[${t.gl_account_code}] ${t.gl_account_name}` : (isAr ? 'غير مربوط' : 'Not linked')}
+                          </td>
+                          <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
+                            {Number(t.actual_balance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-500">
+                            {Number(t.gl_balance).toLocaleString()} ج.م
+                          </td>
+                          <td
+                            className={`p-3 font-mono font-bold ${
+                              t.is_matched ? 'text-emerald-500' : 'text-amber-500'
+                            }`}
+                          >
+                            {Number(t.variance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 text-center">
+                            <Badge variant={t.is_matched ? 'success' : 'warning'}>
+                              {t.is_matched ? (isAr ? 'متطابق' : 'Matched') : (isAr ? 'يوجد فارق' : 'Diff')}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-500">
+                          {isAr ? 'لا توجد حسابات مالية مسجلة' : 'No financial accounts registered'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-slate-50/70 dark:bg-slate-900/70 font-bold border-t border-slate-200 dark:border-slate-800 text-xs">
+                    <tr>
+                      <td colSpan={4} className="p-3 text-start text-slate-700 dark:text-slate-300">
+                        {isAr ? 'إجمالي أرصدة الخزائن والبنوك الفعلية:' : 'Total Actual Treasury:'}
+                      </td>
+                      <td className="p-3 font-mono text-sm text-blue-400">
+                        {Number(treasuryReconciliation?.actual_treasury_total || 0).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 font-mono text-xs text-slate-400">
+                        {Number(treasuryReconciliation?.gl_total || 0).toLocaleString()} ج.م
+                      </td>
+                      <td
+                        className={`p-3 font-mono text-sm ${
+                          treasuryReconciliation?.is_matched ? 'text-emerald-500' : 'text-amber-500'
+                        }`}
+                      >
+                        {Number(treasuryReconciliation?.variance || 0).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 text-center">
+                        {treasuryReconciliation && !treasuryReconciliation.is_matched && (
+                          <Button
+                            size="sm"
+                            disabled={isAutoReconciling === 'treasury'}
+                            onClick={() => handleAutoReconcile('treasury')}
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-1 px-3"
+                          >
+                            <Zap className="w-3 h-3 ml-1" />
+                            {isAr ? 'تسوية الفارق' : 'Reconcile'}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+
+            {/* TAB 4: INVENTORY BREAKDOWN */}
+            {reconciliationActiveTab === 'inventory' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'فئة المخزون' : 'Stock Category'}</th>
+                      <th className="p-3 text-start">{isAr ? 'حساب الأستاذ العام' : 'GL Account'}</th>
+                      <th className="p-3 text-start">{isAr ? 'رصيد الأستاذ العام' : 'GL Balance'}</th>
+                      <th className="p-3 text-start">{isAr ? 'تقييم الجرد المستودعي' : 'Warehouse Valuation'}</th>
+                      <th className="p-3 text-start">{isAr ? 'فارق التقييم' : 'Variance'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {inventoryReconciliation?.breakdown && inventoryReconciliation.breakdown.length > 0 ? (
+                      inventoryReconciliation.breakdown.map((row: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                          <td className="p-3 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Boxes className="w-4 h-4 text-emerald-400" />
+                            <span>{row.category}</span>
+                          </td>
+                          <td className="p-3 font-mono text-xs text-amber-500">
+                            [{row.gl_code}]
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {Number(row.gl_balance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {Number(row.warehouse_valuation).toLocaleString()} ج.م
+                          </td>
+                          <td
+                            className={`p-3 font-mono font-bold ${
+                              Math.abs(row.variance) < 0.01 ? 'text-emerald-500' : 'text-amber-500'
+                            }`}
+                          >
+                            {Number(row.variance).toLocaleString()} ج.م
+                          </td>
+                          <td className="p-3 text-center">
+                            <Badge variant={Math.abs(row.variance) < 0.01 ? 'success' : 'warning'}>
+                              {Math.abs(row.variance) < 0.01 ? (isAr ? 'متطابق' : 'Matched') : (isAr ? 'يوجد فارق' : 'Diff')}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-500">
+                          {isAr ? 'لا توجد بيانات مخزون حالياً' : 'No inventory data found'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-slate-50/70 dark:bg-slate-900/70 font-bold border-t border-slate-200 dark:border-slate-800 text-xs">
+                    <tr>
+                      <td colSpan={2} className="p-3 text-start text-slate-700 dark:text-slate-300">
+                        {isAr ? 'إجمالي تقييم المخزون الصناعي والتام:' : 'Total Inventory Valuation:'}
+                      </td>
+                      <td className="p-3 font-mono text-sm text-emerald-500">
+                        {Number(inventoryReconciliation?.gl_inventory_total || 0).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 font-mono text-sm text-slate-300">
+                        {Number(inventoryReconciliation?.warehouse_valuation_total || 0).toLocaleString()} ج.م
+                      </td>
+                      <td
+                        className={`p-3 font-mono text-sm ${
+                          inventoryReconciliation?.is_matched ? 'text-emerald-500' : 'text-amber-500'
+                        }`}
+                      >
+                        {Number(inventoryReconciliation?.variance || 0).toLocaleString()} ج.م
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className="text-[11px] text-emerald-400 font-semibold">
+                          {inventoryReconciliation?.is_matched ? '✓ متطابق' : 'فحص الجرد'}
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
@@ -5392,6 +6065,16 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         onClose={() => setSelectedLoanForPrint(null)}
         loan={selectedLoanForPrint}
         isAr={isAr}
+      />
+
+      {/* Official A4 Print Reconciliation & Audit Certificate Modal */}
+      <PrintReconciliationModal
+        isOpen={isPrintReconciliationOpen}
+        onClose={() => setIsPrintReconciliationOpen(false)}
+        arData={arReconciliation}
+        apData={apReconciliation}
+        treasuryData={treasuryReconciliation}
+        inventoryData={inventoryReconciliation}
       />
     </div>
   );

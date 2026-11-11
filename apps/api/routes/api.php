@@ -393,6 +393,11 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/accounting/reconciliation/ar', [\App\Http\Controllers\Api\AccountingController::class, 'reconcileAR'])->middleware('role:accountant,financial_accountant,company_owner');
             Route::get('/accounting/reconciliation/ap', [\App\Http\Controllers\Api\AccountingController::class, 'reconcileAP'])->middleware('role:accountant,financial_accountant,company_owner');
+            Route::get('/accounting/reconciliation/treasury', [\App\Http\Controllers\Api\AccountingController::class, 'reconcileTreasury'])->middleware('role:accountant,financial_accountant,company_owner');
+            Route::get('/accounting/reconciliation/inventory', [\App\Http\Controllers\Api\AccountingController::class, 'reconcileInventory'])->middleware('role:accountant,financial_accountant,company_owner');
+            Route::post('/accounting/reconciliation/ar/auto-reconcile', [\App\Http\Controllers\Api\AccountingController::class, 'autoReconcileAR'])->middleware('role:accountant,financial_accountant,company_owner');
+            Route::post('/accounting/reconciliation/ap/auto-reconcile', [\App\Http\Controllers\Api\AccountingController::class, 'autoReconcileAP'])->middleware('role:accountant,financial_accountant,company_owner');
+            Route::post('/accounting/reconciliation/treasury/auto-reconcile', [\App\Http\Controllers\Api\AccountingController::class, 'autoReconcileTreasury'])->middleware('role:accountant,financial_accountant,company_owner');
 
             Route::get('/accounting/payment-vouchers', [\App\Http\Controllers\Api\AccountingController::class, 'paymentVouchers']);
             Route::post('/accounting/payment-vouchers', [\App\Http\Controllers\Api\AccountingController::class, 'storePaymentVoucher'])->middleware('role:accountant,company_owner');

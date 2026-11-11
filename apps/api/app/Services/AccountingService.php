@@ -1239,16 +1239,38 @@ class AccountingService
         $arAccount = $this->getMappedAccount($tenantId, 'ar_control');
         $glBalance = (float)$arAccount->current_balance;
 
-        // إجمالي أرصدة سجل العملاء الفرعي (فواتير المبيعات غير المسددة + الأرصدة الافتتاحية)
-        $invoicesDue = (float)SalesInvoice::withoutGlobalScopes()
+        $customers = Customer::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->where('status', '!=', 'cancelled')
-            ->sum('balance_due');
-        $openingBalances = (float)Customer::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->sum('opening_balance');
+            ->get();
 
-        $subledgerSum = round($invoicesDue + $openingBalances, 4);
+        $breakdown = [];
+        $subledgerSum = 0;
+
+        foreach ($customers as $c) {
+            $invoicesDue = (float)SalesInvoice::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('customer_id', $c->id)
+                ->where('status', '!=', 'cancelled')
+                ->sum('balance_due');
+            $opBal = (float)($c->opening_balance ?? 0);
+            $totalCustomerDue = round($invoicesDue + $opBal, 2);
+
+            if (abs($totalCustomerDue) > 0.001) {
+                $subledgerSum += $totalCustomerDue;
+                $breakdown[] = [
+                    'id' => $c->id,
+                    'code' => $c->code ?? ('CUST-' . substr($c->id, 0, 5)),
+                    'name' => $c->name,
+                    'phone' => $c->phone,
+                    'contact_person' => $c->contact_person ?? null,
+                    'invoices_due' => $invoicesDue,
+                    'opening_balance' => $opBal,
+                    'total_balance' => $totalCustomerDue,
+                ];
+            }
+        }
+
+        $subledgerSum = round($subledgerSum, 4);
         $variance = round($glBalance - $subledgerSum, 4);
 
         return [
@@ -1262,6 +1284,7 @@ class AccountingService
             'subledger_total' => $subledgerSum,
             'variance' => $variance,
             'is_matched' => abs($variance) < 0.0001,
+            'breakdown' => $breakdown,
             'reconciled_at' => now()->toIso8601String(),
         ];
     }
@@ -1274,16 +1297,38 @@ class AccountingService
         $apAccount = $this->getMappedAccount($tenantId, 'ap_control');
         $glBalance = (float)$apAccount->current_balance;
 
-        // إجمالي أرصدة سجل الموردين الفرعي (فواتير الموردين غير المسددة + أرصدة الموردين)
-        $invoicesDue = (float)SupplierInvoice::withoutGlobalScopes()
+        $suppliers = Supplier::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->where('payment_status', '!=', 'paid')
-            ->sum(DB::raw('total_amount - paid_amount'));
-        $supplierBalances = (float)Supplier::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->sum('current_balance');
+            ->get();
 
-        $subledgerSum = round(max($invoicesDue, $supplierBalances), 4);
+        $breakdown = [];
+        $subledgerSum = 0;
+
+        foreach ($suppliers as $s) {
+            $invoicesDue = (float)SupplierInvoice::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('supplier_id', $s->id)
+                ->where('payment_status', '!=', 'paid')
+                ->sum(DB::raw('total_amount - paid_amount'));
+            $currBal = (float)($s->current_balance ?? 0);
+            $totalSupplierDue = round(max($invoicesDue, $currBal), 2);
+
+            if (abs($totalSupplierDue) > 0.001) {
+                $subledgerSum += $totalSupplierDue;
+                $breakdown[] = [
+                    'id' => $s->id,
+                    'code' => $s->code ?? ('SUP-' . substr($s->id, 0, 5)),
+                    'name' => $s->name,
+                    'phone' => $s->phone,
+                    'contact_person' => $s->contact_person ?? null,
+                    'invoices_due' => $invoicesDue,
+                    'current_balance' => $currBal,
+                    'total_balance' => $totalSupplierDue,
+                ];
+            }
+        }
+
+        $subledgerSum = round($subledgerSum, 4);
         $variance = round($glBalance - $subledgerSum, 4);
 
         return [
@@ -1297,7 +1342,411 @@ class AccountingService
             'subledger_total' => $subledgerSum,
             'variance' => $variance,
             'is_matched' => abs($variance) < 0.0001,
+            'breakdown' => $breakdown,
             'reconciled_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * مطابقة حسابات الخزائن والبنوك الفعلية مع الأستاذ العام (Treasury Reconciliation)
+     */
+    public function reconcileTreasury(string $tenantId): array
+    {
+        $financialAccounts = FinancialAccount::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->get();
+
+        $coaIds = $financialAccounts->pluck('chart_of_account_id')->filter()->unique();
+        $coas = ChartOfAccount::withoutGlobalScopes()->whereIn('id', $coaIds)->get()->keyBy('id');
+
+        $subledgerSum = 0;
+        $glSum = 0;
+        $breakdown = [];
+
+        foreach ($financialAccounts as $acc) {
+            $coa = $acc->chart_of_account_id && $coas->has($acc->chart_of_account_id) ? $coas->get($acc->chart_of_account_id) : null;
+            $actualBal = (float)$acc->current_balance;
+            $glBal = $coa ? (float)$coa->current_balance : 0;
+            $diff = round($glBal - $actualBal, 4);
+
+            $subledgerSum += $actualBal;
+            $glSum += $glBal;
+
+            $breakdown[] = [
+                'id' => $acc->id,
+                'name' => $acc->name,
+                'type' => $acc->type,
+                'account_number' => $acc->account_number,
+                'gl_account_code' => $coa ? $coa->code : null,
+                'gl_account_name' => $coa ? $coa->name : null,
+                'actual_balance' => $actualBal,
+                'gl_balance' => $glBal,
+                'variance' => $diff,
+                'is_matched' => abs($diff) < 0.01,
+            ];
+        }
+
+        $variance = round($glSum - $subledgerSum, 4);
+
+        return [
+            'tenant_id' => $tenantId,
+            'gl_total' => $glSum,
+            'actual_treasury_total' => $subledgerSum,
+            'variance' => $variance,
+            'is_matched' => abs($variance) < 0.01,
+            'breakdown' => $breakdown,
+            'reconciled_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * إنشاء قيد تسوية ومطابقة آلي لموازنة أرصدة الخزائن والبنوك مع الأستاذ العام
+     */
+    public function autoReconcileTreasury(string $tenantId, ?string $offsetAccountId = null): array
+    {
+        $rec = $this->reconcileTreasury($tenantId);
+        $variance = $rec['variance'];
+
+        if (abs($variance) < 0.01) {
+            return [
+                'success' => true,
+                'message' => 'حسابات الخزائن والبنوك متطابقة 100% مع الأستاذ العام ولا يوجد فارق للتسوية.',
+                'reconciliation' => $rec,
+            ];
+        }
+
+        if (!$offsetAccountId) {
+            $offsetAcc = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereIn('code', ['3010', '3020'])
+                ->where('is_postable', true)
+                ->first();
+            $offsetAccountId = $offsetAcc ? $offsetAcc->id : null;
+        } else {
+            $offsetAcc = ChartOfAccount::withoutGlobalScopes()->find($offsetAccountId);
+        }
+
+        if (!$offsetAcc) {
+            throw new Exception('لا يوجد حساب مقابل معتمد لتسجيل قيد تسوية الخزائن والبنوك');
+        }
+
+        $lines = [];
+        $totalDebit = 0;
+        $totalCredit = 0;
+
+        foreach ($rec['breakdown'] as $row) {
+            $diff = $row['variance'];
+            if (abs($diff) < 0.01 || empty($row['gl_account_code'])) {
+                continue;
+            }
+            $coa = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('code', $row['gl_account_code'])
+                ->first();
+            if (!$coa) continue;
+
+            $absDiff = abs($diff);
+            if ($diff < 0) {
+                $lines[] = [
+                    'account_id' => $coa->id,
+                    'debit' => $absDiff,
+                    'credit' => 0,
+                    'description' => "إثبات رصيد خزينة/بنك فعلي بالأستاذ العام لمطابقة الواقع: {$row['name']}",
+                ];
+                $totalDebit += $absDiff;
+            } else {
+                $lines[] = [
+                    'account_id' => $coa->id,
+                    'debit' => 0,
+                    'credit' => $absDiff,
+                    'description' => "تخفيض وتعديل رصيد خزينة/بنك بالأستاذ العام: {$row['name']}",
+                ];
+                $totalCredit += $absDiff;
+            }
+        }
+
+        if ($totalDebit > $totalCredit) {
+            $lines[] = [
+                'account_id' => $offsetAcc->id,
+                'debit' => 0,
+                'credit' => round($totalDebit - $totalCredit, 4),
+                'description' => "الطرف المقابل لتسوية أرصدة الخزائن والبنوك - {$offsetAcc->name}",
+            ];
+        } elseif ($totalCredit > $totalDebit) {
+            $lines[] = [
+                'account_id' => $offsetAcc->id,
+                'debit' => round($totalCredit - $totalDebit, 4),
+                'credit' => 0,
+                'description' => "الطرف المقابل لتسوية أرصدة الخزائن والبنوك - {$offsetAcc->name}",
+            ];
+        }
+
+        $entry = $this->createJournalEntry($tenantId, [
+            'description' => "قيد تسوية ومطابقة دفتري: موازنة أرصدة الخزائن النقدية وحسابات البنوك مع الأستاذ العام",
+            'entry_date' => now()->toDateString(),
+            'reference_type' => 'treasury_reconciliation_adjustment',
+            'lines' => $lines,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'تم إنشاء قيد تسوية الخزائن والبنوك بنجاح، وأصبحت السيولة متطابقة 100%!',
+            'journal_entry' => $entry,
+            'reconciliation' => $this->reconcileTreasury($tenantId),
+        ];
+    }
+
+    /**
+     * مطابقة تقييم مخزون المستودعات مع حسابات الأستاذ العام للمخزون (Inventory Reconciliation)
+     */
+    public function reconcileInventory(string $tenantId): array
+    {
+        $glAccounts = ChartOfAccount::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereIn('code', ['1210', '1213', '1220', '1230'])
+            ->get()
+            ->keyBy('code');
+
+        $glFabrics = $glAccounts->has('1210') ? (float)$glAccounts->get('1210')->current_balance : 0;
+        $glAccessories = $glAccounts->has('1213') ? (float)$glAccounts->get('1213')->current_balance : 0;
+        $glWip = $glAccounts->has('1220') ? (float)$glAccounts->get('1220')->current_balance : 0;
+        $glFinished = $glAccounts->has('1230') ? (float)$glAccounts->get('1230')->current_balance : 0;
+
+        $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
+
+        $inventoryItems = \App\Models\InventoryItem::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->get();
+
+        $warehouseFabricsValuation = 0;
+        $warehouseAccessoriesValuation = 0;
+        $warehouseFinishedValuation = 0;
+
+        foreach ($inventoryItems as $item) {
+            $cost = (float)($item->unit_cost ?? $item->cost_price ?? 0);
+            $qty = (float)($item->current_stock ?? $item->quantity ?? 0);
+            $val = $cost * $qty;
+            $cat = strtolower($item->category ?? '');
+
+            if (str_contains($cat, 'fabric') || str_contains($cat, 'قماش')) {
+                $warehouseFabricsValuation += $val;
+            } elseif (str_contains($cat, 'access') || str_contains($cat, 'مستلزم') || str_contains($cat, 'خيط') || str_contains($cat, 'زرار')) {
+                $warehouseAccessoriesValuation += $val;
+            } else {
+                $warehouseFinishedValuation += $val;
+            }
+        }
+
+        $totalWarehouseValuation = round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation + $glWip, 2);
+        $variance = round($totalGlInventory - $totalWarehouseValuation, 2);
+
+        return [
+            'tenant_id' => $tenantId,
+            'gl_inventory_total' => $totalGlInventory,
+            'warehouse_valuation_total' => $totalWarehouseValuation,
+            'variance' => $variance,
+            'is_matched' => abs($variance) < 0.01,
+            'breakdown' => [
+                [
+                    'category' => 'الأقمشة والغزول والمنسوجات',
+                    'gl_code' => '1210',
+                    'gl_balance' => $glFabrics,
+                    'warehouse_valuation' => round($warehouseFabricsValuation, 2),
+                    'variance' => round($glFabrics - $warehouseFabricsValuation, 2),
+                ],
+                [
+                    'category' => 'مستلزمات الإنتاج (إكسسوار، خيوط، حشو)',
+                    'gl_code' => '1213',
+                    'gl_balance' => $glAccessories,
+                    'warehouse_valuation' => round($warehouseAccessoriesValuation, 2),
+                    'variance' => round($glAccessories - $warehouseAccessoriesValuation, 2),
+                ],
+                [
+                    'category' => 'الإنتاج تحت التشغيل (WIP)',
+                    'gl_code' => '1220',
+                    'gl_balance' => $glWip,
+                    'warehouse_valuation' => $glWip,
+                    'variance' => 0,
+                ],
+                [
+                    'category' => 'المنتجات التامة الجاهزة للبيع',
+                    'gl_code' => '1230',
+                    'gl_balance' => $glFinished,
+                    'warehouse_valuation' => round($warehouseFinishedValuation, 2),
+                    'variance' => round($glFinished - $warehouseFinishedValuation, 2),
+                ],
+            ],
+            'reconciled_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * إنشاء قيد تسوية ومطابقة آلي لموازنة حساب مراقبة العملاء مع كشوف العملاء
+     */
+    public function autoReconcileAR(string $tenantId, ?string $offsetAccountId = null): array
+    {
+        $rec = $this->reconcileAccountsReceivable($tenantId);
+        $variance = $rec['variance'];
+
+        if (abs($variance) < 0.01) {
+            return [
+                'success' => true,
+                'message' => 'حساب مراقبة العملاء متطابق 100% مع كشوف حسابات العملاء ولا يوجد فارق للتسوية.',
+                'reconciliation' => $rec,
+            ];
+        }
+
+        $arAccount = $this->getMappedAccount($tenantId, 'ar_control');
+
+        // Offset account (capital or retained earnings or sales)
+        if (!$offsetAccountId) {
+            $offsetAcc = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereIn('code', ['3010', '3020', '3012', '4010'])
+                ->where('is_postable', true)
+                ->first();
+            $offsetAccountId = $offsetAcc ? $offsetAcc->id : null;
+        } else {
+            $offsetAcc = ChartOfAccount::withoutGlobalScopes()->find($offsetAccountId);
+        }
+
+        if (!$offsetAcc) {
+            throw new Exception('لا يوجد حساب مقابل معتمد لتسجيل قيد التسوية (رأس المال أو الأرباح المرحلة)');
+        }
+
+        $absVariance = abs($variance);
+        $entryDate = now()->toDateString();
+        $desc = "قيد تسوية ومطابقة دفتري: إثبات فروق مطابقة كشوف العملاء الفرعية بحساب الأستاذ العام [{$arAccount->code}]";
+
+        if ($variance < 0) {
+            $lines = [
+                [
+                    'account_id' => $arAccount->id,
+                    'debit' => $absVariance,
+                    'credit' => 0,
+                    'description' => "تسوية وإثبات أرصدة العملاء المدينة في الأستاذ العام لمطابقة كشوف العملاء",
+                ],
+                [
+                    'account_id' => $offsetAcc->id,
+                    'debit' => 0,
+                    'credit' => $absVariance,
+                    'description' => "الطرف المقابل لتسوية أرصدة العملاء المدينين - {$offsetAcc->name}",
+                ],
+            ];
+        } else {
+            $lines = [
+                [
+                    'account_id' => $offsetAcc->id,
+                    'debit' => $absVariance,
+                    'credit' => 0,
+                    'description' => "الطرف المقابل لتسوية أرصدة العملاء - {$offsetAcc->name}",
+                ],
+                [
+                    'account_id' => $arAccount->id,
+                    'debit' => 0,
+                    'credit' => $absVariance,
+                    'description' => "تخفيض وتعديل رصيد العملاء بالأستاذ لمطابقة كشوف العملاء",
+                ],
+            ];
+        }
+
+        $entry = $this->createJournalEntry($tenantId, [
+            'description' => $desc,
+            'entry_date' => $entryDate,
+            'reference_type' => 'ar_reconciliation_adjustment',
+            'lines' => $lines,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'تم إنشاء قيد التسوية بنجاح، وأصبح حساب العملاء متطابقاً 100% مع كشوف حسابات العملاء!',
+            'journal_entry' => $entry,
+            'reconciliation' => $this->reconcileAccountsReceivable($tenantId),
+        ];
+    }
+
+    /**
+     * إنشاء قيد تسوية ومطابقة آلي لموازنة حساب مراقبة الموردين مع كشوف الموردين
+     */
+    public function autoReconcileAP(string $tenantId, ?string $offsetAccountId = null): array
+    {
+        $rec = $this->reconcileAccountsPayable($tenantId);
+        $variance = $rec['variance'];
+
+        if (abs($variance) < 0.01) {
+            return [
+                'success' => true,
+                'message' => 'حساب مراقبة الموردين متطابق 100% مع كشوف حسابات الموردين ولا يوجد فارق للتسوية.',
+                'reconciliation' => $rec,
+            ];
+        }
+
+        $apAccount = $this->getMappedAccount($tenantId, 'ap_control');
+
+        // Offset account (raw materials inventory 1210 or capital 3010)
+        if (!$offsetAccountId) {
+            $offsetAcc = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereIn('code', ['1210', '3010', '3020', '5010'])
+                ->where('is_postable', true)
+                ->first();
+            $offsetAccountId = $offsetAcc ? $offsetAcc->id : null;
+        } else {
+            $offsetAcc = ChartOfAccount::withoutGlobalScopes()->find($offsetAccountId);
+        }
+
+        if (!$offsetAcc) {
+            throw new Exception('لا يوجد حساب مقابل معتمد لتسجيل قيد تسوية الموردين');
+        }
+
+        $absVariance = abs($variance);
+        $entryDate = now()->toDateString();
+        $desc = "قيد تسوية ومطابقة دفتري: إثبات فروق مطابقة كشوف الموردين الفرعية بحساب الأستاذ العام [{$apAccount->code}]";
+
+        if ($variance < 0) {
+            $lines = [
+                [
+                    'account_id' => $offsetAcc->id,
+                    'debit' => $absVariance,
+                    'credit' => 0,
+                    'description' => "إثبات خامات / رأس مال مقابل تسوية مستحقات الموردين - {$offsetAcc->name}",
+                ],
+                [
+                    'account_id' => $apAccount->id,
+                    'debit' => 0,
+                    'credit' => $absVariance,
+                    'description' => "تسوية وإثبات التزامات الموردين الدائنة في الأستاذ العام لمطابقة كشوف الموردين",
+                ],
+            ];
+        } else {
+            $lines = [
+                [
+                    'account_id' => $apAccount->id,
+                    'debit' => $absVariance,
+                    'credit' => 0,
+                    'description' => "تعديل رصيد الموردين في الأستاذ العام",
+                ],
+                [
+                    'account_id' => $offsetAcc->id,
+                    'debit' => 0,
+                    'credit' => $absVariance,
+                    'description' => "الطرف المقابل لتسوية مستحقات الموردين - {$offsetAcc->name}",
+                ],
+            ];
+        }
+
+        $entry = $this->createJournalEntry($tenantId, [
+            'description' => $desc,
+            'entry_date' => $entryDate,
+            'reference_type' => 'ap_reconciliation_adjustment',
+            'lines' => $lines,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'تم إنشاء قيد التسوية بنجاح، وأصبح حساب الموردين متطابقاً 100% مع كشوف حسابات الموردين!',
+            'journal_entry' => $entry,
+            'reconciliation' => $this->reconcileAccountsPayable($tenantId),
         ];
     }
 

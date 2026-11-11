@@ -1719,6 +1719,30 @@ class ApiClient {
     reconcileAP: async (): Promise<any> => {
       return this.request('/accounting/reconciliation/ap');
     },
+    reconcileTreasury: async (): Promise<any> => {
+      return this.request('/accounting/reconciliation/treasury');
+    },
+    reconcileInventory: async (): Promise<any> => {
+      return this.request('/accounting/reconciliation/inventory');
+    },
+    autoReconcileAR: async (offset_account_id?: string): Promise<any> => {
+      return this.request('/accounting/reconciliation/ar/auto-reconcile', {
+        method: 'POST',
+        body: JSON.stringify({ offset_account_id }),
+      });
+    },
+    autoReconcileAP: async (offset_account_id?: string): Promise<any> => {
+      return this.request('/accounting/reconciliation/ap/auto-reconcile', {
+        method: 'POST',
+        body: JSON.stringify({ offset_account_id }),
+      });
+    },
+    autoReconcileTreasury: async (offset_account_id?: string): Promise<any> => {
+      return this.request('/accounting/reconciliation/treasury/auto-reconcile', {
+        method: 'POST',
+        body: JSON.stringify({ offset_account_id }),
+      });
+    },
     getPaymentVouchers: async (page = 1): Promise<PaginatedResponse<any>> => {
       return this.request(`/accounting/payment-vouchers?page=${page}`);
     },

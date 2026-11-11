@@ -17,12 +17,22 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ArrowRightLeft,
+  Printer,
+  Search,
+  Filter,
+  Eye,
+  Coins,
+  Boxes,
+  Users,
+  Wallet,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { api } from '../../api/client';
 import type { Language } from '../../types';
+import { AccountStatementModal } from './AccountStatementModal';
+import { PrintFinancialReportModal } from './PrintFinancialReportModal';
 
 interface FinancialReportsViewProps {
   lang: Language;
@@ -85,6 +95,20 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
   const [isEditingOverhead, setIsEditingOverhead] = useState<boolean>(false);
   const [tempOverheadPercent, setTempOverheadPercent] = useState<number>(15);
   const [overheadSaving, setOverheadSaving] = useState<boolean>(false);
+
+  // Smart Filters for Trial Balance
+  const [hideZeroAccounts, setHideZeroAccounts] = useState<boolean>(true);
+  const [selectedLevel, setSelectedLevel] = useState<'all' | '1' | '2' | '4'>('all');
+  const [searchAccount, setSearchAccount] = useState<string>('');
+
+  // Drill-down Account Statement Modal
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [selectedAccountName, setSelectedAccountName] = useState<string>('');
+  const [selectedAccountCode, setSelectedAccountCode] = useState<string>('');
+  const [isStatementModalOpen, setIsStatementModalOpen] = useState<boolean>(false);
+
+  // Official A4 Print Modal
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
   const fetchReport = async () => {
     setIsLoading(true);
@@ -330,10 +354,21 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
           <div className="flex items-center gap-2">
             <Button
               size="sm"
+              variant="outline"
+              onClick={() => setIsPrintModalOpen(true)}
+              disabled={isLoading || !reportData}
+              className="text-xs py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white border-0 shadow-sm font-bold"
+              icon={<Printer className="w-3.5 h-3.5" />}
+            >
+              {isAr ? 'طباعة التقرير المعتمد (A4)' : 'Print Statement (A4)'}
+            </Button>
+
+            <Button
+              size="sm"
               variant="primary"
               onClick={handleExportCsv}
               disabled={isExporting || isLoading}
-              className="text-xs py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-sm"
+              className="text-xs py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-sm font-bold"
               icon={<Download className="w-3.5 h-3.5" />}
             >
               {isExporting
@@ -421,102 +456,313 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
       {!isLoading && reportData && (
         <div className="space-y-6">
           {/* 1. TRIAL BALANCE VIEW */}
-          {activeReport === 'trial-balance' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] text-slate-500">{isAr ? 'حالة التوازن المحاسبي' : 'Double-Entry Balance'}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {reportData.is_balanced ? (
-                      <Badge variant="success" className="text-xs">
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                        {isAr ? 'ميزان متوازن تماماً' : 'Strictly Balanced'}
-                      </Badge>
-                    ) : (
-                      <Badge variant="danger" className="text-xs">
-                        <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-                        {isAr ? `فرق عدم توازن: ${reportData.difference} ج.م` : `Discrepancy: ${reportData.difference}`}
-                      </Badge>
-                    )}
+          {activeReport === 'trial-balance' && (() => {
+            const rawRows = reportData.rows || [];
+            const totalAccountsCount = rawRows.length;
+
+            // Calculate KPIs
+            const cashAndBanks = rawRows
+              .filter((r: any) => String(r.code).startsWith('10'))
+              .reduce((acc: number, r: any) => acc + (Number(r.closing_debit || 0) - Number(r.closing_credit || 0)), 0);
+
+            const receivables = rawRows
+              .filter((r: any) => String(r.code).startsWith('11'))
+              .reduce((acc: number, r: any) => acc + (Number(r.closing_debit || 0) - Number(r.closing_credit || 0)), 0);
+
+            const inventoryValuation = rawRows
+              .filter((r: any) => String(r.code).startsWith('12'))
+              .reduce((acc: number, r: any) => acc + (Number(r.closing_debit || 0) - Number(r.closing_credit || 0)), 0);
+
+            const payables = rawRows
+              .filter((r: any) => String(r.code).startsWith('20') || String(r.code).startsWith('21'))
+              .reduce((acc: number, r: any) => acc + (Number(r.closing_credit || 0) - Number(r.closing_debit || 0)), 0);
+
+            // Filter rows
+            const filteredRows = rawRows.filter((r: any) => {
+              if (hideZeroAccounts) {
+                const hasOpen = Number(r.opening_debit || 0) !== 0 || Number(r.opening_credit || 0) !== 0;
+                const hasPeriod = Number(r.period_debit || 0) !== 0 || Number(r.period_credit || 0) !== 0;
+                const hasClosing = Number(r.closing_debit || 0) !== 0 || Number(r.closing_credit || 0) !== 0;
+                if (!hasOpen && !hasPeriod && !hasClosing) return false;
+              }
+              const codeStr = String(r.code || '');
+              if (selectedLevel === '1' && codeStr.length !== 1) return false;
+              if (selectedLevel === '2' && codeStr.length > 2) return false;
+              if (selectedLevel === '4' && codeStr.length < 4) return false;
+
+              if (searchAccount.trim()) {
+                const q = searchAccount.toLowerCase();
+                const matchesCode = codeStr.toLowerCase().includes(q);
+                const matchesName = String(r.name || '').toLowerCase().includes(q);
+                if (!matchesCode && !matchesName) return false;
+              }
+              return true;
+            });
+
+            return (
+              <div className="space-y-4">
+                {/* 5 Smart Financial Health KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {/* Card 1: Balance Status */}
+                  <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-bold">
+                      <span>{isAr ? 'حالة التوازن المحاسبي' : 'Balance Status'}</span>
+                      <Scale className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="mt-2">
+                      {reportData.is_balanced ? (
+                        <Badge variant="success" className="text-xs font-black py-1 px-2.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-500" />
+                          {isAr ? 'متوازن تماماً 100%' : 'Strictly Balanced'}
+                        </Badge>
+                      ) : (
+                        <Badge variant="danger" className="text-xs font-black py-1 px-2.5">
+                          <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+                          {isAr ? `فرق: ${reportData.difference} ج.م` : `Discrepancy: ${reportData.difference}`}
+                        </Badge>
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* Card 2: Cash & Banks Liquidity */}
+                  <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-bold">
+                      <span>{isAr ? 'السيولة النقدية والبنكية' : 'Cash & Bank Balances'}</span>
+                      <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400">
+                        {cashAndBanks.toLocaleString()} <span className="text-xs font-bold text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-semibold">{isAr ? 'خزائن المصنع + البنك الأهلي' : 'Cash & Banks'}</p>
+                    </div>
+                  </Card>
+
+                  {/* Card 3: Receivables */}
+                  <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-bold">
+                      <span>{isAr ? 'مديونيات العملاء التجارية' : 'Accounts Receivable'}</span>
+                      <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-lg font-black font-mono text-blue-600 dark:text-blue-400">
+                        {receivables.toLocaleString()} <span className="text-xs font-bold text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-semibold">{isAr ? 'مستحقات على عملاء الجملة' : 'Receivables'}</p>
+                    </div>
+                  </Card>
+
+                  {/* Card 4: Inventory */}
+                  <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-bold">
+                      <span>{isAr ? 'مخزون الخامات والإنتاج التام' : 'Inventory Valuation'}</span>
+                      <Boxes className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-lg font-black font-mono text-amber-600 dark:text-amber-400">
+                        {inventoryValuation.toLocaleString()} <span className="text-xs font-bold text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-semibold">{isAr ? 'أقمشة + مستلزمات + تام' : 'Raw & Finished'}</p>
+                    </div>
+                  </Card>
+
+                  {/* Card 5: Payables */}
+                  <Card className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-bold">
+                      <span>{isAr ? 'التزامات الموردين والأجور' : 'Accounts Payable'}</span>
+                      <Coins className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-lg font-black font-mono text-purple-600 dark:text-purple-400">
+                        {payables.toLocaleString()} <span className="text-xs font-bold text-slate-500">{isAr ? 'ج.م' : 'EGP'}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-semibold">{isAr ? 'مستحقات موردين وأجور' : 'Due to Suppliers'}</p>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Smart Interactive Control Bar for Trial Balance */}
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+                  {/* Search */}
+                  <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                    <div className="relative w-full">
+                      <Search className="w-4 h-4 absolute top-2.5 right-3 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder={isAr ? 'بحث سريع برقم الحساب أو اسمه...' : 'Search by account code or name...'}
+                        value={searchAccount}
+                        onChange={(e) => setSearchAccount(e.target.value)}
+                        className="w-full pl-3 pr-9 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
                   </div>
-                </Card>
 
-                <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي حركات الفترة (مدين)' : 'Period Debits'}</p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                    {Number(reportData.totals?.period_debit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
-                  </p>
-                </Card>
+                  {/* Level Filter Pills */}
+                  <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    <span className="text-[11px] font-bold text-slate-500 px-2">{isAr ? 'المستوى:' : 'Level:'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLevel('all')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                        selectedLevel === 'all'
+                          ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      {isAr ? 'الكل (تفصيلي)' : 'All'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLevel('1')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                        selectedLevel === '1'
+                          ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      {isAr ? 'مستوى 1 (رئيسي)' : 'Level 1'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLevel('2')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                        selectedLevel === '2'
+                          ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      {isAr ? 'مستوى 2 (مجموعات)' : 'Level 2'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLevel('4')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                        selectedLevel === '4'
+                          ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      {isAr ? 'مستوى 4 (فرعي / تشغيلي)' : 'Level 4'}
+                    </button>
+                  </div>
 
-                <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي حركات الفترة (دائن)' : 'Period Credits'}</p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                    {Number(reportData.totals?.period_credit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
-                  </p>
-                </Card>
+                  {/* Zero-Balance Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setHideZeroAccounts(!hideZeroAccounts)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+                      hideZeroAccounts
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Filter className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'إخفاء الحسابات الصفرية' : 'Hide Zero Accounts'}</span>
+                    <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      {filteredRows.length} / {totalAccountsCount}
+                    </span>
+                  </button>
+                </div>
 
-                <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] text-slate-500">{isAr ? 'إجمالي الأرصدة الختامية' : 'Total Closing Balance'}</p>
-                  <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                    {Number(reportData.totals?.closing_debit || 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
-                  </p>
-                </Card>
-              </div>
-
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f1523]/90 shadow-sm">
-                <table className="w-full text-xs text-start">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                      <th className="py-2.5 px-3 font-semibold text-start">{isAr ? 'كود الحساب' : 'Code'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-start">{isAr ? 'اسم الحساب المحاسبي' : 'Account Name'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-center">{isAr ? 'النوع' : 'Type'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'أول المدة (مدين)' : 'Open Dr'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'أول المدة (دائن)' : 'Open Cr'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'حركة الفترة (مدين)' : 'Period Dr'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-end">{isAr ? 'حركة الفترة (دائن)' : 'Period Cr'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-end text-emerald-600 dark:text-emerald-400">{isAr ? 'الإقفال (مدين)' : 'Closing Dr'}</th>
-                      <th className="py-2.5 px-3 font-semibold text-end text-emerald-600 dark:text-emerald-400">{isAr ? 'الإقفال (دائن)' : 'Closing Cr'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {reportData.rows?.map((row: any) => (
-                      <tr key={row.account_id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                        <td className="py-2 px-3 font-mono font-medium text-slate-800 dark:text-slate-200">{row.code}</td>
-                        <td className="py-2 px-3 text-slate-900 dark:text-white font-medium">{row.name}</td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                            row.type === 'asset' ? 'bg-blue-500/10 text-blue-600' :
-                            row.type === 'liability' ? 'bg-amber-500/10 text-amber-600' :
-                            row.type === 'equity' ? 'bg-purple-500/10 text-purple-600' :
-                            row.type === 'revenue' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'
-                          }`}>
-                            {row.type}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-end font-mono text-slate-600 dark:text-slate-300">{Number(row.opening_debit || 0).toLocaleString()}</td>
-                        <td className="py-2 px-3 text-end font-mono text-slate-600 dark:text-slate-300">{Number(row.opening_credit || 0).toLocaleString()}</td>
-                        <td className="py-2 px-3 text-end font-mono font-medium text-slate-900 dark:text-white">{Number(row.period_debit || 0).toLocaleString()}</td>
-                        <td className="py-2 px-3 text-end font-mono font-medium text-slate-900 dark:text-white">{Number(row.period_credit || 0).toLocaleString()}</td>
-                        <td className="py-2 px-3 text-end font-mono font-bold text-slate-900 dark:text-white bg-emerald-500/5">{Number(row.closing_debit || 0).toLocaleString()}</td>
-                        <td className="py-2 px-3 text-end font-mono font-bold text-slate-900 dark:text-white bg-emerald-500/5">{Number(row.closing_credit || 0).toLocaleString()}</td>
+                {/* Table */}
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                  <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 font-semibold">
+                    <span className="flex items-center gap-1.5 text-primary font-bold">
+                      <Eye className="w-3.5 h-3.5" />
+                      {isAr ? 'نصيحة ذكية: اضغط على أي سطر في الجدول لعرض كشف حساب الأستاذ العام وحركات اليومية بالتفصيل' : 'Click any row to drill-down into detailed general ledger statement'}
+                    </span>
+                    <span>{isAr ? `عدد الحسابات المعروضة: ${filteredRows.length}` : `Accounts shown: ${filteredRows.length}`}</span>
+                  </div>
+                  <table className="w-full text-xs text-start">
+                    <thead>
+                      <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-black">
+                        <th className="py-3 px-3 font-black text-start">{isAr ? 'الكود' : 'Code'}</th>
+                        <th className="py-3 px-3 font-black text-start">{isAr ? 'اسم الحساب المحاسبي' : 'Account Name'}</th>
+                        <th className="py-3 px-3 font-black text-center">{isAr ? 'النوع' : 'Type'}</th>
+                        <th className="py-3 px-3 font-black text-end font-mono">{isAr ? 'أول المدة (مدين)' : 'Open Dr'}</th>
+                        <th className="py-3 px-3 font-black text-end font-mono">{isAr ? 'أول المدة (دائن)' : 'Open Cr'}</th>
+                        <th className="py-3 px-3 font-black text-end font-mono">{isAr ? 'حركة الفترة (مدين)' : 'Period Dr'}</th>
+                        <th className="py-3 px-3 font-black text-end font-mono">{isAr ? 'حركة الفترة (دائن)' : 'Period Cr'}</th>
+                        <th className="py-3 px-3 font-black text-end font-mono text-emerald-700 dark:text-emerald-400">{isAr ? 'الإقفال (مدين)' : 'Closing Dr'}</th>
+                        <th className="py-3 px-3 font-black text-end font-mono text-emerald-700 dark:text-emerald-400">{isAr ? 'الإقفال (دائن)' : 'Closing Cr'}</th>
+                        <th className="py-3 px-3 font-black text-center">{isAr ? 'كشف الأستاذ' : 'Ledger'}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-100 dark:bg-slate-800 font-bold border-t-2 border-slate-300 dark:border-slate-700">
-                      <td colSpan={3} className="py-2.5 px-3 text-start">{isAr ? 'الإجمالي العام لميزان المراجعة' : 'Grand Total'}</td>
-                      <td className="py-2.5 px-3 text-end font-mono">{Number(reportData.totals?.opening_debit || 0).toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-end font-mono">{Number(reportData.totals?.opening_credit || 0).toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-end font-mono">{Number(reportData.totals?.period_debit || 0).toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-end font-mono">{Number(reportData.totals?.period_credit || 0).toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-end font-mono text-emerald-600">{Number(reportData.totals?.closing_debit || 0).toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-end font-mono text-emerald-600">{Number(reportData.totals?.closing_credit || 0).toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900 font-medium">
+                      {filteredRows.map((row: any) => (
+                        <tr
+                          key={row.account_id || row.code}
+                          onClick={() => {
+                            if (row.account_id) {
+                              setSelectedAccountId(row.account_id);
+                              setSelectedAccountName(row.name);
+                              setSelectedAccountCode(row.code);
+                              setIsStatementModalOpen(true);
+                            }
+                          }}
+                          className="hover:bg-amber-500/10 dark:hover:bg-amber-500/15 cursor-pointer transition group"
+                        >
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                            {row.code}
+                          </td>
+                          <td className="py-2.5 px-3 font-black text-slate-950 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-300">
+                            {row.name}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              row.type === 'asset' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' :
+                              row.type === 'liability' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                              row.type === 'equity' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300' :
+                              row.type === 'revenue' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' :
+                              'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300'
+                            }`}>
+                              {row.type}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-end font-mono font-semibold text-slate-700 dark:text-slate-300">
+                            {Number(row.opening_debit || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-end font-mono font-semibold text-slate-700 dark:text-slate-300">
+                            {Number(row.opening_credit || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-end font-mono font-bold text-slate-900 dark:text-white">
+                            {Number(row.period_debit || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-end font-mono font-bold text-slate-900 dark:text-white">
+                            {Number(row.period_credit || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-end font-mono font-black text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">
+                            {Number(row.closing_debit || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-end font-mono font-black text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">
+                            {Number(row.closing_credit || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-primary group-hover:bg-primary group-hover:text-white transition">
+                              <Eye className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">{isAr ? 'عرض' : 'View'}</span>
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-100 dark:bg-slate-800/90 font-black border-t-2 border-slate-300 dark:border-slate-700">
+                        <td colSpan={3} className="py-3 px-3 text-start text-slate-950 dark:text-white font-black">{isAr ? 'الإجمالي العام لميزان المراجعة' : 'Grand Total'}</td>
+                        <td className="py-3 px-3 text-end font-mono">{Number(reportData.totals?.opening_debit || 0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-end font-mono">{Number(reportData.totals?.opening_credit || 0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-end font-mono">{Number(reportData.totals?.period_debit || 0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-end font-mono">{Number(reportData.totals?.period_credit || 0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-end font-mono text-emerald-700 dark:text-emerald-400">{Number(reportData.totals?.closing_debit || 0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-end font-mono text-emerald-700 dark:text-emerald-400">{Number(reportData.totals?.closing_credit || 0).toLocaleString()}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 2. INCOME STATEMENT VIEW */}
           {activeReport === 'income-statement' && (
@@ -1033,6 +1279,31 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
           )}
         </div>
       )}
+
+      {/* Drill-down Individual Account Statement Modal */}
+      <AccountStatementModal
+        isOpen={isStatementModalOpen}
+        onClose={() => {
+          setIsStatementModalOpen(false);
+          setSelectedAccountId(null);
+        }}
+        accountId={selectedAccountId}
+        accountName={selectedAccountName}
+        accountCode={selectedAccountCode}
+        isAr={isAr}
+      />
+
+      {/* Official A4 Print Financial Report Modal */}
+      <PrintFinancialReportModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        reportType={activeReport}
+        reportData={reportData}
+        fromDate={fromDate}
+        toDate={toDate}
+        asOfDate={asOfDate}
+        isAr={isAr}
+      />
     </div>
   );
 };

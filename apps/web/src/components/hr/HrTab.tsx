@@ -46,6 +46,7 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Pagination } from '../ui/Pagination';
 import { api } from '../../api/client';
+import { PrintWorkerPayslipModal } from './PrintWorkerPayslipModal';
 import type {
   Language,
   Employee,
@@ -5587,236 +5588,17 @@ export const HrTab: React.FC<HrTabProps> = ({ lang }) => {
       </Modal>
 
       {/* 8B. Individual Worker Official Printable Payslip Modal */}
-      <Modal
+      <PrintWorkerPayslipModal
         isOpen={isIndividualPayslipModalOpen}
         onClose={() => setIsIndividualPayslipModalOpen(false)}
-        title={isAr ? `مفردات وقسيمة راتب العامل: ${selectedItemForIndividualPayslip?.employee?.name || ''}` : `Individual Worker Payslip: ${selectedItemForIndividualPayslip?.employee?.name || ''}`}
-        maxWidth="xl"
-      >
-        {selectedItemForIndividualPayslip && (() => {
-          const item = selectedItemForIndividualPayslip;
-          const emp = item.employee;
-          const breakdown = item.calculation_breakdown;
-          const advancesList: any[] = breakdown?.advances_list || [];
+        payroll={selectedPayrollForView}
+        item={selectedItemForIndividualPayslip}
+        isAr={isAr}
+      />
 
-          return (
-            <div className="space-y-4">
-              <div
-                id="printable-worker-payslip"
-                className="p-5 border border-slate-300 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-950 text-slate-900 dark:text-white space-y-4 shadow-sm"
-              >
-                {/* Official Header */}
-                <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-800 pb-3">
-                  <div>
-                    <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white">GARMENTOS CLOUD ERP</h2>
-                    <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                      {isAr ? 'قسيمة ومفردات راتب العامل الرسمية (إشعار صرف معتمد)' : 'Official Worker Payslip & Wage Statement'}
-                    </p>
-                  </div>
-                  <div className="text-end">
-                    <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                      {isAr ? 'فترة المسير:' : 'Period:'} {selectedPayrollForView?.payroll_period}
-                    </span>
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                      {isAr ? 'تاريخ الطباعة:' : 'Date:'} {new Date().toLocaleDateString('ar-EG')}
-                    </p>
-                  </div>
-                </div>
 
-                {/* Worker Bio Information Card */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs">
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">{isAr ? 'كود العامل' : 'Employee Code'}</span>
-                    <strong className="font-mono text-indigo-600 dark:text-indigo-400 text-xs">{emp?.employee_code}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">{isAr ? 'اسم العامل' : 'Full Name'}</span>
-                    <strong className="text-slate-900 dark:text-white text-xs">{emp?.name}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">{isAr ? 'القسم والوظيفة' : 'Dept / Job'}</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">{emp?.department} - {emp?.job_title}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">{isAr ? 'نظام الأجر' : 'Wage System'}</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">{emp?.pay_type}</span>
-                  </div>
-                  {emp?.phone && (
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">{isAr ? 'رقم الهاتف' : 'Phone'}</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300 text-xs">{emp.phone}</span>
-                    </div>
-                  )}
-                  {emp?.national_id && (
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">{isAr ? 'الرقم القومي' : 'National ID'}</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300 text-xs">{emp.national_id}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">{isAr ? 'أيام العمل المسجلة' : 'Payable Days'}</span>
-                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">{breakdown?.payable_days ?? '-'} يوم</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">{isAr ? 'ساعات العمل / إضافي' : 'Hours / OT'}</span>
-                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">{breakdown?.working_hours ?? 0} س | +{breakdown?.overtime_hours ?? 0} إضافي</span>
-                  </div>
-                </div>
 
-                {/* Financial Breakdown Table: Gross vs Deductions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  {/* Left Column: الاستحقاقات (Gross Earnings) */}
-                  <div className="border border-emerald-200/80 dark:border-emerald-800/60 rounded-xl overflow-hidden">
-                    <div className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold border-b border-emerald-200/80 dark:border-emerald-800/60 flex justify-between items-center">
-                      <span>{isAr ? '١. الاستحقاقات والأجور الإجمالية' : '1. Gross Earnings'}</span>
-                      <span className="font-mono">{Number(item.gross_amount).toFixed(2)} ج.م</span>
-                    </div>
-                    <div className="p-3 space-y-1.5 divide-y divide-slate-100 dark:divide-slate-800 text-[11px]">
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'الراتب / الأجر الأساسي المعتمد:' : 'Base Salary:'}</span>
-                        <strong className="font-mono">{Number(item.base_amount || 0).toFixed(2)} ج.م</strong>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'مستحقات إنتاجية أجور القطعة:' : 'Piece Rate Earnings:'}</span>
-                        <strong className="font-mono text-emerald-600">+{Number(item.piece_rate_earnings || 0).toFixed(2)} ج.م</strong>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'أجر ساعات وأيام العمل:' : 'Time Wages:'}</span>
-                        <strong className="font-mono">+{(Number(item.hourly_earnings || 0) + Number(item.daily_earnings || 0)).toFixed(2)} ج.م</strong>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'أجر ساعات إضافية (أوفرتايم):' : 'Overtime Wages:'}</span>
-                        <strong className="font-mono text-emerald-600">+{Number(item.overtime_earnings || 0).toFixed(2)} ج.م</strong>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'البدلات والمكافآت المعتمدة:' : 'Bonuses & Allowances:'}</span>
-                        <strong className="font-mono text-emerald-600">+{Number(item.allowances_and_bonuses || 0).toFixed(2)} ج.م</strong>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Right Column: الاستقطاعات والسلف (Deductions & Advances) */}
-                  <div className="border border-rose-200/80 dark:border-rose-800/60 rounded-xl overflow-hidden">
-                    <div className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold border-b border-rose-200/80 dark:border-rose-800/60 flex justify-between items-center">
-                      <span>{isAr ? '٢. الاستقطاعات والسلف المنصرفة' : '2. Deductions & Advances'}</span>
-                      <span className="font-mono text-rose-600">-{Number(item.deductions_and_advances).toFixed(2)} ج.م</span>
-                    </div>
-                    <div className="p-3 space-y-1.5 divide-y divide-slate-100 dark:divide-slate-800 text-[11px]">
-                      {/* السلف النقدية المنصرفة والمستقطعة */}
-                      <div className="py-1">
-                        <div className="flex justify-between items-center font-bold text-slate-800 dark:text-slate-200">
-                          <span>{isAr ? 'سداد سلف نقدية منصرفة:' : 'Cash Advances Repaid:'}</span>
-                          <strong className="font-mono text-rose-600">-{Number(item.advances_repaid || 0).toFixed(2)} ج.م</strong>
-                        </div>
-                        {/* تفاصيل السلف بالتواريخ والأسباب */}
-                        {advancesList.length > 0 ? (
-                          <div className="mt-1 space-y-1 ps-2 text-[10px] text-slate-500 border-s-2 border-amber-300">
-                            {advancesList.map((adv: any, aIdx: number) => (
-                              <div key={adv.id || aIdx} className="flex justify-between items-center py-0.5">
-                                <div>
-                                  <span className="font-bold text-slate-700 dark:text-slate-300">• سلفة {adv.adjustment_date ? adv.adjustment_date.split('T')[0] : ''} ({adv.reason})</span>
-                                  {adv.installments_count && adv.installments_count > 1 ? (
-                                    <span className="text-[9px] text-indigo-600 dark:text-indigo-400 block ps-2">
-                                      (نظام تقسيط: {adv.installments_count} أشهر | الرصيد المتبقي على العامل بعد هذا المسير: {Number(adv.remaining_after ?? 0).toLocaleString()} ج.م)
-                                    </span>
-                                  ) : (
-                                    adv.remaining_after !== undefined && (
-                                      <span className="text-[9px] text-slate-500 block ps-2">
-                                        (الرصيد المتبقي: {Number(adv.remaining_after).toLocaleString()} ج.م)
-                                      </span>
-                                    )
-                                  )}
-                                </div>
-                                <span className="font-mono font-bold text-rose-600">-{Number(adv.deducted_amount ?? adv.amount).toLocaleString()} ج.م</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'خصومات عيوب الجودة المعتمدة:' : 'Defect Penalties:'}</span>
-                        <strong className="font-mono text-rose-600">-{Number(item.defect_deductions || 0).toFixed(2)} ج.م</strong>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-slate-600 dark:text-slate-400">{isAr ? 'خصومات إدارية وتأمينات:' : 'General Deductions:'}</span>
-                        <strong className="font-mono text-rose-600">-{Number(item.general_deductions || 0).toFixed(2)} ج.م</strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Net Payout Highlight Banner */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-teal-500/10 border-2 border-emerald-500/40 flex flex-col sm:flex-row justify-between items-center gap-3">
-                  <div>
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                      {isAr ? 'صافي المبلغ المستحق للصرف للعامل' : 'Net Salary Payable'}
-                    </span>
-                    <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
-                      {Number(item.net_salary).toLocaleString()} <span className="text-sm font-bold text-slate-600 dark:text-slate-300">{isAr ? 'جنيه مصري' : 'EGP'}</span>
-                    </div>
-                  </div>
-                  <div className="text-end">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${
-                      item.is_paid
-                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
-                        : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                    }`}>
-                      <span className={`w-2 h-2 rounded-full ${item.is_paid ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                      <span>{item.is_paid ? (isAr ? 'تم الصرف نقداً بالخزينة' : 'Paid in Cash') : (isAr ? 'جاهز ومعلق للصرف' : 'Pending Disbursement')}</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Official Signatures Triplet */}
-                <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-200 dark:border-slate-800 text-center text-xs">
-                  <div>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 block mb-10">
-                      {isAr ? 'توقيع وبصمة العامل المستلم' : 'Worker Signature'}
-                    </span>
-                    <div className="border-b border-dashed border-slate-400 dark:border-slate-600 w-3/4 mx-auto"></div>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      {isAr ? 'أقر باستلام كامل مستحقاتي' : 'Received in full'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 block mb-10">
-                      {isAr ? 'توقيع الصراف / أمين الخزينة' : 'Cashier Signature'}
-                    </span>
-                    <div className="border-b border-dashed border-slate-400 dark:border-slate-600 w-3/4 mx-auto"></div>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      {isAr ? 'تم صرف القيمة نقداً' : 'Disbursed'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 block mb-10">
-                      {isAr ? 'اعتماد المدير المالي / المصنع' : 'Factory / HR Manager'}
-                    </span>
-                    <div className="border-b border-dashed border-slate-400 dark:border-slate-600 w-3/4 mx-auto"></div>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      {isAr ? 'معتمد رسمياً' : 'Authorized'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-2 pt-1">
-                <Button variant="ghost" onClick={() => setIsIndividualPayslipModalOpen(false)}>
-                  {isAr ? 'إغلاق' : 'Close'}
-                </Button>
-                <Button
-                  onClick={() => window.print()}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
-                  icon={<Printer className="w-4 h-4" />}
-                >
-                  {isAr ? 'طباعة القسيمة (Ctrl + P)' : 'Print Payslip'}
-                </Button>
-              </div>
-            </div>
-          );
-        })()}
-      </Modal>
 
       {/* 9. Generate Payroll Modal */}
       <Modal

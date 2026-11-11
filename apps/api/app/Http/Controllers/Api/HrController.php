@@ -958,6 +958,7 @@ class HrController extends Controller
                     'total_pieces' => (int)$pieceWorkLogs->sum('completed_quantity'),
                     'total_amount' => (float)$pieceWorkLogs->sum('total_amount'),
                 ],
+                'piece_work_logs' => $pieceWorkLogs,
                 'adjustments' => $adjustments,
                 'defect_adjustments' => $defectAdjustments,
             ],

@@ -14,6 +14,9 @@ import {
   Settings,
   Sliders,
   Check,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -44,6 +47,39 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reportData, setReportData] = useState<any | null>(null);
 
+  // Comparative Statement Analysis Mode
+  const [isComparative, setIsComparative] = useState<boolean>(false);
+  const [compareFromDate, setCompareFromDate] = useState<string>(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [compareToDate, setCompareToDate] = useState<string>(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [comparativeData, setComparativeData] = useState<any | null>(null);
+
+  const setPriorYearPreset = () => {
+    const f = new Date(fromDate);
+    f.setFullYear(f.getFullYear() - 1);
+    const t = new Date(toDate);
+    t.setFullYear(t.getFullYear() - 1);
+    setCompareFromDate(f.toISOString().slice(0, 10));
+    setCompareToDate(t.toISOString().slice(0, 10));
+  };
+
+  const setPriorMonthPreset = () => {
+    const f = new Date(fromDate);
+    f.setMonth(f.getMonth() - 1);
+    const t = new Date(toDate);
+    t.setMonth(t.getMonth() - 1);
+    setCompareFromDate(f.toISOString().slice(0, 10));
+    setCompareToDate(t.toISOString().slice(0, 10));
+  };
+
   // Configurable Overhead Rate (Phase 09B)
   const [overheadRate, setOverheadRate] = useState<number>(0.15);
   const [isEditingOverhead, setIsEditingOverhead] = useState<boolean>(false);
@@ -55,10 +91,29 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
     setErrorMsg(null);
     try {
       let res: any;
+      let compRes: any = null;
       if (activeReport === 'trial-balance') {
-        res = await api.accounting.getTrialBalance({ from_date: fromDate, to_date: toDate });
+        if (isComparative) {
+          const [currentRes, priorRes] = await Promise.all([
+            api.accounting.getTrialBalance({ from_date: fromDate, to_date: toDate }),
+            api.accounting.getTrialBalance({ from_date: compareFromDate, to_date: compareToDate }),
+          ]);
+          res = currentRes;
+          compRes = priorRes;
+        } else {
+          res = await api.accounting.getTrialBalance({ from_date: fromDate, to_date: toDate });
+        }
       } else if (activeReport === 'income-statement') {
-        res = await api.accounting.getIncomeStatement({ from_date: fromDate, to_date: toDate });
+        if (isComparative) {
+          const [currentRes, priorRes] = await Promise.all([
+            api.accounting.getIncomeStatement({ from_date: fromDate, to_date: toDate }),
+            api.accounting.getIncomeStatement({ from_date: compareFromDate, to_date: compareToDate }),
+          ]);
+          res = currentRes;
+          compRes = priorRes;
+        } else {
+          res = await api.accounting.getIncomeStatement({ from_date: fromDate, to_date: toDate });
+        }
       } else if (activeReport === 'balance-sheet') {
         res = await api.accounting.getBalanceSheet({ as_of_date: asOfDate });
       } else if (activeReport === 'vat-summary') {
@@ -77,6 +132,7 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
         }
       }
       setReportData(res);
+      setComparativeData(compRes);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تحميل بيانات التقرير المالي' : 'Failed to load report data'));
     } finally {
@@ -253,6 +309,22 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
               <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
               {isAr ? 'تطبيق الفلتر' : 'Apply Filter'}
             </Button>
+
+            {(activeReport === 'income-statement' || activeReport === 'trial-balance') && (
+              <button
+                type="button"
+                onClick={() => setIsComparative(!isComparative)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  isComparative
+                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-500 dark:text-amber-400'
+                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>{isAr ? 'نمط المقارنة الفترية' : 'Comparative Mode'}</span>
+                {isComparative && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -270,6 +342,54 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
             </Button>
           </div>
         </div>
+
+        {/* Comparative Period Sub-Bar */}
+        {isComparative && (activeReport === 'income-statement' || activeReport === 'trial-balance') && (
+          <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs bg-amber-500/5 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                {isAr ? 'الفترة المقارنة (Prior Period):' : 'Comparative Range:'}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400">{isAr ? 'من:' : 'From:'}</span>
+                <input
+                  type="date"
+                  value={compareFromDate}
+                  onChange={(e) => setCompareFromDate(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400">{isAr ? 'إلى:' : 'To:'}</span>
+                <input
+                  type="date"
+                  value={compareToDate}
+                  onChange={(e) => setCompareToDate(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">{isAr ? 'تحديد سريع:' : 'Presets:'}</span>
+              <button
+                type="button"
+                onClick={setPriorYearPreset}
+                className="px-2.5 py-1 rounded-md text-[11px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-amber-500/10 text-slate-700 dark:text-slate-300 font-bold cursor-pointer"
+              >
+                {isAr ? 'نفس الفترة العام السابق' : 'Prior Year'}
+              </button>
+              <button
+                type="button"
+                onClick={setPriorMonthPreset}
+                className="px-2.5 py-1 rounded-md text-[11px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-amber-500/10 text-slate-700 dark:text-slate-300 font-bold cursor-pointer"
+              >
+                {isAr ? 'الشهر السابق' : 'Prior Month'}
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Error state */}
@@ -401,6 +521,105 @@ export const FinancialReportsView: React.FC<FinancialReportsViewProps> = ({ lang
           {/* 2. INCOME STATEMENT VIEW */}
           {activeReport === 'income-statement' && (
             <div className="space-y-4">
+              {/* Comparative Analysis Table if Active */}
+              {isComparative && comparativeData && (() => {
+                const compItems = [
+                  {
+                    title: isAr ? 'صافي إيرادات المبيعات (Net Revenue)' : 'Net Sales Revenue',
+                    cur: Number(reportData.revenue?.total_net_revenue || 0),
+                    prev: Number(comparativeData.revenue?.total_net_revenue || 0),
+                  },
+                  {
+                    title: isAr ? 'تكلفة المبيعات والتصنيع (COGS)' : 'Cost of Goods Sold',
+                    cur: Number(reportData.cost_of_goods_sold?.total_cogs || 0),
+                    prev: Number(comparativeData.cost_of_goods_sold?.total_cogs || 0),
+                    inverse: true,
+                  },
+                  {
+                    title: isAr ? 'مجمل الربح (Gross Profit)' : 'Gross Profit',
+                    cur: Number(reportData.gross_profit || 0),
+                    prev: Number(comparativeData.gross_profit || 0),
+                  },
+                  {
+                    title: isAr ? 'المصروفات التشغيلية (OpEx)' : 'Operating Expenses',
+                    cur: Number(reportData.operating_expenses?.total_operating_expenses || 0),
+                    prev: Number(comparativeData.operating_expenses?.total_operating_expenses || 0),
+                    inverse: true,
+                  },
+                  {
+                    title: isAr ? 'الدخل التشغيلي (Operating Income)' : 'Operating Income',
+                    cur: Number(reportData.operating_income || 0),
+                    prev: Number(comparativeData.operating_income || 0),
+                  },
+                  {
+                    title: isAr ? 'صافي الربح النهائي (Net Profit)' : 'Net Profit',
+                    cur: Number(reportData.net_profit || 0),
+                    prev: Number(comparativeData.net_profit || 0),
+                    highlight: true,
+                  },
+                ];
+
+                return (
+                  <Card className="p-0 overflow-hidden border border-amber-500/30 bg-white dark:bg-[#0f1523]/90 shadow-md">
+                    <div className="p-3.5 bg-gradient-to-r from-amber-500/10 to-amber-600/10 border-b border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                          {isAr ? 'التحليل المالي المقارن لقائمة الدخل' : 'Comparative Income Statement Analysis'}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+                        <span>{fromDate} : {toDate}</span>
+                        <span className="text-amber-500 font-bold">vs</span>
+                        <span>{compareFromDate} : {compareToDate}</span>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-right">
+                        <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                          <tr>
+                            <th className="p-2.5">{isAr ? 'البند المالي' : 'Line Item'}</th>
+                            <th className="p-2.5 text-center">{isAr ? 'الفترة الحالية (ج.م)' : 'Current (EGP)'}</th>
+                            <th className="p-2.5 text-center">{isAr ? 'الفترة المقارنة (ج.م)' : 'Prior (EGP)'}</th>
+                            <th className="p-2.5 text-center">{isAr ? 'مبلغ الفرق والانحراف' : 'Variance (EGP)'}</th>
+                            <th className="p-2.5 text-center">{isAr ? 'نسبة التغير %' : 'Growth %'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {compItems.map((c, idx) => {
+                            const diff = c.cur - c.prev;
+                            const pct = c.prev !== 0 ? ((diff / Math.abs(c.prev)) * 100).toFixed(1) : (diff > 0 ? '+100' : '0');
+                            const isPositive = c.inverse ? diff < 0 : diff >= 0;
+
+                            return (
+                              <tr key={idx} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/40 ${c.highlight ? 'bg-amber-500/5 font-bold' : ''}`}>
+                                <td className="p-2.5 font-medium text-slate-900 dark:text-white">{c.title}</td>
+                                <td className="p-2.5 text-center font-mono font-bold text-slate-900 dark:text-white">{c.cur.toLocaleString()}</td>
+                                <td className="p-2.5 text-center font-mono text-slate-500">{c.prev.toLocaleString()}</td>
+                                <td className={`p-2.5 text-center font-mono font-bold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                  {diff >= 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()} ج.م
+                                </td>
+                                <td className="p-2.5 text-center font-mono">
+                                  <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                                    isPositive
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                                  }`}>
+                                    {diff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                    <span>{pct}%</span>
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                );
+              })()}
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <Card className="p-3.5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
                   <p className="text-[11px] text-slate-500">{isAr ? 'صافي إيرادات المبيعات' : 'Net Sales Revenue'}</p>

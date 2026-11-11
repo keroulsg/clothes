@@ -123,6 +123,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenant/settings/tax', [TenantController::class, 'getTaxSettings']);
         Route::put('/tenant/settings/tax', [TenantController::class, 'updateTaxSettings'])->middleware('role:company_owner,accountant');
 
+        // إدارة النسخ الاحتياطي وأمان البيانات (Database Backup & Disaster Recovery)
+        Route::get('/tenant/backup/status', [TenantController::class, 'backupStatus']);
+        Route::get('/tenant/backup/download', [TenantController::class, 'downloadBackup']);
+
         // الفروع ومواقع العمل (Branches - Batch 2A)
         Route::get('/branches', [BranchController::class, 'index']);
         Route::post('/branches', [BranchController::class, 'store'])->middleware('quota:active_branches');

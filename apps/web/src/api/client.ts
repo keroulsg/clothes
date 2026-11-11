@@ -367,6 +367,57 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+
+    getBackupStatus: async (): Promise<{
+      success: boolean;
+      driver: string;
+      size_bytes: number;
+      size_human: string;
+      latest_backup_date: string;
+      records_summary: {
+        journals: number;
+        cutting_orders: number;
+        sales_orders: number;
+        employees: number;
+        total_records: number;
+      };
+      tenant: {
+        name: string;
+        subdomain: string;
+      };
+      integrity_status: string;
+    }> => {
+      return this.request('/tenant/backup/status');
+    },
+
+    downloadBackup: async (): Promise<void> => {
+      const token = this.token || localStorage.getItem('garmentos_token');
+      const tenantId = localStorage.getItem('garmentos_tenant_id') || '';
+      const response = await fetch(`${this.baseUrl}/tenant/backup/download`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to download backup');
+      }
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'garmentos_backup.sqlite';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
   };
 
   // --- Branches Endpoints ---

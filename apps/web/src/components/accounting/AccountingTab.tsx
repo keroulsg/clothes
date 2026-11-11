@@ -20,6 +20,17 @@ import {
   Unlock,
   ShieldCheck,
   FolderTree,
+  ChevronDown,
+  ChevronLeft,
+  Search,
+  HelpCircle,
+  Folder,
+  FolderOpen,
+  Pencil,
+  Sparkles,
+  ShieldAlert,
+  Layers,
+  X,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -89,6 +100,23 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
   const [arReconciliation, setArReconciliation] = useState<ReconciliationResult | null>(null);
   const [apReconciliation, setApReconciliation] = useState<ReconciliationResult | null>(null);
+
+  // COA Interactive States & Filters
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
+  const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'asset' | 'liability' | 'equity' | 'revenue' | 'expense'>('all');
+  const [accountPostableFilter, setAccountPostableFilter] = useState<'all' | 'postable' | 'header'>('all');
+  const [isCoaGuideOpen, setIsCoaGuideOpen] = useState(false);
+  const [expandedAccountIds, setExpandedAccountIds] = useState<Set<string>>(new Set());
+  const [isHealthCheckOpen, setIsHealthCheckOpen] = useState(false);
+
+  // Edit Account Modal State
+  const [isEditAccountModalOpen, setIsEditAccountModalOpen] = useState(false);
+  const [selectedAccountForEdit, setSelectedAccountForEdit] = useState<ChartOfAccount | null>(null);
+  const [editAccName, setEditAccName] = useState('');
+  const [editAccNameEn, setEditAccNameEn] = useState('');
+  const [editAccNotes, setEditAccNotes] = useState('');
+  const [editAccIsActive, setEditAccIsActive] = useState(true);
+  const [editAccIsPostable, setEditAccIsPostable] = useState(true);
 
   // Load accounting data from server
   const loadAccountingData = async () => {
@@ -320,6 +348,95 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setIsSubmitting(false);
     }
   };
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccountForEdit || !editAccName) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await api.accounting.updateAccount(selectedAccountForEdit.id, {
+        name: editAccName,
+        name_en: editAccNameEn || undefined,
+        notes: editAccNotes || undefined,
+        is_active: editAccIsActive,
+        is_postable: editAccIsPostable,
+      });
+
+      setSuccessMsg(isAr ? 'تم تحديث بيانات الحساب بنجاح' : 'Account updated successfully');
+      setIsEditAccountModalOpen(false);
+      setSelectedAccountForEdit(null);
+      await loadAccountingData();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تحديث الحساب' : 'Failed to update account'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openEditAccount = (acc: ChartOfAccount) => {
+    setSelectedAccountForEdit(acc);
+    setEditAccName(acc.name);
+    setEditAccNameEn(acc.name_en || '');
+    setEditAccNotes(acc.notes || '');
+    setEditAccIsActive(acc.is_active !== false);
+    setEditAccIsPostable(acc.is_postable !== false);
+    setIsEditAccountModalOpen(true);
+  };
+
+  const openAddSubAccount = (parent: ChartOfAccount) => {
+    setNewAccParentId(parent.id);
+    setNewAccType(parent.type as any);
+    setNewAccCategory(parent.category || 'current_asset');
+    setNewAccIsPostable(true);
+
+    const children = accounts.filter((a) => a.parent_id === parent.id);
+    let nextCode = `${parent.code}01`;
+    if (children.length > 0) {
+      const numericCodes = children
+        .map((c) => parseInt(c.code.replace(/\D/g, ''), 10))
+        .filter((n) => !isNaN(n));
+      if (numericCodes.length > 0) {
+        const maxCode = Math.max(...numericCodes);
+        nextCode = String(maxCode + 1);
+      }
+    }
+    setNewAccCode(nextCode);
+    setNewAccName('');
+    setNewAccNameEn('');
+    setIsAccountModalOpen(true);
+  };
+
+  const toggleAccountExpand = (id: string) => {
+    setExpandedAccountIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const expandAllAccounts = () => {
+    setExpandedAccountIds(new Set(accounts.map((a) => a.id)));
+  };
+
+  const collapseAllAccounts = () => {
+    setExpandedAccountIds(new Set());
+  };
+
+  // Expand headers by default when accounts load
+  useEffect(() => {
+    if (accounts.length > 0 && expandedAccountIds.size === 0) {
+      const headerIds = new Set(
+        accounts
+          .filter((a) => (a.level || 1) <= 2 || a.is_postable === false)
+          .map((a) => a.id)
+      );
+      setExpandedAccountIds(headerIds);
+    }
+  }, [accounts]);
 
   const handleInitDefaultCOA = async () => {
     if (!window.confirm(isAr ? 'هل تريد بالتأكيد تهيئة شجرة الحسابات الافتراضية وحسابات الربط لمصنع الملابس؟' : 'Initialize default standard Chart of Accounts?')) {
@@ -789,95 +906,628 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       </div>
 
       {/* 1. CHART OF ACCOUNTS VIEW */}
-      {activeSubTab === 'accounts' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'شجرة الحسابات الهرمية لمصنع الملابس والتشغيل' : 'Apparel Manufacturing Hierarchical Chart of Accounts'}
-            </h3>
-            <span className="text-xs text-slate-500 font-mono">
-              {accounts.length} {isAr ? 'حساب مسجل' : 'Accounts'}
-            </span>
-          </div>
+      {activeSubTab === 'accounts' && (() => {
+        // Build hierarchical tree
+        interface AccountTreeNode extends ChartOfAccount {
+          children?: AccountTreeNode[];
+        }
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'كود الحساب' : 'Code'}</th>
-                  <th className="p-3 text-start">{isAr ? 'اسم الحساب' : 'Account Name'}</th>
-                  <th className="p-3 text-start">{isAr ? 'المستوى' : 'Level'}</th>
-                  <th className="p-3 text-start">{isAr ? 'النوع الرئيسي' : 'Type'}</th>
-                  <th className="p-3 text-start">{isAr ? 'قابلية الترحيل' : 'Postable'}</th>
-                  <th className="p-3 text-end">{isAr ? 'الرصيد الدفتري الحالي' : 'Balance'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {accounts.map((acc) => (
-                  <tr key={acc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="p-3 font-mono font-bold text-primary">{acc.code}</td>
-                    <td className="p-3 font-semibold text-slate-900 dark:text-white" style={{ paddingInlineStart: `${((acc.level || 1) - 1) * 20 + 12}px` }}>
-                      {(acc.level || 1) > 1 && <span className="text-slate-400 me-1.5">└─</span>}
-                      {acc.name}
-                      {acc.name_en && <span className="text-xs text-slate-400 block font-normal">{acc.name_en}</span>}
-                    </td>
-                    <td className="p-3 font-mono text-xs">{acc.level || 1}</td>
-                    <td className="p-3 capitalize">
-                      <Badge
-                        variant={
-                          acc.type === 'asset'
-                            ? 'success'
-                            : acc.type === 'liability'
-                            ? 'warning'
-                            : acc.type === 'equity'
-                            ? 'info'
-                            : acc.type === 'revenue'
-                            ? 'success'
-                            : 'danger'
-                        }
+        const map = new Map<string, AccountTreeNode>();
+        const roots: AccountTreeNode[] = [];
+
+        accounts.forEach((a) => {
+          map.set(a.id, { ...a, children: [] });
+        });
+
+        accounts.forEach((a) => {
+          const node = map.get(a.id)!;
+          if (a.parent_id && map.has(a.parent_id)) {
+            map.get(a.parent_id)!.children!.push(node);
+          } else {
+            roots.push(node);
+          }
+        });
+
+        const sortTreeNodes = (nodes: AccountTreeNode[]) => {
+          nodes.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+          nodes.forEach((n) => {
+            if (n.children && n.children.length > 0) sortTreeNodes(n.children);
+          });
+        };
+
+        sortTreeNodes(roots);
+
+        // Filter and search logic
+        const q = accountSearchQuery.trim().toLowerCase();
+        const hasFilters = q !== '' || accountTypeFilter !== 'all' || accountPostableFilter !== 'all';
+
+        const matchingIds = new Set<string>();
+        if (hasFilters) {
+          accounts.forEach((acc) => {
+            const matchesSearch =
+              !q ||
+              acc.code.toLowerCase().includes(q) ||
+              acc.name.toLowerCase().includes(q) ||
+              (acc.name_en && acc.name_en.toLowerCase().includes(q));
+
+            const matchesType = accountTypeFilter === 'all' || acc.type === accountTypeFilter;
+
+            const matchesPostable =
+              accountPostableFilter === 'all' ||
+              (accountPostableFilter === 'postable' && acc.is_postable !== false) ||
+              (accountPostableFilter === 'header' && acc.is_postable === false);
+
+            if (matchesSearch && matchesType && matchesPostable) {
+              matchingIds.add(acc.id);
+              let curr = acc;
+              while (curr.parent_id) {
+                matchingIds.add(curr.parent_id);
+                const parent = accounts.find((p) => p.id === curr.parent_id);
+                if (!parent) break;
+                curr = parent;
+              }
+            }
+          });
+        }
+
+        // Flatten visible tree nodes according to expansion and filtering
+        const visibleRows: Array<{ node: AccountTreeNode; hasChildren: boolean; isExpanded: boolean }> = [];
+
+        const traverse = (nodes: AccountTreeNode[]) => {
+          nodes.forEach((node) => {
+            if (hasFilters && !matchingIds.has(node.id)) {
+              return;
+            }
+
+            const hasChildren = !!(node.children && node.children.length > 0);
+            const isExpanded = hasFilters || expandedAccountIds.has(node.id);
+
+            visibleRows.push({ node, hasChildren, isExpanded });
+
+            if (hasChildren && isExpanded) {
+              traverse(node.children!);
+            }
+          });
+        };
+
+        traverse(roots);
+
+        // Required vital account codes check for health audit
+        const vitalMappings = [
+          { key: 'cash', code: '1010', nameAr: 'نقدية بالصندوق والخزينة', icon: '💵' },
+          { key: 'bank', code: '1020', nameAr: 'حسابات البنوك الجارية', icon: '🏦' },
+          { key: 'ar', code: '1110', nameAr: 'العملاء والمدينون التجاريون', icon: '👥' },
+          { key: 'raw_materials', code: '1210', nameAr: 'مخزون الأقمشة والخامات', icon: '🧵' },
+          { key: 'wip', code: '1220', nameAr: 'مخزون الإنتاج تحت التشغيل (WIP)', icon: '⚙️' },
+          { key: 'finished_goods', code: '1230', nameAr: 'مخزون المنتجات التامة', icon: '📦' },
+          { key: 'ap', code: '2010', nameAr: 'الموردون والدائنون التجاريون', icon: '🏭' },
+          { key: 'sales', code: '4010', nameAr: 'إيراد مبيعات الملابس والإنتاج التام', icon: '📈' },
+          { key: 'cogs', code: '5010', nameAr: 'تكلفة البضاعة المباعة (COGS)', icon: '🏷️' },
+          { key: 'labor', code: '5020', nameAr: 'أجور عمال الإنتاج المباشرة (أجر القطعة)', icon: '✂️' },
+        ];
+
+        const healthStatus = vitalMappings.map((v) => ({
+          ...v,
+          found: accounts.some((a) => a.code === v.code),
+          account: accounts.find((a) => a.code === v.code),
+        }));
+
+        const healthyCount = healthStatus.filter((h) => h.found).length;
+
+        // Statistics
+        const postableCount = accounts.filter((a) => a.is_postable !== false).length;
+        const headerCount = accounts.filter((a) => a.is_postable === false).length;
+
+        return (
+          <div className="space-y-4">
+            {/* ─── EDUCATIONAL & HOW-TO GUIDE PANEL ─── */}
+            <div className="rounded-2xl border border-[#7F1625]/20 bg-gradient-to-r from-[#7F1625]/5 via-white to-amber-500/5 dark:from-[#7F1625]/10 dark:via-[#0c121e] dark:to-amber-500/10 p-4 transition-all">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#7F1625]/10 dark:bg-[#7F1625]/20 text-[#7F1625] dark:text-red-400 flex items-center justify-center font-bold">
+                    <HelpCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                      <span>{isAr ? 'دليل فهم والتعامل مع شجرة الحسابات (COA Guide)' : 'Chart of Accounts Guide'}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7F1625]/10 text-[#7F1625] dark:text-red-300">
+                        {isAr ? 'إرشادات المحاسبة الصناعية' : 'Industrial Accounting'}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {isAr
+                        ? 'تعرف على تركيبة شجرة حسابات المصنع، كيف تُقرأ الأرقام، والفرق بين الحساب الرئيسي والفرعي.'
+                        : 'Learn the factory chart of accounts hierarchy, number schemes, and automated posting.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsHealthCheckOpen(!isHealthCheckOpen)}
+                    className="px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>{isAr ? `فحص جاهزية الربط (${healthyCount}/10)` : `Health Audit (${healthyCount}/10)`}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsCoaGuideOpen(!isCoaGuideOpen)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0c121e] text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <span>{isCoaGuideOpen ? (isAr ? 'إخفاء الإرشادات ▲' : 'Hide Guide ▲') : (isAr ? 'عرض الإرشادات ▼' : 'Show Guide ▼')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* EXPANDABLE EXPLANATION BODY */}
+              {isCoaGuideOpen && (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs animate-in fade-in duration-300">
+                  <div className="p-3 rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <p className="font-bold text-[#7F1625] dark:text-red-400 flex items-center gap-1.5">
+                      <FolderTree className="w-4 h-4" />
+                      {isAr ? '1. ما هي الأرقام الستة القياسية؟' : '1. Core Number Structure'}
+                    </p>
+                    <ul className="space-y-1 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                      <li>• <strong>1: الأصول:</strong> النقدية، البنوك، العملاء، ومخازن الأقمشة والمنتجات.</li>
+                      <li>• <strong>2: الالتزامات:</strong> مستحقات الموردين، أجور العمال، والضرائب.</li>
+                      <li>• <strong>3: حقوق الملكية:</strong> رأس المال والأرباح المحتجزة / المرحلة.</li>
+                      <li>• <strong>4: الإيرادات:</strong> مبيعات الملابس وخدمات القص والتشغيل للغير (CMT).</li>
+                      <li>• <strong>5: تكاليف مباشرة:</strong> تكلفة البضاعة، أجور عمال الخياطة، والتشغيل الخارجي.</li>
+                      <li>• <strong>6: مصروفات غير مباشرة:</strong> صيانة الماكينات، استهلاك، وكهرباء المصنع.</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4" />
+                      {isAr ? '2. الفرق بين الرئيسي والفرعي' : '2. Header vs. Postable'}
+                    </p>
+                    <div className="space-y-1.5 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                      <p>
+                        <strong>🔒 حساب تجميعي (Header):</strong> مثل «11 الأصول المتداولة». وظيفته تجميع أرصدة الحسابات المتفرعة منه لعرضها في الميزانية وقائمة الدخل ولا يُسجل عليه قيد مباشر.
+                      </p>
+                      <p>
+                        <strong>✓ حساب فرعي يقبل الترحيل (Postable):</strong> مثل «1010 نقدية بالخزينة» أو «1110 العملاء». هو الحساب الفعلي الذي يستقبل حركات السداد، القبض، والفواتير.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <p className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4" />
+                      {isAr ? '3. كيف يعمل الترحيل الآلي؟' : '3. Automated Posting'}
+                    </p>
+                    <div className="space-y-1.5 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                      <p>
+                        <strong>لا تحتاج لتسجيل قيود يدوية لكل حركة!</strong>
+                      </p>
+                      <p>
+                        بمجرد إصدار فاتورة مبيعات، تسجيل سند قبض نقدي، صرف أثواب قماش من المخزن لأمر قص، أو تسليم شحنة، يقوم النظام فوراً بترحيل القيد المزدوج المتوازن في الحسابات المربوطة هنا تلقائياً.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* EXPANDABLE HEALTH AUDIT PANEL */}
+              {isHealthCheckOpen && (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      {isAr ? 'فحص جاهزية حسابات الربط الآلي لنظام المصنع:' : 'Automated Accounting Integration Health:'}
+                    </h4>
+                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {healthyCount === vitalMappings.length
+                        ? (isAr ? '✓ جاهزية مكتملة 100%' : '100% Ready')
+                        : `${healthyCount}/${vitalMappings.length}`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                    {healthStatus.map((item) => (
+                      <div
+                        key={item.key}
+                        className={`p-2 rounded-xl border text-[11px] flex items-center justify-between transition-all ${
+                          item.found
+                            ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300/60 dark:border-emerald-800/60 text-slate-800 dark:text-slate-200'
+                            : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-300/60 dark:border-rose-800/60 text-rose-800 dark:text-rose-200'
+                        }`}
                       >
-                        {acc.type}
-                      </Badge>
-                    </td>
-                    <td className="p-3">
-                      {acc.is_postable !== false ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1">
-                          <CheckCircle className="w-3.5 h-3.5" /> {isAr ? 'يقبل الترحيل' : 'Postable'}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs font-semibold flex items-center gap-1">
-                          <Lock className="w-3.5 h-3.5" /> {isAr ? 'حساب تجميعي' : 'Header'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-end font-mono font-bold">
-                      {Number(acc.current_balance).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                    </td>
-                    <td className="p-3 text-center">
-                      <ActionsMenu
-                        variant="icon-horizontal"
-                        align={isAr ? 'left' : 'right'}
-                        items={[
-                          {
-                            id: 'stmt',
-                            label: isAr ? 'كشف حساب الأستاذ العام' : 'Account Statement',
-                            icon: <Eye className="w-3.5 h-3.5 text-primary" />,
-                            onClick: () => {
-                              setSelectedAccountForStatement(acc);
-                              setIsStatementModalOpen(true);
-                            },
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1 font-mono font-bold text-[10px]">
+                            <span>{item.icon}</span>
+                            <span>{item.code}</span>
+                          </div>
+                          <p className="truncate text-[10px] text-slate-600 dark:text-slate-400 mt-0.5">{item.nameAr}</p>
+                        </div>
+                        <div>
+                          {item.found ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          ) : (
+                            <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ─── MAIN COA CARD & TREE VIEW ─── */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              {/* HEADER & TOP STATS */}
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#7F1625] text-white flex items-center justify-center shadow-xs">
+                    <FolderTree className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>{isAr ? 'شجرة الحسابات الهرمية لمصنع الملابس والتشغيل' : 'Apparel Manufacturing Hierarchical Chart of Accounts'}</span>
+                      <span className="text-xs font-mono font-medium text-slate-500">({accounts.length} حساب)</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {isAr
+                        ? `${headerCount} حسابات رئيسية تجميعية • ${postableCount} حسابات فرعية تقبل الترحيل`
+                        : `${headerCount} Header Accounts • ${postableCount} Postable Leaf Accounts`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={handleInitDefaultCOA}>
+                    <RotateCw className="w-3.5 h-3.5 me-1" />
+                    {isAr ? 'تهيئة / تحديث الدليل الافتراضي' : 'Init / Reset Default COA'}
+                  </Button>
+                  <Button size="sm" onClick={() => setIsAccountModalOpen(true)}>
+                    <Plus className="w-3.5 h-3.5 me-1" />
+                    {isAr ? '+ حساب جديد' : '+ New Account'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* SEARCH & FILTERS TOOLBAR */}
+              <div className="p-3 bg-white dark:bg-[#0c121e] border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                {/* SEARCH INPUT */}
+                <div className="relative flex-1 min-w-[220px] max-w-sm">
+                  <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={accountSearchQuery}
+                    onChange={(e) => setAccountSearchQuery(e.target.value)}
+                    placeholder={isAr ? 'بحث بالكود أو الاسم العربي أو الإنجليزي...' : 'Search by code or name...'}
+                    className="w-full ps-9 pe-8 py-1.5 text-xs bg-slate-50 dark:bg-[#0d131f] border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#7F1625]"
+                  />
+                  {accountSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setAccountSearchQuery('')}
+                      className="absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* ACCOUNT TYPE PILLS */}
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-slate-400 font-medium me-1">{isAr ? 'النوع:' : 'Type:'}</span>
+                  {(
+                    [
+                      { id: 'all', label: isAr ? 'الكل' : 'All' },
+                      { id: 'asset', label: isAr ? '🏛️ الأصول (1)' : 'Assets' },
+                      { id: 'liability', label: isAr ? '📑 الالتزامات (2)' : 'Liabilities' },
+                      { id: 'equity', label: isAr ? '💼 حقوق الملكية (3)' : 'Equity' },
+                      { id: 'revenue', label: isAr ? '📈 الإيرادات (4)' : 'Revenue' },
+                      { id: 'expense', label: isAr ? '🧵 تكاليف ومصروفات (5/6)' : 'Costs' },
+                    ] as const
+                  ).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setAccountTypeFilter(t.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        accountTypeFilter === t.id
+                          ? 'bg-[#7F1625] text-white shadow-xs font-bold'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* POSTABLE FILTER PILLS */}
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-slate-400 font-medium me-1">{isAr ? 'الترحيل:' : 'Posting:'}</span>
+                  {(
+                    [
+                      { id: 'all', label: isAr ? 'الكل' : 'All' },
+                      { id: 'postable', label: isAr ? '✓ فرعي مرحل' : 'Postable' },
+                      { id: 'header', label: isAr ? '🔒 تجميعي' : 'Header' },
+                    ] as const
+                  ).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setAccountPostableFilter(p.id)}
+                      className={`px-2 py-1 rounded-lg text-xs font-medium transition-all ${
+                        accountPostableFilter === p.id
+                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs font-bold'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* TREE EXPAND/COLLAPSE BUTTONS */}
+                <div className="flex items-center gap-1.5 ms-auto">
+                  <button
+                    type="button"
+                    onClick={expandAllAccounts}
+                    className="px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-[#7F1625] dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors flex items-center gap-1"
+                    title={isAr ? 'فتح جميع مستويات الشجرة' : 'Expand All'}
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'فتح الكل' : 'Expand All'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={collapseAllAccounts}
+                    className="px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-[#7F1625] dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors flex items-center gap-1"
+                    title={isAr ? 'طي جميع المستويات' : 'Collapse All'}
+                  >
+                    <Folder className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'طي الكل' : 'Collapse All'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* TREE TABLE VIEW */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 text-start w-36">{isAr ? 'كود الحساب' : 'Code'}</th>
+                      <th className="p-3 text-start">{isAr ? 'اسم الحساب في الشجرة' : 'Account Tree Hierarchy'}</th>
+                      <th className="p-3 text-center">{isAr ? 'المستوى' : 'Level'}</th>
+                      <th className="p-3 text-start">{isAr ? 'النوع الرئيسي' : 'Type'}</th>
+                      <th className="p-3 text-center">{isAr ? 'طبيعة الرصيد' : 'Normal'}</th>
+                      <th className="p-3 text-center">{isAr ? 'حالة الترحيل' : 'Posting'}</th>
+                      <th className="p-3 text-end">{isAr ? 'الرصيد الدفتري الحالي' : 'Balance'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {visibleRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-12 text-center text-slate-400">
+                          {accounts.length === 0 ? (
+                            <div className="space-y-3">
+                              <p className="font-bold text-slate-600 dark:text-slate-300">
+                                {isAr ? 'شجرة الحسابات فارغة حالياً!' : 'Chart of accounts is empty!'}
+                              </p>
+                              <p className="text-xs">
+                                {isAr
+                                  ? 'اضغط على زر «تهيئة الدليل الافتراضي» لإنشاء دليل الحسابات القياسي المتكامل لمصانع الملابس.'
+                                  : 'Click "Init Default COA" to generate the standard manufacturing chart of accounts.'}
+                              </p>
+                              <Button onClick={handleInitDefaultCOA} icon={<FolderTree className="w-4 h-4" />}>
+                                {isAr ? 'تهيئة شجرة الحسابات الآن' : 'Initialize COA Now'}
+                              </Button>
+                            </div>
+                          ) : (
+                            <p>{isAr ? 'لا توجد حسابات مطابقة لمعايير البحث الحالية' : 'No accounts match your search'}</p>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleRows.map(({ node: acc, hasChildren, isExpanded }) => {
+                        const level = Number(acc.level) || 1;
+                        const isHeader = acc.is_postable === false;
+
+                        // Type styling
+                        let typeBadgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+                        let typeLabel: string = acc.type;
+                        if (acc.type === 'asset') {
+                          typeBadgeClass = 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20';
+                          typeLabel = isAr ? 'أصول (Assets)' : 'Asset';
+                        } else if (acc.type === 'liability') {
+                          typeBadgeClass = 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20';
+                          typeLabel = isAr ? 'التزامات (Liabilities)' : 'Liability';
+                        } else if (acc.type === 'equity') {
+                          typeBadgeClass = 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20';
+                          typeLabel = isAr ? 'حقوق ملكية (Equity)' : 'Equity';
+                        } else if (acc.type === 'revenue') {
+                          typeBadgeClass = 'bg-emerald-600/15 text-emerald-800 dark:text-emerald-200 border-emerald-600/30 font-bold';
+                          typeLabel = isAr ? 'إيرادات (Revenue)' : 'Revenue';
+                        } else if (acc.type === 'expense') {
+                          typeBadgeClass = 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20';
+                          typeLabel = isAr ? 'تكاليف ومصروفات (Expense)' : 'Expense';
+                        }
+
+                        const indentPixels = (level - 1) * 24 + 8;
+
+                        return (
+                          <tr
+                            key={acc.id}
+                            className={`transition-colors ${
+                              isHeader
+                                ? 'bg-slate-50/70 dark:bg-slate-800/30 font-bold'
+                                : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'
+                            }`}
+                          >
+                            {/* CODE */}
+                            <td className="p-3 font-mono font-bold text-xs">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded-md border font-mono ${
+                                  level === 1
+                                    ? 'bg-[#7F1625] text-white border-[#7F1625]'
+                                    : level === 2
+                                    ? 'bg-red-50 dark:bg-red-950/40 text-[#7F1625] dark:text-red-400 border-red-200 dark:border-red-900/40'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                {acc.code}
+                              </span>
+                            </td>
+
+                            {/* ACCOUNT NAME WITH TREE CONNECTOR & EXPAND BUTTON */}
+                            <td className="p-3">
+                              <div className="flex items-center" style={{ paddingInlineStart: `${indentPixels}px` }}>
+                                {hasChildren ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleAccountExpand(acc.id)}
+                                    className="p-1 rounded-md text-slate-500 hover:text-[#7F1625] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors me-1.5 shrink-0"
+                                    title={isExpanded ? (isAr ? 'طي الفرع' : 'Collapse') : (isAr ? 'فتح الفرع' : 'Expand')}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-4 h-4 text-[#7F1625] dark:text-red-400" />
+                                    ) : (
+                                      <ChevronLeft className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span className="w-4 me-1.5 inline-block text-slate-300 dark:text-slate-600 text-center font-mono">
+                                    {level > 1 ? '└─' : '•'}
+                                  </span>
+                                )}
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`text-xs truncate ${
+                                        level === 1
+                                          ? 'font-black text-sm text-[#7F1625] dark:text-red-400'
+                                          : level === 2
+                                          ? 'font-bold text-slate-900 dark:text-white'
+                                          : 'font-semibold text-slate-800 dark:text-slate-200'
+                                      }`}
+                                    >
+                                      {acc.name}
+                                    </span>
+                                    {hasChildren && (
+                                      <span className="text-[10px] text-slate-400 font-normal">
+                                        ({acc.children?.length} {isAr ? 'فرعي' : 'subs'})
+                                      </span>
+                                    )}
+                                  </div>
+                                  {acc.name_en && (
+                                    <span className="text-[11px] text-slate-400 block font-normal font-sans">
+                                      {acc.name_en}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* LEVEL */}
+                            <td className="p-3 text-center font-mono text-xs">
+                              <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]">
+                                L{level}
+                              </span>
+                            </td>
+
+                            {/* TYPE */}
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${typeBadgeClass}`}>
+                                {typeLabel}
+                              </span>
+                            </td>
+
+                            {/* NORMAL BALANCE (DEBIT / CREDIT) */}
+                            <td className="p-3 text-center">
+                              <span
+                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                  acc.normal_balance === 'debit'
+                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                    : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                }`}
+                              >
+                                {acc.normal_balance === 'debit' ? (isAr ? 'مدين (Dr)' : 'Debit') : (isAr ? 'دائن (Cr)' : 'Credit')}
+                              </span>
+                            </td>
+
+                            {/* POSTABLE STATUS */}
+                            <td className="p-3 text-center">
+                              {!isHeader ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>{isAr ? 'يقبل الترحيل' : 'Postable'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                                  <Lock className="w-3 h-3" />
+                                  <span>{isAr ? 'رئيسي تجميعي' : 'Header'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* CURRENT BALANCE */}
+                            <td className="p-3 text-end font-mono font-bold text-xs">
+                              <span className={Number(acc.current_balance) !== 0 ? 'text-slate-900 dark:text-white' : 'text-slate-400'}>
+                                {Number(acc.current_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[10px] text-slate-400 ms-1">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* ACTIONS */}
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {/* STATEMENT */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedAccountForStatement(acc);
+                                    setIsStatementModalOpen(true);
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-[#7F1625] dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                  title={isAr ? 'كشف حساب الأستاذ العام' : 'Account Statement'}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* ADD SUB ACCOUNT */}
+                                <button
+                                  type="button"
+                                  onClick={() => openAddSubAccount(acc)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                  title={isAr ? 'إضافة حساب فرعي متفرع من هذا الحساب' : 'Add Sub-Account'}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* EDIT ACCOUNT */}
+                                <button
+                                  type="button"
+                                  onClick={() => openEditAccount(acc)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                  title={isAr ? 'تعديل بيانات الحساب' : 'Edit Account'}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {/* 2. JOURNALS VIEW */}
       {activeSubTab === 'journals' && (
@@ -1727,6 +2377,104 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ الحساب' : 'Save Account')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Account Modal */}
+      <Modal
+        isOpen={isEditAccountModalOpen}
+        onClose={() => {
+          setIsEditAccountModalOpen(false);
+          setSelectedAccountForEdit(null);
+        }}
+        title={
+          isAr
+            ? `تعديل الحساب: ${selectedAccountForEdit?.code || ''} - ${selectedAccountForEdit?.name || ''}`
+            : `Edit Account: ${selectedAccountForEdit?.code || ''} - ${selectedAccountForEdit?.name || ''}`
+        }
+      >
+        <form onSubmit={handleUpdateAccount} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم الحساب باللغة العربية *' : 'Account Name (Arabic) *'}
+            </label>
+            <input
+              type="text"
+              required
+              value={editAccName}
+              onChange={(e) => setEditAccName(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'اسم الحساب بالإنجليزية (اختياري)' : 'Account Name (English)'}
+            </label>
+            <input
+              type="text"
+              value={editAccNameEn}
+              onChange={(e) => setEditAccNameEn(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'البيان والملاحظات' : 'Notes'}
+            </label>
+            <textarea
+              rows={2}
+              value={editAccNotes}
+              onChange={(e) => setEditAccNotes(e.target.value)}
+              placeholder={isAr ? 'ملاحظات إضافية حول طبيعة استخدام هذا الحساب...' : 'Notes...'}
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="edit_is_postable_chk"
+                checked={editAccIsPostable}
+                onChange={(e) => setEditAccIsPostable(e.target.checked)}
+                className="w-4 h-4 rounded text-primary border-slate-300"
+              />
+              <label htmlFor="edit_is_postable_chk" className="text-xs text-slate-700 dark:text-slate-300">
+                {isAr ? 'يقبل الترحيل المباشر لقيود اليومية (Postable)' : 'Postable Account'}
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="edit_is_active_chk"
+                checked={editAccIsActive}
+                onChange={(e) => setEditAccIsActive(e.target.checked)}
+                className="w-4 h-4 rounded text-primary border-slate-300"
+              />
+              <label htmlFor="edit_is_active_chk" className="text-xs text-slate-700 dark:text-slate-300">
+                {isAr ? 'حساب نشط في النظام' : 'Active Account'}
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setIsEditAccountModalOpen(false);
+                setSelectedAccountForEdit(null);
+              }}
+            >
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ التعديلات' : 'Save Changes')}
             </Button>
           </div>
         </form>

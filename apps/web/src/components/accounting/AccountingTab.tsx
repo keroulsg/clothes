@@ -32,6 +32,12 @@ import {
   Layers,
   Trash2,
   X,
+  Building2,
+  Landmark,
+  Wallet,
+  ArrowDownRight,
+  ArrowUpRight,
+  Smartphone,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -43,6 +49,7 @@ import { FinancialReportsView } from './FinancialReportsView';
 import { AccountStatementModal } from './AccountStatementModal';
 import { CalculateCostModal } from './CalculateCostModal';
 import { PrintJournalVoucherModal } from './PrintJournalVoucherModal';
+import { PrintTransferVoucherModal } from './PrintTransferVoucherModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -104,6 +111,13 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
     { account_id: '', debit: 0, credit: 0, description: '' },
     { account_id: '', debit: 0, credit: 0, description: '' },
   ]);
+
+  // Financial Accounts & Transfers States
+  const [selectedTransferForPrint, setSelectedTransferForPrint] = useState<FinancialAccountTransfer | null>(null);
+  const [finSearchQuery, setFinSearchQuery] = useState('');
+  const [finFilterType, setFinFilterType] = useState<'all' | 'cash' | 'bank' | 'wallet'>('all');
+  const [trfSearchQuery, setTrfSearchQuery] = useState('');
+  const [trfFilterStatus, setTrfFilterStatus] = useState<'all' | 'completed' | 'reversed'>('all');
 
   const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
@@ -2212,100 +2226,568 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       })()}
 
       {/* 3. FINANCIAL ACCOUNTS (CASH & BANKS & TRANSFERS) */}
-      {activeSubTab === 'financial_accounts' && (
-        <div className="space-y-6">
-          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-            <h3 className="font-bold text-slate-900 dark:text-white mb-3">
-              {isAr ? 'حسابات الخزائن والبنوك والمحافظ الإلكترونية' : 'Cash Desks & Bank Accounts'}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {financialAccounts.map((fa) => (
-                <div key={fa.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-primary">{fa.code}</span>
-                      <Badge variant={fa.type === 'cash' ? 'success' : 'info'}>{fa.type.toUpperCase()}</Badge>
-                    </div>
-                    <p className="font-bold text-slate-900 dark:text-white mt-1">{fa.name}</p>
-                    {fa.bank_name && <p className="text-xs text-slate-400">{fa.bank_name} {fa.account_number ? `(${fa.account_number})` : ''}</p>}
-                  </div>
-                  <div className="text-end">
-                    <p className="text-xs text-slate-400">{isAr ? 'الرصيد الفعلي' : 'Current Balance'}</p>
-                    <p className="font-mono font-bold text-lg text-emerald-600 dark:text-emerald-400">
-                      {Number(fa.current_balance).toLocaleString()} {fa.currency}
-                    </p>
+      {activeSubTab === 'financial_accounts' && (() => {
+        // KPI calculations
+        const totalLiquidity = financialAccounts.reduce((sum, fa) => sum + Number(fa.current_balance || 0), 0);
+        const totalBankBalances = financialAccounts.filter((fa) => fa.type === 'bank').reduce((sum, fa) => sum + Number(fa.current_balance || 0), 0);
+        const totalVaultBalances = financialAccounts.filter((fa) => fa.type === 'cash').reduce((sum, fa) => sum + Number(fa.current_balance || 0), 0);
+        const completedTransfers = transfers.filter((t) => t.status === 'completed');
+        const totalTransfersVolume = completedTransfers.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+        // Filter financial accounts
+        const filteredFinancialAccounts = financialAccounts.filter((fa) => {
+          if (finFilterType !== 'all' && fa.type !== finFilterType) return false;
+          if (finSearchQuery.trim()) {
+            const q = finSearchQuery.toLowerCase();
+            const matchName = fa.name?.toLowerCase().includes(q);
+            const matchCode = fa.code?.toLowerCase().includes(q);
+            const matchBank = fa.bank_name?.toLowerCase().includes(q);
+            const matchAccNum = fa.account_number?.toLowerCase().includes(q);
+            if (!matchName && !matchCode && !matchBank && !matchAccNum) return false;
+          }
+          return true;
+        });
+
+        // Filter transfers
+        const filteredTransfers = transfers.filter((t) => {
+          if (trfFilterStatus !== 'all' && t.status !== trfFilterStatus) return false;
+          if (trfSearchQuery.trim()) {
+            const q = trfSearchQuery.toLowerCase();
+            const matchNum = t.transfer_number?.toLowerCase().includes(q);
+            const matchFrom = t.from_account?.name?.toLowerCase().includes(q);
+            const matchTo = t.to_account?.name?.toLowerCase().includes(q);
+            const matchNotes = t.notes?.toLowerCase().includes(q);
+            if (!matchNum && !matchFrom && !matchTo && !matchNotes) return false;
+          }
+          return true;
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* Top 4 KPI Bento Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card 1: Total Liquidity */}
+              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-[#7F1625]/40 transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي السيولة النقدية والمصرفية' : 'Total Treasury Liquidity'}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
+                    <Landmark className="w-5 h-5" />
                   </div>
                 </div>
-              ))}
-            </div>
-          </Card>
+                <div className="space-y-1">
+                  <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
+                    {totalLiquidity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                  <span>{financialAccounts.length} {isAr ? 'حسابات وخزائن مفعلة' : 'Active accounts'}</span>
+                </p>
+              </div>
 
-          <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 dark:text-white">
-                {isAr ? 'سجل التحويلات المالية الداخلية بين الخزائن والبنوك' : 'Internal Funds Transfers Log'}
-              </h3>
+              {/* Card 2: Bank Balances */}
+              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-500/40 transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'أرصدة الحسابات المصرفية' : 'Bank Accounts Balances'}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="font-mono text-2xl font-black text-blue-600 dark:text-blue-400">
+                    {totalBankBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                  <span>{financialAccounts.filter((f) => f.type === 'bank').length} {isAr ? 'حسابات بنكية جارية' : 'Bank accounts'}</span>
+                </p>
+              </div>
+
+              {/* Card 3: Vault Cash */}
+              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-500/40 transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'النقدية بالخزائن والعهد' : 'Vault Cash On Hand'}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="font-mono text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    {totalVaultBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                  <span>{financialAccounts.filter((f) => f.type === 'cash').length} {isAr ? 'خزائن كاش رئيسية وفرعية' : 'Cash vaults'}</span>
+                </p>
+              </div>
+
+              {/* Card 4: Transfers Volume */}
+              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-purple-500/40 transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي التحويلات الداخلية' : 'Internal Transfers Volume'}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                    <ArrowRightLeft className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="font-mono text-2xl font-black text-purple-600 dark:text-purple-400">
+                    {totalTransfersVolume.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                  <span>{completedTransfers.length} {isAr ? 'حركة تحويل مرحلة بنجاح' : 'Completed transfers'}</span>
+                </p>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-start text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="p-3 text-start">{isAr ? 'رقم التحويل' : 'Transfer #'}</th>
-                    <th className="p-3 text-start">{isAr ? 'من حساب' : 'From Account'}</th>
-                    <th className="p-3 text-start">{isAr ? 'إلى حساب' : 'To Account'}</th>
-                    <th className="p-3 text-end">{isAr ? 'المبلغ المحول' : 'Amount'}</th>
-                    <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
-                    <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                    <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                  {transfers.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400">
-                        {isAr ? 'لا توجد تحويلات مالية مسجلة' : 'No transfers recorded'}
-                      </td>
-                    </tr>
-                  ) : (
-                    transfers.map((t) => (
-                      <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <td className="p-3 font-mono font-bold text-primary">{t.transfer_number}</td>
-                        <td className="p-3 font-semibold">{t.from_account?.name || t.from_financial_account_id}</td>
-                        <td className="p-3 font-semibold">{t.to_account?.name || t.to_financial_account_id}</td>
-                        <td className="p-3 text-end font-mono font-bold text-slate-900 dark:text-white">
-                          {Number(t.amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                        </td>
-                        <td className="p-3 text-xs text-slate-400">{t.transfer_date}</td>
-                        <td className="p-3 text-center">
-                          <Badge variant={t.status === 'completed' ? 'success' : 'danger'}>
-                            {t.status === 'completed' ? (isAr ? 'مكتمل ومرحل' : 'Completed') : (isAr ? 'ملغي معكوس' : 'Reversed')}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-center">
-                          {t.status === 'completed' && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-rose-500 hover:text-rose-600 text-xs py-1"
-                              onClick={() => {
-                                setReversalTarget({ type: 'transfer', id: t.id, number: t.transfer_number });
-                                setIsReversalModalOpen(true);
-                              }}
+
+            {/* SECTION 1: FINANCIAL ACCOUNTS (BANKS & VAULTS CARDS) */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Landmark className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                    {isAr ? 'حسابات الخزائن والبنوك والمحافظ الإلكترونية' : 'Cash Desks, Banks & E-Wallets'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                    {isAr ? 'متابعة الأرصدة النقدية الفعلية، وإدارة السحب والإيداع والتحويلات اللحظية' : 'Manage actual balances, deposits, withdrawals and transfers'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={finSearchQuery}
+                      onChange={(e) => setFinSearchQuery(e.target.value)}
+                      placeholder={isAr ? 'بحث بالاسم أو الكود أو البنك...' : 'Search accounts...'}
+                      className="ps-9 pe-3 py-1.5 text-xs rounded-xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] w-48 sm:w-60 font-medium"
+                    />
+                  </div>
+
+                  {/* Add New Financial Account Button */}
+                  <Button
+                    size="sm"
+                    onClick={() => setIsFinancialAccModalOpen(true)}
+                    className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
+                    icon={<Plus className="w-3.5 h-3.5" />}
+                  >
+                    {isAr ? '+ إضافة حساب / خزينة' : '+ New Account'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Filter pills */}
+              <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                {(
+                  [
+                    { id: 'all', labelAr: 'جميع الحسابات', labelEn: 'All', count: financialAccounts.length },
+                    { id: 'cash', labelAr: '💵 الخزائن النقدية (كاش)', labelEn: 'Cash Desks', count: financialAccounts.filter((f) => f.type === 'cash').length },
+                    { id: 'bank', labelAr: '🏛️ حسابات بنكية جارية', labelEn: 'Bank Accounts', count: financialAccounts.filter((f) => f.type === 'bank').length },
+                    { id: 'wallet', labelAr: '📱 محافظ إلكترونية', labelEn: 'E-Wallets', count: financialAccounts.filter((f) => f.type === 'wallet').length },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setFinFilterType(tab.id)}
+                    className={`px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      finFilterType === tab.id
+                        ? 'bg-[#7F1625] text-white shadow-xs'
+                        : 'bg-white dark:bg-[#0c121e] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Grid of Financial Account Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredFinancialAccounts.map((fa) => {
+                  const linkedCoa = accounts.find((a) => a.id === fa.chart_of_account_id);
+                  const isBank = fa.type === 'bank';
+                  const isCash = fa.type === 'cash';
+
+                  return (
+                    <div
+                      key={fa.id}
+                      className="group relative overflow-hidden rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/60 dark:hover:border-[#7F1625]/60 transition-all p-5 shadow-xs flex flex-col justify-between"
+                    >
+                      {/* Ambient gradient */}
+                      <div className="absolute top-0 end-0 w-32 h-32 bg-[#7F1625]/5 rounded-full blur-2xl group-hover:bg-[#7F1625]/10 transition-colors pointer-events-none"></div>
+
+                      <div className="space-y-3 relative z-10">
+                        {/* Top Badge & Code */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                                isBank
+                                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                                  : isCash
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                              }`}
                             >
-                              <RotateCw className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'عكس التحويل' : 'Reverse'}
-                            </Button>
+                              {isBank ? <Building2 className="w-5 h-5" /> : isCash ? <Wallet className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
+                            </div>
+                            <div>
+                              <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
+                                {fa.code}
+                              </span>
+                              <span className="block text-[10px] text-slate-400">
+                                {isBank ? (isAr ? 'حساب بنكي' : 'Bank Account') : isCash ? (isAr ? 'خزينة نقدية' : 'Cash Vault') : (isAr ? 'محفظة إلكترونية' : 'E-Wallet')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            {isAr ? 'نشط ومتاح' : 'Active'}
+                          </span>
+                        </div>
+
+                        {/* Account Name */}
+                        <div>
+                          <h4 className="font-black text-sm sm:text-base text-slate-900 dark:text-white tracking-tight">
+                            {fa.name}
+                          </h4>
+                          {fa.bank_name ? (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {fa.bank_name} {fa.account_number ? `(${fa.account_number})` : ''}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {isAr ? 'خزينة معتمدة للنقدية والمتحصلات' : 'Certified cash desk for payments and receipts'}
+                            </p>
                           )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        </div>
+
+                        {/* Linked COA Account */}
+                        {linkedCoa && (
+                          <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                            <span className="text-slate-400 font-medium">{isAr ? 'دليل الحسابات:' : 'COA:'}</span>
+                            <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                              [{linkedCoa.code}] {linkedCoa.name}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Balance Highlight Box */}
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+                            {isAr ? 'الرصيد الفعلي المتاح:' : 'Actual Available Balance:'}
+                          </span>
+                          <div className="flex items-baseline justify-between">
+                            <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                              {Number(fa.current_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="font-bold text-xs text-[#7F1625] dark:text-[#ff8ba0]">
+                              {fa.currency || 'EGP'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Actions Footer */}
+                      <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 gap-2 relative z-10">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setTrfFromAccId(fa.id);
+                            setIsTransferModalOpen(true);
+                          }}
+                          className="w-full text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625] dark:hover:text-[#ff8ba0]"
+                          icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+                        >
+                          {isAr ? 'تحويل مالي' : 'Transfer'}
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (linkedCoa) {
+                              setSelectedAccountForStatement(linkedCoa);
+                              setIsStatementModalOpen(true);
+                            } else {
+                              api.accounting.getAccounts().then((accs) => {
+                                const matched = accs.find((a: any) => a.id === fa.chart_of_account_id);
+                                if (matched) {
+                                  setSelectedAccountForStatement(matched);
+                                  setIsStatementModalOpen(true);
+                                }
+                              });
+                            }
+                          }}
+                          className="w-full text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          icon={<Receipt className="w-3.5 h-3.5" />}
+                        >
+                          {isAr ? 'كشف حركة' : 'Statement'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </Card>
-        </div>
-      )}
+
+            {/* SECTION 2: INTERNAL TRANSFERS LOG */}
+            <Card className="bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+              {/* Header with Title and Actions */}
+              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/30">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <ArrowRightLeft className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                    {isAr ? 'سجل التحويلات المالية الداخلية بين الخزائن والبنوك' : 'Internal Funds Transfers Ledger'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isAr ? 'سجل تداول السيولة النقدية والمصرفية مع القيود المحاسبية التلقائية وتوثيق السندات المعتمدة' : 'Treasury transfers ledger with automatic double entries and printable vouchers'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Search Transfers */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={trfSearchQuery}
+                      onChange={(e) => setTrfSearchQuery(e.target.value)}
+                      placeholder={isAr ? 'بحث برقم السند أو الحساب...' : 'Search transfers...'}
+                      className="ps-9 pe-3 py-1.5 text-xs rounded-xl bg-white dark:bg-[#0f1523] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] w-48 sm:w-60 font-medium"
+                    />
+                  </div>
+
+                  {/* New Transfer Button */}
+                  <Button
+                    size="sm"
+                    onClick={() => setIsTransferModalOpen(true)}
+                    className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
+                    icon={<Plus className="w-3.5 h-3.5" />}
+                  >
+                    {isAr ? '+ تحويل مالي جديد' : '+ New Transfer'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Status Filter Tabs */}
+              <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    { id: 'all', labelAr: 'جميع التحويلات', labelEn: 'All', count: transfers.length },
+                    { id: 'completed', labelAr: '✓ مكتملة ومرحلة', labelEn: 'Completed', count: completedTransfers.length },
+                    { id: 'reversed', labelAr: '✕ ملغاة ومعكوسة', labelEn: 'Reversed', count: transfers.filter((t) => t.status === 'reversed').length },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTrfFilterStatus(tab.id)}
+                    className={`px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      trfFilterStatus === tab.id
+                        ? 'bg-[#7F1625] text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Transfers List / Bento Rows */}
+              <div className="p-4 sm:p-5 space-y-3">
+                {filteredTransfers.length === 0 ? (
+                  <div className="py-12 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] mx-auto flex items-center justify-center font-bold">
+                      <ArrowRightLeft className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-slate-300">
+                        {isAr ? 'لا توجد حركات تحويل مالي مطابقة' : 'No funds transfers found'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {isAr ? 'يمكنك تحويل مبالغ نقدية بين الخزائن والمصارف بسهولة وترحيل القيود آلياً' : 'Transfer funds between cash desks and banks with auto-balancing'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsTransferModalOpen(true)}
+                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs"
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? '+ إجراء أول تحويل مالي' : '+ Record First Transfer'}
+                    </Button>
+                  </div>
+                ) : (
+                  filteredTransfers.map((t) => {
+                    const isReversed = t.status === 'reversed';
+                    const trfDateClean = formatCleanDate(t.transfer_date || (t as any).created_at);
+
+                    return (
+                      <div
+                        key={t.id}
+                        className={`rounded-2xl border transition-all p-4 ${
+                          isReversed
+                            ? 'bg-rose-50/20 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900/40 opacity-75'
+                            : 'bg-white dark:bg-[#0c121e] border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/50 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          {/* Left: Transfer info & visual movement flow */}
+                          <div className="space-y-3 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs font-black px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700">
+                                {t.transfer_number}
+                              </span>
+
+                              <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
+                                <Clock className="w-3.5 h-3.5" />
+                                {trfDateClean}
+                              </span>
+
+                              <Badge variant={isReversed ? 'danger' : 'success'}>
+                                {isReversed ? (isAr ? 'ملغي ومعكوس' : 'Reversed') : (isAr ? 'مكتمل ومرحل بنجاح' : 'Completed')}
+                              </Badge>
+
+                              {t.journal_entry_id && (
+                                <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                                  {isAr ? 'قيد آلي: ' : 'JE: '}
+                                  {t.journal_entry?.entry_number || t.journal_entry_id.slice(0, 8)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Movement Flow Visualizer */}
+                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                              {/* Source (Debit / Out) */}
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold shrink-0">
+                                  <ArrowDownRight className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-medium block">
+                                    {isAr ? 'من حساب (صرف):' : 'From:'}
+                                  </span>
+                                  <span className="font-bold text-slate-900 dark:text-white">
+                                    {t.from_account?.name || t.from_financial_account_id}
+                                  </span>
+                                  {t.from_account?.code && (
+                                    <span className="font-mono text-[10px] text-slate-400 ms-1 font-bold">
+                                      ({t.from_account.code})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Direction arrow in middle */}
+                              <div className="hidden sm:flex items-center justify-center px-4">
+                                <ArrowRightLeft className="w-4 h-4 text-[#7F1625] dark:text-[#ff8ba0]" />
+                              </div>
+
+                              {/* Destination (Credit / In) */}
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                                  <ArrowUpRight className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-medium block">
+                                    {isAr ? 'إلى حساب (إيداع):' : 'To:'}
+                                  </span>
+                                  <span className="font-bold text-slate-900 dark:text-white">
+                                    {t.to_account?.name || t.to_financial_account_id}
+                                  </span>
+                                  {t.to_account?.code && (
+                                    <span className="font-mono text-[10px] text-slate-400 ms-1 font-bold">
+                                      ({t.to_account.code})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Memo / Notes */}
+                            {t.notes && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium ps-1">
+                                <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'البيان: ' : 'Memo: '}</span>
+                                {t.notes}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Right: Amount & Action Buttons */}
+                          <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+                            <div className="text-start lg:text-end">
+                              <span className="text-[10px] text-slate-400 font-medium block">
+                                {isAr ? 'قيمة التحويل' : 'Transfer Amount'}
+                              </span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                                  {Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-xs font-bold text-[#7F1625] dark:text-[#ff8ba0]">
+                                  {isAr ? 'ج.م' : 'EGP'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* Print Voucher Button */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedTransferForPrint(t)}
+                                className="text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625] dark:hover:text-[#ff8ba0]"
+                                icon={<Printer className="w-3.5 h-3.5" />}
+                              >
+                                {isAr ? 'طباعة السند' : 'Print'}
+                              </Button>
+
+                              {/* Reverse Action Button */}
+                              {!isReversed && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setReversalTarget({ type: 'transfer', id: t.id, number: t.transfer_number });
+                                    setIsReversalModalOpen(true);
+                                  }}
+                                  className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                  icon={<RotateCw className="w-3.5 h-3.5" />}
+                                >
+                                  {isAr ? 'عكس التحويل' : 'Reverse'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* 4. GENERAL LEDGER RECONCILIATION VIEW */}
       {activeSubTab === 'reconciliation' && (
@@ -3868,6 +4350,14 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         isOpen={!!selectedJournalForPrint}
         onClose={() => setSelectedJournalForPrint(null)}
         journalEntry={selectedJournalForPrint}
+        isAr={isAr}
+      />
+
+      {/* Official A4 Print Transfer Voucher Modal */}
+      <PrintTransferVoucherModal
+        isOpen={!!selectedTransferForPrint}
+        onClose={() => setSelectedTransferForPrint(null)}
+        transfer={selectedTransferForPrint}
         isAr={isAr}
       />
     </div>

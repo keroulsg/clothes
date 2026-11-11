@@ -391,6 +391,7 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/accounting/fiscal-years', [\App\Http\Controllers\Api\AccountingController::class, 'fiscalYears']);
             Route::post('/accounting/fiscal-years', [\App\Http\Controllers\Api\AccountingController::class, 'storeFiscalYear'])->middleware('role:accountant,company_owner');
+            Route::post('/accounting/fiscal-years/initialize-current', [\App\Http\Controllers\Api\AccountingController::class, 'initializeCurrentFiscalYear'])->middleware('role:accountant,company_owner');
             Route::post('/accounting/fiscal-periods/{id}/close', [\App\Http\Controllers\Api\AccountingController::class, 'closeFiscalPeriod'])->middleware('role:accountant,company_owner');
             Route::post('/accounting/fiscal-periods/{id}/reopen', [\App\Http\Controllers\Api\AccountingController::class, 'reopenFiscalPeriod'])->middleware('role:accountant,company_owner');
             Route::post('/accounting/fiscal-years/{id}/close', [\App\Http\Controllers\Api\AccountingController::class, 'closeFiscalYear'])->middleware('role:accountant,company_owner');

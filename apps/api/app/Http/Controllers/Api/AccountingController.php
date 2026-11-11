@@ -679,11 +679,114 @@ class AccountingController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $years = FiscalYear::where('tenant_id', $tenantId)
-            ->with('periods')
+            ->with(['periods' => function ($q) {
+                $q->orderBy('period_number');
+            }])
             ->latest('start_date')
             ->get();
 
+        foreach ($years as $year) {
+            $yearRevenues = 0;
+            $yearExpenses = 0;
+            $yearEntriesCount = 0;
+            $openPeriods = 0;
+            $closedPeriods = 0;
+
+            foreach ($year->periods as $period) {
+                if ($period->status === 'open') {
+                    $openPeriods++;
+                } else {
+                    $closedPeriods++;
+                }
+
+                $entries = JournalEntry::where('tenant_id', $tenantId)
+                    ->whereBetween('entry_date', [$period->start_date, $period->end_date])
+                    ->with('lines.account')
+                    ->get();
+
+                $periodEntriesCount = $entries->count();
+                $periodRevenues = 0;
+                $periodExpenses = 0;
+
+                foreach ($entries as $entry) {
+                    foreach ($entry->lines as $line) {
+                        $acc = $line->account;
+                        if (!$acc) continue;
+                        if ($acc->type === 'revenue' || str_starts_with($acc->code, '4')) {
+                            $periodRevenues += ((float)$line->credit - (float)$line->debit);
+                        } elseif ($acc->type === 'expense' || str_starts_with($acc->code, '5') || str_starts_with($acc->code, '6')) {
+                            $periodExpenses += ((float)$line->debit - (float)$line->credit);
+                        }
+                    }
+                }
+
+                $period->entries_count = $periodEntriesCount;
+                $period->revenues = round($periodRevenues, 2);
+                $period->expenses = round($periodExpenses, 2);
+                $period->net_income = round($periodRevenues - $periodExpenses, 2);
+
+                $yearRevenues += $periodRevenues;
+                $yearExpenses += $periodExpenses;
+                $yearEntriesCount += $periodEntriesCount;
+            }
+
+            $year->total_entries = $yearEntriesCount;
+            $year->total_revenues = round($yearRevenues, 2);
+            $year->total_expenses = round($yearExpenses, 2);
+            $year->net_income = round($yearRevenues - $yearExpenses, 2);
+            $year->open_periods_count = $openPeriods;
+            $year->closed_periods_count = $closedPeriods;
+        }
+
         return response()->json($years);
+    }
+
+    public function initializeCurrentFiscalYear(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $currentYear = now()->year;
+        $name = "السنة المالية {$currentYear}";
+
+        $existing = FiscalYear::where('tenant_id', $tenantId)
+            ->whereYear('start_date', $currentYear)
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'message' => "السنة المالية {$currentYear} مهيأة وموجودة بالفعل!",
+                'fiscal_year' => $existing->load('periods'),
+            ]);
+        }
+
+        $startDate = "{$currentYear}-01-01";
+        $endDate = "{$currentYear}-12-31";
+
+        $year = $this->accountingService->createFiscalYearWithPeriods(
+            $tenantId,
+            $name,
+            $startDate,
+            $endDate,
+            12
+        );
+
+        $arabicMonths = [
+            1 => 'يناير', 2 => 'فبراير', 3 => 'مارس', 4 => 'أبريل',
+            5 => 'مايو', 6 => 'يونيو', 7 => 'يوليو', 8 => 'أغسطس',
+            9 => 'سبتمبر', 10 => 'أكتوبر', 11 => 'نوفمبر', 12 => 'ديسمبر',
+        ];
+
+        foreach ($year->periods as $period) {
+            $monthNum = (int)Carbon::parse($period->start_date)->month;
+            $monthName = $arabicMonths[$monthNum] ?? "شهر {$monthNum}";
+            $period->update([
+                'name' => "{$monthName} {$currentYear} (الفترة {$period->period_number})",
+            ]);
+        }
+
+        return response()->json([
+            'message' => "تم تهيئة وبدء السنة المالية {$currentYear} وتقسيمها إلى 12 فترة شهرية بنجاح!",
+            'fiscal_year' => $year->load('periods'),
+        ], 201);
     }
 
     public function storeFiscalYear(Request $request): JsonResponse

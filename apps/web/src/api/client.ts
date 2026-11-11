@@ -1715,6 +1715,11 @@ class ApiClient {
     getFiscalYears: async (): Promise<any[]> => {
       return this.request('/accounting/fiscal-years');
     },
+    initializeCurrentFiscalYear: async (): Promise<{ message: string; fiscal_year: any }> => {
+      return this.request('/accounting/fiscal-years/initialize-current', {
+        method: 'POST',
+      });
+    },
     createFiscalYear: async (payload: { name: string; start_date: string; end_date: string; periods_count?: number }): Promise<{ message: string; fiscal_year: any }> => {
       return this.request('/accounting/fiscal-years', {
         method: 'POST',

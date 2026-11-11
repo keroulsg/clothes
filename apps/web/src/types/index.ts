@@ -910,6 +910,10 @@ export interface FiscalPeriod {
   closed_at?: string;
   reopened_at?: string;
   reopening_reason?: string;
+  entries_count?: number;
+  revenues?: number;
+  expenses?: number;
+  net_income?: number;
 }
 
 export interface FiscalYear {
@@ -919,6 +923,12 @@ export interface FiscalYear {
   end_date: string;
   status: 'open' | 'closed';
   periods?: FiscalPeriod[];
+  total_entries?: number;
+  total_revenues?: number;
+  total_expenses?: number;
+  net_income?: number;
+  open_periods_count?: number;
+  closed_periods_count?: number;
 }
 
 export interface BankLoanInstallment {

@@ -59,6 +59,7 @@ import { PrintLoanScheduleModal } from './PrintLoanScheduleModal';
 import { PrintReconciliationModal } from './PrintReconciliationModal';
 import { CostCenterModal } from './CostCenterModal';
 import { CostCenterStatementModal } from './CostCenterStatementModal';
+import { PrintFiscalPeriodModal } from './PrintFiscalPeriodModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -236,6 +237,11 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [costCenterFilter, setCostCenterFilter] = useState<'all' | 'main' | 'sub'>('all');
   const [isSeedingCostCenters, setIsSeedingCostCenters] = useState(false);
   const [costCenterSuccessMsg, setCostCenterSuccessMsg] = useState<string | null>(null);
+
+  // Fiscal Periods Interactive States
+  const [selectedPeriodForPrint, setSelectedPeriodForPrint] = useState<FiscalPeriod | null>(null);
+  const [selectedYearForPrint, setSelectedYearForPrint] = useState<FiscalYear | null>(null);
+  const [isInitializingYear, setIsInitializingYear] = useState(false);
 
   // COA Interactive States & Filters
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
@@ -1176,6 +1182,21 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setErrorMsg(err?.message || 'Failed to reopen period');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleInitializeCurrentFiscalYear = async () => {
+    try {
+      setIsInitializingYear(true);
+      setSuccessMsg(null);
+      const res = await api.accounting.initializeCurrentFiscalYear();
+      setSuccessMsg(res?.message || 'تم تهيئة وبدء السنة المالية بنجاح!');
+      await loadFiscalYears();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || err?.message || 'فشلت التهيئة');
+    } finally {
+      setIsInitializingYear(false);
     }
   };
 
@@ -4616,77 +4637,300 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       })()}
 
       {/* 6. FISCAL YEARS & PERIODS VIEW */}
-      {activeSubTab === 'fiscal_periods' && (
-        <div className="space-y-6">
-          {fiscalYears.map((fy) => (
-            <Card key={fy.id} className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                <div>
-                  <h4 className="font-bold text-slate-900 dark:text-white text-base">{fy.name}</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">{fy.start_date} ── {fy.end_date}</p>
+      {activeSubTab === 'fiscal_periods' && (() => {
+        const activeYear = fiscalYears.find((y) => y.status === 'open') || fiscalYears[0];
+        const allPeriods = fiscalYears.flatMap((y) => y.periods || []);
+        const totalClosedPeriods = allPeriods.filter((p) => p.status === 'closed').length;
+        const totalYearProfit = activeYear ? Number(activeYear.net_income || 0) : 0;
+        const totalYearEntries = activeYear ? Number(activeYear.total_entries || 0) : 0;
+
+        return (
+          <div className="space-y-6">
+            {/* Top Control Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950/90 border border-amber-900/30 shadow-xl backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Calendar className="w-6 h-6" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={fy.status === 'open' ? 'success' : 'danger'}>
-                    {fy.status === 'open' ? (isAr ? 'سنة مالية مفتوحة' : 'OPEN') : (isAr ? 'سنة مقفلة نهائياً' : 'CLOSED')}
-                  </Badge>
-                  {fy.status === 'open' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs text-rose-500 hover:text-rose-600 py-1"
-                      onClick={async () => {
-                        if (window.confirm(isAr ? 'هل تريد إغلاق السنة المالية وترحيل الأرباح والخسائر إلى الأرباح المحتجزة؟' : 'Close fiscal year?')) {
-                          await api.accounting.closeFiscalYear(fy.id);
-                          await loadFiscalYears();
-                        }
-                      }}
-                    >
-                      <Lock className="w-3.5 h-3.5 me-1" />
-                      {isAr ? 'إقفال السنة السنوي' : 'Close Year'}
-                    </Button>
-                  )}
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <span>{isAr ? 'إدارة السنوات والفترات المالية والرقابة الدفترية' : 'Fiscal Years & Accounting Periods'}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Posting Lock
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {isAr
+                      ? 'القفل الشهري لحماية الحسابات من التعديل والترحيل بأثر رجعي، وترحيل الأرباح السنوية'
+                      : 'Lock monthly periods to prevent backdated entries and execute year-end closing'}
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
-                {fy.periods?.map((p) => (
-                  <div key={p.id} className={`p-3 rounded-lg border ${p.status === 'open' ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20' : 'border-slate-200 dark:border-slate-800 bg-slate-50/30'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white">{p.name}</span>
-                      <Badge variant={p.status === 'open' ? 'success' : 'danger'}>
-                        {p.status === 'open' ? (isAr ? 'مفتوحة' : 'Open') : (isAr ? 'مقفلة' : 'Closed')}
-                      </Badge>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Button
+                  variant="outline"
+                  disabled={isInitializingYear}
+                  onClick={handleInitializeCurrentFiscalYear}
+                  className="border-amber-600/40 text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 text-xs font-bold py-2 px-3.5"
+                >
+                  <Zap className={`w-4 h-4 ${isInitializingYear ? 'animate-spin' : ''}`} />
+                  {isInitializingYear
+                    ? (isAr ? 'جاري التهيئة...' : 'Initializing...')
+                    : (isAr ? 'بدء السنة المالية 2026 فوراً ⚡' : 'Initialize 2026 (One-Click)')}
+                </Button>
+
+                <Button
+                  onClick={() => setIsFiscalYearModalOpen(true)}
+                  className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center gap-2 py-2 px-4 shadow-lg shadow-amber-900/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  {isAr ? 'سنة مالية مخصصة' : 'Custom Year'}
+                </Button>
+              </div>
+            </div>
+
+            {/* 4 Bento Telemetry Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'السنة المالية الحالية' : 'Active Fiscal Year'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-black font-mono text-slate-900 dark:text-white mt-2">
+                  {activeYear ? activeYear.name : (isAr ? 'غير مهيأة' : 'Not Set')}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <Badge variant={activeYear?.status === 'open' ? 'success' : 'neutral'}>
+                    {activeYear?.status === 'open' ? (isAr ? 'مفتوحة للترحيل' : 'Active') : (isAr ? 'مقفلة' : 'Closed')}
+                  </Badge>
+                </div>
+              </Card>
+
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'الفترات الشهرية المقفلة' : 'Protected / Closed Periods'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-black font-mono text-blue-400 mt-2">
+                  {totalClosedPeriods} <span className="text-xs font-normal text-slate-400">/ {allPeriods.length} {isAr ? 'شهر' : 'months'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'فترات تم تجميدها ومنع التعديل فيها' : 'Periods locked from modifications'}
+                </p>
+              </Card>
+
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'صافي أرباح / خسائر السنة' : 'YTD Net Income'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                </div>
+                <div
+                  className={`text-xl font-black font-mono mt-2 ${
+                    totalYearProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'
+                  }`}
+                >
+                  {totalYearProfit.toLocaleString()} ج.م
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'إيرادات المبيعات مطروحاً منها كافة المصاريف' : 'Revenues minus operating expenses'}
+                </p>
+              </Card>
+
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'القيود اليومية المرحلة' : 'Posted Journal Entries'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-black font-mono text-slate-900 dark:text-white mt-2">
+                  {totalYearEntries} <span className="text-xs font-normal text-slate-400">{isAr ? 'قيد' : 'entries'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'قيود متوازنة ومرحلة بدفتر اليومية' : 'Balanced entries in general ledger'}
+                </p>
+              </Card>
+            </div>
+
+            {/* Empty State */}
+            {fiscalYears.length === 0 ? (
+              <Card className="p-10 text-center bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800">
+                <div className="space-y-4 max-w-md mx-auto">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 mx-auto flex items-center justify-center">
+                    <Calendar className="w-7 h-7" />
+                  </div>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                    {isAr ? 'لم يتم تهيئة أي سنة مالية حتى الآن' : 'No Fiscal Years Configured'}
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {isAr
+                      ? 'لبدء تفعيل الرقابة الدفترية والإقفال الشهري للدفاتر، يمكنك الضغط على الزر أدناه لبدء السنة المالية الحالية 2026 وتقسيمها تلقائياً إلى 12 فترة شهرية من يناير حتى ديسمبر.'
+                      : 'Click below to initialize the current fiscal year 2026 divided into 12 monthly accounting periods.'}
+                  </p>
+                  <Button
+                    disabled={isInitializingYear}
+                    onClick={handleInitializeCurrentFiscalYear}
+                    className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs py-2.5 px-6 shadow-lg shadow-amber-900/20"
+                  >
+                    <Zap className={`w-4 h-4 ml-2 ${isInitializingYear ? 'animate-spin' : ''}`} />
+                    {isInitializingYear
+                      ? (isAr ? 'جاري التهيئة...' : 'Initializing...')
+                      : (isAr ? 'بدء السنة المالية 2026 فوراً ⚡' : 'Initialize 2026 Now')}
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              fiscalYears.map((fy) => (
+                <Card
+                  key={fy.id}
+                  className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-5"
+                >
+                  {/* Year Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{fy.name}</h4>
+                        <Badge variant={fy.status === 'open' ? 'success' : 'neutral'}>
+                          {fy.status === 'open' ? (isAr ? 'سنة مالية مفتوحة' : 'OPEN') : (isAr ? 'سنة مقفلة نهائياً' : 'CLOSED')}
+                        </Badge>
+                      </div>
+                      <p className="text-xs font-mono text-slate-400 mt-1">
+                        من: {fy.start_date} ── إلى: {fy.end_date}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">{p.start_date} إلى {p.end_date}</p>
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                      {p.status === 'open' ? (
-                        <button
-                          onClick={() => handleClosePeriod(p.id)}
-                          className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1"
-                        >
-                          <Lock className="w-3 h-3" />
-                          {isAr ? 'إغلاق الفترة' : 'Close'}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setSelectedPeriodForReopen(p);
-                            setIsPeriodReopenModalOpen(true);
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="hidden lg:flex items-center gap-3 text-xs bg-slate-50 dark:bg-slate-800/50 px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 font-mono">
+                        <span>إيرادات: <b className="text-emerald-500">{Number(fy.total_revenues || 0).toLocaleString()} ج.م</b></span>
+                        <span className="text-slate-400">|</span>
+                        <span>مصروفات: <b className="text-amber-500">{Number(fy.total_expenses || 0).toLocaleString()} ج.م</b></span>
+                        <span className="text-slate-400">|</span>
+                        <span>صافي: <b className={Number(fy.net_income || 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}>{Number(fy.net_income || 0).toLocaleString()} ج.م</b></span>
+                      </div>
+
+                      {fy.status === 'open' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-rose-500/40 text-rose-500 hover:bg-rose-500/10 font-bold text-xs py-1.5 px-3"
+                          onClick={async () => {
+                            if (window.confirm(isAr ? 'تنبيه تدقيق: هل تريد إغلاق السنة المالية وترحيل صافي الأرباح والخسائر إلى الأرباح المحتجزة [3020] وقفل كافة الفترات نهائياً؟' : 'Close fiscal year and roll net income to retained earnings?')) {
+                              await api.accounting.closeFiscalYear(fy.id);
+                              await loadFiscalYears();
+                            }
                           }}
-                          className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
                         >
-                          <Unlock className="w-3 h-3" />
-                          {isAr ? 'إعادة الفتح' : 'Reopen'}
-                        </button>
+                          <Lock className="w-3.5 h-3.5 me-1.5" />
+                          {isAr ? 'إقفال السنة السنوي وترحيل الأرباح 🔒' : 'Year-End Closing'}
+                        </Button>
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+
+                  {/* 12-Month Calendar Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                    {fy.periods?.map((p) => {
+                      const isOpen = p.status === 'open';
+                      const pNet = Number(p.net_income || 0);
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`p-3.5 rounded-xl border transition flex flex-col justify-between ${
+                            isOpen
+                              ? 'border-emerald-500/30 bg-emerald-500/[0.03] dark:bg-emerald-950/10 hover:border-emerald-500/50'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 opacity-80'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <span>{p.name}</span>
+                              </span>
+                              <Badge variant={isOpen ? 'success' : 'neutral'}>
+                                {isOpen ? (isAr ? 'مفتوحة' : 'Open') : (isAr ? 'مقفلة' : 'Closed')}
+                              </Badge>
+                            </div>
+
+                            <p className="text-[10px] font-mono text-slate-400 mt-1.5">
+                              {p.start_date} ── {p.end_date}
+                            </p>
+
+                            {/* Monthly Financial Stats */}
+                            <div className="mt-2.5 space-y-1 text-[11px] bg-slate-50/80 dark:bg-slate-800/40 p-2 rounded-lg font-mono">
+                              <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                                <span>{isAr ? 'إيرادات:' : 'Rev:'}</span>
+                                <span className="font-bold text-emerald-500">
+                                  {Number(p.revenues || 0).toLocaleString()} ج.م
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                                <span>{isAr ? 'مصروفات:' : 'Exp:'}</span>
+                                <span className="font-bold text-amber-500">
+                                  {Number(p.expenses || 0).toLocaleString()} ج.م
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center pt-1 border-t border-slate-200 dark:border-slate-700/60 font-bold">
+                                <span>{isAr ? 'الصافي:' : 'Net:'}</span>
+                                <span className={pNet >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                                  {pNet.toLocaleString()} ج.م
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Toolbar */}
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <button
+                              onClick={() => {
+                                setSelectedPeriodForPrint(p);
+                                setSelectedYearForPrint(fy);
+                              }}
+                              title={isAr ? 'طباعة محضر إقفال الفترة A4' : 'Print Period Certificate'}
+                              className="text-xs font-semibold text-slate-500 hover:text-amber-400 flex items-center gap-1 transition cursor-pointer"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span className="text-[11px]">{isAr ? 'طباعة محضر' : 'Print'}</span>
+                            </button>
+
+                            {isOpen ? (
+                              <button
+                                onClick={() => handleClosePeriod(p.id)}
+                                className="text-xs text-rose-500 hover:text-rose-600 font-bold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Lock className="w-3 h-3" />
+                                <span>{isAr ? 'إغلاق وقفل' : 'Lock'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setSelectedPeriodForReopen(p);
+                                  setIsPeriodReopenModalOpen(true);
+                                }}
+                                className="text-xs text-primary hover:underline font-bold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Unlock className="w-3 h-3" />
+                                <span>{isAr ? 'إعادة الفتح' : 'Reopen'}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        );
+      })()}
 
       {/* 7. VOUCHERS VIEW */}
       {activeSubTab === 'vouchers' && (
@@ -6511,6 +6755,18 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         isOpen={!!selectedCostCenterForStatement}
         onClose={() => setSelectedCostCenterForStatement(null)}
         costCenter={selectedCostCenterForStatement}
+        isAr={isAr}
+      />
+
+      {/* Official A4 Print Fiscal Period Certificate Modal */}
+      <PrintFiscalPeriodModal
+        isOpen={!!selectedPeriodForPrint}
+        onClose={() => {
+          setSelectedPeriodForPrint(null);
+          setSelectedYearForPrint(null);
+        }}
+        period={selectedPeriodForPrint}
+        fiscalYear={selectedYearForPrint}
         isAr={isAr}
       />
     </div>

@@ -923,15 +923,83 @@ class AccountingController extends Controller
     // سندات القبض والصرف
     // ==========================================
 
-    public function paymentVouchers(): JsonResponse
+    public function paymentVouchers(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $vouchers = PaymentVoucher::where('tenant_id', $tenantId)
-            ->with('account')
-            ->latest()
-            ->paginate(20);
+        $query = PaymentVoucher::where('tenant_id', $tenantId)->with('account');
 
-        return response()->json($vouchers);
+        if ($request->filled('type')) {
+            $type = $request->get('type');
+            if ($type === 'discount') {
+                $query->where(function($q) {
+                    $q->where('payment_method', 'discount')
+                      ->orWhere('voucher_number', 'like', 'DISC-%');
+                });
+            } elseif ($type === 'receipt') {
+                $query->where(function($q) {
+                    $q->where('voucher_type', 'receipt')
+                      ->orWhere('voucher_number', 'like', 'RCV-%');
+                });
+            } elseif ($type === 'payment') {
+                $query->where(function($q) {
+                    $q->where('voucher_type', 'payment')
+                      ->orWhere('voucher_number', 'like', 'PV-%');
+                });
+            }
+        }
+
+        if ($request->filled('party_type')) {
+            $query->where('party_type', $request->get('party_type'));
+        }
+
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', $request->get('payment_method'));
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->get('search');
+            $query->where(function($q) use ($s) {
+                $q->where('voucher_number', 'like', "%{$s}%")
+                  ->orWhere('party_name', 'like', "%{$s}%")
+                  ->orWhere('notes', 'like', "%{$s}%");
+            });
+        }
+
+        $allVouchers = (clone $query)->get();
+        $totalReceipts = 0;
+        $totalPayments = 0;
+        $totalDiscounts = 0;
+
+        foreach ($allVouchers as $v) {
+            $amt = (float)$v->amount;
+            $num = $v->voucher_number ?? '';
+            $isDisc = ($v->payment_method === 'discount') || str_starts_with($num, 'DISC-');
+            $isRcv = ($v->voucher_type === 'receipt') || str_starts_with($num, 'RCV-');
+
+            if ($isDisc) {
+                $totalDiscounts += $amt;
+            } elseif ($isRcv) {
+                $totalReceipts += $amt;
+            } else {
+                $totalPayments += $amt;
+            }
+        }
+
+        $vouchers = $query->latest('voucher_date')->latest('created_at')->paginate(100);
+
+        return response()->json([
+            'data' => $vouchers->items(),
+            'current_page' => $vouchers->currentPage(),
+            'last_page' => $vouchers->lastPage(),
+            'total' => $vouchers->total(),
+            'summary' => [
+                'total_receipts' => $totalReceipts,
+                'total_payments' => $totalPayments,
+                'net_cash_flow' => $totalReceipts - $totalPayments,
+                'total_discounts' => $totalDiscounts,
+                'count' => $allVouchers->count(),
+            ],
+        ]);
     }
 
     public function storePaymentVoucher(Request $request): JsonResponse

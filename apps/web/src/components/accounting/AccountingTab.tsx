@@ -43,6 +43,8 @@ import {
   Boxes,
   Zap,
   TrendingUp,
+  Coins,
+  Building,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -60,6 +62,7 @@ import { PrintReconciliationModal } from './PrintReconciliationModal';
 import { CostCenterModal } from './CostCenterModal';
 import { CostCenterStatementModal } from './CostCenterStatementModal';
 import { PrintFiscalPeriodModal } from './PrintFiscalPeriodModal';
+import { PrintPaymentVoucherModal, cleanVoucherNotes } from './PrintPaymentVoucherModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -242,6 +245,13 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [selectedPeriodForPrint, setSelectedPeriodForPrint] = useState<FiscalPeriod | null>(null);
   const [selectedYearForPrint, setSelectedYearForPrint] = useState<FiscalYear | null>(null);
   const [isInitializingYear, setIsInitializingYear] = useState(false);
+
+  // Payment Vouchers Interactive States
+  const [selectedVoucherForPrint, setSelectedVoucherForPrint] = useState<PaymentVoucher | null>(null);
+  const [voucherFilterType, setVoucherFilterType] = useState<'all' | 'receipt' | 'payment' | 'discount'>('all');
+  const [voucherFilterParty, setVoucherFilterParty] = useState<'all' | 'supplier' | 'customer' | 'employee'>('all');
+  const [voucherFilterMethod, setVoucherFilterMethod] = useState<'all' | 'cash' | 'bank' | 'card' | 'discount' | 'cheque'>('all');
+  const [voucherSearch, setVoucherSearch] = useState('');
 
   // COA Interactive States & Filters
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
@@ -4933,60 +4943,396 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       })()}
 
       {/* 7. VOUCHERS VIEW */}
-      {activeSubTab === 'vouchers' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'سجل سندات الصرف والقبض المالية' : 'Receipt & Payment Vouchers Register'}
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'رقم السند' : 'Voucher #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'النوع' : 'Type'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الطرف المستفيد / المسدد' : 'Party Name'}</th>
-                  <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Payment Method'}</th>
-                  <th className="p-3 text-start">{isAr ? 'المبلغ' : 'Amount'}</th>
-                  <th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
-                  <th className="p-3 text-start">{isAr ? 'البيان' : 'Notes'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {vouchers.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد سندات مالية مسجلة' : 'No payment vouchers found'}
-                    </td>
-                  </tr>
-                ) : (
-                  vouchers.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <td className="p-3 font-mono font-semibold text-slate-900 dark:text-white">{v.voucher_number}</td>
-                      <td className="p-3">
-                        <Badge variant={v.voucher_type === 'receipt' ? 'success' : 'warning'}>
-                          {v.voucher_type === 'receipt' ? (isAr ? 'سند قبض' : 'Receipt') : (isAr ? 'سند صرف' : 'Payment')}
-                        </Badge>
-                      </td>
-                      <td className="p-3 font-medium text-slate-900 dark:text-white">
-                        {v.party_name}
-                        <span className="text-xs text-slate-400 block capitalize">{v.party_type}</span>
-                      </td>
-                      <td className="p-3 capitalize">{v.payment_method?.replace('_', ' ')}</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        {Number(v.amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3 text-slate-500">{v.voucher_date}</td>
-                      <td className="p-3 text-slate-500 text-xs">{v.notes || '—'}</td>
+      {activeSubTab === 'vouchers' && (() => {
+        // Compute summary metrics
+        let totalReceipts = 0;
+        let totalPayments = 0;
+        let totalDiscounts = 0;
+
+        vouchers.forEach((v) => {
+          const amt = Number(v.amount || 0);
+          const num = v.voucher_number || '';
+          const isDisc = v.payment_method === 'discount' || num.startsWith('DISC-');
+          const isRcv = v.voucher_type === 'receipt' || num.startsWith('RCV-');
+
+          if (isDisc) {
+            totalDiscounts += amt;
+          } else if (isRcv) {
+            totalReceipts += amt;
+          } else {
+            totalPayments += amt;
+          }
+        });
+
+        const netCashFlow = totalReceipts - totalPayments;
+
+        // Filter vouchers
+        const filteredVouchers = vouchers.filter((v) => {
+          const num = v.voucher_number || '';
+          const isDisc = v.payment_method === 'discount' || num.startsWith('DISC-');
+          const isRcv = v.voucher_type === 'receipt' || num.startsWith('RCV-');
+          const isPay = !isDisc && !isRcv;
+
+          if (voucherFilterType === 'receipt' && !isRcv) return false;
+          if (voucherFilterType === 'payment' && !isPay) return false;
+          if (voucherFilterType === 'discount' && !isDisc) return false;
+
+          if (voucherFilterParty !== 'all' && v.party_type !== voucherFilterParty) return false;
+
+          if (voucherFilterMethod !== 'all') {
+            const method = (v.payment_method || '').toLowerCase();
+            if (voucherFilterMethod === 'cash' && !method.includes('cash')) return false;
+            if (voucherFilterMethod === 'bank' && !method.includes('bank')) return false;
+            if (voucherFilterMethod === 'card' && !method.includes('card')) return false;
+            if (voucherFilterMethod === 'cheque' && !method.includes('check') && !method.includes('cheque')) return false;
+            if (voucherFilterMethod === 'discount' && !method.includes('discount')) return false;
+          }
+
+          if (voucherSearch.trim()) {
+            const q = voucherSearch.toLowerCase();
+            const matchNum = num.toLowerCase().includes(q);
+            const matchParty = (v.party_name || '').toLowerCase().includes(q);
+            const matchNotes = (v.notes || '').toLowerCase().includes(q);
+            if (!matchNum && !matchParty && !matchNotes) return false;
+          }
+
+          return true;
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* 1. Bento Financial Telemetry Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Receipts Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي المقبوضات المحصلة' : 'Total Receipts'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <ArrowDownRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-2">
+                  {totalReceipts.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'مقبوضات ومتحصلات العملاء والمبيعات' : 'Customer collections & sales'}
+                </p>
+              </div>
+
+              {/* Disbursements Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-amber-500/30 dark:border-amber-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي المدفوعات المنصرفة' : 'Total Disbursements'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-2">
+                  {totalPayments.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'سداد فواتير الموردين والتشغيل والخامات' : 'Supplier bills & operations'}
+                </p>
+              </div>
+
+              {/* Net Cash Flow Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-cyan-500/30 dark:border-cyan-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'صافي حركة السيولة (Net Cash Flow)' : 'Net Cash Flow'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className={`text-2xl font-black font-mono mt-2 ${netCashFlow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {netCashFlow >= 0 ? `+${netCashFlow.toLocaleString()}` : netCashFlow.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'الفائض / العجز النقدي الفعلي بالخزينة' : 'Actual treasury surplus/deficit'}
+                </p>
+              </div>
+
+              {/* Discounts & Adjustments Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-purple-500/30 dark:border-purple-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إشعارات الخصم والتسويات' : 'Discounts & Offsets'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-purple-600 dark:text-purple-400 mt-2">
+                  {totalDiscounts.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'خصومات تعجيل الدفع ومطالبات الجودة' : 'Early payment & defect notes'}
+                </p>
+              </div>
+            </div>
+
+            {/* 2. Smart Search & Filter Control Bar */}
+            <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                {/* Search & Filters */}
+                <div className="flex flex-wrap items-center gap-3 flex-1">
+                  <div className="relative min-w-[200px] max-w-xs flex-1">
+                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={voucherSearch}
+                      onChange={(e) => setVoucherSearch(e.target.value)}
+                      placeholder={isAr ? 'بحث برقم السند، الطرف، أو البيان...' : 'Search by voucher #, party, or notes...'}
+                      className="w-full ps-9 pe-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  {/* Type Filter Pills */}
+                  <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl text-xs">
+                    {[
+                      { id: 'all', labelAr: 'الكل', labelEn: 'All' },
+                      { id: 'payment', labelAr: 'سندات صرف', labelEn: 'Payments' },
+                      { id: 'receipt', labelAr: 'سندات قبض', labelEn: 'Receipts' },
+                      { id: 'discount', labelAr: 'إشعارات خصم', labelEn: 'Discounts' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setVoucherFilterType(tab.id as any)}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-xs ${
+                          voucherFilterType === tab.id
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {isAr ? tab.labelAr : tab.labelEn}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Party Dropdown */}
+                  <select
+                    value={voucherFilterParty}
+                    onChange={(e) => setVoucherFilterParty(e.target.value as any)}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-700 dark:text-slate-300"
+                  >
+                    <option value="all">{isAr ? 'كل الأطراف' : 'All Parties'}</option>
+                    <option value="supplier">{isAr ? 'الموردين' : 'Suppliers'}</option>
+                    <option value="customer">{isAr ? 'العملاء' : 'Customers'}</option>
+                    <option value="employee">{isAr ? 'الموظفين' : 'Employees'}</option>
+                  </select>
+
+                  {/* Method Dropdown */}
+                  <select
+                    value={voucherFilterMethod}
+                    onChange={(e) => setVoucherFilterMethod(e.target.value as any)}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-700 dark:text-slate-300"
+                  >
+                    <option value="all">{isAr ? 'كل طرق السداد' : 'All Methods'}</option>
+                    <option value="cash">{isAr ? 'نقداً (خزينة)' : 'Cash'}</option>
+                    <option value="bank">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
+                    <option value="cheque">{isAr ? 'شيكات بنكية' : 'Cheques'}</option>
+                    <option value="card">{isAr ? 'بطاقات فيزا' : 'Cards'}</option>
+                  </select>
+                </div>
+
+                {/* New Voucher Action Button */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setIsVoucherModalOpen(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-900/20"
+                    icon={<Plus className="w-4 h-4" />}
+                  >
+                    {isAr ? 'إصدار سند مالي جديد' : 'New Voucher'}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* 3. Upgraded High-Contrast Vouchers Table */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-amber-500" />
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {isAr ? 'سجل السندات المالية المعتمدة' : 'Official Financial Vouchers Register'}
+                  </h3>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                    {filteredVouchers.length} {isAr ? 'سند' : 'records'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-bold">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'رقم السند' : 'Voucher #'}</th>
+                      <th className="p-3 text-start">{isAr ? 'نوع السند' : 'Type'}</th>
+                      <th className="p-3 text-start">{isAr ? 'الطرف المستفيد / المسدد' : 'Party Details'}</th>
+                      <th className="p-3 text-start">{isAr ? 'طريقة السداد' : 'Payment Method'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المبلغ المسدد' : 'Amount'}</th>
+                      <th className="p-3 text-start">{isAr ? 'تاريخ السند' : 'Date'}</th>
+                      <th className="p-3 text-start">{isAr ? 'البيان والغرض المحاسبي' : 'Narrative & Notes'}</th>
+                      <th className="p-3 text-center">{isAr ? 'طباعة واعتماد' : 'Print / Action'}</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {filteredVouchers.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-400">
+                          {isAr ? 'لا توجد سندات مالية تطابق معايير البحث والفلترة' : 'No payment vouchers match the criteria'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredVouchers.map((v) => {
+                        const num = v.voucher_number || '';
+                        const isDisc = v.payment_method === 'discount' || num.startsWith('DISC-');
+                        const isRcv = v.voucher_type === 'receipt' || num.startsWith('RCV-');
+                        const { cleanText, tags } = cleanVoucherNotes(v.notes);
+
+                        const formattedDate = v.voucher_date
+                          ? new Date(v.voucher_date).toLocaleDateString(isAr ? 'ar-EG' : 'en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : '—';
+
+                        return (
+                          <tr key={v.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                            {/* Voucher Number */}
+                            <td className="p-3">
+                              <span className="font-mono font-bold text-slate-900 dark:text-white px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                {num}
+                              </span>
+                            </td>
+
+                            {/* Voucher Type */}
+                            <td className="p-3">
+                              {isDisc ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                                  <Coins className="w-3 h-3" />
+                                  <span>{isAr ? 'إشعار خصم' : 'Discount'}</span>
+                                </span>
+                              ) : isRcv ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                  <ArrowDownRight className="w-3 h-3" />
+                                  <span>{isAr ? 'سند قبض' : 'Receipt'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                  <ArrowUpRight className="w-3 h-3" />
+                                  <span>{isAr ? 'سند صرف' : 'Payment'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Party Name & Type */}
+                            <td className="p-3">
+                              <div className="font-bold text-slate-900 dark:text-white text-xs">
+                                {v.party_name}
+                              </div>
+                              <span className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
+                                v.party_type === 'supplier'
+                                  ? 'bg-purple-500/10 text-purple-500'
+                                  : v.party_type === 'customer'
+                                  ? 'bg-blue-500/10 text-blue-500'
+                                  : 'bg-slate-500/10 text-slate-500'
+                              }`}>
+                                {v.party_type === 'supplier' ? (isAr ? 'مورد' : 'Supplier') : v.party_type === 'customer' ? (isAr ? 'عميل' : 'Customer') : v.party_type}
+                              </span>
+                            </td>
+
+                            {/* Payment Method */}
+                            <td className="p-3">
+                              {v.payment_method === 'cash' ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                                  <Coins className="w-3.5 h-3.5" />
+                                  <span>{isAr ? 'نقداً (خزينة)' : 'Cash'}</span>
+                                </span>
+                              ) : (v.payment_method || '').includes('bank') ? (
+                                <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+                                  <Building className="w-3.5 h-3.5" />
+                                  <span>{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</span>
+                                </span>
+                              ) : (v.payment_method || '').includes('check') || (v.payment_method || '').includes('cheque') ? (
+                                <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                                  <Receipt className="w-3.5 h-3.5" />
+                                  <span>{isAr ? 'شيك بنكي' : 'Cheque'}</span>
+                                </span>
+                              ) : v.payment_method === 'card' ? (
+                                <span className="inline-flex items-center gap-1 text-cyan-600 dark:text-cyan-400 font-medium">
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  <span>{isAr ? 'بطاقة فيزا' : 'Card'}</span>
+                                </span>
+                              ) : v.payment_method === 'discount' ? (
+                                <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                                  <Coins className="w-3.5 h-3.5" />
+                                  <span>{isAr ? 'خصم تعجيل' : 'Discount'}</span>
+                                </span>
+                              ) : (
+                                <span className="capitalize text-slate-500">{v.payment_method?.replace('_', ' ')}</span>
+                              )}
+                            </td>
+
+                            {/* Amount */}
+                            <td className="p-3 font-mono font-bold text-slate-900 dark:text-white text-xs">
+                              <span className={isRcv ? 'text-emerald-600 dark:text-emerald-400' : isDisc ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}>
+                                {Number(v.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>{' '}
+                              <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* Date */}
+                            <td className="p-3 text-slate-500 font-medium whitespace-nowrap">
+                              {formattedDate}
+                            </td>
+
+                            {/* Clean Narrative Notes */}
+                            <td className="p-3 max-w-xs">
+                              {tags.length > 0 && (
+                                <div className="flex gap-1 mb-1">
+                                  {tags.map((t, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <p className="line-clamp-2 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                                {cleanText}
+                              </p>
+                            </td>
+
+                            {/* Print Voucher Action */}
+                            <td className="p-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedVoucherForPrint(v)}
+                                title={isAr ? 'طباعة إيصال السند الرسمي (A5 / A4)' : 'Print Official Voucher Receipt'}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 text-[11px] font-bold mx-auto cursor-pointer transition"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>{isAr ? 'طباعة' : 'Print'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {/* 8. COSTING VIEW */}
       {activeSubTab === 'costing' && (
@@ -6767,6 +7113,14 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         }}
         period={selectedPeriodForPrint}
         fiscalYear={selectedYearForPrint}
+        isAr={isAr}
+      />
+
+      {/* Official A5 / A4 Print Payment / Receipt Voucher Modal */}
+      <PrintPaymentVoucherModal
+        isOpen={!!selectedVoucherForPrint}
+        onClose={() => setSelectedVoucherForPrint(null)}
+        voucher={selectedVoucherForPrint}
         isAr={isAr}
       />
     </div>

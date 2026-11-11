@@ -43,8 +43,15 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'rbac' | 'profile' | 'branches' | 'backup'>('users');
   const [users, setUsers] = useState<any[]>([]);
   const [permissionsCatalog, setPermissionsCatalog] = useState<any[]>([]);
+  const [rolesData, setRolesData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Role Customization Modal State
+  const [isEditRoleModalOpen, setIsEditRoleModalOpen] = useState<boolean>(false);
+  const [selectedRoleForEdit, setSelectedRoleForEdit] = useState<any | null>(null);
+  const [roleEditPermissions, setRoleEditPermissions] = useState<string[]>([]);
+  const [isSavingRole, setIsSavingRole] = useState<boolean>(false);
 
   // Backup telemetry
   const [backupStatus, setBackupStatus] = useState<any>(null);
@@ -85,15 +92,17 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [usersRes, catalogRes, backupRes, profileRes] = await Promise.all([
+      const [usersRes, catalogRes, rolesRes, backupRes, profileRes] = await Promise.all([
         api.tenant.getUsers().catch(() => ({ users: [], total: 0, active_count: 0 })),
         api.tenant.getPermissionsCatalog().catch(() => ({ catalog: [], roles: [] })),
+        api.tenant.getRolesWithPermissions().catch(() => ({ roles: [], catalog: [] })),
         api.tenant.getBackupStatus().catch(() => null),
         api.tenant.getProfile().catch(() => null),
       ]);
 
       setUsers(usersRes.users || []);
-      setPermissionsCatalog(catalogRes.catalog || []);
+      setPermissionsCatalog(catalogRes.catalog && catalogRes.catalog.length > 0 ? catalogRes.catalog : (rolesRes.catalog || []));
+      setRolesData(rolesRes.roles || []);
       if (backupRes) setBackupStatus(backupRes);
 
       if (profileRes?.tenant) {
@@ -199,6 +208,68 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
     } else {
       setUserPermissions((prev) => Array.from(new Set([...prev, ...keys])));
     }
+  };
+
+  const handleOpenEditRole = (role: any) => {
+    setSelectedRoleForEdit(role);
+    setRoleEditPermissions(Array.isArray(role.permissions) ? [...role.permissions] : []);
+    setIsEditRoleModalOpen(true);
+  };
+
+  const handleToggleRoleEditPermission = (permKey: string) => {
+    if (selectedRoleForEdit?.key === 'company_owner') return;
+    setRoleEditPermissions((prev) => {
+      if (prev.includes(permKey)) {
+        return prev.filter((p) => p !== permKey);
+      } else {
+        return [...prev, permKey];
+      }
+    });
+  };
+
+  const handleSelectAllInRoleEditModule = (modulePerms: any[]) => {
+    if (selectedRoleForEdit?.key === 'company_owner') return;
+    const keys = modulePerms.map((p) => p.key);
+    const allSelected = keys.every((k) => roleEditPermissions.includes(k));
+    if (allSelected) {
+      setRoleEditPermissions((prev) => prev.filter((k) => !keys.includes(k)));
+    } else {
+      setRoleEditPermissions((prev) => Array.from(new Set([...prev, ...keys])));
+    }
+  };
+
+  const handleSaveRolePermissions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRoleForEdit) return;
+    setIsSavingRole(true);
+    setStatusMsg(null);
+    try {
+      const res = await api.tenant.updateRolePermissions(selectedRoleForEdit.key, roleEditPermissions);
+      setStatusMsg({
+        type: 'success',
+        text: res.message || (isAr ? 'تم حفظ واعتماد صلاحيات الدور للمصنع بنجاح!' : 'Role permissions updated successfully!'),
+      });
+      setIsEditRoleModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'error',
+        text: err?.message || (isAr ? 'فشل حفظ صلاحيات الدور' : 'Failed to save role permissions'),
+      });
+    } finally {
+      setIsSavingRole(false);
+    }
+  };
+
+  const handleQuickAddUserWithRole = (roleKey: string) => {
+    setEditingUserId(null);
+    setUserName('');
+    setUserEmail('');
+    setUserPhone('');
+    setUserPassword('');
+    handleRoleChange(roleKey);
+    setUserIsActive(true);
+    setIsUserModalOpen(true);
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -672,59 +743,105 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
         </div>
       )}
 
-      {/* ─── TAB 2: RBAC MATRIX ─── */}
+      {/* ─── TAB 2: RBAC MATRIX & LIVE ROLE CUSTOMIZER ─── */}
       {activeSubTab === 'rbac' && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>{isAr ? 'مصفوفة الصلاحيات وأدوار النظام المعتمدة (RBAC Standard Matrix)' : 'RBAC Standard Matrix'}</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {isAr
-                ? 'توزيع الصلاحيات بحسب المهام الوظيفية لحماية أمانات العملاء وتكاليف التشغيل ومنع التضارب.'
-                : 'Role mappings and security boundaries for plant operations to protect client fabrics and costs.'}
-            </p>
+        <div className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span>{isAr ? 'مصفوفة الأدوار والصلاحيات التفاعلية (Live RBAC Control Center)' : 'Interactive RBAC Matrix'}</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {isAr
+                  ? 'هذه الأدوار ليست مجرد شكل! يمكنك الضغط على «تعديل الصلاحيات» لتغيير ما يستطيع كل دور فعله في المصنع، أو «إضافة موظف» لإنشاء حساب فوراً.'
+                  : 'Fully active role presets! Click "Customize" to change what each role can do, or "Add User" to create an account directly.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="brand" className="text-xs font-mono font-bold">
+                {rolesData.length || 7} {isAr ? 'أدوار معتمدة' : 'Roles'}
+              </Badge>
+            </div>
           </div>
 
-          <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-[#0c1017]">
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold">
-                  <tr>
-                    <th className="py-3 px-4">{isAr ? 'الدور الوظيفي' : 'Role'}</th>
-                    <th className="py-3 px-4">{isAr ? 'صالة القص والإنتاج' : 'Cutting Floor'}</th>
-                    <th className="py-3 px-4">{isAr ? 'المخازن والأمانات' : 'Inventory & CMT'}</th>
-                    <th className="py-3 px-4">{isAr ? 'المشتريات والتكاليف' : 'Procurement & Costing'}</th>
-                    <th className="py-3 px-4">{isAr ? 'تدقيق الجودة (QC)' : 'Quality Audit'}</th>
-                    <th className="py-3 px-4">{isAr ? 'صلاحيات الإدارة' : 'Admin Privileges'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 text-slate-800 dark:text-slate-200">
-                  {[
-                    { role: isAr ? 'مدير المصنع / المالك' : 'Factory Owner', cutting: 'كامل (فرش + قص + اعتماد)', inv: 'كامل (استلام + جرد + صرف)', proc: 'كامل (أوامر + فواتير + تكاليف)', qc: 'اعتماد نهائي وإجازة', admin: 'إدارة شاملة + مستخدمين' },
-                    { role: isAr ? 'مهندس صالة القص' : 'Cutting Floor Lead', cutting: 'إصدار وفرش وقص وبندلات', inv: 'صرف خامات وأقمشة للتشغيل', proc: 'عرض أوامر الشراء', qc: 'فحص عينات الفرش', admin: 'محدود' },
-                    { role: isAr ? 'أمين مخزن الأقمشة' : 'Fabric Storekeeper', cutting: 'عرض خطط القص والتشغيل', inv: 'استلام وجرد وصرف أقمشة', proc: 'تسجيل إذن الاستلام (GRN)', qc: '—', admin: '—' },
-                    { role: isAr ? 'محاسب التكاليف' : 'Cost Accountant', cutting: 'عرض إحصاءات وتكاليف الهدر', inv: 'معاينة دفتر المخزون والأستاذ', proc: 'مطابقة 3-Way وفواتير الموردين', qc: '—', admin: '—' },
-                    { role: isAr ? 'مدقق الجودة (QC)' : 'QC Inspector', cutting: 'فحص الحزم والبندلات', inv: 'فحص خامات الاستلام', proc: 'فحص استلام ومطابقة مواصفات', qc: 'إجازة / رفض واستبعاد المعيب', admin: '—' },
-                    { role: isAr ? 'مسؤول المبيعات' : 'Sales Representative', cutting: '—', inv: 'معاينة أرصدة التام والمعارض', proc: '—', qc: '—', admin: 'إصدار فواتير ومردودات' },
-                    { role: isAr ? 'عامل تشغيل / خط إنتاج' : 'Line Operator', cutting: 'عرض أوامر الخط الحالي', inv: '—', proc: '—', qc: '—', admin: 'تسجيل القطع المنجزة' },
-                  ].map((r, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{r.role}</td>
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.cutting}</td>
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.inv}</td>
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.proc}</td>
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.qc}</td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-medium text-primary dark:text-[#ff8ba0]">{r.admin}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          {/* Grid of Interactive Role Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {rolesData.map((role) => {
+              const isOwner = role.key === 'company_owner';
+              const permsList = role.permissions || [];
+              const permsCount = isOwner ? 'كامل الصلاحيات (★)' : `${permsList.length} صلاحيات`;
+
+              return (
+                <Card
+                  key={role.key}
+                  className="p-4 bg-white dark:bg-[#0c1017] border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between space-y-3 hover:border-primary/40 transition"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-xs text-slate-900 dark:text-white">
+                          {isAr ? role.name_ar : role.name_en}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {role.key}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {role.is_customized && (
+                          <Badge variant="warning" className="text-[9px] font-bold">
+                            {isAr ? 'مخصص للمصنع' : 'Custom'}
+                          </Badge>
+                        )}
+                        {getRoleBadge(role.key)}
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed min-h-[32px]">
+                      {isAr ? role.description_ar : role.description_en}
+                    </p>
+
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                        <Users className="w-3.5 h-3.5 text-primary" />
+                        <span>
+                          {role.users_count} {isAr ? 'موظفين معينين' : 'users assigned'}
+                        </span>
+                      </div>
+                      <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        {permsCount}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isOwner}
+                      onClick={() => handleOpenEditRole(role)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-primary/50 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-primary transition flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      title={isOwner ? (isAr ? 'دور المالك محصن' : 'Owner is locked') : (isAr ? 'تعديل صلاحيات هذا الدور' : 'Customize role permissions')}
+                    >
+                      <Edit2 className="w-3 h-3 text-amber-500" />
+                      <span>{isAr ? 'تعديل الصلاحيات' : 'Customize'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleQuickAddUserWithRole(role.key)}
+                      className="px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                      title={isAr ? 'إنشاء حساب موظف جديد بهذا الدور' : 'Add user with this role'}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{isAr ? 'إضافة موظف' : 'Add User'}</span>
+                    </button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1294,6 +1411,87 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
             </Button>
             <Button variant="primary" type="submit" disabled={isSubmittingBranch}>
               {isSubmittingBranch ? (isAr ? 'جارِ الإضافة...' : 'Adding...') : (isAr ? 'إضافة الموقع' : 'Add Location')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ─── MODAL: CUSTOMIZE ROLE PERMISSIONS FOR THE FACTORY ─── */}
+      <Modal
+        isOpen={isEditRoleModalOpen}
+        onClose={() => setIsEditRoleModalOpen(false)}
+        title={isAr ? `تعديل وضبط صلاحيات الدور: ${selectedRoleForEdit?.name_ar || ''}` : `Customize Role: ${selectedRoleForEdit?.name_en || ''}`}
+      >
+        <form onSubmit={handleSaveRolePermissions} className="space-y-4 text-xs text-slate-900 dark:text-white max-h-[80vh] overflow-y-auto pr-1">
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs leading-relaxed">
+            <span className="font-bold">⚠️ {isAr ? 'تنبيه إداري:' : 'Administrative Notice:'} </span>
+            {isAr
+              ? 'تعديل هذا القالب يغير الصلاحيات الافتراضية الممنوحة لهذا الدور لجميع الموظفين الجدد والحاليين في مصنعك.'
+              : 'Modifying this role template adjusts default privileges across all employees carrying this role.'}
+          </div>
+
+          <div className="space-y-3">
+            {permissionsCatalog.map((moduleItem) => {
+              const modulePerms = moduleItem.permissions || [];
+              const allSelected = modulePerms.every((p: any) => roleEditPermissions.includes(p.key));
+
+              return (
+                <div
+                  key={moduleItem.module}
+                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 space-y-2"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      <span>{isAr ? moduleItem.name_ar : moduleItem.name_en}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllInRoleEditModule(modulePerms)}
+                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      {allSelected ? (isAr ? 'إلغاء تحديد الكل' : 'Deselect All') : (isAr ? 'تحديد كل القسم' : 'Select All')}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {modulePerms.map((perm: any) => {
+                      const isChecked = roleEditPermissions.includes(perm.key);
+
+                      return (
+                        <label
+                          key={perm.key}
+                          className={`p-2 rounded-lg border text-[11px] flex items-center gap-2 cursor-pointer transition ${
+                            isChecked
+                              ? 'bg-primary/5 dark:bg-primary/10 border-primary/40 text-slate-900 dark:text-white font-semibold'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleRoleEditPermission(perm.key)}
+                            className="w-3.5 h-3.5 rounded text-primary focus:ring-primary cursor-pointer shrink-0"
+                          />
+                          <div className="truncate">
+                            <div>{isAr ? perm.name_ar : perm.name_en}</div>
+                            <div className="text-[9px] font-mono text-slate-400">{perm.key}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setIsEditRoleModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button variant="primary" type="submit" disabled={isSavingRole}>
+              {isSavingRole ? (isAr ? 'جارِ الحفظ...' : 'Saving...') : (isAr ? 'حفظ واعتماد صلاحيات الدور للمصنع' : 'Save Role Presets')}
             </Button>
           </div>
         </form>

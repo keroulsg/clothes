@@ -122,10 +122,19 @@ class User extends Authenticatable
     }
 
     /**
-     * الصلاحيات الافتراضية لكل دور
+     * الصلاحيات الافتراضية لكل دور مع دعم التخصيص على مستوى المصنع
      */
-    public static function getDefaultPermissionsForRole(string $role): array
+    public static function getDefaultPermissionsForRole(string $role, ?string $tenantId = null): array
     {
+        $tenantId = $tenantId ?? (app()->bound('current_tenant_id') ? app('current_tenant_id') : null);
+        if ($tenantId) {
+            $tenant = Tenant::find($tenantId);
+            $customRoles = $tenant?->settings['custom_role_permissions'] ?? [];
+            if (!empty($customRoles[$role]) && is_array($customRoles[$role])) {
+                return $customRoles[$role];
+            }
+        }
+
         switch ($role) {
             case 'company_owner':
                 return ['*'];
@@ -162,7 +171,7 @@ class User extends Authenticatable
             return ['*'];
         }
 
-        $defaults = self::getDefaultPermissionsForRole($this->role);
+        $defaults = self::getDefaultPermissionsForRole($this->role, $this->tenant_id);
         $custom = is_array($this->permissions) ? $this->permissions : [];
 
         return array_values(array_unique(array_merge($defaults, $custom)));

@@ -908,6 +908,141 @@ class TenantController extends Controller
             'tenant' => $tenant,
         ]);
     }
+
+    /**
+     * إرجاع جميع أدوار المصنع مع صلاحياتها الحالية والمستخدمين المرتبطين بها
+     */
+    public function getRolesWithPermissions(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+        $customRoles = $tenant->settings['custom_role_permissions'] ?? [];
+
+        $users = User::where('tenant_id', $tenantId)->get(['id', 'name', 'email', 'role', 'is_active']);
+
+        $definedRoles = [
+            [
+                'key' => 'company_owner',
+                'name_ar' => 'مدير المصنع / المالك',
+                'name_en' => 'Factory Owner / GM',
+                'badge_color' => 'rose',
+                'description_ar' => 'كامل الصلاحيات غير المقيدة لإدارة صالات القص، المخازن، التكاليف، والأمان.',
+                'description_en' => 'Unconstrained master access across production, finance, and settings.',
+                'is_locked' => true,
+            ],
+            [
+                'key' => 'production_manager',
+                'name_ar' => 'مهندس / مدير صالة القص والإنتاج',
+                'name_en' => 'Production & Cutting Lead',
+                'badge_color' => 'amber',
+                'description_ar' => 'إصدار وفرش وقص وبندلات صالة الإنتاج وطلب خامات التشغيل.',
+                'description_en' => 'Cutting lays, production bundles, and floor material issuance.',
+                'is_locked' => false,
+            ],
+            [
+                'key' => 'inventory_custodian',
+                'name_ar' => 'أمين مخزن الأقمشة والمستلزمات',
+                'name_en' => 'Fabric & Material Storekeeper',
+                'badge_color' => 'indigo',
+                'description_ar' => 'استلام خامات (GRN)، جرد المخازن، وصرف وتحويل الأقمشة.',
+                'description_en' => 'Goods receipt notes (GRN), inventory audits, and fabric dispatch.',
+                'is_locked' => false,
+            ],
+            [
+                'key' => 'accountant',
+                'name_ar' => 'محاسب التكاليف والمالية',
+                'name_en' => 'Cost & Financial Accountant',
+                'badge_color' => 'emerald',
+                'description_ar' => 'ميزان المراجعة، بطاقات التكلفة للقطعة (BOM)، قيود اليومية، ومطابقة الموردين.',
+                'description_en' => 'Trial balances, BOM costing sheets, ledger journals, and 3-way matching.',
+                'is_locked' => false,
+            ],
+            [
+                'key' => 'quality_controller',
+                'name_ar' => 'مدقق ومفتش الجودة (QC)',
+                'name_en' => 'Quality Control Inspector',
+                'badge_color' => 'cyan',
+                'description_ar' => 'فحص حزم الإنتاج وعينات الأقمشة وإجازة أو رفض واستبعاد المعيب.',
+                'description_en' => 'QC inspections on incoming fabrics and outgoing bundles.',
+                'is_locked' => false,
+            ],
+            [
+                'key' => 'sales_rep',
+                'name_ar' => 'مسؤول المبيعات والمعارض',
+                'name_en' => 'Sales & Showroom Specialist',
+                'badge_color' => 'blue',
+                'description_ar' => 'إصدار فواتير المبيعات، إدارة العملاء، ومعاينة أرصدة المعارض.',
+                'description_en' => 'Sales orders, customer invoices, and retail showroom stock.',
+                'is_locked' => false,
+            ],
+            [
+                'key' => 'worker',
+                'name_ar' => 'عامل تشغيل / خط إنتاج',
+                'name_en' => 'Production Line Operator',
+                'badge_color' => 'slate',
+                'description_ar' => 'تسجيل إنجاز مراحل القطعة بالوردية ومتابعة الباركود.',
+                'description_en' => 'Piece-rate stage logs and bundle tracking.',
+                'is_locked' => false,
+            ],
+        ];
+
+        $rolesData = array_map(function ($r) use ($tenantId, $customRoles, $users) {
+            $key = $r['key'];
+            $currentPerms = User::getDefaultPermissionsForRole($key, $tenantId);
+            $assignedUsers = $users->filter(function ($u) use ($key) {
+                return $u->role === $key;
+            })->values();
+
+            return array_merge($r, [
+                'permissions' => $currentPerms,
+                'is_customized' => !empty($customRoles[$key]),
+                'users_count' => $assignedUsers->count(),
+                'users' => $assignedUsers,
+            ]);
+        }, $definedRoles);
+
+        return response()->json([
+            'roles' => $rolesData,
+            'catalog' => User::getPermissionsCatalog(),
+        ]);
+    }
+
+    /**
+     * تخصيص واعتماد صلاحيات دور وظيفي للمصنع بالكامل
+     */
+    public function updateRolePermissions(Request $request, string $roleKey): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        if ($roleKey === 'company_owner') {
+            return response()->json([
+                'error' => 'CannotModifyOwnerRole',
+                'message' => 'أمان: دور مالك المصنع محصن ويمتلك دائماً كافة الصلاحيات.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'permissions' => 'required|array',
+            'permissions.*' => 'string',
+        ]);
+
+        $settings = $tenant->settings ?? [];
+        if (!isset($settings['custom_role_permissions']) || !is_array($settings['custom_role_permissions'])) {
+            $settings['custom_role_permissions'] = [];
+        }
+
+        $settings['custom_role_permissions'][$roleKey] = array_values(array_unique($validated['permissions']));
+        $tenant->settings = $settings;
+        $tenant->save();
+
+        return response()->json([
+            'message' => "تم تحديث واعتماد صلاحيات الدور ({$roleKey}) للمصنع بنجاح.",
+            'role_key' => $roleKey,
+            'permissions' => $settings['custom_role_permissions'][$roleKey],
+        ]);
+    }
+    }
 }
 
 

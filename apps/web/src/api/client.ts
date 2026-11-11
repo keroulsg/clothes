@@ -430,6 +430,17 @@ class ApiClient {
       return this.request('/tenant/permissions-catalog');
     },
 
+    getRolesWithPermissions: async (): Promise<{ roles: any[]; catalog: any[] }> => {
+      return this.request('/tenant/roles');
+    },
+
+    updateRolePermissions: async (roleKey: string, permissions: string[]): Promise<{ message: string; role_key: string; permissions: string[] }> => {
+      return this.request(`/tenant/roles/${roleKey}`, {
+        method: 'PUT',
+        body: JSON.stringify({ permissions }),
+      });
+    },
+
     getUsers: async (): Promise<{ users: any[]; total: number; active_count: number }> => {
       return this.request('/tenant/users');
     },

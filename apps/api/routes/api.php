@@ -114,6 +114,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
         Route::put('/tenant/profile', [TenantController::class, 'updateProfile'])->middleware('role:company_owner');
         Route::get('/tenant/permissions-catalog', [TenantController::class, 'getPermissionsCatalog']);
+        Route::get('/tenant/roles', [TenantController::class, 'getRolesWithPermissions']);
+        Route::put('/tenant/roles/{roleKey}', [TenantController::class, 'updateRolePermissions'])->middleware('role:company_owner');
         Route::get('/tenant/users', [TenantController::class, 'getUsers'])->middleware('role:company_owner');
         Route::post('/tenant/users', [TenantController::class, 'createUser'])->middleware('role:company_owner');
         Route::put('/tenant/users/{id}', [TenantController::class, 'updateUser'])->middleware('role:company_owner');

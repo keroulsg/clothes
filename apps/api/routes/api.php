@@ -411,6 +411,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/accounting/payment-vouchers', [\App\Http\Controllers\Api\AccountingController::class, 'paymentVouchers']);
             Route::post('/accounting/payment-vouchers', [\App\Http\Controllers\Api\AccountingController::class, 'storePaymentVoucher'])->middleware('role:accountant,company_owner');
             Route::get('/accounting/cost-sheets', [\App\Http\Controllers\Api\AccountingController::class, 'costSheets']);
+            Route::post('/accounting/cost-sheets/auto-calculate-all', [\App\Http\Controllers\Api\AccountingController::class, 'autoCalculateAllCostSheets'])->middleware('role:accountant,production_manager,company_owner');
             Route::post('/accounting/cost-sheets/{productionOrderId}/calculate', [\App\Http\Controllers\Api\AccountingController::class, 'calculateCost'])->middleware('role:accountant,production_manager,company_owner');
             Route::post('/accounting/cost-sheets/{id}/approve', [\App\Http\Controllers\Api\AccountingController::class, 'approveCostSheet'])->middleware('role:accountant,production_manager,company_owner');
 

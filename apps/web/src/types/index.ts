@@ -1029,6 +1029,8 @@ export interface ProductionCostSheet {
   id: string;
   production_order_id: string;
   garment_model_id: string;
+  production_order?: any;
+  garment_model?: any;
   costing_method?: string;
   overhead_allocation_method?: string;
   total_produced_pieces: number;

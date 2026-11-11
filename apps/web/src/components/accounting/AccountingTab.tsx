@@ -43,6 +43,7 @@ import {
   Boxes,
   Zap,
   TrendingUp,
+  TrendingDown,
   Coins,
   Building,
 } from 'lucide-react';
@@ -63,6 +64,7 @@ import { CostCenterModal } from './CostCenterModal';
 import { CostCenterStatementModal } from './CostCenterStatementModal';
 import { PrintFiscalPeriodModal } from './PrintFiscalPeriodModal';
 import { PrintPaymentVoucherModal, cleanVoucherNotes } from './PrintPaymentVoucherModal';
+import { PrintCostSheetModal } from './PrintCostSheetModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -252,6 +254,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [voucherFilterParty, setVoucherFilterParty] = useState<'all' | 'supplier' | 'customer' | 'employee'>('all');
   const [voucherFilterMethod, setVoucherFilterMethod] = useState<'all' | 'cash' | 'bank' | 'card' | 'discount' | 'cheque'>('all');
   const [voucherSearch, setVoucherSearch] = useState('');
+
+  // Production Cost Sheets Interactive States
+  const [selectedCostSheetForPrint, setSelectedCostSheetForPrint] = useState<ProductionCostSheet | null>(null);
+  const [costSheetSearch, setCostSheetSearch] = useState('');
+  const [costSheetStatusFilter, setCostSheetStatusFilter] = useState<'all' | 'approved' | 'calculated'>('all');
+  const [isAutoCalculatingCostSheets, setIsAutoCalculatingCostSheets] = useState(false);
 
   // COA Interactive States & Filters
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
@@ -1249,6 +1257,24 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setErrorMsg(err?.message || (isAr ? 'فشل تسجيل السند المالي' : 'Failed to create payment voucher'));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoCalculateAllCostSheets = async () => {
+    setIsAutoCalculatingCostSheets(true);
+    try {
+      const res = await api.accounting.autoCalculateAllCostSheets();
+      if (res?.data) {
+        setCostSheets(res.data);
+      } else {
+        await loadAccountingData();
+      }
+      setSuccessMsg(res?.message || (isAr ? 'تم احتساب وتحديث بطاقات التكلفة لجميع أوامر الإنتاج بنجاح' : 'Cost sheets calculated for all production orders successfully'));
+      setTimeout(() => setSuccessMsg(null), 4500);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل الحساب التلقائي لبطاقات التكلفة' : 'Auto calculation failed'));
+    } finally {
+      setIsAutoCalculatingCostSheets(false);
     }
   };
 
@@ -5335,78 +5361,364 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       })()}
 
       {/* 8. COSTING VIEW */}
-      {activeSubTab === 'costing' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'بطاقات التكلفة الصناعية الفعلية للقطعة (Cost Sheets)' : 'Actual Production Costing Breakdown'}
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'أمر الإنتاج' : 'PO #'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الكمية التامة' : 'Pieces'}</th>
-                  <th className="p-3 text-start">{isAr ? 'تكلفة الخامات' : 'Materials'}</th>
-                  <th className="p-3 text-start">{isAr ? 'أجور القطعة' : 'Direct Labor'}</th>
-                  <th className="p-3 text-start">{isAr ? 'المصاريف غير المباشرة' : 'Overheads'}</th>
-                  <th className="p-3 text-start">{isAr ? 'إجمالي التكلفة' : 'Total Cost'}</th>
-                  <th className="p-3 text-end">{isAr ? 'تكلفة القطعة الواحدة' : 'Cost / Piece'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {costSheets.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد بطاقات تكلفة مسجلة' : 'No cost sheets recorded'}
-                    </td>
-                  </tr>
-                ) : (
-                  costSheets.map((cs) => (
-                    <tr key={cs.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{cs.production_order_id}</td>
-                      <td className="p-3 font-bold">{Number(cs.total_produced_pieces).toLocaleString()}</td>
-                      <td className="p-3">{Number(cs.direct_materials_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="p-3">{Number(cs.direct_labor_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="p-3">{Number(cs.allocated_overhead_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">{Number(cs.total_cost).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}</td>
-                      <td className="p-3 text-end font-bold text-primary text-base">
-                        {Number(cs.cost_per_piece).toFixed(2)} {isAr ? 'ج.م' : 'EGP'}
-                      </td>
-                      <td className="p-3 text-center">
-                        {cs.status === 'approved' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            {isAr ? 'معتمدة نهائياً' : 'Approved & Locked'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                            <Clock className="w-3.5 h-3.5" />
-                            {isAr ? 'مسودة محسوبة' : 'Calculated'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-center">
-                        <ActionsMenu
-                          variant="icon-horizontal"
-                          align={isAr ? 'left' : 'right'}
-                          items={[
-                            {
-                              id: 'print-cost',
-                              label: isAr ? 'طباعة بطاقة التكلفة' : 'Print Cost Sheet',
-                              icon: <Printer className="w-3.5 h-3.5 text-primary" />,
-                              onClick: () => window.print(),
-                            },
-                            ...(cs.status !== 'approved'
-                              ? [
-                                  {
-                                    id: 'approve-cost',
-                                    label: isAr ? 'اعتماد نهائي وإقفال' : 'Approve & Lock',
-                                    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />,
-                                    onClick: async () => {
+      {activeSubTab === 'costing' && (() => {
+        // Analytics calculations
+        let totalBatchCosts = 0;
+        let totalFinishedPieces = 0;
+        let totalMaterialsCost = 0;
+        let totalLaborCost = 0;
+        let totalOverheadsCost = 0;
+
+        costSheets.forEach((cs) => {
+          totalBatchCosts += Number(cs.total_cost || 0);
+          totalFinishedPieces += Number(cs.total_produced_pieces || 0);
+          totalMaterialsCost += Number(cs.direct_materials_cost || 0);
+          totalLaborCost += Number(cs.direct_labor_cost || 0);
+          totalOverheadsCost += Number(cs.allocated_overhead_cost || 0);
+        });
+
+        const avgUnitCost = totalFinishedPieces > 0 ? (totalBatchCosts / totalFinishedPieces) : 0;
+        const materialsPct = totalBatchCosts > 0 ? ((totalMaterialsCost / totalBatchCosts) * 100).toFixed(0) : '0';
+        const laborPct = totalBatchCosts > 0 ? ((totalLaborCost / totalBatchCosts) * 100).toFixed(0) : '0';
+        const overheadsPct = totalBatchCosts > 0 ? ((totalOverheadsCost / totalBatchCosts) * 100).toFixed(0) : '0';
+
+        // Filtering
+        const filteredSheets = costSheets.filter((cs) => {
+          if (costSheetStatusFilter !== 'all' && cs.status !== costSheetStatusFilter) return false;
+
+          if (costSheetSearch.trim()) {
+            const q = costSheetSearch.toLowerCase();
+            const poNum = (cs.production_order?.order_number || cs.production_order_id || '').toLowerCase();
+            const modelName = (cs.garment_model?.name || cs.production_order?.garment_model?.name || '').toLowerCase();
+            const modelCode = (cs.garment_model?.code || cs.production_order?.garment_model?.code || '').toLowerCase();
+            if (!poNum.includes(q) && !modelName.includes(q) && !modelCode.includes(q)) return false;
+          }
+
+          return true;
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* 1. Bento Costing KPIs Analytics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Avg Unit Cost Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'متوسط تكلفة تصنيع القطعة بالمصنع' : 'Average Unit Cost'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-2">
+                  {avgUnitCost.toFixed(2)} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م / قطعة' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'متوسط تكلفة الأوامر المحسوبة شاملاً الخامات' : 'Weighted average cost per piece'}
+                </p>
+              </div>
+
+              {/* Total Batch Production Cost */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-amber-500/30 dark:border-amber-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي تكاليف التشغيل الصناعية' : 'Total Production Cost'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-2">
+                  {totalBatchCosts.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'مجموع خامات + عمالة + مصاريف' : 'Materials + Labor + Overheads'}
+                </p>
+              </div>
+
+              {/* Total Produced Pieces */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-blue-500/30 dark:border-blue-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'إجمالي القطع المصنعة التامة' : 'Total Finished Units'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <Boxes className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 mt-2">
+                  {totalFinishedPieces.toLocaleString()} <span className="text-xs font-normal text-slate-400">{isAr ? 'قطعة' : 'pieces'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'الكمية التامة المحسوبة بالبطاقات' : 'Count of units in approved cost sheets'}
+                </p>
+              </div>
+
+              {/* Cost Split Structure Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-[#0f1523]/90 border border-purple-500/30 dark:border-purple-500/20 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {isAr ? 'هيكل التكلفة (Cost Breakdown)' : 'Cost Split'}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                    <PieChart className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-2 text-xs font-bold font-mono">
+                  <span className="text-amber-500">خامات {materialsPct}%</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-emerald-500">عمالة {laborPct}%</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-cyan-500">غير مباشر {overheadsPct}%</span>
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden flex mt-2">
+                  <div style={{ width: `${materialsPct}%` }} className="bg-amber-500 h-full" />
+                  <div style={{ width: `${laborPct}%` }} className="bg-emerald-500 h-full" />
+                  <div style={{ width: `${overheadsPct}%` }} className="bg-cyan-500 h-full" />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Control, Search & Action Bar */}
+            <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                {/* Search & Status Filter */}
+                <div className="flex flex-wrap items-center gap-3 flex-1">
+                  <div className="relative min-w-[220px] max-w-sm flex-1">
+                    <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={costSheetSearch}
+                      onChange={(e) => setCostSheetSearch(e.target.value)}
+                      placeholder={isAr ? 'بحث برقم أمر الإنتاج أو اسم الموديل...' : 'Search by order # or model name...'}
+                      className="w-full ps-9 pe-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  {/* Status Pills */}
+                  <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl text-xs">
+                    {[
+                      { id: 'all', labelAr: 'الكل', labelEn: 'All' },
+                      { id: 'approved', labelAr: 'معتمدة ومقفلة', labelEn: 'Approved' },
+                      { id: 'calculated', labelAr: 'مسودات محسوبة', labelEn: 'Drafts' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setCostSheetStatusFilter(tab.id as any)}
+                        className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer text-xs ${
+                          costSheetStatusFilter === tab.id
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {isAr ? tab.labelAr : tab.labelEn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Primary & Secondary Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAutoCalculateAllCostSheets}
+                    disabled={isAutoCalculatingCostSheets}
+                    className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 border border-slate-200 dark:border-slate-700"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-amber-500 ${isAutoCalculatingCostSheets ? 'animate-spin' : ''}`} />
+                    <span>{isAutoCalculatingCostSheets ? (isAr ? 'جاري الحساب...' : 'Calculating...') : (isAr ? 'توليد تلقائي لكافة الأوامر' : 'Auto Calculate All')}</span>
+                  </button>
+
+                  <Button
+                    onClick={() => setIsCalcCostModalOpen(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-900/20"
+                    icon={<Calculator className="w-4 h-4" />}
+                  >
+                    {isAr ? '+ احتساب تكلفة أمر إنتاج جديد' : '+ Calculate Order Cost'}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* 3. Upgraded Rich Cost Sheets Table */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-amber-500" />
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {isAr ? 'سجل بطاقات التكلفة الصناعية الفعلية للقطعة' : 'Actual Production Costing Breakdown'}
+                  </h3>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                    {filteredSheets.length} {isAr ? 'بطاقة' : 'sheets'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 font-bold">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'أمر الإنتاج والموديل' : 'Order & Model'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الكمية التامة' : 'Finished Pieces'}</th>
+                      <th className="p-3 text-start">{isAr ? 'تكلفة الخامات' : 'Materials Cost'}</th>
+                      <th className="p-3 text-start">{isAr ? 'أجور العمالة' : 'Direct Labor'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المصاريف غير المباشرة' : 'Overheads'}</th>
+                      <th className="p-3 text-start">{isAr ? 'إجمالي التكلفة' : 'Total Batch Cost'}</th>
+                      <th className="p-3 text-end">{isAr ? 'تكلفة القطعة الواحدة' : 'Cost / Piece'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الانحراف' : 'Variance'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {filteredSheets.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="p-10 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Layers className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                            <p className="font-semibold text-slate-600 dark:text-slate-300">
+                              {isAr ? 'لا توجد بطاقات تكلفة محسوبة حتى الآن' : 'No cost sheets calculated yet'}
+                            </p>
+                            <p className="text-xs text-slate-400 max-w-sm">
+                              {isAr ? 'اضغط على "+ احتساب تكلفة أمر إنتاج" أو "توليد تلقائي لكافة الأوامر" لحساب تكلفة القطعة الفعلية.' : 'Click Calculate Order Cost to generate unit costing.'}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Button
+                                size="sm"
+                                onClick={() => setIsCalcCostModalOpen(true)}
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs"
+                                icon={<Calculator className="w-3.5 h-3.5" />}
+                              >
+                                {isAr ? 'احتساب أول أمر إنتاج الآن' : 'Calculate First Order'}
+                              </Button>
+                              <button
+                                type="button"
+                                onClick={handleAutoCalculateAllCostSheets}
+                                disabled={isAutoCalculatingCostSheets}
+                                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
+                              >
+                                {isAr ? 'توليد تلقائي للأوامر السابقة' : 'Auto Generate'}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSheets.map((cs) => {
+                        const po = cs.production_order || {};
+                        const model = cs.garment_model || po.garment_model || {};
+                        const poNumber = po.order_number || cs.production_order_id?.slice(0, 8);
+                        const modelName = model.name || (isAr ? 'موديل مصنعي جاهز' : 'Garment Model');
+                        const variancePct = Number(cs.variance_percentage || 0);
+
+                        return (
+                          <tr key={cs.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                            {/* Order & Model */}
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-900 dark:text-white px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                  {poNumber}
+                                </span>
+                              </div>
+                              <div className="font-bold text-slate-900 dark:text-white mt-1 text-xs">
+                                {modelName}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono block">
+                                {model.code ? `كود: ${model.code}` : ''}
+                              </span>
+                            </td>
+
+                            {/* Pieces */}
+                            <td className="p-3 text-center font-mono font-bold text-slate-900 dark:text-white">
+                              {Number(cs.total_produced_pieces).toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">{isAr ? 'قطعة' : 'pcs'}</span>
+                            </td>
+
+                            {/* Direct Materials */}
+                            <td className="p-3 font-mono font-medium text-slate-900 dark:text-white">
+                              <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                {Number(cs.direct_materials_cost).toLocaleString()}
+                              </span>{' '}
+                              <span className="text-[10px] text-slate-400 font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* Direct Labor */}
+                            <td className="p-3 font-mono font-medium text-slate-900 dark:text-white">
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                {Number(cs.direct_labor_cost).toLocaleString()}
+                              </span>{' '}
+                              <span className="text-[10px] text-slate-400 font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* Overheads */}
+                            <td className="p-3 font-mono font-medium text-slate-900 dark:text-white">
+                              <span className="text-cyan-600 dark:text-cyan-400 font-bold">
+                                {Number(cs.allocated_overhead_cost).toLocaleString()}
+                              </span>{' '}
+                              <span className="text-[10px] text-slate-400 font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* Total Cost */}
+                            <td className="p-3 font-mono font-bold text-slate-900 dark:text-white text-xs">
+                              {Number(cs.total_cost).toLocaleString()}{' '}
+                              <span className="text-[10px] text-slate-400 font-normal">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* Cost Per Piece (Golden Metric) */}
+                            <td className="p-3 text-end font-mono font-black text-amber-500 text-sm">
+                              {Number(cs.cost_per_piece).toFixed(2)}{' '}
+                              <span className="text-[10px] font-normal text-slate-400">{isAr ? 'ج.م' : 'EGP'}</span>
+                            </td>
+
+                            {/* Variance */}
+                            <td className="p-3 text-center">
+                              {variancePct !== 0 ? (
+                                <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                                  variancePct < 0
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                                }`}>
+                                  {variancePct < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                                  <span>{variancePct > 0 ? `+${variancePct}%` : `${variancePct}%`}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-[10px]">0%</span>
+                              )}
+                            </td>
+
+                            {/* Status */}
+                            <td className="p-3 text-center">
+                              {cs.status === 'approved' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>{isAr ? 'معتمدة ومقفلة' : 'Approved'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{isAr ? 'مسودة محسوبة' : 'Draft'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCostSheetForPrint(cs)}
+                                  title={isAr ? 'طباعة بطاقة التكلفة الصناعية (A4)' : 'Print Cost Sheet'}
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 text-[11px] font-bold cursor-pointer transition"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <span>{isAr ? 'طباعة' : 'Print'}</span>
+                                </button>
+
+                                {cs.status !== 'approved' && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
                                       try {
                                         setIsLoading(true);
                                         await api.accounting.approveCostSheet(cs.id);
@@ -5418,21 +5730,27 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                                       } finally {
                                         setIsLoading(false);
                                       }
-                                    },
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                                    }}
+                                    title={isAr ? 'اعتماد نهائي وإقفال' : 'Approve & Lock'}
+                                    className="px-2 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 text-[11px] font-bold cursor-pointer transition"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>{isAr ? 'اعتماد' : 'Approve'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {/* 9. FINANCIAL REPORTS VIEW */}
       {activeSubTab === 'reports' && (
@@ -7121,6 +7439,14 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         isOpen={!!selectedVoucherForPrint}
         onClose={() => setSelectedVoucherForPrint(null)}
         voucher={selectedVoucherForPrint}
+        isAr={isAr}
+      />
+
+      {/* Official A4 Print Production Cost Sheet Modal */}
+      <PrintCostSheetModal
+        isOpen={!!selectedCostSheetForPrint}
+        onClose={() => setSelectedCostSheetForPrint(null)}
+        costSheet={selectedCostSheetForPrint}
         isAr={isAr}
       />
     </div>

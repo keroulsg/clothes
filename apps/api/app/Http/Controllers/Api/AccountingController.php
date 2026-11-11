@@ -1031,11 +1031,40 @@ class AccountingController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $sheets = ProductionCostSheet::where('tenant_id', $tenantId)
-            ->with(['productionOrder', 'garmentModel'])
+            ->with(['productionOrder.garmentModel', 'garmentModel'])
             ->latest()
-            ->paginate(20);
+            ->paginate(100);
 
         return response()->json($sheets);
+    }
+
+    public function autoCalculateAllCostSheets(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $orders = \App\Models\ProductionOrder::where('tenant_id', $tenantId)
+            ->whereNotIn('status', ['archived'])
+            ->get();
+
+        $calculatedCount = 0;
+        foreach ($orders as $order) {
+            try {
+                $this->accountingService->calculateProductionCost($order->id, ['force_recalculate' => true]);
+                $calculatedCount++;
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        $sheets = ProductionCostSheet::where('tenant_id', $tenantId)
+            ->with(['productionOrder.garmentModel', 'garmentModel'])
+            ->latest()
+            ->paginate(100);
+
+        return response()->json([
+            'message' => "تم احتساب وتحديث {$calculatedCount} بطاقة تكلفة صناعية لأوامر الإنتاج",
+            'calculated_count' => $calculatedCount,
+            'data' => $sheets->items(),
+        ]);
     }
 
     public function calculateCost(Request $request, string $productionOrderId): JsonResponse

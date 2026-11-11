@@ -1846,6 +1846,11 @@ class ApiClient {
         method: 'POST',
       });
     },
+    autoCalculateAllCostSheets: async (): Promise<{ message: string; calculated_count: number; data?: any[] }> => {
+      return this.request('/accounting/cost-sheets/auto-calculate-all', {
+        method: 'POST',
+      });
+    },
     // Phase 08B: Financial Reporting Endpoints
     getTrialBalance: async (params?: { from_date?: string; to_date?: string }): Promise<any> => {
       const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';

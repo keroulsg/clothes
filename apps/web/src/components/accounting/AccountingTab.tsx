@@ -38,6 +38,8 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Smartphone,
+  CreditCard,
+  Calendar,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -50,6 +52,7 @@ import { AccountStatementModal } from './AccountStatementModal';
 import { CalculateCostModal } from './CalculateCostModal';
 import { PrintJournalVoucherModal } from './PrintJournalVoucherModal';
 import { PrintTransferVoucherModal } from './PrintTransferVoucherModal';
+import { PrintLoanScheduleModal } from './PrintLoanScheduleModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -63,6 +66,8 @@ import type {
   FiscalYear,
   FiscalPeriod,
   ReconciliationResult,
+  BankLoan,
+  BankLoanInstallment,
 } from '../../types';
 
 interface AccountingTabProps {
@@ -118,6 +123,75 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [finFilterType, setFinFilterType] = useState<'all' | 'cash' | 'bank' | 'wallet'>('all');
   const [trfSearchQuery, setTrfSearchQuery] = useState('');
   const [trfFilterStatus, setTrfFilterStatus] = useState<'all' | 'completed' | 'reversed'>('all');
+
+  // Bank Loans & Credit Facilities States
+  const [finSectionView, setFinSectionView] = useState<'all' | 'accounts' | 'transfers' | 'loans'>('all');
+  const [bankLoans, setBankLoans] = useState<BankLoan[]>(() => {
+    try {
+      const saved = localStorage.getItem('garmentos_bank_loans');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      {
+        id: 'loan-nbe-01',
+        loan_number: 'LOAN-NBE-2026-001',
+        name: 'قرض تمويل ماكينات خياطة وقص وتحديث خطوط الإنتاج (مبادرة دعم الصناعة)',
+        bank_name: 'البنك الأهلي المصري - فرع المصانع',
+        contract_number: 'CTR-NBE-88921',
+        financial_account_id: 'BNK-01',
+        principal_amount: 360000,
+        interest_rate: 8,
+        interest_amount: 28800,
+        total_loan_amount: 388800,
+        paid_amount: 97200,
+        remaining_amount: 291600,
+        installments_count: 12,
+        frequency: 'monthly',
+        start_date: '2026-08-01',
+        maturity_date: '2027-07-01',
+        status: 'active',
+        notes: 'تمويل شراء 10 ماكينات سنجر ياباني كمبيوتر ومقص قماش رأسي 10 بوصة بضمان خطوط الإنتاج',
+        installments: [
+          { id: 'inst-1', installment_number: 1, due_date: '2026-09-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-09-01', payment_reference: 'TRF-NBE-0901' },
+          { id: 'inst-2', installment_number: 2, due_date: '2026-10-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-10-01', payment_reference: 'TRF-NBE-1001' },
+          { id: 'inst-3', installment_number: 3, due_date: '2026-11-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-11-01', payment_reference: 'TRF-NBE-1101' },
+          { id: 'inst-4', installment_number: 4, due_date: '2026-12-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-5', installment_number: 5, due_date: '2027-01-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-6', installment_number: 6, due_date: '2027-02-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-7', installment_number: 7, due_date: '2027-03-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-8', installment_number: 8, due_date: '2027-04-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-9', installment_number: 9, due_date: '2027-05-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-10', installment_number: 10, due_date: '2027-06-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-11', installment_number: 11, due_date: '2027-07-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+          { id: 'inst-12', installment_number: 12, due_date: '2027-08-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
+        ],
+      },
+    ];
+  });
+
+  const [selectedLoanForSchedule, setSelectedLoanForSchedule] = useState<BankLoan | null>(null);
+  const [selectedLoanForPrint, setSelectedLoanForPrint] = useState<BankLoan | null>(null);
+  const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
+  const [isPayInstallmentModalOpen, setIsPayInstallmentModalOpen] = useState(false);
+  const [selectedInstallmentForPay, setSelectedInstallmentForPay] = useState<{ loan: BankLoan; installment: BankLoanInstallment } | null>(null);
+
+  // New Loan Form State
+  const [loanName, setLoanName] = useState('');
+  const [loanBankName, setLoanBankName] = useState('البنك الأهلي المصري');
+  const [loanContractNum, setLoanContractNum] = useState('');
+  const [loanPrincipal, setLoanPrincipal] = useState<number>(300000);
+  const [loanInterestRate, setLoanInterestRate] = useState<number>(8);
+  const [loanInstallmentsCount, setLoanInstallmentsCount] = useState<number>(12);
+  const [loanFrequency, setLoanFrequency] = useState<'monthly' | 'quarterly'>('monthly');
+  const [loanStartDate, setLoanStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loanNotes, setLoanNotes] = useState('');
+  const [loanFinancialAccId, setLoanFinancialAccId] = useState('');
+
+  // Pay Installment Form State
+  const [payInstDate, setPayInstDate] = useState(new Date().toISOString().split('T')[0]);
+  const [payInstPaymentAccId, setPayInstPaymentAccId] = useState('');
+  const [payInstRef, setPayInstRef] = useState('');
+  const [payInstNotes, setPayInstNotes] = useState('');
 
   const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
@@ -729,6 +803,216 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل التحويل المالي' : 'Transfer failed'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('garmentos_bank_loans', JSON.stringify(bankLoans));
+    } catch (e) {}
+  }, [bankLoans]);
+
+  const handleCreateLoan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loanName || loanPrincipal <= 0 || loanInstallmentsCount <= 0) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const calculatedInterest = Math.round(loanPrincipal * (loanInterestRate / 100));
+      const totalAmount = loanPrincipal + calculatedInterest;
+      const principalPerInst = Math.round(loanPrincipal / loanInstallmentsCount);
+      const interestPerInst = Math.round(calculatedInterest / loanInstallmentsCount);
+      const totalPerInst = principalPerInst + interestPerInst;
+
+      const generatedInstallments: BankLoanInstallment[] = [];
+      const baseDate = new Date(loanStartDate || new Date());
+
+      for (let i = 1; i <= loanInstallmentsCount; i++) {
+        const instDate = new Date(baseDate);
+        if (loanFrequency === 'monthly') {
+          instDate.setMonth(instDate.getMonth() + i);
+        } else {
+          instDate.setMonth(instDate.getMonth() + i * 3);
+        }
+
+        generatedInstallments.push({
+          id: `inst-${Date.now()}-${i}`,
+          installment_number: i,
+          due_date: instDate.toISOString().split('T')[0],
+          principal_amount: i === loanInstallmentsCount ? (loanPrincipal - principalPerInst * (loanInstallmentsCount - 1)) : principalPerInst,
+          interest_amount: i === loanInstallmentsCount ? (calculatedInterest - interestPerInst * (loanInstallmentsCount - 1)) : interestPerInst,
+          total_amount: totalPerInst,
+          paid_amount: 0,
+          status: 'pending',
+        });
+      }
+
+      const maturity = generatedInstallments[generatedInstallments.length - 1]?.due_date || loanStartDate;
+
+      const newLoanObj: BankLoan = {
+        id: `loan-${Date.now()}`,
+        loan_number: `LOAN-${(loanBankName.includes('الأهلي') ? 'NBE' : loanBankName.includes('مصر') ? 'BM' : 'BNK')}-${new Date().getFullYear()}-${String(bankLoans.length + 1).padStart(3, '0')}`,
+        name: loanName,
+        bank_name: loanBankName,
+        contract_number: loanContractNum || `CTR-${Math.floor(10000 + Math.random() * 90000)}`,
+        financial_account_id: loanFinancialAccId || undefined,
+        principal_amount: loanPrincipal,
+        interest_rate: loanInterestRate,
+        interest_amount: calculatedInterest,
+        total_loan_amount: totalAmount,
+        paid_amount: 0,
+        remaining_amount: totalAmount,
+        installments_count: loanInstallmentsCount,
+        frequency: loanFrequency,
+        start_date: loanStartDate,
+        maturity_date: maturity,
+        status: 'active',
+        notes: loanNotes,
+        installments: generatedInstallments,
+      };
+
+      setBankLoans((prev) => [newLoanObj, ...prev]);
+
+      try {
+        const loanLiabilityAcc = accounts.find((a) => a.code === '2110' || a.code === '2210');
+        const selectedFinAcc = financialAccounts.find((fa) => fa.id === loanFinancialAccId);
+        const bankAssetAcc = accounts.find((a) => a.id === selectedFinAcc?.chart_of_account_id || a.code === '1021');
+
+        if (loanLiabilityAcc && bankAssetAcc) {
+          await api.accounting.createJournalEntry({
+            description: `إثبات استلام وتسييل تمويل بنكي: ${loanName} (${newLoanObj.loan_number})`,
+            entry_date: loanStartDate,
+            reference_type: 'bank_loan_disbursement',
+            lines: [
+              {
+                account_id: bankAssetAcc.id,
+                debit: Number(loanPrincipal),
+                credit: 0,
+                description: `إيداع مبلغ القرض بحساب ${bankAssetAcc.name}`,
+              },
+              {
+                account_id: loanLiabilityAcc.id,
+                debit: 0,
+                credit: Number(loanPrincipal),
+                description: `إثبات التزام قرض وتسهيل بنكي - ${loanBankName}`,
+              },
+            ],
+          });
+          await loadAccountingData();
+          await loadFinancialAccounts();
+        }
+      } catch (jeErr) {}
+
+      setIsNewLoanModalOpen(false);
+      setLoanName('');
+      setLoanContractNum('');
+      setLoanNotes('');
+      setSuccessMsg(isAr ? 'تم تسجيل القرض وتوليد جدول الأقساط الشهرية وترحيل القيد آلياً بنجاح' : 'Bank loan registered and amortization schedule generated successfully');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل القرض' : 'Failed to register loan'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePayInstallment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInstallmentForPay) return;
+
+    const { loan, installment } = selectedInstallmentForPay;
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const updatedLoans = bankLoans.map((l) => {
+        if (l.id !== loan.id) return l;
+        const updatedInsts = l.installments.map((inst) => {
+          if (inst.id !== installment.id) return inst;
+          return {
+            ...inst,
+            status: 'paid' as const,
+            paid_amount: inst.total_amount,
+            paid_at: payInstDate || new Date().toISOString().split('T')[0],
+            payment_account_id: payInstPaymentAccId || undefined,
+            payment_reference: payInstRef || undefined,
+            notes: payInstNotes || undefined,
+          };
+        });
+
+        const newPaid = updatedInsts.filter((i) => i.status === 'paid').reduce((sum, i) => sum + Number(i.total_amount), 0);
+        const newRemaining = Math.max(0, l.total_loan_amount - newPaid);
+
+        return {
+          ...l,
+          paid_amount: newPaid,
+          remaining_amount: newRemaining,
+          status: newRemaining <= 0 ? ('completed' as const) : ('active' as const),
+          installments: updatedInsts,
+        };
+      });
+
+      setBankLoans(updatedLoans);
+
+      try {
+        const loanLiabilityAcc = accounts.find((a) => a.code === '2110' || a.code === '2120' || a.code === '2210');
+        const interestAcc = accounts.find((a) => a.code === '6040' || a.category?.includes('interest') || a.code.startsWith('6'));
+        const payFinAcc = financialAccounts.find((fa) => fa.id === payInstPaymentAccId);
+        const payCoaAcc = accounts.find((a) => a.id === payFinAcc?.chart_of_account_id || a.code === '1021' || a.code === '1010');
+
+        if (loanLiabilityAcc && payCoaAcc) {
+          const lines: any[] = [
+            {
+              account_id: loanLiabilityAcc.id,
+              debit: Number(installment.principal_amount),
+              credit: 0,
+              description: `سداد أصل القسط رقم (${installment.installment_number}) - ${loan.loan_number}`,
+            },
+          ];
+
+          if (Number(installment.interest_amount) > 0 && interestAcc) {
+            lines.push({
+              account_id: interestAcc.id,
+              debit: Number(installment.interest_amount),
+              credit: 0,
+              description: `فائدة القسط رقم (${installment.installment_number}) - ${loan.bank_name}`,
+            });
+          }
+
+          lines.push({
+            account_id: payCoaAcc.id,
+            debit: 0,
+            credit: Number(installment.total_amount),
+            description: `خصم سداد القسط البنكي من: ${payCoaAcc.name}`,
+          });
+
+          await api.accounting.createJournalEntry({
+            description: `سداد قسط بنكي رقم ${installment.installment_number} لقرض [${loan.name}]`,
+            entry_date: payInstDate || new Date().toISOString().split('T')[0],
+            reference_type: 'bank_loan_repayment',
+            lines,
+          });
+
+          await loadAccountingData();
+          await loadFinancialAccounts();
+        }
+      } catch (jeErr) {}
+
+      const currLoan = updatedLoans.find((l) => l.id === loan.id);
+      if (currLoan && selectedLoanForSchedule?.id === loan.id) {
+        setSelectedLoanForSchedule(currLoan);
+      }
+
+      setIsPayInstallmentModalOpen(false);
+      setSelectedInstallmentForPay(null);
+      setPayInstRef('');
+      setPayInstNotes('');
+      setSuccessMsg(isAr ? 'تم سداد القسط البنكي بنجاح وترحيل القيد المحاسبي المزدوج وتحديث الأرصدة' : 'Installment paid successfully and journal entry posted');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل سداد القسط' : 'Failed to pay installment'));
     } finally {
       setIsSubmitting(false);
     }
@@ -2225,7 +2509,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         );
       })()}
 
-      {/* 3. FINANCIAL ACCOUNTS (CASH & BANKS & TRANSFERS) */}
+      {/* 3. FINANCIAL ACCOUNTS (CASH & BANKS & TRANSFERS & LOANS) */}
       {activeSubTab === 'financial_accounts' && (() => {
         // KPI calculations
         const totalLiquidity = financialAccounts.reduce((sum, fa) => sum + Number(fa.current_balance || 0), 0);
@@ -2233,6 +2517,16 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         const totalVaultBalances = financialAccounts.filter((fa) => fa.type === 'cash').reduce((sum, fa) => sum + Number(fa.current_balance || 0), 0);
         const completedTransfers = transfers.filter((t) => t.status === 'completed');
         const totalTransfersVolume = completedTransfers.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+        // Bank Loans KPIs
+        const totalLoanObligations = bankLoans.reduce((sum, l) => sum + Number(l.total_loan_amount || 0), 0);
+        const totalLoanPaid = bankLoans.reduce((sum, l) => sum + Number(l.paid_amount || 0), 0);
+        const totalLoanRemaining = bankLoans.reduce((sum, l) => sum + Number(l.remaining_amount || 0), 0);
+
+        const allPendingInstallments = bankLoans.flatMap((l) =>
+          l.installments.filter((i) => i.status === 'pending').map((i) => ({ ...i, loan: l }))
+        ).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+        const nextUpcomingInstallment = allPendingInstallments[0] || null;
 
         // Filter financial accounts
         const filteredFinancialAccounts = financialAccounts.filter((fa) => {
@@ -2264,527 +2558,844 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
         return (
           <div className="space-y-6">
-            {/* Top 4 KPI Bento Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Card 1: Total Liquidity */}
-              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-[#7F1625]/40 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    {isAr ? 'إجمالي السيولة النقدية والمصرفية' : 'Total Treasury Liquidity'}
-                  </span>
-                  <div className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
-                    <Landmark className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
-                    {totalLiquidity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
-                  <span>{financialAccounts.length} {isAr ? 'حسابات وخزائن مفعلة' : 'Active accounts'}</span>
-                </p>
-              </div>
-
-              {/* Card 2: Bank Balances */}
-              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-500/40 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    {isAr ? 'أرصدة الحسابات المصرفية' : 'Bank Accounts Balances'}
-                  </span>
-                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <span className="font-mono text-2xl font-black text-blue-600 dark:text-blue-400">
-                    {totalBankBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
-                  <span>{financialAccounts.filter((f) => f.type === 'bank').length} {isAr ? 'حسابات بنكية جارية' : 'Bank accounts'}</span>
-                </p>
-              </div>
-
-              {/* Card 3: Vault Cash */}
-              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-500/40 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    {isAr ? 'النقدية بالخزائن والعهد' : 'Vault Cash On Hand'}
-                  </span>
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                    <Wallet className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <span className="font-mono text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                    {totalVaultBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
-                  <span>{financialAccounts.filter((f) => f.type === 'cash').length} {isAr ? 'خزائن كاش رئيسية وفرعية' : 'Cash vaults'}</span>
-                </p>
-              </div>
-
-              {/* Card 4: Transfers Volume */}
-              <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-purple-500/40 transition-all">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    {isAr ? 'إجمالي التحويلات الداخلية' : 'Internal Transfers Volume'}
-                  </span>
-                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
-                    <ArrowRightLeft className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <span className="font-mono text-2xl font-black text-purple-600 dark:text-purple-400">
-                    {totalTransfersVolume.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
-                  <span>{completedTransfers.length} {isAr ? 'حركة تحويل مرحلة بنجاح' : 'Completed transfers'}</span>
-                </p>
-              </div>
-            </div>
-
-            {/* SECTION 1: FINANCIAL ACCOUNTS (BANKS & VAULTS CARDS) */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <Landmark className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
-                    {isAr ? 'حسابات الخزائن والبنوك والمحافظ الإلكترونية' : 'Cash Desks, Banks & E-Wallets'}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-                    {isAr ? 'متابعة الأرصدة النقدية الفعلية، وإدارة السحب والإيداع والتحويلات اللحظية' : 'Manage actual balances, deposits, withdrawals and transfers'}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Search Bar */}
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={finSearchQuery}
-                      onChange={(e) => setFinSearchQuery(e.target.value)}
-                      placeholder={isAr ? 'بحث بالاسم أو الكود أو البنك...' : 'Search accounts...'}
-                      className="ps-9 pe-3 py-1.5 text-xs rounded-xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] w-48 sm:w-60 font-medium"
-                    />
-                  </div>
-
-                  {/* Add New Financial Account Button */}
-                  <Button
-                    size="sm"
-                    onClick={() => setIsFinancialAccModalOpen(true)}
-                    className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                  >
-                    {isAr ? '+ إضافة حساب / خزينة' : '+ New Account'}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Filter pills */}
-              <div className="flex flex-wrap items-center gap-1.5 pb-1">
-                {(
-                  [
-                    { id: 'all', labelAr: 'جميع الحسابات', labelEn: 'All', count: financialAccounts.length },
-                    { id: 'cash', labelAr: '💵 الخزائن النقدية (كاش)', labelEn: 'Cash Desks', count: financialAccounts.filter((f) => f.type === 'cash').length },
-                    { id: 'bank', labelAr: '🏛️ حسابات بنكية جارية', labelEn: 'Bank Accounts', count: financialAccounts.filter((f) => f.type === 'bank').length },
-                    { id: 'wallet', labelAr: '📱 محافظ إلكترونية', labelEn: 'E-Wallets', count: financialAccounts.filter((f) => f.type === 'wallet').length },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setFinFilterType(tab.id)}
-                    className={`px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      finFilterType === tab.id
-                        ? 'bg-[#7F1625] text-white shadow-xs'
-                        : 'bg-white dark:bg-[#0c121e] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <span>{isAr ? tab.labelAr : tab.labelEn}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
-                      {tab.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Grid of Financial Account Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredFinancialAccounts.map((fa) => {
-                  const linkedCoa = accounts.find((a) => a.id === fa.chart_of_account_id);
-                  const isBank = fa.type === 'bank';
-                  const isCash = fa.type === 'cash';
-
+            {/* Top View Selector Pills */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { id: 'all', labelAr: 'الكل (خزائن وبنوك وقروض)', labelEn: 'All Overview', icon: Landmark, count: financialAccounts.length + bankLoans.length },
+                  { id: 'accounts', labelAr: '🏛️ حسابات الخزائن والبنوك', labelEn: 'Cash & Banks', icon: Building2, count: financialAccounts.length },
+                  { id: 'transfers', labelAr: '🔄 سجل التحويلات الداخلية', labelEn: 'Internal Transfers', icon: ArrowRightLeft, count: transfers.length },
+                  { id: 'loans', labelAr: '💳 قروض وتسهيلات البنوك والأقساط', labelEn: 'Bank Loans & Facilities', icon: CreditCard, count: bankLoans.length },
+                ].map((v) => {
+                  const Icon = v.icon;
                   return (
-                    <div
-                      key={fa.id}
-                      className="group relative overflow-hidden rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/60 dark:hover:border-[#7F1625]/60 transition-all p-5 shadow-xs flex flex-col justify-between"
+                    <button
+                      key={v.id}
+                      onClick={() => setFinSectionView(v.id as any)}
+                      className={`px-3.5 py-1.5 text-xs rounded-xl font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                        finSectionView === v.id
+                          ? 'bg-[#7F1625] text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      }`}
                     >
-                      {/* Ambient gradient */}
-                      <div className="absolute top-0 end-0 w-32 h-32 bg-[#7F1625]/5 rounded-full blur-2xl group-hover:bg-[#7F1625]/10 transition-colors pointer-events-none"></div>
-
-                      <div className="space-y-3 relative z-10">
-                        {/* Top Badge & Code */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
-                                isBank
-                                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                                  : isCash
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                              }`}
-                            >
-                              {isBank ? <Building2 className="w-5 h-5" /> : isCash ? <Wallet className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
-                            </div>
-                            <div>
-                              <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
-                                {fa.code}
-                              </span>
-                              <span className="block text-[10px] text-slate-400">
-                                {isBank ? (isAr ? 'حساب بنكي' : 'Bank Account') : isCash ? (isAr ? 'خزينة نقدية' : 'Cash Vault') : (isAr ? 'محفظة إلكترونية' : 'E-Wallet')}
-                              </span>
-                            </div>
-                          </div>
-
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            {isAr ? 'نشط ومتاح' : 'Active'}
-                          </span>
-                        </div>
-
-                        {/* Account Name */}
-                        <div>
-                          <h4 className="font-black text-sm sm:text-base text-slate-900 dark:text-white tracking-tight">
-                            {fa.name}
-                          </h4>
-                          {fa.bank_name ? (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {fa.bank_name} {fa.account_number ? `(${fa.account_number})` : ''}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              {isAr ? 'خزينة معتمدة للنقدية والمتحصلات' : 'Certified cash desk for payments and receipts'}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Linked COA Account */}
-                        {linkedCoa && (
-                          <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                            <span className="text-slate-400 font-medium">{isAr ? 'دليل الحسابات:' : 'COA:'}</span>
-                            <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                              [{linkedCoa.code}] {linkedCoa.name}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Balance Highlight Box */}
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
-                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
-                            {isAr ? 'الرصيد الفعلي المتاح:' : 'Actual Available Balance:'}
-                          </span>
-                          <div className="flex items-baseline justify-between">
-                            <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                              {Number(fa.current_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                            <span className="font-bold text-xs text-[#7F1625] dark:text-[#ff8ba0]">
-                              {fa.currency || 'EGP'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Quick Actions Footer */}
-                      <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 gap-2 relative z-10">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setTrfFromAccId(fa.id);
-                            setIsTransferModalOpen(true);
-                          }}
-                          className="w-full text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625] dark:hover:text-[#ff8ba0]"
-                          icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
-                        >
-                          {isAr ? 'تحويل مالي' : 'Transfer'}
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            if (linkedCoa) {
-                              setSelectedAccountForStatement(linkedCoa);
-                              setIsStatementModalOpen(true);
-                            } else {
-                              api.accounting.getAccounts().then((accs) => {
-                                const matched = accs.find((a: any) => a.id === fa.chart_of_account_id);
-                                if (matched) {
-                                  setSelectedAccountForStatement(matched);
-                                  setIsStatementModalOpen(true);
-                                }
-                              });
-                            }
-                          }}
-                          className="w-full text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          icon={<Receipt className="w-3.5 h-3.5" />}
-                        >
-                          {isAr ? 'كشف حركة' : 'Statement'}
-                        </Button>
-                      </div>
-                    </div>
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{isAr ? v.labelAr : v.labelEn}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
+                        {v.count}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => setIsNewLoanModalOpen(true)}
+                  className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs"
+                  icon={<CreditCard className="w-3.5 h-3.5" />}
+                >
+                  {isAr ? '+ تسجيل قرض بنكي جديد' : '+ New Loan'}
+                </Button>
+              </div>
             </div>
 
-            {/* SECTION 2: INTERNAL TRANSFERS LOG */}
-            <Card className="bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-              {/* Header with Title and Actions */}
-              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/30">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <ArrowRightLeft className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
-                    {isAr ? 'سجل التحويلات المالية الداخلية بين الخزائن والبنوك' : 'Internal Funds Transfers Ledger'}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {isAr ? 'سجل تداول السيولة النقدية والمصرفية مع القيود المحاسبية التلقائية وتوثيق السندات المعتمدة' : 'Treasury transfers ledger with automatic double entries and printable vouchers'}
+            {/* Top 4 Treasury Liquidity KPI Bento Cards */}
+            {(finSectionView === 'all' || finSectionView === 'accounts' || finSectionView === 'transfers') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Card 1: Total Liquidity */}
+                <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-[#7F1625]/40 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {isAr ? 'إجمالي السيولة النقدية والمصرفية' : 'Total Treasury Liquidity'}
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] flex items-center justify-center font-bold">
+                      <Landmark className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-2xl font-black text-slate-900 dark:text-white">
+                      {totalLiquidity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                    <span>{financialAccounts.length} {isAr ? 'حسابات وخزائن مفعلة' : 'Active accounts'}</span>
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Search Transfers */}
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={trfSearchQuery}
-                      onChange={(e) => setTrfSearchQuery(e.target.value)}
-                      placeholder={isAr ? 'بحث برقم السند أو الحساب...' : 'Search transfers...'}
-                      className="ps-9 pe-3 py-1.5 text-xs rounded-xl bg-white dark:bg-[#0f1523] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] w-48 sm:w-60 font-medium"
-                    />
+                {/* Card 2: Bank Balances */}
+                <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-500/40 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {isAr ? 'أرصدة الحسابات المصرفية' : 'Bank Accounts Balances'}
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                      <Building2 className="w-5 h-5" />
+                    </div>
                   </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-2xl font-black text-blue-600 dark:text-blue-400">
+                      {totalBankBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                    <span>{financialAccounts.filter((f) => f.type === 'bank').length} {isAr ? 'حسابات بنكية جارية' : 'Bank accounts'}</span>
+                  </p>
+                </div>
 
-                  {/* New Transfer Button */}
-                  <Button
-                    size="sm"
-                    onClick={() => setIsTransferModalOpen(true)}
-                    className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                  >
-                    {isAr ? '+ تحويل مالي جديد' : '+ New Transfer'}
-                  </Button>
+                {/* Card 3: Vault Cash */}
+                <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-500/40 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {isAr ? 'النقدية بالخزائن والعهد' : 'Vault Cash On Hand'}
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                      <Wallet className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                      {totalVaultBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                    <span>{financialAccounts.filter((f) => f.type === 'cash').length} {isAr ? 'خزائن كاش رئيسية وفرعية' : 'Cash vaults'}</span>
+                  </p>
+                </div>
+
+                {/* Card 4: Transfers Volume */}
+                <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs hover:border-purple-500/40 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {isAr ? 'إجمالي التحويلات الداخلية' : 'Internal Transfers Volume'}
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                      <ArrowRightLeft className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-2xl font-black text-purple-600 dark:text-purple-400">
+                      {totalTransfersVolume.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 ms-1.5">{isAr ? 'ج.م' : 'EGP'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
+                    <span>{completedTransfers.length} {isAr ? 'حركة تحويل مرحلة بنجاح' : 'Completed transfers'}</span>
+                  </p>
                 </div>
               </div>
+            )}
 
-              {/* Status Filter Tabs */}
-              <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
-                {(
-                  [
-                    { id: 'all', labelAr: 'جميع التحويلات', labelEn: 'All', count: transfers.length },
-                    { id: 'completed', labelAr: '✓ مكتملة ومرحلة', labelEn: 'Completed', count: completedTransfers.length },
-                    { id: 'reversed', labelAr: '✕ ملغاة ومعكوسة', labelEn: 'Reversed', count: transfers.filter((t) => t.status === 'reversed').length },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setTrfFilterStatus(tab.id)}
-                    className={`px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      trfFilterStatus === tab.id
-                        ? 'bg-[#7F1625] text-white shadow-xs'
-                        : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <span>{isAr ? tab.labelAr : tab.labelEn}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
-                      {tab.count}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            {/* SECTION 1: FINANCIAL ACCOUNTS (BANKS & VAULTS CARDS) */}
+            {(finSectionView === 'all' || finSectionView === 'accounts') && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <Landmark className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                      {isAr ? 'حسابات الخزائن والبنوك والمحافظ الإلكترونية' : 'Cash Desks, Banks & E-Wallets'}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                      {isAr ? 'متابعة الأرصدة النقدية الفعلية، وإدارة السحب والإيداع والتحويلات اللحظية' : 'Manage actual balances, deposits, withdrawals and transfers'}
+                    </p>
+                  </div>
 
-              {/* Transfers List / Bento Rows */}
-              <div className="p-4 sm:p-5 space-y-3">
-                {filteredTransfers.length === 0 ? (
-                  <div className="py-12 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                    <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] mx-auto flex items-center justify-center font-bold">
-                      <ArrowRightLeft className="w-6 h-6" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Search Bar */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={finSearchQuery}
+                        onChange={(e) => setFinSearchQuery(e.target.value)}
+                        placeholder={isAr ? 'بحث بالاسم أو الكود أو البنك...' : 'Search accounts...'}
+                        className="ps-9 pe-3 py-1.5 text-xs rounded-xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] w-48 sm:w-60 font-medium"
+                      />
                     </div>
-                    <div>
-                      <p className="font-bold text-slate-700 dark:text-slate-300">
-                        {isAr ? 'لا توجد حركات تحويل مالي مطابقة' : 'No funds transfers found'}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        {isAr ? 'يمكنك تحويل مبالغ نقدية بين الخزائن والمصارف بسهولة وترحيل القيود آلياً' : 'Transfer funds between cash desks and banks with auto-balancing'}
-                      </p>
-                    </div>
+
+                    {/* Add New Financial Account Button */}
                     <Button
                       size="sm"
-                      onClick={() => setIsTransferModalOpen(true)}
-                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs"
+                      onClick={() => setIsFinancialAccModalOpen(true)}
+                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
                       icon={<Plus className="w-3.5 h-3.5" />}
                     >
-                      {isAr ? '+ إجراء أول تحويل مالي' : '+ Record First Transfer'}
+                      {isAr ? '+ إضافة حساب / خزينة' : '+ New Account'}
                     </Button>
                   </div>
-                ) : (
-                  filteredTransfers.map((t) => {
-                    const isReversed = t.status === 'reversed';
-                    const trfDateClean = formatCleanDate(t.transfer_date || (t as any).created_at);
+                </div>
+
+                {/* Filter pills */}
+                <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                  {(
+                    [
+                      { id: 'all', labelAr: 'جميع الحسابات', labelEn: 'All', count: financialAccounts.length },
+                      { id: 'cash', labelAr: '💵 الخزائن النقدية (كاش)', labelEn: 'Cash Desks', count: financialAccounts.filter((f) => f.type === 'cash').length },
+                      { id: 'bank', labelAr: '🏛️ حسابات بنكية جارية', labelEn: 'Bank Accounts', count: financialAccounts.filter((f) => f.type === 'bank').length },
+                      { id: 'wallet', labelAr: '📱 محافظ إلكترونية', labelEn: 'E-Wallets', count: financialAccounts.filter((f) => f.type === 'wallet').length },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setFinFilterType(tab.id)}
+                      className={`px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        finFilterType === tab.id
+                          ? 'bg-[#7F1625] text-white shadow-xs'
+                          : 'bg-white dark:bg-[#0c121e] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grid of Financial Account Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredFinancialAccounts.map((fa) => {
+                    const linkedCoa = accounts.find((a) => a.id === fa.chart_of_account_id);
+                    const isBank = fa.type === 'bank';
+                    const isCash = fa.type === 'cash';
 
                     return (
                       <div
-                        key={t.id}
-                        className={`rounded-2xl border transition-all p-4 ${
-                          isReversed
-                            ? 'bg-rose-50/20 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900/40 opacity-75'
-                            : 'bg-white dark:bg-[#0c121e] border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/50 shadow-2xs'
-                        }`}
+                        key={fa.id}
+                        className="group relative overflow-hidden rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/60 dark:hover:border-[#7F1625]/60 transition-all p-5 shadow-xs flex flex-col justify-between"
                       >
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                          {/* Left: Transfer info & visual movement flow */}
-                          <div className="space-y-3 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs font-black px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700">
-                                {t.transfer_number}
-                              </span>
+                        {/* Ambient gradient */}
+                        <div className="absolute top-0 end-0 w-32 h-32 bg-[#7F1625]/5 rounded-full blur-2xl group-hover:bg-[#7F1625]/10 transition-colors pointer-events-none"></div>
 
-                              <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
-                                <Clock className="w-3.5 h-3.5" />
-                                {trfDateClean}
-                              </span>
-
-                              <Badge variant={isReversed ? 'danger' : 'success'}>
-                                {isReversed ? (isAr ? 'ملغي ومعكوس' : 'Reversed') : (isAr ? 'مكتمل ومرحل بنجاح' : 'Completed')}
-                              </Badge>
-
-                              {t.journal_entry_id && (
-                                <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                                  {isAr ? 'قيد آلي: ' : 'JE: '}
-                                  {t.journal_entry?.entry_number || t.journal_entry_id.slice(0, 8)}
+                        <div className="space-y-3 relative z-10">
+                          {/* Top Badge & Code */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                                  isBank
+                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                                    : isCash
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                }`}
+                              >
+                                {isBank ? <Building2 className="w-5 h-5" /> : isCash ? <Wallet className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
+                              </div>
+                              <div>
+                                <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
+                                  {fa.code}
                                 </span>
-                              )}
-                            </div>
-
-                            {/* Movement Flow Visualizer */}
-                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                              {/* Source (Debit / Out) */}
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold shrink-0">
-                                  <ArrowDownRight className="w-3.5 h-3.5" />
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-medium block">
-                                    {isAr ? 'من حساب (صرف):' : 'From:'}
-                                  </span>
-                                  <span className="font-bold text-slate-900 dark:text-white">
-                                    {t.from_account?.name || t.from_financial_account_id}
-                                  </span>
-                                  {t.from_account?.code && (
-                                    <span className="font-mono text-[10px] text-slate-400 ms-1 font-bold">
-                                      ({t.from_account.code})
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Direction arrow in middle */}
-                              <div className="hidden sm:flex items-center justify-center px-4">
-                                <ArrowRightLeft className="w-4 h-4 text-[#7F1625] dark:text-[#ff8ba0]" />
-                              </div>
-
-                              {/* Destination (Credit / In) */}
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
-                                  <ArrowUpRight className="w-3.5 h-3.5" />
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-medium block">
-                                    {isAr ? 'إلى حساب (إيداع):' : 'To:'}
-                                  </span>
-                                  <span className="font-bold text-slate-900 dark:text-white">
-                                    {t.to_account?.name || t.to_financial_account_id}
-                                  </span>
-                                  {t.to_account?.code && (
-                                    <span className="font-mono text-[10px] text-slate-400 ms-1 font-bold">
-                                      ({t.to_account.code})
-                                    </span>
-                                  )}
-                                </div>
+                                <span className="block text-[10px] text-slate-400">
+                                  {isBank ? (isAr ? 'حساب بنكي' : 'Bank Account') : isCash ? (isAr ? 'خزينة نقدية' : 'Cash Vault') : (isAr ? 'محفظة إلكترونية' : 'E-Wallet')}
+                                </span>
                               </div>
                             </div>
 
-                            {/* Memo / Notes */}
-                            {t.notes && (
-                              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium ps-1">
-                                <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'البيان: ' : 'Memo: '}</span>
-                                {t.notes}
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              {isAr ? 'نشط ومتاح' : 'Active'}
+                            </span>
+                          </div>
+
+                          {/* Account Name */}
+                          <div>
+                            <h4 className="font-black text-sm sm:text-base text-slate-900 dark:text-white tracking-tight">
+                              {fa.name}
+                            </h4>
+                            {fa.bank_name ? (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                {fa.bank_name} {fa.account_number ? `(${fa.account_number})` : ''}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {isAr ? 'خزينة معتمدة للنقدية والمتحصلات' : 'Certified cash desk for payments and receipts'}
                               </p>
                             )}
                           </div>
 
-                          {/* Right: Amount & Action Buttons */}
-                          <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
-                            <div className="text-start lg:text-end">
-                              <span className="text-[10px] text-slate-400 font-medium block">
-                                {isAr ? 'قيمة التحويل' : 'Transfer Amount'}
+                          {/* Linked COA Account */}
+                          {linkedCoa && (
+                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                              <span className="text-slate-400 font-medium">{isAr ? 'دليل الحسابات:' : 'COA:'}</span>
+                              <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                                [{linkedCoa.code}] {linkedCoa.name}
                               </span>
-                              <div className="flex items-baseline gap-1">
-                                <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                                  {Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </span>
-                                <span className="text-xs font-bold text-[#7F1625] dark:text-[#ff8ba0]">
-                                  {isAr ? 'ج.م' : 'EGP'}
-                                </span>
-                              </div>
                             </div>
+                          )}
 
-                            <div className="flex items-center gap-2">
-                              {/* Print Voucher Button */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setSelectedTransferForPrint(t)}
-                                className="text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625] dark:hover:text-[#ff8ba0]"
-                                icon={<Printer className="w-3.5 h-3.5" />}
-                              >
-                                {isAr ? 'طباعة السند' : 'Print'}
-                              </Button>
-
-                              {/* Reverse Action Button */}
-                              {!isReversed && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setReversalTarget({ type: 'transfer', id: t.id, number: t.transfer_number });
-                                    setIsReversalModalOpen(true);
-                                  }}
-                                  className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                                  icon={<RotateCw className="w-3.5 h-3.5" />}
-                                >
-                                  {isAr ? 'عكس التحويل' : 'Reverse'}
-                                </Button>
-                              )}
+                          {/* Balance Highlight Box */}
+                          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+                              {isAr ? 'الرصيد الفعلي المتاح:' : 'Actual Available Balance:'}
+                            </span>
+                            <div className="flex items-baseline justify-between">
+                              <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                                {Number(fa.current_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="font-bold text-xs text-[#7F1625] dark:text-[#ff8ba0]">
+                                {fa.currency || 'EGP'}
+                              </span>
                             </div>
                           </div>
                         </div>
+
+                        {/* Quick Actions Footer */}
+                        <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 gap-2 relative z-10">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setTrfFromAccId(fa.id);
+                              setIsTransferModalOpen(true);
+                            }}
+                            className="w-full text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625] dark:hover:text-[#ff8ba0]"
+                            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+                          >
+                            {isAr ? 'تحويل مالي' : 'Transfer'}
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (linkedCoa) {
+                                setSelectedAccountForStatement(linkedCoa);
+                                setIsStatementModalOpen(true);
+                              } else {
+                                api.accounting.getAccounts().then((accs) => {
+                                  const matched = accs.find((a: any) => a.id === fa.chart_of_account_id);
+                                  if (matched) {
+                                    setSelectedAccountForStatement(matched);
+                                    setIsStatementModalOpen(true);
+                                  }
+                                });
+                              }
+                            }}
+                            className="w-full text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            icon={<Receipt className="w-3.5 h-3.5" />}
+                          >
+                            {isAr ? 'كشف حركة' : 'Statement'}
+                          </Button>
+                        </div>
                       </div>
                     );
-                  })
-                )}
+                  })}
+                </div>
               </div>
-            </Card>
+            )}
+
+            {/* SECTION 2: INTERNAL TRANSFERS LOG */}
+            {(finSectionView === 'all' || finSectionView === 'transfers') && (
+              <Card className="bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+                {/* Header with Title and Actions */}
+                <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/30">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <ArrowRightLeft className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                      {isAr ? 'سجل التحويلات المالية الداخلية بين الخزائن والبنوك' : 'Internal Funds Transfers Ledger'}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {isAr ? 'سجل تداول السيولة النقدية والمصرفية مع القيود المحاسبية التلقائية وتوثيق السندات المعتمدة' : 'Treasury transfers ledger with automatic double entries and printable vouchers'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Search Transfers */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={trfSearchQuery}
+                        onChange={(e) => setTrfSearchQuery(e.target.value)}
+                        placeholder={isAr ? 'بحث برقم السند أو الحساب...' : 'Search transfers...'}
+                        className="ps-9 pe-3 py-1.5 text-xs rounded-xl bg-white dark:bg-[#0f1523] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#7F1625] w-48 sm:w-60 font-medium"
+                      />
+                    </div>
+
+                    {/* New Transfer Button */}
+                    <Button
+                      size="sm"
+                      onClick={() => setIsTransferModalOpen(true)}
+                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? '+ تحويل مالي جديد' : '+ New Transfer'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Status Filter Tabs */}
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
+                  {(
+                    [
+                      { id: 'all', labelAr: 'جميع التحويلات', labelEn: 'All', count: transfers.length },
+                      { id: 'completed', labelAr: '✓ مكتملة ومرحلة', labelEn: 'Completed', count: completedTransfers.length },
+                      { id: 'reversed', labelAr: '✕ ملغاة ومعكوسة', labelEn: 'Reversed', count: transfers.filter((t) => t.status === 'reversed').length },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setTrfFilterStatus(tab.id)}
+                      className={`px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        trfFilterStatus === tab.id
+                          ? 'bg-[#7F1625] text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <span>{isAr ? tab.labelAr : tab.labelEn}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10 dark:bg-white/10 font-mono">
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Transfers List / Bento Rows */}
+                <div className="p-4 sm:p-5 space-y-3">
+                  {filteredTransfers.length === 0 ? (
+                    <div className="py-12 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <div className="w-12 h-12 rounded-2xl bg-[#7F1625]/10 text-[#7F1625] dark:text-[#ff8ba0] mx-auto flex items-center justify-center font-bold">
+                        <ArrowRightLeft className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-700 dark:text-slate-300">
+                          {isAr ? 'لا توجد حركات تحويل مالي مطابقة' : 'No funds transfers found'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {isAr ? 'يمكنك تحويل مبالغ نقدية بين الخزائن والمصارف بسهولة وترحيل القيود آلياً' : 'Transfer funds between cash desks and banks with auto-balancing'}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => setIsTransferModalOpen(true)}
+                        className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs"
+                        icon={<Plus className="w-3.5 h-3.5" />}
+                      >
+                        {isAr ? '+ إجراء أول تحويل مالي' : '+ Record First Transfer'}
+                      </Button>
+                    </div>
+                  ) : (
+                    filteredTransfers.map((t) => {
+                      const isReversed = t.status === 'reversed';
+                      const trfDateClean = formatCleanDate(t.transfer_date || (t as any).created_at);
+
+                      return (
+                        <div
+                          key={t.id}
+                          className={`rounded-2xl border transition-all p-4 ${
+                            isReversed
+                              ? 'bg-rose-50/20 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900/40 opacity-75'
+                              : 'bg-white dark:bg-[#0c121e] border-slate-200 dark:border-slate-800 hover:border-[#7F1625]/50 shadow-2xs'
+                          }`}
+                        >
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            {/* Left: Transfer info & visual movement flow */}
+                            <div className="space-y-3 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs font-black px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700">
+                                  {t.transfer_number}
+                                </span>
+
+                                <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  {trfDateClean}
+                                </span>
+
+                                <Badge variant={isReversed ? 'danger' : 'success'}>
+                                  {isReversed ? (isAr ? 'ملغي ومعكوس' : 'Reversed') : (isAr ? 'مكتمل ومرحل بنجاح' : 'Completed')}
+                                </Badge>
+
+                                {t.journal_entry_id && (
+                                  <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                                    {isAr ? 'قيد آلي: ' : 'JE: '}
+                                    {t.journal_entry?.entry_number || t.journal_entry_id.slice(0, 8)}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Movement Flow Visualizer */}
+                              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                {/* Source (Debit / Out) */}
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold shrink-0">
+                                    <ArrowDownRight className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-slate-400 font-medium block">
+                                      {isAr ? 'من حساب (صرف):' : 'From:'}
+                                    </span>
+                                    <span className="font-bold text-slate-900 dark:text-white">
+                                      {t.from_account?.name || t.from_financial_account_id}
+                                    </span>
+                                    {t.from_account?.code && (
+                                      <span className="font-mono text-[10px] text-slate-400 ms-1 font-bold">
+                                        ({t.from_account.code})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Direction arrow in middle */}
+                                <div className="hidden sm:flex items-center justify-center px-4">
+                                  <ArrowRightLeft className="w-4 h-4 text-[#7F1625] dark:text-[#ff8ba0]" />
+                                </div>
+
+                                {/* Destination (Credit / In) */}
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                                    <ArrowUpRight className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-slate-400 font-medium block">
+                                      {isAr ? 'إلى حساب (إيداع):' : 'To:'}
+                                    </span>
+                                    <span className="font-bold text-slate-900 dark:text-white">
+                                      {t.to_account?.name || t.to_financial_account_id}
+                                    </span>
+                                    {t.to_account?.code && (
+                                      <span className="font-mono text-[10px] text-slate-400 ms-1 font-bold">
+                                        ({t.to_account.code})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Memo / Notes */}
+                              {t.notes && (
+                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium ps-1">
+                                  <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'البيان: ' : 'Memo: '}</span>
+                                  {t.notes}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Right: Amount & Action Buttons */}
+                            <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+                              <div className="text-start lg:text-end">
+                                <span className="text-[10px] text-slate-400 font-medium block">
+                                  {isAr ? 'قيمة التحويل' : 'Transfer Amount'}
+                                </span>
+                                <div className="flex items-baseline gap-1">
+                                  <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                                    {Number(t.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </span>
+                                  <span className="text-xs font-bold text-[#7F1625] dark:text-[#ff8ba0]">
+                                    {isAr ? 'ج.م' : 'EGP'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {/* Print Voucher Button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setSelectedTransferForPrint(t)}
+                                  className="text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625] hover:text-[#7F1625] dark:hover:text-[#ff8ba0]"
+                                  icon={<Printer className="w-3.5 h-3.5" />}
+                                >
+                                  {isAr ? 'طباعة السند' : 'Print'}
+                                </Button>
+
+                                {/* Reverse Action Button */}
+                                {!isReversed && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setReversalTarget({ type: 'transfer', id: t.id, number: t.transfer_number });
+                                      setIsReversalModalOpen(true);
+                                    }}
+                                    className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                    icon={<RotateCw className="w-3.5 h-3.5" />}
+                                  >
+                                    {isAr ? 'عكس التحويل' : 'Reverse'}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* SECTION 3: BANK LOANS & CREDIT FACILITIES */}
+            {(finSectionView === 'all' || finSectionView === 'loans') && (
+              <div className="space-y-6 pt-4 border-t border-slate-200 dark:border-slate-800">
+                {/* Header with Title and Add Button */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-[#7F1625] dark:text-[#ff8ba0]" />
+                      {isAr ? 'قروض وتسهيلات البنوك وجدول سداد الأقساط' : 'Bank Loans & Credit Facilities'}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                      {isAr
+                        ? 'متابعة خطوط التمويل المصرفي الممنوحة للمصنع، مواعيد استحقاق الأقساط، والسداد اللحظي مع إثبات القيود'
+                        : 'Track factory bank financing, installment maturities, and direct accounting payments'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => setIsNewLoanModalOpen(true)}
+                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      {isAr ? '+ تسجيل قرض أو تسهيل جديد' : '+ New Bank Loan'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Loans Top 4 KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Total Obligations */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        {isAr ? 'إجمالي الالتزامات والتمويل' : 'Total Financing Obligations'}
+                      </span>
+                      <CreditCard className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="font-mono text-xl font-black text-slate-900 dark:text-white">
+                        {totalLoanObligations.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 ms-1">{isAr ? 'ج.م' : 'EGP'}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {bankLoans.length} {isAr ? 'عقود تمويل بنكي' : 'Loan contracts'}
+                    </p>
+                  </div>
+
+                  {/* Total Paid */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        {isAr ? 'إجمالي الأقساط المسددة' : 'Total Paid Installments'}
+                      </span>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="font-mono text-xl font-black text-emerald-600 dark:text-emerald-400">
+                        {totalLoanPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 ms-1">{isAr ? 'ج.م' : 'EGP'}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {totalLoanObligations > 0
+                        ? `${Math.round((totalLoanPaid / totalLoanObligations) * 100)}% ${isAr ? 'نسبة السداد الكلي' : 'Paid'}`
+                        : '0%'}
+                    </p>
+                  </div>
+
+                  {/* Remaining Balance */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        {isAr ? 'الرصيد المتبقي للبنوك' : 'Remaining Loan Debt'}
+                      </span>
+                      <Landmark className="w-4 h-4 text-rose-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="font-mono text-xl font-black text-rose-600 dark:text-rose-400">
+                        {totalLoanRemaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 ms-1">{isAr ? 'ج.م' : 'EGP'}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {isAr ? 'شامل أصل الدين والفوائد' : 'Principal & Interest'}
+                    </p>
+                  </div>
+
+                  {/* Next Upcoming Installment */}
+                  <div className="p-4 rounded-2xl bg-linear-to-br from-[#7F1625]/10 to-[#7F1625]/5 border border-[#7F1625]/30 shadow-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-[#7F1625] dark:text-[#ff8ba0]">
+                          {isAr ? '⏰ القسط القادم الأقرب:' : 'Next Due Installment:'}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#7F1625] text-white">
+                          {nextUpcomingInstallment ? `${formatCleanDate(nextUpcomingInstallment.due_date)}` : '—'}
+                        </span>
+                      </div>
+                      {nextUpcomingInstallment ? (
+                        <div className="mt-1">
+                          <span className="font-mono text-lg font-black text-slate-900 dark:text-white">
+                            {Number(nextUpcomingInstallment.total_amount).toLocaleString()} ج.م
+                          </span>
+                          <p className="text-[10px] text-slate-600 dark:text-slate-300 truncate">
+                            قسط ({nextUpcomingInstallment.installment_number}) — {nextUpcomingInstallment.loan.name}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-2">
+                          {isAr ? 'لا توجد أقساط معلقة حالياً' : 'No pending installments'}
+                        </p>
+                      )}
+                    </div>
+                    {nextUpcomingInstallment && (
+                      <button
+                        onClick={() => {
+                          setSelectedInstallmentForPay({
+                            loan: nextUpcomingInstallment.loan,
+                            installment: nextUpcomingInstallment,
+                          });
+                          setIsPayInstallmentModalOpen(true);
+                        }}
+                        className="mt-2 w-full py-1 text-center text-xs font-bold rounded-lg bg-[#7F1625] hover:bg-[#961b2c] text-white transition-colors cursor-pointer"
+                      >
+                        {isAr ? 'سداد هذا القسط الآن' : 'Pay This Installment'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Loans Bento Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {bankLoans.map((loan) => {
+                    const percentPaid = loan.total_loan_amount > 0 ? Math.round((loan.paid_amount / loan.total_loan_amount) * 100) : 0;
+                    const pendingInsts = loan.installments.filter((i) => i.status === 'pending');
+                    const nextInst = pendingInsts[0] || null;
+
+                    return (
+                      <div
+                        key={loan.id}
+                        className="rounded-2xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4 hover:border-[#7F1625]/40 transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-3">
+                          {/* Card Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">
+                                  {loan.loan_number}
+                                </span>
+                                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                  <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                                  {loan.bank_name}
+                                </span>
+                              </div>
+                              <h4 className="font-black text-sm text-slate-900 dark:text-white">
+                                {loan.name}
+                              </h4>
+                              {loan.contract_number && (
+                                <p className="text-[11px] text-slate-400 font-mono">
+                                  {isAr ? 'رقم العقد:' : 'Contract:'} {loan.contract_number}
+                                </p>
+                              )}
+                            </div>
+
+                            <Badge variant={loan.status === 'completed' ? 'success' : 'info'}>
+                              {loan.status === 'completed'
+                                ? (isAr ? 'مسدد بالكامل ✓' : 'Paid Off')
+                                : (isAr ? 'نشط وجاري السداد' : 'Active')}
+                            </Badge>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-bold">{isAr ? 'نسبة الوفاء بالقرض:' : 'Payoff Progress:'}</span>
+                              <span className="font-mono font-bold text-[#7F1625] dark:text-[#ff8ba0]">{percentPaid}%</span>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="h-2 rounded-full bg-linear-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
+                                style={{ width: `${percentPaid}%` }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-0.5">
+                              <span>{isAr ? 'مسدد:' : 'Paid:'} {Number(loan.paid_amount).toLocaleString()} ج.م</span>
+                              <span>{isAr ? 'متبقي:' : 'Rem:'} {Number(loan.remaining_amount).toLocaleString()} ج.م</span>
+                            </div>
+                          </div>
+
+                          {/* Loan Numbers Grid */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">{isAr ? 'أصل التمويل:' : 'Principal:'}</span>
+                              <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                {Number(loan.principal_amount).toLocaleString()} ج.م
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/80">
+                              <span className="text-[10px] text-slate-400 block">{isAr ? 'الفائدة الإجمالية:' : 'Total Interest:'}</span>
+                              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                                {loan.interest_rate}% ({Number(loan.interest_amount).toLocaleString()} ج.م)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Next Installment Banner */}
+                          {nextInst ? (
+                            <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-between text-xs">
+                              <div>
+                                <span className="text-[10px] text-amber-800 dark:text-amber-300 font-bold block">
+                                  {isAr ? `القسط القادم (${nextInst.installment_number} من ${loan.installments_count}):` : `Next (${nextInst.installment_number}/${loan.installments_count}):`}
+                                </span>
+                                <span className="font-mono font-black text-slate-900 dark:text-white">
+                                  {Number(nextInst.total_amount).toLocaleString()} ج.م
+                                </span>
+                                <span className="text-[10px] text-slate-500 ms-1.5 font-mono">
+                                  ({formatCleanDate(nextInst.due_date)})
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedInstallmentForPay({ loan, installment: nextInst });
+                                  setIsPayInstallmentModalOpen(true);
+                                }}
+                                className="px-3 py-1 rounded-lg bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              >
+                                {isAr ? 'سداد القسط' : 'Pay'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 text-center text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                              ✓ {isAr ? 'تم سداد جميع الأقساط بالكامل وإغلاق القرض' : 'All installments paid in full'}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Card Actions Footer */}
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedLoanForSchedule(loan)}
+                            className="w-full text-xs font-bold border-slate-200 dark:border-slate-700 hover:border-[#7F1625]"
+                            icon={<Calendar className="w-3.5 h-3.5" />}
+                          >
+                            {isAr ? 'جدول الأقساط' : 'Schedule'}
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedLoanForPrint(loan)}
+                            className="w-full text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            icon={<Printer className="w-3.5 h-3.5" />}
+                          >
+                            {isAr ? 'طباعة الجدول A4' : 'Print A4'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -4358,6 +4969,428 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         isOpen={!!selectedTransferForPrint}
         onClose={() => setSelectedTransferForPrint(null)}
         transfer={selectedTransferForPrint}
+        isAr={isAr}
+      />
+
+      {/* New Bank Loan Modal */}
+      <Modal
+        isOpen={isNewLoanModalOpen}
+        onClose={() => setIsNewLoanModalOpen(false)}
+        title={isAr ? 'تسجيل قرض أو تسهيل بنكي جديد للمصنع' : 'Register New Bank Loan / Facility'}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCreateLoan} className="space-y-4">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+            <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p>
+              {isAr
+                ? 'إدارة التسهيلات الائتمانية: أدخل بيانات القرض ومعدل الفائدة وعدد الأقساط، وسيقوم النظام تلقائياً باحتساب الفائدة وتوليد جدول الأقساط وتواريخ استحقاقها وترحيل قيد تسييل التمويل في الحساب البنكي.'
+                : 'Credit Facilities: Enter loan amount, interest rate, and installments. System automatically generates repayment schedule.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'اسم القرض أو الغرض الاستثماري *' : 'Loan Purpose / Name *'}
+              </label>
+              <input
+                type="text"
+                required
+                value={loanName}
+                onChange={(e) => setLoanName(e.target.value)}
+                placeholder={isAr ? 'مثال: تمويل شراء خط ماكينات خياطة سنجر كمبيوتر' : 'e.g. Machinery Financing Loan'}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'البنك المقرض / جهة التمويل *' : 'Lender Bank *'}
+              </label>
+              <select
+                value={loanBankName}
+                onChange={(e) => setLoanBankName(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              >
+                <option value="البنك الأهلي المصري - فرع المصانع">البنك الأهلي المصري (NBE)</option>
+                <option value="بنك مصر - قطاع تمويل المشروعات">بنك مصر (Banque Misr)</option>
+                <option value="البنك التجاري الدولي (CIB)">البنك التجاري الدولي (CIB)</option>
+                <option value="بنك قطر الوطني (QNB)">بنك قطر الوطني (QNB AlAhli)</option>
+                <option value="بنك القاهرة">بنك القاهرة (Banque du Caire)</option>
+                <option value="بنك الإسكندرية">بنك الإسكندرية (Bank of Alexandria)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'رقم العقد أو حساب التسهيل (اختياري)' : 'Contract / Facility # (Optional)'}
+              </label>
+              <input
+                type="text"
+                value={loanContractNum}
+                onChange={(e) => setLoanContractNum(e.target.value)}
+                placeholder="CTR-NBE-88921"
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'أصل مبلغ القرض (جنيه مصري) *' : 'Principal Amount (EGP) *'}
+              </label>
+              <input
+                type="number"
+                min="1000"
+                step="1000"
+                required
+                value={loanPrincipal}
+                onChange={(e) => setLoanPrincipal(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-black"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'معدل الفائدة الإجمالي % *' : 'Interest Rate % *'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                required
+                value={loanInterestRate}
+                onChange={(e) => setLoanInterestRate(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'عدد الأقساط *' : 'Number of Installments *'}
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                required
+                value={loanInstallmentsCount}
+                onChange={(e) => setLoanInstallmentsCount(Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'دورية السداد *' : 'Frequency *'}
+              </label>
+              <select
+                value={loanFrequency}
+                onChange={(e) => setLoanFrequency(e.target.value as any)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              >
+                <option value="monthly">{isAr ? 'أقساط شهرية (Monthly)' : 'Monthly'}</option>
+                <option value="quarterly">{isAr ? 'أقساط ربع سنوية (Quarterly)' : 'Quarterly'}</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'تاريخ بدء القرض وتسييل التمويل *' : 'Disbursement Date *'}
+              </label>
+              <input
+                type="date"
+                required
+                value={loanStartDate}
+                onChange={(e) => setLoanStartDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الحساب البنكي المودع به التمويل' : 'Deposit Bank Account'}
+              </label>
+              <select
+                value={loanFinancialAccId}
+                onChange={(e) => setLoanFinancialAccId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              >
+                <option value="">{isAr ? '-- اختر الحساب البنكي للإيداع --' : '-- Select Bank Account --'}</option>
+                {financialAccounts.filter((fa) => fa.type === 'bank').map((fa) => (
+                  <option key={fa.id} value={fa.id}>
+                    {fa.code} - {fa.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Real-time Calculation Summary Box */}
+          {loanPrincipal > 0 && (
+            <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2 text-xs">
+              <span className="font-bold text-slate-700 dark:text-slate-300 block border-b border-slate-200/60 dark:border-slate-700/60 pb-1.5">
+                {isAr ? 'المعاينة الحسابية التلقائية للقرض والأقساط:' : 'Automatic Amortization Preview:'}
+              </span>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">{isAr ? 'إجمالي الفائدة:' : 'Interest:'}</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                    {Math.round(loanPrincipal * (loanInterestRate / 100)).toLocaleString()} ج.م
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">{isAr ? 'إجمالي الالتزام:' : 'Total Debt:'}</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">
+                    {(loanPrincipal + Math.round(loanPrincipal * (loanInterestRate / 100))).toLocaleString()} ج.م
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">{isAr ? 'قيمة القسط الدوري:' : 'Installment:'}</span>
+                  <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">
+                    {loanInstallmentsCount > 0
+                      ? Math.round((loanPrincipal + Math.round(loanPrincipal * (loanInterestRate / 100))) / loanInstallmentsCount).toLocaleString()
+                      : 0} ج.م
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="ghost" onClick={() => setIsNewLoanModalOpen(false)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !loanName || loanPrincipal <= 0}
+              className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold"
+            >
+              {isSubmitting ? (isAr ? 'جاري التسجيل...' : 'Registering...') : (isAr ? 'تسجيل القرض وتوليد الأقساط' : 'Save Loan & Schedule')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* View Full Loan Schedule Modal */}
+      {selectedLoanForSchedule && (
+        <Modal
+          isOpen={!!selectedLoanForSchedule}
+          onClose={() => setSelectedLoanForSchedule(null)}
+          title={isAr ? `جدول استحقاقات وأقساط: ${selectedLoanForSchedule.name}` : `Amortization Schedule: ${selectedLoanForSchedule.name}`}
+          maxWidth="xl"
+        >
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold px-2 py-0.5 rounded bg-[#7F1625] text-white">
+                  {selectedLoanForSchedule.loan_number}
+                </span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">{selectedLoanForSchedule.bank_name}</span>
+              </div>
+              <div className="flex items-center gap-3 font-mono">
+                <span>{isAr ? 'المسدد:' : 'Paid:'} <b className="text-emerald-600">{Number(selectedLoanForSchedule.paid_amount).toLocaleString()} ج.م</b></span>
+                <span>{isAr ? 'المتبقي:' : 'Rem:'} <b className="text-rose-600">{Number(selectedLoanForSchedule.remaining_amount).toLocaleString()} ج.م</b></span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto max-h-[60vh] rounded-xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-xs text-start">
+                <thead className="bg-slate-100 dark:bg-slate-800/80 sticky top-0 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="p-2.5 text-center font-bold w-12">{isAr ? 'م' : '#'}</th>
+                    <th className="p-2.5 text-start font-bold">{isAr ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
+                    <th className="p-2.5 text-end font-bold">{isAr ? 'أصل القسط' : 'Principal'}</th>
+                    <th className="p-2.5 text-end font-bold">{isAr ? 'الفائدة' : 'Interest'}</th>
+                    <th className="p-2.5 text-end font-bold">{isAr ? 'إجمالي القسط' : 'Total'}</th>
+                    <th className="p-2.5 text-center font-bold">{isAr ? 'الحالة' : 'Status'}</th>
+                    <th className="p-2.5 text-end font-bold">{isAr ? 'الإجراء' : 'Action'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                  {selectedLoanForSchedule.installments.map((inst) => {
+                    const isPaid = inst.status === 'paid';
+                    return (
+                      <tr key={inst.id} className={isPaid ? 'bg-emerald-50/20 dark:bg-emerald-950/10' : ''}>
+                        <td className="p-2 text-center font-mono font-bold">{inst.installment_number}</td>
+                        <td className="p-2 font-mono font-bold text-slate-900 dark:text-white">{formatCleanDate(inst.due_date)}</td>
+                        <td className="p-2 text-end font-mono">{Number(inst.principal_amount).toLocaleString()}</td>
+                        <td className="p-2 text-end font-mono text-slate-400">{Number(inst.interest_amount).toLocaleString()}</td>
+                        <td className="p-2 text-end font-mono font-black text-slate-900 dark:text-white">
+                          {Number(inst.total_amount).toLocaleString()} ج.م
+                        </td>
+                        <td className="p-2 text-center">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              isPaid ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                            }`}
+                          >
+                            {isPaid ? (isAr ? 'مسدد بنجاح' : 'Paid') : (isAr ? 'مستحق للسداد' : 'Due')}
+                          </span>
+                        </td>
+                        <td className="p-2 text-end">
+                          {!isPaid ? (
+                            <button
+                              onClick={() => {
+                                setSelectedInstallmentForPay({ loan: selectedLoanForSchedule, installment: inst });
+                                setIsPayInstallmentModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-md bg-[#7F1625] hover:bg-[#961b2c] text-white text-[11px] font-bold transition-all cursor-pointer shadow-xs"
+                            >
+                              {isAr ? 'سداد القسط 💳' : 'Pay'}
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              {formatCleanDate(inst.paid_at || '')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSelectedLoanForPrint(selectedLoanForSchedule)}
+                icon={<Printer className="w-3.5 h-3.5" />}
+              >
+                {isAr ? 'طباعة الجدول A4' : 'Print A4'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedLoanForSchedule(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Pay Installment Modal */}
+      {selectedInstallmentForPay && (
+        <Modal
+          isOpen={isPayInstallmentModalOpen}
+          onClose={() => {
+            setIsPayInstallmentModalOpen(false);
+            setSelectedInstallmentForPay(null);
+          }}
+          title={isAr ? `سداد القسط البنكي: قسط رقم (${selectedInstallmentForPay.installment.installment_number})` : `Pay Loan Installment #${selectedInstallmentForPay.installment.installment_number}`}
+        >
+          <form onSubmit={handlePayInstallment} className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-semibold">{isAr ? 'القرض المعني:' : 'Loan:'}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedInstallmentForPay.loan.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-semibold">{isAr ? 'تاريخ الاستحقاق الرسمي:' : 'Due Date:'}</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                  {formatCleanDate(selectedInstallmentForPay.installment.due_date)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span className="font-bold text-slate-700 dark:text-slate-300">{isAr ? 'إجمالي قيمة القسط المطلوب سداده:' : 'Total Installment Due:'}</span>
+                <span className="font-mono text-base font-black text-[#7F1625] dark:text-[#ff8ba0]">
+                  {Number(selectedInstallmentForPay.installment.total_amount).toLocaleString()} ج.م
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'الحساب البنكي أو الخزينة المسدد منها *' : 'Paid From Account *'}
+              </label>
+              <select
+                required
+                value={payInstPaymentAccId}
+                onChange={(e) => setPayInstPaymentAccId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium"
+              >
+                <option value="">{isAr ? '-- اختر حساب السداد --' : '-- Select Payment Account --'}</option>
+                {financialAccounts.map((fa) => (
+                  <option key={fa.id} value={fa.id}>
+                    {fa.code} - {fa.name} (رصيد: {Number(fa.current_balance).toLocaleString()} {fa.currency})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'تاريخ السداد الفعلي *' : 'Payment Date *'}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={payInstDate}
+                  onChange={(e) => setPayInstDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isAr ? 'رقم الإشعار أو الشيك' : 'Reference / Check #'}
+                </label>
+                <input
+                  type="text"
+                  value={payInstRef}
+                  onChange={(e) => setPayInstRef(e.target.value)}
+                  placeholder="TRF-NBE-99120"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1 text-xs">
+              <span className="font-semibold text-slate-600 dark:text-slate-400 block border-b border-slate-200 dark:border-slate-700 pb-1">
+                {isAr ? 'القيد المحاسبي المزدوج الآلي الناتج:' : 'Resulting Double-Entry:'}
+              </span>
+              <p className="font-mono text-emerald-700 dark:text-emerald-300">
+                [من حـ/ قروض وتسهيلات بنكية]: +{Number(selectedInstallmentForPay.installment.principal_amount).toLocaleString()} ج.م
+              </p>
+              {Number(selectedInstallmentForPay.installment.interest_amount) > 0 && (
+                <p className="font-mono text-amber-700 dark:text-amber-300">
+                  [من حـ/ فوائد ومصاريف بنكية]: +{Number(selectedInstallmentForPay.installment.interest_amount).toLocaleString()} ج.م
+                </p>
+              )}
+              <p className="font-mono text-rose-700 dark:text-rose-300">
+                [إلى حـ/ الحساب البنكي المسدد منه]: -{Number(selectedInstallmentForPay.installment.total_amount).toLocaleString()} ج.م
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setIsPayInstallmentModalOpen(false);
+                  setSelectedInstallmentForPay(null);
+                }}
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting || !payInstPaymentAccId}
+                className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold"
+              >
+                {isSubmitting ? (isAr ? 'جاري السداد...' : 'Processing...') : (isAr ? 'تأكيد السداد وترحيل القيد' : 'Confirm Payment')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Official A4 Print Loan Schedule Modal */}
+      <PrintLoanScheduleModal
+        isOpen={!!selectedLoanForPrint}
+        onClose={() => setSelectedLoanForPrint(null)}
+        loan={selectedLoanForPrint}
         isAr={isAr}
       />
     </div>

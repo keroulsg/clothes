@@ -916,6 +916,43 @@ export interface FiscalYear {
   periods?: FiscalPeriod[];
 }
 
+export interface BankLoanInstallment {
+  id: string;
+  installment_number: number;
+  due_date: string;
+  principal_amount: number;
+  interest_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  status: 'paid' | 'pending' | 'overdue';
+  paid_at?: string;
+  payment_account_id?: string;
+  payment_reference?: string;
+  notes?: string;
+}
+
+export interface BankLoan {
+  id: string;
+  loan_number: string;
+  name: string;
+  bank_name: string;
+  contract_number?: string;
+  financial_account_id?: string;
+  principal_amount: number;
+  interest_rate: number;
+  interest_amount: number;
+  total_loan_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  installments_count: number;
+  frequency: 'monthly' | 'quarterly' | 'annually';
+  start_date: string;
+  maturity_date: string;
+  status: 'active' | 'completed' | 'defaulted';
+  notes?: string;
+  installments: BankLoanInstallment[];
+}
+
 export interface ReconciliationResult {
   tenant_id: string;
   control_account: {

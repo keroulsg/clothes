@@ -89,6 +89,10 @@ class AccountingService
             ['code' => '2021', 'name' => 'أجور عمال الخياطة والقص (بالقطعة)', 'name_en' => 'Piece-Rate Workers Wages', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2020'],
             ['code' => '2022', 'name' => 'رواتب الإشراف والإدارة الشهرية', 'name_en' => 'Monthly Supervisory & Staff Salaries', 'type' => 'liability', 'category' => 'current_liability', 'level' => 4, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2020'],
             ['code' => '2030', 'name' => 'ضريبة القيمة المضافة المستحقة (VAT)', 'name_en' => 'VAT Payable', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '21'],
+            ['code' => '2110', 'name' => 'قروض وتسهيلات بنكية قصيرة الأجل', 'name_en' => 'Short-Term Bank Loans & Facilities', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '21'],
+            ['code' => '2120', 'name' => 'أقساط قروض بنكية جارية ومستحقة', 'name_en' => 'Current Due Bank Installments', 'type' => 'liability', 'category' => 'current_liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '21'],
+            ['code' => '2200', 'name' => 'الالتزامات والقروض طويلة الأجل', 'name_en' => 'Long-Term Liabilities', 'type' => 'liability', 'category' => 'liability', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '2'],
+            ['code' => '2210', 'name' => 'قروض وتسهيلات بنكية طويلة الأجل (تمويل خطوط إنتاج)', 'name_en' => 'Long-Term Machinery & Production Loans', 'type' => 'liability', 'category' => 'liability', 'level' => 3, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '2200'],
 
             // 3: حقوق الملكية
             ['code' => '3', 'name' => 'حقوق الملكية', 'name_en' => 'Equity', 'type' => 'equity', 'category' => 'equity', 'level' => 1, 'normal_balance' => 'credit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
@@ -117,6 +121,7 @@ class AccountingService
             ['code' => '6013', 'name' => 'إهلاك ماكينات ومعدات المصنع', 'name_en' => 'Machinery Depreciation Expense', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
             ['code' => '6020', 'name' => 'مصاريف بيع وتوزيع وشحن', 'name_en' => 'Selling, Shipping & Marketing', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
             ['code' => '6030', 'name' => 'مصاريف إدارية وعمومية واتصالات', 'name_en' => 'Administrative & General Expenses', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
+            ['code' => '6040', 'name' => 'فوائد تمويل وعمولات ومصاريف بنكية', 'name_en' => 'Financing Interest & Bank Fees', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '6'],
         ];
 
         // Step 1: Create accounts in order

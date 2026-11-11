@@ -2452,7 +2452,7 @@ export function App() {
           {/* Subscription & Cloud Quota Meters Tab */}
           {activeTab === 'subscription' && (
             <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
-              <TenantSubscriptionView isAr={lang === 'ar'} />
+              <TenantSubscriptionView isAr={lang === 'ar'} onNavigate={(tab) => handleTabChange(tab)} />
             </Suspense>
           )}
 

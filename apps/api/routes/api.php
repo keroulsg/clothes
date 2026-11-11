@@ -505,6 +505,7 @@ Route::prefix('v1')->group(function () {
 
         // إدارة الاشتراكات والحصص والفوترة (Commercial SaaS Subscription Plans & Usage Metering)
         Route::get('/subscription/current', [\App\Http\Controllers\Api\SubscriptionController::class, 'current']);
+        Route::get('/subscription/overrides', [\App\Http\Controllers\Api\SubscriptionController::class, 'activeOverrides']);
         Route::post('/subscription/upgrade', [\App\Http\Controllers\Api\SubscriptionController::class, 'upgrade'])->middleware('role:company_owner');
         Route::get('/admin/subscriptions', [\App\Http\Controllers\Api\SubscriptionController::class, 'adminList'])->middleware('role:platform_admin,company_owner');
         Route::post('/admin/subscriptions/override', [\App\Http\Controllers\Api\SubscriptionController::class, 'grantOverride'])->middleware('role:platform_admin,company_owner');

@@ -2273,7 +2273,7 @@ class ApiClient {
     getCurrentReport: async (): Promise<any> => {
       return this.request('/subscription/current');
     },
-    upgrade: async (payload: { plan_code: string; billing_cycle?: 'monthly' | 'annual' }): Promise<{ message: string; subscription: any }> => {
+    upgrade: async (payload: { plan_code: string; billing_cycle?: 'monthly' | 'annual'; direct_activate?: boolean }): Promise<any> => {
       return this.request('/subscription/upgrade', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -2282,11 +2282,14 @@ class ApiClient {
     getAdminSubscriptions: async (page = 1): Promise<any> => {
       return this.request(`/admin/subscriptions?page=${page}`);
     },
-    grantAdminOverride: async (payload: { tenant_id: string; meter_key: string; temporary_limit: number; reason: string; days?: number }): Promise<{ message: string; override: any }> => {
+    grantAdminOverride: async (payload: { tenant_id?: string; meter_key: string; temporary_limit: number; reason: string; days?: number }): Promise<{ message: string; override: any }> => {
       return this.request('/admin/subscriptions/override', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+    },
+    getActiveOverrides: async (): Promise<{ overrides: any[] }> => {
+      return this.request('/subscription/overrides');
     },
   };
 

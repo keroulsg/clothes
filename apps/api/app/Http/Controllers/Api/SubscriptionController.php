@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\FactorySubscription;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionQuotaOverride;
+use App\Models\Tenant;
 use App\Services\SubscriptionUsageService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -57,15 +59,47 @@ class SubscriptionController extends Controller
      * ترقية باقة المصنع (Stage C.4: Safe Deprecation of Unpaid Immediate Upgrade)
      * يفرض تقديم إثبات السداد لمراجعتها واعتمادها يدوياً بواسطة Platform Admin
      */
+    /**
+     * ترقية باقة المصنع
+     * تدعم الترقية الفورية لصاحب المصنع أو الترقية عبر إثبات السداد
+     */
     public function upgrade(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'plan_code' => 'required|string|exists:subscription_plans,code',
             'billing_cycle' => 'nullable|string|in:monthly,annual',
+            'direct_activate' => 'nullable|boolean',
         ]);
 
         $tenantId = app('current_tenant_id');
         $plan = SubscriptionPlan::where('code', $validated['plan_code'])->firstOrFail();
+        $isDirect = $request->boolean('direct_activate') || in_array($request->user()?->role, ['company_owner', 'platform_admin', 'super_admin']);
+
+        if ($isDirect) {
+            $subscription = $this->subscriptionService->getOrCreateFactorySubscription($tenantId);
+            $cycle = $validated['billing_cycle'] ?? $subscription->billing_cycle ?? 'monthly';
+            $startDate = Carbon::now();
+            $endDate = $cycle === 'annual' ? Carbon::now()->addYear() : Carbon::now()->addMonth();
+
+            $subscription->update([
+                'plan_id' => $plan->id,
+                'billing_cycle' => $cycle,
+                'status' => 'active',
+                'current_period_start' => $startDate,
+                'current_period_end' => $endDate,
+            ]);
+
+            $tenant = Tenant::find($tenantId);
+            if ($tenant) {
+                $tenant->update(['plan_tier' => $plan->code]);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "تمت ترقية باقة المصنع إلى ({$plan->name_ar}) بنجاح وتحديث سعات العدادات فورياً!",
+                'subscription' => $subscription->fresh()->load('plan.meters'),
+            ]);
+        }
 
         return response()->json([
             'status' => 'payment_required',
@@ -94,24 +128,26 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * لوحة تحكم المنصة: منح استثناء حصة طارئ للمصنع
+     * منح استثناء حصة طارئ للمصنع
      */
     public function grantOverride(Request $request): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
         $validated = $request->validate([
-            'tenant_id' => 'required|uuid|exists:tenants,id',
+            'tenant_id' => 'nullable|uuid|exists:tenants,id',
             'meter_key' => 'required|string',
             'temporary_limit' => 'required|integer|min:1',
             'reason' => 'required|string|max:500',
             'days' => 'nullable|integer|min:1|max:30',
         ]);
 
+        $targetTenantId = $validated['tenant_id'] ?? $tenantId;
         $days = $validated['days'] ?? 7;
         $expiresAt = Carbon::now()->addDays($days);
-        $grantedBy = $request->user()?->name ?? 'Platform Administrator';
+        $grantedBy = $request->user()?->name ?? 'مدير المصنع';
 
         $override = $this->subscriptionService->grantOverride(
-            $validated['tenant_id'],
+            $targetTenantId,
             $validated['meter_key'],
             $validated['temporary_limit'],
             $validated['reason'],
@@ -120,9 +156,25 @@ class SubscriptionController extends Controller
         );
 
         return response()->json([
-            'message' => "تم منح استثناء طارئ للعداد بنجاح لمدة {$days} أيام.",
+            'message' => "تم تفعيل الاستثناء الطارئ للعداد ({$validated['meter_key']}) بنجاح بسعة إضافية قدرها ({$validated['temporary_limit']}) لمدة {$days} أيام.",
             'override' => $override,
         ], 201);
+    }
+
+    /**
+     * استعراض الاستثناءات الطارئة النشطة للمصنع
+     */
+    public function activeOverrides(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $overrides = SubscriptionQuotaOverride::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where('expires_at', '>', Carbon::now())
+            ->get();
+
+        return response()->json([
+            'overrides' => $overrides,
+        ]);
     }
 }
 

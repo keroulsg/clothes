@@ -1481,7 +1481,8 @@ class AccountingService
             ];
         }
 
-        $entry = $this->createJournalEntry($tenantId, [
+        $entry = $this->createJournalEntry([
+            'tenant_id' => $tenantId,
             'description' => "قيد تسوية ومطابقة دفتري: موازنة أرصدة الخزائن النقدية وحسابات البنوك مع الأستاذ العام",
             'entry_date' => now()->toDateString(),
             'reference_type' => 'treasury_reconciliation_adjustment',
@@ -1650,7 +1651,8 @@ class AccountingService
             ];
         }
 
-        $entry = $this->createJournalEntry($tenantId, [
+        $entry = $this->createJournalEntry([
+            'tenant_id' => $tenantId,
             'description' => $desc,
             'entry_date' => $entryDate,
             'reference_type' => 'ar_reconciliation_adjustment',
@@ -1735,7 +1737,8 @@ class AccountingService
             ];
         }
 
-        $entry = $this->createJournalEntry($tenantId, [
+        $entry = $this->createJournalEntry([
+            'tenant_id' => $tenantId,
             'description' => $desc,
             'entry_date' => $entryDate,
             'reference_type' => 'ap_reconciliation_adjustment',

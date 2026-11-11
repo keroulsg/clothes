@@ -384,6 +384,10 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/accounting/cost-centers', [\App\Http\Controllers\Api\AccountingController::class, 'costCenters']);
             Route::post('/accounting/cost-centers', [\App\Http\Controllers\Api\AccountingController::class, 'storeCostCenter'])->middleware('role:accountant,company_owner');
+            Route::put('/accounting/cost-centers/{id}', [\App\Http\Controllers\Api\AccountingController::class, 'updateCostCenter'])->middleware('role:accountant,company_owner');
+            Route::delete('/accounting/cost-centers/{id}', [\App\Http\Controllers\Api\AccountingController::class, 'deleteCostCenter'])->middleware('role:accountant,company_owner');
+            Route::post('/accounting/cost-centers/seed-defaults', [\App\Http\Controllers\Api\AccountingController::class, 'seedDefaultCostCenters'])->middleware('role:accountant,company_owner');
+            Route::get('/accounting/cost-centers/{id}/statement', [\App\Http\Controllers\Api\AccountingController::class, 'costCenterStatement'])->middleware('role:accountant,financial_accountant,company_owner');
 
             Route::get('/accounting/fiscal-years', [\App\Http\Controllers\Api\AccountingController::class, 'fiscalYears']);
             Route::post('/accounting/fiscal-years', [\App\Http\Controllers\Api\AccountingController::class, 'storeFiscalYear'])->middleware('role:accountant,company_owner');

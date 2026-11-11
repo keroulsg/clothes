@@ -858,6 +858,11 @@ export interface CostCenter {
   description?: string;
   is_active: boolean;
   parent?: CostCenter;
+  children?: CostCenter[];
+  total_expenses?: number;
+  total_debit?: number;
+  total_credit?: number;
+  entries_count?: number;
 }
 
 export interface FinancialAccount {

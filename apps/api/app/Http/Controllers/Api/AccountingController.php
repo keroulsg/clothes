@@ -430,9 +430,31 @@ class AccountingController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $centers = CostCenter::where('tenant_id', $tenantId)
-            ->with('parent')
+            ->with(['parent', 'children'])
             ->orderBy('code')
             ->get();
+
+        $totalAllocatedExpenses = 0;
+
+        foreach ($centers as $center) {
+            $lines = JournalEntryLine::where('tenant_id', $tenantId)
+                ->where(function ($q) use ($center) {
+                    $q->where('cost_center_id', $center->id)
+                      ->orWhere('cost_center', $center->code);
+                })
+                ->get();
+
+            $totalDebit = (float)$lines->sum('debit');
+            $totalCredit = (float)$lines->sum('credit');
+            $netExpense = round($totalDebit - $totalCredit, 2);
+
+            $center->total_expenses = max($netExpense, 0);
+            $center->total_debit = $totalDebit;
+            $center->total_credit = $totalCredit;
+            $center->entries_count = $lines->count();
+
+            $totalAllocatedExpenses += $center->total_expenses;
+        }
 
         return response()->json($centers);
     }
@@ -463,6 +485,190 @@ class AccountingController extends Controller
             'message' => 'تم إنشاء مركز التكلفة بنجاح',
             'cost_center' => $center->load('parent'),
         ], 201);
+    }
+
+    public function updateCostCenter(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $center = CostCenter::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'code' => 'required|string|max:50',
+            'name' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'parent_id' => 'nullable|uuid',
+            'description' => 'nullable|string',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        $center->update([
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'name_en' => $validated['name_en'] ?? null,
+            'parent_id' => $validated['parent_id'] ?? null,
+            'description' => $validated['description'] ?? null,
+            'is_active' => $validated['is_active'] ?? $center->is_active,
+        ]);
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات مركز التكلفة بنجاح',
+            'cost_center' => $center->load('parent'),
+        ]);
+    }
+
+    public function deleteCostCenter(string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $center = CostCenter::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $hasChildren = CostCenter::where('tenant_id', $tenantId)->where('parent_id', $id)->exists();
+        if ($hasChildren) {
+            return response()->json([
+                'message' => 'لا يمكن حذف هذا المركز لأنه يحتوي على مراكز تكلفة فرعية تابعة له',
+            ], 422);
+        }
+
+        $hasEntries = JournalEntryLine::where('tenant_id', $tenantId)
+            ->where(function ($q) use ($center) {
+                $q->where('cost_center_id', $center->id)
+                  ->orWhere('cost_center', $center->code);
+            })
+            ->exists();
+
+        if ($hasEntries) {
+            return response()->json([
+                'message' => 'لا يمكن حذف هذا المركز لوجود قيود ومصروفات مسجلة ومرحلة عليه. يمكنك تعطيله بدلاً من حذفه.',
+            ], 422);
+        }
+
+        $center->delete();
+
+        return response()->json([
+            'message' => 'تم حذف مركز التكلفة بنجاح',
+        ]);
+    }
+
+    public function seedDefaultCostCenters(): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $defaults = [
+            [
+                'code' => '100',
+                'name' => 'مراكز الإنتاج المباشرة',
+                'name_en' => 'Direct Production Centers',
+                'description' => 'الورش والعنابر المسؤولة عن تحويل الخامات إلى ملابس جاهزة',
+                'children' => [
+                    ['code' => '101', 'name' => 'قسم القص وفرش الأقمشة', 'name_en' => 'Cutting Department', 'description' => 'عمليات فرد الأقمشة والباترون والقص الميكانيكي'],
+                    ['code' => '102', 'name' => 'خطوط الخياطة والتجميع', 'name_en' => 'Sewing & Assembly Lines', 'description' => 'ماكينات الأوفر والسنجر وتجميع قطع الملابس'],
+                    ['code' => '103', 'name' => 'قسم التشطيب والمكواة والتعبئة', 'name_en' => 'Finishing, Pressing & Packing', 'description' => 'الفحص النهائي والمكواة بالبخار والتغليف'],
+                ],
+            ],
+            [
+                'code' => '200',
+                'name' => 'مراكز الخدمات الإنتاجية المساعدة',
+                'name_en' => 'Production Support Centers',
+                'description' => 'الأقسام المساندة لعمليات التصنيع وتجهيز الخامات والآلات',
+                'children' => [
+                    ['code' => '201', 'name' => 'ورشة صيانة الماكينات وقطع الغيار', 'name_en' => 'Machine Maintenance & Spare Parts', 'description' => 'صيانة خطوط الخياطة والمقصات ومولدات الكهرباء'],
+                    ['code' => '202', 'name' => 'مستودع الأقمشة ومستلزمات الإنتاج', 'name_en' => 'Raw Materials & Accessories Warehouse', 'description' => 'تخزين الخامات والأزرار والخيوط والبطانات'],
+                    ['code' => '203', 'name' => 'قسم مراقبة الجودة وفحص القماش', 'name_en' => 'Quality Control & Fabric Inspection', 'description' => 'معاينة عيوب النسيج والقياسات ومطابقة المواصفات'],
+                ],
+            ],
+            [
+                'code' => '300',
+                'name' => 'مراكز التسويق والمبيعات والتوزيع',
+                'name_en' => 'Sales, Marketing & Distribution',
+                'description' => 'تسويق المنتجات التامة وتوزيع طلبيات وتوكيلات الملابس',
+                'children' => [
+                    ['code' => '301', 'name' => 'معرض ومنافذ بيع المصنع', 'name_en' => 'Factory Outlets & Showrooms', 'description' => 'منافذ البيع النقدية والمعارض التابعة للمصنع'],
+                    ['code' => '302', 'name' => 'التسويق والشحن والتوصيل', 'name_en' => 'Marketing, Freight & Logistics', 'description' => 'حملات الدعاية وشحن الطلبيات لتجار الجملة'],
+                ],
+            ],
+            [
+                'code' => '400',
+                'name' => 'الإدارة العامة والخدمات المشتركة',
+                'name_en' => 'General Administration & Shared Services',
+                'description' => 'إدارة المصنع، الحسابات، الموارد البشرية، والشؤون القانونية',
+                'children' => [
+                    ['code' => '401', 'name' => 'الإدارة العامة والمكتب التنفيذي', 'name_en' => 'Executive Management & Administration', 'description' => 'مصاريف المقر الإداري، الاتصالات، والخدمات المكتبية'],
+                ],
+            ],
+        ];
+
+        $createdCount = 0;
+
+        foreach ($defaults as $parentData) {
+            $children = $parentData['children'] ?? [];
+            unset($parentData['children']);
+
+            $parent = CostCenter::firstOrCreate(
+                ['tenant_id' => $tenantId, 'code' => $parentData['code']],
+                [
+                    'name' => $parentData['name'],
+                    'name_en' => $parentData['name_en'],
+                    'description' => $parentData['description'],
+                    'is_active' => true,
+                ]
+            );
+            $createdCount++;
+
+            foreach ($children as $childData) {
+                CostCenter::firstOrCreate(
+                    ['tenant_id' => $tenantId, 'code' => $childData['code']],
+                    [
+                        'name' => $childData['name'],
+                        'name_en' => $childData['name_en'],
+                        'parent_id' => $parent->id,
+                        'description' => $childData['description'],
+                        'is_active' => true,
+                    ]
+                );
+                $createdCount++;
+            }
+        }
+
+        return response()->json([
+            'message' => "تم توليد وتجهيز {$createdCount} مركز تكلفة معياري لمصنع الملابس بنجاح!",
+        ]);
+    }
+
+    public function costCenterStatement(string $id, Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $center = CostCenter::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $query = JournalEntryLine::where('tenant_id', $tenantId)
+            ->where(function ($q) use ($center) {
+                $q->where('cost_center_id', $center->id)
+                  ->orWhere('cost_center', $center->code);
+            })
+            ->with(['journalEntry', 'account']);
+
+        if ($request->filled('from_date')) {
+            $query->whereHas('journalEntry', function ($q) use ($request) {
+                $q->where('entry_date', '>=', $request->input('from_date'));
+            });
+        }
+        if ($request->filled('to_date')) {
+            $query->whereHas('journalEntry', function ($q) use ($request) {
+                $q->where('entry_date', '<=', $request->input('to_date'));
+            });
+        }
+
+        $lines = $query->latest('created_at')->get();
+
+        $totalDebit = (float)$lines->sum('debit');
+        $totalCredit = (float)$lines->sum('credit');
+        $netExpense = round($totalDebit - $totalCredit, 2);
+
+        return response()->json([
+            'cost_center' => $center->load('parent'),
+            'total_debit' => $totalDebit,
+            'total_credit' => $totalCredit,
+            'net_expense' => $netExpense,
+            'lines' => $lines,
+        ]);
     }
 
     // ==========================================

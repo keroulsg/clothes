@@ -1692,6 +1692,26 @@ class ApiClient {
         body: JSON.stringify(payload),
       });
     },
+    updateCostCenter: async (id: string, payload: { code?: string; name?: string; name_en?: string; parent_id?: string; description?: string; is_active?: boolean }): Promise<{ message: string; cost_center: any }> => {
+      return this.request(`/accounting/cost-centers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    deleteCostCenter: async (id: string): Promise<{ message: string }> => {
+      return this.request(`/accounting/cost-centers/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    seedDefaultCostCenters: async (): Promise<{ message: string }> => {
+      return this.request('/accounting/cost-centers/seed-defaults', {
+        method: 'POST',
+      });
+    },
+    getCostCenterStatement: async (id: string, params?: { from_date?: string; to_date?: string }): Promise<any> => {
+      const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.request(`/accounting/cost-centers/${id}/statement${q ? `?${q}` : ''}`);
+    },
     getFiscalYears: async (): Promise<any[]> => {
       return this.request('/accounting/fiscal-years');
     },

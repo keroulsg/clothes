@@ -42,6 +42,7 @@ import {
   Calendar,
   Boxes,
   Zap,
+  TrendingUp,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -56,6 +57,8 @@ import { PrintJournalVoucherModal } from './PrintJournalVoucherModal';
 import { PrintTransferVoucherModal } from './PrintTransferVoucherModal';
 import { PrintLoanScheduleModal } from './PrintLoanScheduleModal';
 import { PrintReconciliationModal } from './PrintReconciliationModal';
+import { CostCenterModal } from './CostCenterModal';
+import { CostCenterStatementModal } from './CostCenterStatementModal';
 import { formatCleanDate } from '../sales/PrintSalesInvoiceModal';
 import type {
   Language,
@@ -226,6 +229,14 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [reconcileSuccessMsg, setReconcileSuccessMsg] = useState<string | null>(null);
   const [reconciliationActiveTab, setReconciliationActiveTab] = useState<'ar' | 'ap' | 'treasury' | 'inventory'>('ar');
 
+  // Cost Centers Interactive States
+  const [costCenterToEdit, setCostCenterToEdit] = useState<CostCenter | null>(null);
+  const [selectedCostCenterForStatement, setSelectedCostCenterForStatement] = useState<CostCenter | null>(null);
+  const [costCenterSearch, setCostCenterSearch] = useState('');
+  const [costCenterFilter, setCostCenterFilter] = useState<'all' | 'main' | 'sub'>('all');
+  const [isSeedingCostCenters, setIsSeedingCostCenters] = useState(false);
+  const [costCenterSuccessMsg, setCostCenterSuccessMsg] = useState<string | null>(null);
+
   // COA Interactive States & Filters
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'asset' | 'liability' | 'equity' | 'revenue' | 'expense'>('all');
@@ -290,6 +301,33 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       const res = await api.accounting.getCostCenters();
       if (Array.isArray(res)) setCostCenters(res);
     } catch (err) {}
+  };
+
+  const handleSeedDefaultCostCenters = async () => {
+    try {
+      setIsSeedingCostCenters(true);
+      setCostCenterSuccessMsg(null);
+      const res = await api.accounting.seedDefaultCostCenters();
+      setCostCenterSuccessMsg(res?.message || 'تم توليد مراكز التكلفة الصناعية المعيارية بنجاح!');
+      await loadCostCenters();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || 'فشل توليد مراكز التكلفة');
+    } finally {
+      setIsSeedingCostCenters(false);
+    }
+  };
+
+  const handleDeleteCostCenter = async (id: string, name: string) => {
+    if (!confirm(isAr ? `هل أنت متأكد من حذف مركز التكلفة: "${name}"؟` : `Delete cost center "${name}"?`)) {
+      return;
+    }
+    try {
+      const res = await api.accounting.deleteCostCenter(id);
+      setCostCenterSuccessMsg(res?.message || 'تم حذف مركز التكلفة بنجاح');
+      await loadCostCenters();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || 'تعذر حذف مركز التكلفة');
+    }
   };
 
   const loadFiscalYears = async () => {
@@ -4153,48 +4191,429 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
       )}
 
       {/* 5. COST CENTERS VIEW */}
-      {activeSubTab === 'cost_centers' && (
-        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 dark:text-white">
-              {isAr ? 'دليل مراكز التكلفة التحليلية للمصنع' : 'Analytical Cost Centers'}
-            </h3>
-            <span className="text-xs text-slate-500 font-mono">{costCenters.length} {isAr ? 'مركز' : 'Centers'}</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                <tr>
-                  <th className="p-3 text-start">{isAr ? 'كود المركز' : 'Code'}</th>
-                  <th className="p-3 text-start">{isAr ? 'اسم مركز التكلفة' : 'Name'}</th>
-                  <th className="p-3 text-start">{isAr ? 'الوصف والنشاط' : 'Description'}</th>
-                  <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {costCenters.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-400">
-                      {isAr ? 'لا توجد مراكز تكلفة مسجلة' : 'No cost centers recorded'}
-                    </td>
-                  </tr>
-                ) : (
-                  costCenters.map((cc) => (
-                    <tr key={cc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <td className="p-3 font-mono font-bold text-primary">{cc.code}</td>
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{cc.name}</td>
-                      <td className="p-3 text-xs text-slate-400">{cc.description || '—'}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant="success">{isAr ? 'نشط' : 'Active'}</Badge>
-                      </td>
+      {activeSubTab === 'cost_centers' && (() => {
+        const totalAllocatedExpenses = costCenters.reduce((sum, c) => sum + Number(c.total_expenses || 0), 0);
+        const mainCenters = costCenters.filter((c) => !c.parent_id);
+        const subCenters = costCenters.filter((c) => Boolean(c.parent_id));
+        const activeCentersCount = costCenters.filter((c) => c.is_active !== false).length;
+
+        // Highest spending center
+        const sortedByExpense = [...costCenters].sort((a, b) => Number(b.total_expenses || 0) - Number(a.total_expenses || 0));
+        const highestCenter = sortedByExpense.length > 0 && Number(sortedByExpense[0].total_expenses || 0) > 0 ? sortedByExpense[0] : null;
+
+        // Filter & Search
+        const filteredCenters = costCenters.filter((c) => {
+          if (costCenterFilter === 'main' && c.parent_id) return false;
+          if (costCenterFilter === 'sub' && !c.parent_id) return false;
+          if (costCenterSearch.trim()) {
+            const q = costCenterSearch.toLowerCase();
+            return (
+              c.code.toLowerCase().includes(q) ||
+              c.name.toLowerCase().includes(q) ||
+              (c.name_en && c.name_en.toLowerCase().includes(q)) ||
+              (c.description && c.description.toLowerCase().includes(q))
+            );
+          }
+          return true;
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* Top Control Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950/90 border border-amber-900/30 shadow-xl backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <span>{isAr ? 'دليل ومراكز التكلفة الصناعية التحليلية' : 'Analytical Cost Centers & Activity Tracking'}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Cost Allocation
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {isAr
+                      ? 'توزيع ومراقبة التكاليف والمصروفات على خطوط الإنتاج والورش والأقسام لمعرفة أرباح وهدر كل قسم'
+                      : 'Track operational and manufacturing costs per production line, department, and activity'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Button
+                  variant="outline"
+                  disabled={isSeedingCostCenters}
+                  onClick={handleSeedDefaultCostCenters}
+                  className="border-amber-600/40 text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 text-xs font-bold py-2 px-3.5"
+                >
+                  <Zap className={`w-4 h-4 ${isSeedingCostCenters ? 'animate-spin' : ''}`} />
+                  {isSeedingCostCenters
+                    ? (isAr ? 'جاري التوليد...' : 'Generating...')
+                    : (isAr ? 'توليد مراكز التكلفة المعيارية ⚡' : 'Seed Default Centers')}
+                </Button>
+
+                <Button
+                  onClick={() => {
+                    setCostCenterToEdit(null);
+                    setIsCostCenterModalOpen(true);
+                  }}
+                  className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs flex items-center gap-2 py-2 px-4 shadow-lg shadow-amber-900/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  {isAr ? 'إضافة مركز تكلفة جديد' : 'Add Cost Center'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Success Banner */}
+            {costCenterSuccessMsg && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-between text-sm animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                  <span>{costCenterSuccessMsg}</span>
+                </div>
+                <button
+                  onClick={() => setCostCenterSuccessMsg(null)}
+                  className="text-emerald-400 hover:text-white text-xs font-bold px-2 py-1"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* 4 Bento Metric Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'إجمالي المصروفات المحملة' : 'Total Allocated Costs'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                    <PieChart className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-black font-mono text-slate-900 dark:text-white mt-2">
+                  {totalAllocatedExpenses.toLocaleString()} ج.م
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'محملة من واقع القيود وسندات الصرف' : 'Allocated from posted journal entries'}
+                </p>
+              </Card>
+
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'المركز الأعلى استهلاكاً للتكلفة' : 'Highest Cost Center'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-base font-bold text-slate-900 dark:text-white mt-2 truncate">
+                  {highestCenter ? highestCenter.name : (isAr ? 'لا توجد مصاريف' : 'None')}
+                </div>
+                <p className="text-[11px] font-mono text-amber-500 font-bold mt-1">
+                  {highestCenter ? `${Number(highestCenter.total_expenses).toLocaleString()} ج.م` : '0.00 ج.م'}
+                </p>
+              </Card>
+
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'إجمالي مراكز التكلفة' : 'Total Cost Centers'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                    <FolderTree className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-black font-mono text-slate-900 dark:text-white mt-2">
+                  {costCenters.length} <span className="text-xs font-normal text-slate-400">{isAr ? 'مركز' : 'centers'}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {mainCenters.length} {isAr ? 'رئيسي' : 'main'} • {subCenters.length} {isAr ? 'فرعي' : 'sub'}
+                </p>
+              </Card>
+
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs">
+                  <span>{isAr ? 'المراكز النشطة للتشغيل' : 'Active Centers'}</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-xl font-black font-mono text-emerald-500 mt-2">
+                  {activeCentersCount} <span className="text-xs font-normal text-slate-400">/ {costCenters.length}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {isAr ? 'متاحة لتحميل تكاليف أوامر الشغل والقص' : 'Available for work order cost allocation'}
+                </p>
+              </Card>
+            </div>
+
+            {/* Visual Expense Allocation Bar */}
+            {totalAllocatedExpenses > 0 && (
+              <Card className="p-4 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <span>{isAr ? 'خريطة توزيع المصروفات النسبية على المراكز الأنشط' : 'Relative Expense Distribution'}</span>
+                  <span className="font-mono text-amber-500">{totalAllocatedExpenses.toLocaleString()} ج.م (100%)</span>
+                </div>
+                <div className="w-full h-3.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                  {sortedByExpense.slice(0, 5).map((cc, idx) => {
+                    const pct = ((Number(cc.total_expenses || 0) / totalAllocatedExpenses) * 100);
+                    if (pct <= 0) return null;
+                    const colors = [
+                      'bg-amber-500',
+                      'bg-blue-500',
+                      'bg-emerald-500',
+                      'bg-purple-500',
+                      'bg-rose-500',
+                    ];
+                    return (
+                      <div
+                        key={cc.id}
+                        style={{ width: `${pct}%` }}
+                        className={`${colors[idx % colors.length]} h-full transition-all`}
+                        title={`${cc.name}: ${pct.toFixed(1)}% (${Number(cc.total_expenses).toLocaleString()} ج.م)`}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-500">
+                  {sortedByExpense.slice(0, 5).map((cc, idx) => {
+                    const pct = ((Number(cc.total_expenses || 0) / totalAllocatedExpenses) * 100);
+                    if (pct <= 0) return null;
+                    const dotColors = [
+                      'bg-amber-500',
+                      'bg-blue-500',
+                      'bg-emerald-500',
+                      'bg-purple-500',
+                      'bg-rose-500',
+                    ];
+                    return (
+                      <div key={cc.id} className="flex items-center gap-1.5">
+                        <span className={`w-2.5 h-2.5 rounded-full ${dotColors[idx % dotColors.length]}`} />
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">{cc.name}:</span>
+                        <span className="font-mono font-bold text-amber-500">{pct.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* Search, Filter & Table */}
+            <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              {/* Filter bar */}
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCostCenterFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      costCenterFilter === 'all'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {isAr ? 'كافة المراكز' : 'All Centers'} ({costCenters.length})
+                  </button>
+                  <button
+                    onClick={() => setCostCenterFilter('main')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      costCenterFilter === 'main'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {isAr ? 'المراكز الرئيسية' : 'Main Centers'} ({mainCenters.length})
+                  </button>
+                  <button
+                    onClick={() => setCostCenterFilter('sub')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      costCenterFilter === 'sub'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {isAr ? 'المراكز الفرعية' : 'Sub-Centers'} ({subCenters.length})
+                  </button>
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={costCenterSearch}
+                    onChange={(e) => setCostCenterSearch(e.target.value)}
+                    placeholder={isAr ? 'بحث بالكود، الاسم، أو النشاط...' : 'Search centers...'}
+                    className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl ps-9 pe-3 py-1.5 text-xs text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-xs">
+                    <tr>
+                      <th className="p-3 text-start">{isAr ? 'كود المركز' : 'Code'}</th>
+                      <th className="p-3 text-start">{isAr ? 'اسم مركز التكلفة' : 'Cost Center Name'}</th>
+                      <th className="p-3 text-start">{isAr ? 'التبعية والتصنيف' : 'Hierarchy'}</th>
+                      <th className="p-3 text-start">{isAr ? 'الوصف والنشاط المستهدف' : 'Description'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المصروفات المحملة' : 'Allocated Expenses'}</th>
+                      <th className="p-3 text-start">{isAr ? 'النسبة' : 'Share'}</th>
+                      <th className="p-3 text-center">{isAr ? 'القيود' : 'Entries'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
+                      <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-xs">
+                    {filteredCenters.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center">
+                          {costCenters.length === 0 ? (
+                            <div className="space-y-3 py-4">
+                              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 mx-auto flex items-center justify-center">
+                                <Layers className="w-6 h-6" />
+                              </div>
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                                {isAr ? 'دليل مراكز التكلفة فارغ حالياً' : 'No Cost Centers Configured Yet'}
+                              </h4>
+                              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                                {isAr
+                                  ? 'يمكنك الضغط على الزر أدناه لتوليد مراكز التكلفة الصناعية المعيارية فوراً (أقسام القص، الخياطة، المكواة، الصيانة، المعارض، والإدارة العامة).'
+                                  : 'Click below to seed default garment factory cost centers (Cutting, Sewing, Finishing, Maintenance, Outlets, and Admin).'}
+                              </p>
+                              <Button
+                                onClick={handleSeedDefaultCostCenters}
+                                disabled={isSeedingCostCenters}
+                                className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs py-2 px-5 shadow-lg shadow-amber-900/20"
+                              >
+                                <Zap className="w-3.5 h-3.5 ml-1.5" />
+                                {isAr ? 'توليد مراكز التكلفة الصناعية المعيارية الآن ⚡' : 'Generate Standard Factory Centers'}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="text-slate-400">
+                              {isAr ? 'لا توجد مراكز تكلفة مطابقة لمعايير البحث' : 'No matching cost centers found'}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCenters.map((cc) => {
+                        const expenses = Number(cc.total_expenses || 0);
+                        const sharePct = totalAllocatedExpenses > 0 ? (expenses / totalAllocatedExpenses) * 100 : 0;
+                        const isMain = !cc.parent_id;
+
+                        return (
+                          <tr
+                            key={cc.id}
+                            className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition ${
+                              isMain ? 'font-semibold bg-slate-50/20 dark:bg-slate-900/20' : ''
+                            }`}
+                          >
+                            <td className="p-3 font-mono font-bold text-amber-500">
+                              <span className="flex items-center gap-1.5">
+                                {!isMain && <span className="text-slate-400">↳</span>}
+                                <span>{cc.code}</span>
+                              </span>
+                            </td>
+                            <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                              <div>{cc.name}</div>
+                              {cc.name_en && <div className="text-[10px] text-slate-400">{cc.name_en}</div>}
+                            </td>
+                            <td className="p-3">
+                              {isMain ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  {isAr ? 'مركز رئيسي' : 'Main Center'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800">
+                                  <span>{isAr ? 'فرعي من:' : 'Child of:'}</span>
+                                  <span className="font-bold text-slate-300">{cc.parent?.name || '-'}</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-xs text-slate-400 max-w-xs truncate">
+                              {cc.description || '—'}
+                            </td>
+                            <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
+                              {expenses > 0 ? `${expenses.toLocaleString()} ج.م` : '0.00 ج.م'}
+                            </td>
+                            <td className="p-3">
+                              {sharePct > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                    <div
+                                      style={{ width: `${Math.min(sharePct, 100)}%` }}
+                                      className="h-full bg-amber-500"
+                                    />
+                                  </div>
+                                  <span className="font-mono text-xs font-bold text-amber-500">
+                                    {sharePct.toFixed(1)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-500 font-mono text-xs">0%</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center font-mono font-bold text-xs text-slate-500">
+                              {cc.entries_count || 0}
+                            </td>
+                            <td className="p-3 text-center">
+                              <Badge variant={cc.is_active ? 'success' : 'neutral'}>
+                                {cc.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => setSelectedCostCenterForStatement(cc)}
+                                  title={isAr ? 'كشف الحساب التحليلي' : 'View Statement'}
+                                  className="p-1 text-slate-400 hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setCostCenterToEdit(cc);
+                                    setIsCostCenterModalOpen(true);
+                                  }}
+                                  title={isAr ? 'تعديل المركز' : 'Edit Center'}
+                                  className="p-1 text-slate-400 hover:text-blue-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCostCenter(cc.id, cc.name)}
+                                  title={isAr ? 'حذف المركز' : 'Delete Center'}
+                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                  {filteredCenters.length > 0 && (
+                    <tfoot className="bg-slate-50/70 dark:bg-slate-900/70 font-bold border-t border-slate-200 dark:border-slate-800 text-xs">
+                      <tr>
+                        <td colSpan={4} className="p-3 text-start text-slate-700 dark:text-slate-300">
+                          {isAr ? 'إجمالي التكاليف والمصروفات المحملة على المراكز:' : 'Total Factory Allocated Expenses:'}
+                        </td>
+                        <td className="p-3 font-mono text-sm text-amber-500 font-bold">
+                          {totalAllocatedExpenses.toLocaleString()} ج.م
+                        </td>
+                        <td colSpan={4} className="p-3 text-slate-400 text-end">
+                          {isAr ? 'منظومة محاسبة التكاليف الصناعية' : 'Industrial Costing Engine'}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {/* 6. FISCAL YEARS & PERIODS VIEW */}
       {activeSubTab === 'fiscal_periods' && (
@@ -6075,6 +6494,24 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
         apData={apReconciliation}
         treasuryData={treasuryReconciliation}
         inventoryData={inventoryReconciliation}
+      />
+
+      {/* Cost Center Add / Edit Modal */}
+      <CostCenterModal
+        isOpen={isCostCenterModalOpen}
+        onClose={() => setIsCostCenterModalOpen(false)}
+        onSuccess={loadCostCenters}
+        costCenterToEdit={costCenterToEdit}
+        existingCenters={costCenters}
+        isAr={isAr}
+      />
+
+      {/* Cost Center Detailed Statement Modal */}
+      <CostCenterStatementModal
+        isOpen={!!selectedCostCenterForStatement}
+        onClose={() => setSelectedCostCenterForStatement(null)}
+        costCenter={selectedCostCenterForStatement}
+        isAr={isAr}
       />
     </div>
   );

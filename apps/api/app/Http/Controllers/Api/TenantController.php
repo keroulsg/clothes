@@ -678,6 +678,236 @@ class TenantController extends Controller
             'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
         ]);
     }
+
+    /**
+     * عرض جميع مستخدمي وحسابات المصنع الحالي
+     */
+    public function getUsers(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $users = User::where('tenant_id', $tenantId)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $usersWithDetails = $users->map(function ($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'phone' => $u->phone,
+                'role' => $u->role,
+                'is_active' => (bool)$u->is_active,
+                'permissions' => $u->permissions ?? [],
+                'effective_permissions' => $u->getEffectivePermissions(),
+                'created_at' => $u->created_at?->format('Y-m-d H:i:s'),
+            ];
+        });
+
+        return response()->json([
+            'users' => $usersWithDetails,
+            'total' => $users->count(),
+            'active_count' => $users->where('is_active', true)->count(),
+        ]);
+    }
+
+    /**
+     * إنشاء حساب مستخدم جديد وتحديد دوره وصلاحياته
+     */
+    public function createUser(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'password' => 'required|string|min:6',
+            'phone' => 'nullable|string|max:50',
+            'role' => 'required|string|in:company_owner,production_manager,production_engineer,inventory_custodian,storekeeper,warehouse_manager,accountant,financial_accountant,quality_controller,qc,sales_rep,worker,operator',
+            'permissions' => 'nullable|array',
+            'is_active' => 'boolean',
+        ]);
+
+        if ($validated['role'] === 'platform_admin') {
+            return response()->json([
+                'error' => 'ForbiddenRole',
+                'message' => 'أمان: لا يمكن إنشاء حساب مشرف منصة عام من داخل إعدادات المصنع.',
+            ], 403);
+        }
+
+        $user = User::create([
+            'tenant_id' => $tenantId,
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+            'role' => $validated['role'],
+            'permissions' => $validated['permissions'] ?? [],
+            'is_active' => $validated['is_active'] ?? true,
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return response()->json([
+            'message' => 'تم إنشاء حساب المستخدم وتعيين الصلاحيات بنجاح.',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'permissions' => $user->permissions ?? [],
+                'effective_permissions' => $user->getEffectivePermissions(),
+                'is_active' => (bool)$user->is_active,
+            ],
+        ], 201);
+    }
+
+    /**
+     * تحديث بيانات وصلاحيات مستخدم محدد
+     */
+    public function updateUser(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $user = User::where('tenant_id', $tenantId)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:50',
+            'password' => 'nullable|string|min:6',
+            'role' => 'sometimes|required|string|in:company_owner,production_manager,production_engineer,inventory_custodian,storekeeper,warehouse_manager,accountant,financial_accountant,quality_controller,qc,sales_rep,worker,operator',
+            'permissions' => 'nullable|array',
+            'is_active' => 'boolean',
+        ]);
+
+        if (isset($validated['role']) && $validated['role'] === 'platform_admin') {
+            return response()->json([
+                'error' => 'ForbiddenRole',
+                'message' => 'أمان: محظور ترقية الحساب إلى مشرف منصة عام.',
+            ], 403);
+        }
+
+        if ($user->id === auth()->id() && isset($validated['role']) && $validated['role'] !== 'company_owner') {
+            return response()->json([
+                'error' => 'CannotDemoteSelf',
+                'message' => 'أمان: لا يمكنك سحب صلاحية مالك المصنع عن حسابك الشخصي.',
+            ], 422);
+        }
+
+        if (isset($validated['name'])) $user->name = $validated['name'];
+        if (isset($validated['email'])) $user->email = $validated['email'];
+        if (array_key_exists('phone', $validated)) $user->phone = $validated['phone'];
+        if (!empty($validated['password'])) $user->password = Hash::make($validated['password']);
+        if (isset($validated['role'])) $user->role = $validated['role'];
+        if (array_key_exists('permissions', $validated)) $user->permissions = $validated['permissions'];
+        if (array_key_exists('is_active', $validated)) $user->is_active = $validated['is_active'];
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات المستخدم وصلاحياته بنجاح.',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'permissions' => $user->permissions ?? [],
+                'effective_permissions' => $user->getEffectivePermissions(),
+                'is_active' => (bool)$user->is_active,
+            ],
+        ]);
+    }
+
+    /**
+     * تفعيل / تعطيل حساب مستخدم
+     */
+    public function toggleUserActive(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $user = User::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if ($user->id === auth()->id()) {
+            return response()->json([
+                'error' => 'CannotDeactivateSelf',
+                'message' => 'أمان: لا يمكنك تعطيل حسابك الشخصي الذي تستخدمه حالياً.',
+            ], 422);
+        }
+
+        $user->is_active = !$user->is_active;
+        $user->save();
+
+        return response()->json([
+            'message' => $user->is_active ? 'تم تفعيل حساب المستخدم بنجاح.' : 'تم تعطيل حساب المستخدم.',
+            'is_active' => (bool)$user->is_active,
+        ]);
+    }
+
+    /**
+     * حذف حساب مستخدم
+     */
+    public function deleteUser(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $user = User::where('tenant_id', $tenantId)->findOrFail($id);
+
+        if ($user->id === auth()->id()) {
+            return response()->json([
+                'error' => 'CannotDeleteSelf',
+                'message' => 'أمان: لا يمكنك حذف حسابك الشخصي الذي تستخدمه حالياً.',
+            ], 422);
+        }
+
+        $user->delete();
+
+        return response()->json([
+            'message' => 'تم حذف حساب المستخدم نهائياً من سجلات المصنع.',
+        ]);
+    }
+
+    /**
+     * إرجاع كتالوج الصلاحيات ومصفوفة الأدوار
+     */
+    public function getPermissionsCatalog(): JsonResponse
+    {
+        return response()->json([
+            'catalog' => User::getPermissionsCatalog(),
+            'roles' => [
+                ['key' => 'company_owner', 'name_ar' => 'مدير المصنع / المالك', 'name_en' => 'Factory Owner / GM', 'badge_color' => 'rose'],
+                ['key' => 'production_manager', 'name_ar' => 'مهندس / مدير صالة القص والإنتاج', 'name_en' => 'Production & Cutting Lead', 'badge_color' => 'amber'],
+                ['key' => 'inventory_custodian', 'name_ar' => 'أمين مخزن الأقمشة والمستلزمات', 'name_en' => 'Fabric Storekeeper', 'badge_color' => 'indigo'],
+                ['key' => 'accountant', 'name_ar' => 'محاسب التكاليف والمالية', 'name_en' => 'Cost & Financial Accountant', 'badge_color' => 'emerald'],
+                ['key' => 'quality_controller', 'name_ar' => 'مدقق ومفتش الجودة (QC)', 'name_en' => 'Quality Control Inspector', 'badge_color' => 'cyan'],
+                ['key' => 'sales_rep', 'name_ar' => 'مسؤول المبيعات والمعارض', 'name_en' => 'Sales Specialist', 'badge_color' => 'blue'],
+                ['key' => 'worker', 'name_ar' => 'عامل تشغيل / خط إنتاج', 'name_en' => 'Line Operator', 'badge_color' => 'slate'],
+            ],
+        ]);
+    }
+
+    /**
+     * تحديث الهوية الصناعية والبيانات العامة للمصنع
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'commercial_name' => 'nullable|string|max:255',
+            'tax_id' => 'nullable|string|max:100',
+            'industrial_registry' => 'nullable|string|max:100',
+            'phone' => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:500',
+        ]);
+
+        $tenant->fill($validated);
+        $tenant->save();
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات الهوية الصناعية للمصنع بنجاح.',
+            'tenant' => $tenant,
+        ]);
+    }
 }
 
 

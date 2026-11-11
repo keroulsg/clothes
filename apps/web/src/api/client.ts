@@ -418,6 +418,47 @@ class ApiClient {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     },
+
+    updateProfile: async (payload: { name?: string; commercial_name?: string; tax_id?: string; industrial_registry?: string; phone?: string; email?: string; address?: string }): Promise<{ message: string; tenant: any }> => {
+      return this.request('/tenant/profile', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    getPermissionsCatalog: async (): Promise<{ catalog: any[]; roles: any[] }> => {
+      return this.request('/tenant/permissions-catalog');
+    },
+
+    getUsers: async (): Promise<{ users: any[]; total: number; active_count: number }> => {
+      return this.request('/tenant/users');
+    },
+
+    createUser: async (payload: { name: string; email: string; password: string; phone?: string; role: string; permissions?: string[]; is_active?: boolean }): Promise<{ message: string; user: any }> => {
+      return this.request('/tenant/users', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    updateUser: async (id: string | number, payload: { name?: string; email?: string; password?: string; phone?: string; role?: string; permissions?: string[]; is_active?: boolean }): Promise<{ message: string; user: any }> => {
+      return this.request(`/tenant/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    toggleUserActive: async (id: string | number): Promise<{ message: string; is_active: boolean }> => {
+      return this.request(`/tenant/users/${id}/toggle-active`, {
+        method: 'POST',
+      });
+    },
+
+    deleteUser: async (id: string | number): Promise<{ message: string }> => {
+      return this.request(`/tenant/users/${id}`, {
+        method: 'DELETE',
+      });
+    },
   };
 
   // --- Branches Endpoints ---

@@ -6,10 +6,8 @@ import {
   CheckCircle,
   Search,
   Filter,
-  ShieldCheck,
   RefreshCw,
   Printer,
-  Building2,
   Table as TableIcon,
   LayoutGrid,
   Tag,
@@ -19,9 +17,6 @@ import {
   Edit2,
   Trash2,
   X,
-  Database,
-  Download,
-  HardDrive,
 } from 'lucide-react';
 import { AppLayout } from './components/layout/AppLayout';
 import { Card } from './components/ui/Card';
@@ -75,6 +70,7 @@ const PublicStorefrontView = lazy(() => import('./components/storefront/PublicSt
 const PublicOrderTracker = lazy(() => import('./components/storefront/PublicOrderTracker').then(m => ({ default: m.PublicOrderTracker })));
 const MaintenanceTab = lazy(() => import('./components/maintenance/MaintenanceTab').then(m => ({ default: m.MaintenanceTab })));
 const TenantSubscriptionView = lazy(() => import('./components/subscription/TenantSubscriptionView').then(m => ({ default: m.TenantSubscriptionView })));
+const FactorySettingsView = lazy(() => import('./components/settings/FactorySettingsView').then(m => ({ default: m.FactorySettingsView })));
 const WaslatWorshTab = lazy(() => import('./components/marketplace/WaslatWorshTab').then(m => ({ default: m.WaslatWorshTab })));
 const WaslatWorshRequesterPortal = lazy(() => import('./components/marketplace/WaslatWorshRequesterPortal').then(m => ({ default: m.WaslatWorshRequesterPortal })));
 
@@ -569,37 +565,6 @@ export function App() {
   });
   const [isSubmittingCompany, setIsSubmittingCompany] = useState(false);
   const [companySuccessMsg, setCompanySuccessMsg] = useState('');
-
-  // Backup & Disaster Recovery State
-  const [backupStatus, setBackupStatus] = useState<any | null>(null);
-  const [isDownloadingBackup, setIsDownloadingBackup] = useState(false);
-  const [backupSuccessMsg, setBackupSuccessMsg] = useState<string | null>(null);
-
-  const loadBackupStatus = async () => {
-    try {
-      const res = await api.tenant.getBackupStatus();
-      if (res && res.success) {
-        setBackupStatus(res);
-      }
-    } catch {
-      // Fallback
-    }
-  };
-
-  const handleDownloadBackup = async () => {
-    setIsDownloadingBackup(true);
-    setBackupSuccessMsg(null);
-    try {
-      await api.tenant.downloadBackup();
-      setBackupSuccessMsg(lang === 'ar' ? 'تم تنزيل النسخة الاحتياطية بنجاح على جهازك!' : 'Backup archive downloaded successfully!');
-      setTimeout(() => setBackupSuccessMsg(null), 6000);
-      loadBackupStatus();
-    } catch {
-      alert(lang === 'ar' ? 'فشل تحميل النسخة الاحتياطية' : 'Failed to download backup');
-    } finally {
-      setIsDownloadingBackup(false);
-    }
-  };
 
   // Search & Filter state
   const [modelViewMode, setModelViewMode] = useState<'table' | 'cards'>('table');
@@ -1401,13 +1366,6 @@ export function App() {
   useEffect(() => {
     setModelPage(1);
   }, [modelSearch, modelCategoryFilter]);
-
-  useEffect(() => {
-    if (activeTab === 'settings') {
-      loadBackupStatus();
-    }
-  }, [activeTab]);
-
 
   if (viewMode === 'public') {
     return (
@@ -2456,289 +2414,17 @@ export function App() {
             </Suspense>
           )}
 
-          {/* Settings Tab */}
+          {/* Settings Tab: Modern Factory Settings & Granular RBAC Permissions Control */}
           {activeTab === 'settings' && (
-            <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
-              {/* ─── Ultra-Modern Hero Header & Control Center (#7F1625 & #000000) ─── */}
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#000000] via-[#180508] to-[#000000] border border-[#7F1625]/40 p-6 md:p-8 text-white shadow-2xl">
-                <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#7F1625]/25 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#9E2A3B]/15 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                  <div className="space-y-3">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7F1625]/30 border border-[#7F1625]/50 text-[#ff8ba0] text-xs font-bold tracking-wide backdrop-blur-md">
-                      <span className="w-2 h-2 rounded-full bg-[#ff4d6d] animate-pulse" />
-                      {lang === 'ar' ? 'إعدادات الشركة والمصنع • العزل السحابي والصلاحيات' : 'Factory & Tenant Settings • Active'}
-                    </div>
-                    <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-[#7F1625] flex items-center justify-center shadow-lg shadow-[#7F1625]/50">
-                        <Building2 className="w-5 h-5 text-white" />
-                      </div>
-                      {lang === 'ar' ? 'إعدادات الشركة والمصنع والفروع' : 'Company & Factory Settings'}
-                    </h1>
-                    <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-                      {lang === 'ar'
-                        ? 'إدارة الهوية الصناعية، فروع ومخازن التشغيل، بيانات الاشتراك، وصلاحيات الوصول ومصفوفة الأدوار.'
-                        : 'Manage factory profile, operational branches, subscription tier, and RBAC security boundaries.'}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <button
-                      onClick={() => setIsBranchModalOpen(true)}
-                      className="px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-black shadow-lg shadow-[#7F1625]/40 transition-all flex items-center gap-2 active:scale-95 border border-[#ff4d6d]/30"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>{lang === 'ar' ? 'إضافة فرع / مخزن جديد' : 'New Branch / Node'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 1. Tenant & Factory Profile */}
-                <Card className="lg:col-span-1 p-5 bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">
-                  <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                    <div className="w-10 h-10 rounded-xl bg-[var(--brand-subtle)] flex items-center justify-center text-[var(--brand-primary)] dark:text-[#F87171] font-bold">
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">{tenantName}</h4>
-                      <p className="text-[11px] font-mono text-[var(--brand-primary)] dark:text-[#F87171]">{tenantCode}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">{lang === 'ar' ? 'الموقع التشغيلي الرئيسي' : 'Primary Site'}</span>
-                      <strong className="text-slate-800 dark:text-slate-200 font-medium">{branchName}</strong>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">{lang === 'ar' ? 'باقة الاشتراك والمنظومة' : 'Subscription Tier'}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                          {lang === 'ar' ? 'باقة المصانع الاحترافية (Professional)' : 'Professional Apparel Tier'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-[11px]">{lang === 'ar' ? 'حالة العزل السحابي (Multi-Tenancy)' : 'Multi-Tenancy Isolation'}</span>
-                      <div className="flex items-center gap-1.5 mt-1 text-slate-700 dark:text-slate-300">
-                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                        <span className="font-medium text-[11px]">{lang === 'ar' ? 'Fail-Closed Active — عزل تام لكل مستأجر' : 'Fail-Closed Strict Isolation'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full text-xs border-slate-300 dark:border-slate-700 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
-                      onClick={() => setIsBranchModalOpen(true)}
-                    >
-                      {lang === 'ar' ? 'إضافة فرع / خط إنتاج جديد' : 'Add Production Branch'}
-                    </Button>
-                  </div>
-                </Card>
-
-                {/* 2. Operational Branches & Warehouses Table */}
-                <Card className="lg:col-span-2 overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                  <div className="p-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                        {lang === 'ar' ? 'فروع التشغيل والمخازن الصناعية المعتمدة' : 'Operational Branches & Warehouses'}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {lang === 'ar' ? 'مواقع صالات القص، مخازن الأقمشة والمستلزمات، ونقاط التسليم' : 'Cutting floors, material stock, and delivery depots'}
-                      </p>
-                    </div>
-                    <Badge variant="brand">{warehouses.length} {lang === 'ar' ? 'مواقع' : 'sites'}</Badge>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-100/70 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                        <tr>
-                          <th className="py-2.5 px-4">{lang === 'ar' ? 'كود المخزن/الفرع' : 'Code'}</th>
-                          <th className="py-2.5 px-4">{lang === 'ar' ? 'اسم الموقع' : 'Location Name'}</th>
-                          <th className="py-2.5 px-4">{lang === 'ar' ? 'النوع التشغيلي' : 'Operational Type'}</th>
-                          <th className="py-2.5 px-4">{lang === 'ar' ? 'الحالة' : 'Status'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                        {warehouses.map((wh) => (
-                          <tr key={wh.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
-                            <td className="py-2.5 px-4 font-mono font-bold text-slate-900 dark:text-white">{wh.code}</td>
-                            <td className="py-2.5 px-4 font-medium text-slate-800 dark:text-slate-200">{wh.name}</td>
-                            <td className="py-2.5 px-4">
-                              <Badge variant="neutral">{wh.type}</Badge>
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium text-[11px]">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                {lang === 'ar' ? 'جاهز للتشغيل' : 'Operational'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-
-              {/* 3. RBAC Roles & System Permissions Matrix */}
-              <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                <div className="p-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    {lang === 'ar' ? 'مصفوفة الصلاحيات وأدوار النظام (RBAC)' : 'Role-Based Access Control (RBAC)'}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {lang === 'ar' ? 'توزيع الصلاحيات بحسب المهام الوظيفية لحماية أمانات العملاء وتكلفة التشغيل' : 'Role mappings and security boundaries for plant operations'}
-                  </p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-100/70 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold font-sans">
-                      <tr>
-                        <th className="py-3 px-4">{lang === 'ar' ? 'الدور الوظيفي' : 'Role'}</th>
-                        <th className="py-3 px-4">{lang === 'ar' ? 'صالة القص والإنتاج' : 'Cutting Floor'}</th>
-                        <th className="py-3 px-4">{lang === 'ar' ? 'المخازن والأمانات' : 'Inventory & CMT'}</th>
-                        <th className="py-3 px-4">{lang === 'ar' ? 'المشتريات والتكاليف' : 'Procurement & Costing'}</th>
-                        <th className="py-3 px-4">{lang === 'ar' ? 'تدقيق الجودة (QC)' : 'Quality Audit'}</th>
-                        <th className="py-3 px-4">{lang === 'ar' ? 'صلاحيات الإدارة' : 'Admin Privileges'}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                      {[
-                        { role: lang === 'ar' ? 'مدير المصنع / المالك' : 'Factory Owner', cutting: 'كامل', inv: 'كامل', proc: 'كامل', qc: 'اعتماد نهائي', admin: 'إدارة شاملة' },
-                        { role: lang === 'ar' ? 'مهندس صالة القص' : 'Cutting Floor Lead', cutting: 'إصدار وفرش وقص', inv: 'صرف خامات', proc: 'عرض أوامر', qc: 'فحص أولي', admin: 'محدود' },
-                        { role: lang === 'ar' ? 'أمين مخزن الأقمشة' : 'Fabric Storekeeper', cutting: 'عرض خطط', inv: 'استلام وجرد وصرف', proc: 'تسجيل GRN', qc: '—', admin: '—' },
-                        { role: lang === 'ar' ? 'محاسب التكاليف' : 'Cost Accountant', cutting: 'عرض إحصاءات', inv: 'دفتر الأستاذ', proc: 'مطابقة 3-Way', qc: '—', admin: '—' },
-                        { role: lang === 'ar' ? 'مدقق الجودة' : 'QC Inspector', cutting: 'فحص الحزم', inv: '—', proc: 'فحص استلام', qc: 'إجازة / رفض', admin: '—' },
-                      ].map((r, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
-                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{r.role}</td>
-                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.cutting}</td>
-                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.inv}</td>
-                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.proc}</td>
-                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300">{r.qc}</td>
-                          <td className="py-3 px-4">
-                            <span className="font-mono font-medium text-[var(--brand-primary)] dark:text-[#F87171]">{r.admin}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-
-              {/* 4. Disaster Recovery & One-Click Database Backup Card */}
-              <Card className="overflow-hidden p-0 border border-slate-200 dark:border-slate-800 shadow-2xs bg-white dark:bg-[#0f1523]/90">
-                <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white border-b border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-white flex items-center gap-2">
-                        <span>{lang === 'ar' ? 'إدارة النسخ الاحتياطي وأمان البيانات الصناعية' : 'Disaster Recovery & Database Backup'}</span>
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          {lang === 'ar' ? 'مشفر ومؤمن AES-256' : 'AES-256 Audited'}
-                        </span>
-                      </h4>
-                      <p className="text-xs text-slate-300 mt-0.5">
-                        {lang === 'ar'
-                          ? 'تصدير وتحميل قاعدة بيانات المصنع وحسابات العملاء والإنتاج بضغطة زر واحدة لحفظها محلياً.'
-                          : 'Export and download an audited snapshot of factory orders, ledger entries, and tenant database.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleDownloadBackup}
-                      disabled={isDownloadingBackup}
-                      className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-900/30 flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
-                    >
-                      <Download className={`w-4 h-4 ${isDownloadingBackup ? 'animate-bounce' : ''}`} />
-                      <span>
-                        {isDownloadingBackup
-                          ? (lang === 'ar' ? 'جاري تجهيز النسخة...' : 'Preparing Dump...')
-                          : (lang === 'ar' ? 'تحميل نسخة احتياطية فورية' : 'Download Instant Backup')}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {backupSuccessMsg && (
-                  <div className="mx-5 mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 shrink-0" />
-                    <span className="font-bold">{backupSuccessMsg}</span>
-                  </div>
-                )}
-
-                {/* Telemetry Bento Grid */}
-                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
-                      <Database className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>{lang === 'ar' ? 'محرك قاعدة البيانات' : 'Database Driver'}</span>
-                    </div>
-                    <div className="font-mono font-bold text-slate-900 dark:text-white uppercase text-sm">
-                      {backupStatus?.driver ? `${backupStatus.driver} Engine` : 'SQLite 3 (WAL)'}
-                    </div>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-0.5">
-                      {lang === 'ar' ? 'عالي السرعة ومحصن صناعياً' : 'High Performance'}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
-                      <HardDrive className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{lang === 'ar' ? 'حجم البيانات النشط' : 'Current DB Size'}</span>
-                    </div>
-                    <div className="font-mono font-bold text-slate-900 dark:text-white text-sm">
-                      {backupStatus?.size_human || '2.84 MB'}
-                    </div>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">
-                      {lang === 'ar' ? 'يشمل الأرشفة والمرفقات' : 'Compacted storage'}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>{lang === 'ar' ? 'السجلات المحمية' : 'Protected Records'}</span>
-                    </div>
-                    <div className="font-mono font-bold text-slate-900 dark:text-white text-sm">
-                      {backupStatus?.records_summary?.total_records ? `${backupStatus.records_summary.total_records.toLocaleString()}+` : '3,800+'} {lang === 'ar' ? 'سجل' : 'rows'}
-                    </div>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">
-                      {lang === 'ar' ? 'قيود + أوامر قص + مبيعات' : 'Journals, BOMs & Orders'}
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-teal-500" />
-                      <span>{lang === 'ar' ? 'حالة التكامل والفحص' : 'Integrity Audit'}</span>
-                    </div>
-                    <div className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                      {lang === 'ar' ? 'سليمة 100% ومطابقة' : '100% Verified'}
-                    </div>
-                    <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
-                      {backupStatus?.latest_backup_date ? `${backupStatus.latest_backup_date.slice(0, 16)}` : 'Live Synced'}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            </div>
+            <Suspense fallback={<TabLoadingFallback isAr={isAr} />}>
+              <FactorySettingsView
+                isAr={lang === 'ar'}
+                tenantName={tenantName}
+                tenantCode={tenantCode}
+                branchName={branchName}
+                warehouses={warehouses}
+              />
+            </Suspense>
           )}
         </>
 

@@ -112,6 +112,13 @@ Route::prefix('v1')->group(function () {
     // المسارات المحمية بعزل الشركات
     Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
+        Route::put('/tenant/profile', [TenantController::class, 'updateProfile'])->middleware('role:company_owner');
+        Route::get('/tenant/permissions-catalog', [TenantController::class, 'getPermissionsCatalog']);
+        Route::get('/tenant/users', [TenantController::class, 'getUsers'])->middleware('role:company_owner');
+        Route::post('/tenant/users', [TenantController::class, 'createUser'])->middleware('role:company_owner');
+        Route::put('/tenant/users/{id}', [TenantController::class, 'updateUser'])->middleware('role:company_owner');
+        Route::post('/tenant/users/{id}/toggle-active', [TenantController::class, 'toggleUserActive'])->middleware('role:company_owner');
+        Route::delete('/tenant/users/{id}', [TenantController::class, 'deleteUser'])->middleware('role:company_owner');
         Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription']);
 
         // دورة رفع إثباتات السداد ومتابعة الحصص (Stage C.4: Customer Payment Requests & Subscriptions)

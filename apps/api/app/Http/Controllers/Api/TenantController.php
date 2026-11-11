@@ -1042,7 +1042,6 @@ class TenantController extends Controller
             'permissions' => $settings['custom_role_permissions'][$roleKey],
         ]);
     }
-    }
 }
 
 

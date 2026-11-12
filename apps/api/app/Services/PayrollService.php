@@ -166,7 +166,7 @@ class PayrollService
         }
 
         return DB::transaction(function () use ($data, $userId, $tenantId) {
-            $employee = Employee::where('tenant_id', $tenantId)->findOrFail($data['employee_id']);
+            $employee = Employee::where('tenant_id', $tenantId)->whereKey($data['employee_id'])->lockForUpdate()->firstOrFail();
             $date = $data['attendance_date'] ?? now()->toDateString();
 
             // فحص التكرار (Unique per employee and date)
@@ -211,23 +211,8 @@ class PayrollService
                 $isPayable = (bool)$data['is_payable'];
             }
 
-            // إذا كان مسجلاً بالفعل، يتم التحديث الفوري (Upsert) بدلاً من إلقاء خطأ لمنع تعطيل المستخدم
             if ($existing) {
-                $existing->update([
-                    'branch_id' => $data['branch_id'] ?? $existing->branch_id ?? $employee->branch_id,
-                    'check_in' => $checkIn ?? $existing->check_in,
-                    'check_out' => $checkOut ?? $existing->check_out,
-                    'status' => $status,
-                    'working_hours' => $workingHours >= 0 ? $workingHours : $existing->working_hours,
-                    'overtime_hours' => $overtimeHours >= 0 ? $overtimeHours : $existing->overtime_hours,
-                    'late_minutes' => isset($data['late_minutes']) ? (int)$data['late_minutes'] : $existing->late_minutes,
-                    'early_departure_minutes' => isset($data['early_departure_minutes']) ? (int)$data['early_departure_minutes'] : $existing->early_departure_minutes,
-                    'is_payable' => $isPayable,
-                    'notes' => $data['notes'] ?? $existing->notes,
-                    'created_by_user_id' => $userId,
-                ]);
-
-                return $existing->fresh();
+                throw new InvalidArgumentException('تم تسجيل حضور هذا العامل لهذا اليوم بالفعل. استخدم مسار تصحيح الحضور مع سبب موثق بدلاً من إنشاء سجل مكرر.');
             }
 
             return Attendance::create([

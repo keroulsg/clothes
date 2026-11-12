@@ -145,3 +145,36 @@ The next workflow run (43243446906) was started before those follow-up commits w
 - Frontend TypeScript and Vite build: PASS
 - Added a regression test proving AP reconciliation reports the supplier's actual subledger balance and exposes a mismatch with open invoices instead of masking it.
 - Fixed employee-adjustment creator attribution to use the type-safe actor column.
+
+---
+
+## Follow-up Remediation — 2026-11-12
+
+This section records additional source changes made after the preceding CI evidence. These changes are isolated to `garmentos/pre-sunday-hardening`; no production database, deployment, or `main` branch changes were made.
+
+### Implemented
+
+1. **Catalog truthfulness:** garment models created without an explicit season now persist `null`; the API no longer fabricates `صيف 2026`.
+2. **Strict stock issue UI:** manual OUT validation now checks unreserved available quantity (`current_balance - reserved_quantity`) rather than the physical on-hand balance alone.
+3. **Storefront cart aggregation:** repeated cart lines for the same variant are accumulated before stock validation, preventing individually-valid duplicate lines from reserving more than available stock.
+4. **Storefront shipment execution:** moving a COD or verified InstaPay order to `shipped` executes the linked ERP sales order through `SalesService::fulfillOrder`, creating the sales invoice and consuming the reservation through the immutable inventory transaction ledger. Repeated status updates are idempotent; backward transitions and cancellation after shipment are rejected.
+5. **Storefront status authorization:** status mutation is restricted to authorized tenant roles; InstaPay manual verification remains mandatory before shipment.
+6. **SaaS quota enforcement:** tenant user creation, cutting-order creation, and the legacy `/sales-orders` alias now enforce the relevant quota/RBAC middleware. The active-user meter counts active users only.
+7. **Regression coverage:** tests cover omitted garment seasons, duplicate cart-line over-reservation, inactive-user seat counting, and storefront shipment stock/invoice synchronization.
+
+### Verification Evidence
+
+- CI run `43259887846`, commit `b496fb57f8b8d1e2c1d22b7b9f393e862a6b2fe0`: **success**.
+- Full backend suite: **531 passed, 0 failed, 3,267 assertions**.
+- PostgreSQL concurrency integration: **5 passed, 22 assertions**.
+- Frontend TypeScript and Vite production build: **success**.
+
+### Remaining Production Gates — Not Claimed Complete
+
+- WIP valuation still has no authoritative inventory subledger value; the reconciliation response intentionally remains `incomplete_wip_valuation`.
+- FIFO inventory valuation is not implemented; current valuation uses weighted average cost.
+- Live Paymob/Stripe credentials and end-to-end payment settlement remain external launch dependencies.
+- Branch-level user access restrictions remain an owner policy decision and are not enabled.
+- Production cloud backup/restore and disaster-recovery execution still require a verified target environment and restore drill.
+- Inventory asset GL posting coverage for every manual adjustment and warehouse-transfer path requires a separate transaction-by-transaction accounting verification before claiming full financial close readiness.
+

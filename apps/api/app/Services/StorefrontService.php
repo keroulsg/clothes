@@ -840,7 +840,8 @@ class StorefrontService
                 $order->update([
                     'payment_status' => 'verified_paid',
                     'status' => 'confirmed',
-                                        'payment_reviewed_by_user_id' => (string) $userId,
+                                        'payment_reviewed_by' => (string) $userId,
+                    'payment_reviewed_by_user_id' => (string) $userId,
                     'payment_reviewed_at' => now(),
                     'payment_rejection_reason' => null,
                 ]);

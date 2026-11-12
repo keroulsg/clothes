@@ -138,6 +138,9 @@ class EnsureRole
             return $isRead ? 'inventory.view' : 'admin.settings';
         }
         if ($root === 'inventory') {
+            if (str_contains($path, 'stock-count')) {
+                return $isRead ? 'inventory.view' : 'inventory.manage';
+            }
             if ($isRead) {
                 return 'inventory.view';
             }

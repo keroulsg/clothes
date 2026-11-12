@@ -381,6 +381,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
 
         $job = JobOrder::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->mainBranch->id,
             'customer_id' => $customer->id,
             'customer_name' => $customer->name,
             'order_number' => 'JOB-AUTH-001',
@@ -434,6 +435,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
 
         $job = JobOrder::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->mainBranch->id,
             'customer_id' => $customer->id,
             'customer_name' => $customer->name,
             'order_number' => 'JOB-AUTH-002',

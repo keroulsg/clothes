@@ -13,6 +13,7 @@ use App\Models\CustomerMaterial;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Models\JournalEntry;
 use App\Models\Pattern;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderItem;
@@ -1116,6 +1117,17 @@ class ProductionService
                     throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: كمية حركة الصرف الأصلية لا تطابق كمية الأمر.');
                 }
 
+                $originalJournal = JournalEntry::where('tenant_id', $contextTenantId)
+                    ->where('reference_type', 'cutting_order_issue')
+                    ->where('reference_id', $cuttingOrder->id)
+                    ->where('status', 'posted')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$originalJournal || abs((float) $originalJournal->total_debit - (float) $originalIssue->total_cost) > 0.01) {
+                    throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: قيد تكلفة الخامات الأصلي غير موجود أو لا يطابق دفتر المخزون. يلزم إجراء مطابقة محاسبية أولاً.');
+                }
+
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $contextTenantId,
                     'inventory_item_id' => $originalIssue->inventory_item_id,
@@ -1134,7 +1146,7 @@ class ProductionService
                 app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal(
                     $contextTenantId,
                     $cuttingOrder,
-                    (float) $originalIssue->total_cost,
+                    (float) $originalJournal->total_debit,
                     $reason
                 );
             } elseif ($cuttingOrder->fabric_source === 'customer_deposit' && $cuttingOrder->customer_material_id) {

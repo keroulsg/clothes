@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Branch;
 use App\Models\GarmentModel;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderItem;
@@ -103,6 +104,44 @@ class ProductionOrderController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
+        // Every non-owner production order must belong to an assigned branch.
+        // If the user has exactly one branch, select it automatically.
+        $user = $request->user();
+        $branchId = $validated['branch_id'] ?? null;
+        if ($user && $user->role !== 'company_owner') {
+            $assignedBranchIds = $user->assignedBranchIds();
+            if (!$branchId && count($assignedBranchIds) === 1) {
+                $branchId = $assignedBranchIds[0];
+            }
+            if (!$branchId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAssignmentRequired',
+                    'message' => 'يجب تحديد فرع معيّن لإنشاء أمر الإنتاج.',
+                ], 422);
+            }
+            if (!in_array($branchId, $assignedBranchIds, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAccessDenied',
+                    'message' => 'لا يمكنك إنشاء أمر إنتاج لفرع غير معيّن لحسابك.',
+                ], 403);
+            }
+        }
+
+        if ($branchId) {
+            $branch = Branch::where('tenant_id', $tenantId)->find($branchId);
+            if (!$branch) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchNotFound',
+                    'message' => 'الفرع المحدد غير تابع لشركتك.',
+                ], 422);
+            }
+        } elseif ($user && $user->role === 'company_owner') {
+            $branchId = Branch::where('tenant_id', $tenantId)->where('is_main', true)->value('id');
+        }
+
         // التحقق من ملكية الموديل للشركة الحالية
         $model = GarmentModel::withoutGlobalScopes()->find($validated['garment_model_id']);
         if (!$model || $model->tenant_id !== $tenantId) {
@@ -116,6 +155,7 @@ class ProductionOrderController extends Controller
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['branch_id'] = $branchId;
             $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
             $order = $this->productionService->createProductionOrder($data, $validated['items']);

@@ -295,6 +295,8 @@ class Batch2InventoryAndProcurementTest extends TestCase
             'type' => 'factory',
         ]);
 
+        $this->accountantA->branches()->sync([$branch->id]);
+
         $wh = Warehouse::create([
             'tenant_id' => $this->tenantA->id,
             'branch_id' => $branch->id,

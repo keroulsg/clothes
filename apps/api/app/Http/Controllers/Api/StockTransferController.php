@@ -27,8 +27,10 @@ class StockTransferController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = StockTransfer::where('tenant_id', $tenantId)
-            ->with(['sourceWarehouse.branch', 'destinationWarehouse.branch', 'creator', 'receiver', 'items.inventoryItem'])
+        $query = $this->scopeTransfersToAssignedBranches(
+            StockTransfer::where('tenant_id', $tenantId),
+            $request
+        )->with(['sourceWarehouse.branch', 'destinationWarehouse.branch', 'creator', 'receiver', 'items.inventoryItem'])
             ->withCount('items');
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -181,8 +183,10 @@ class StockTransferController extends Controller
         $tenantId = app('current_tenant_id');
 
         $transfer = DB::transaction(function () use ($id, $tenantId) {
-            $transfer = StockTransfer::where('tenant_id', $tenantId)
-                ->whereKey($id)
+            $transfer = $this->scopeTransfersToAssignedBranches(
+                StockTransfer::where('tenant_id', $tenantId),
+                $request
+            )->whereKey($id)
                 ->lockForUpdate()
                 ->firstOrFail();
 

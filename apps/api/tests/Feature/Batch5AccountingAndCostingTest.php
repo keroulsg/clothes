@@ -101,7 +101,7 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->assertEquals(1, $assets->level);
         $this->assertFalse((bool)$assets->is_postable);
 
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $this->assertNotNull($cash);
         $this->assertTrue((bool)$cash->is_postable);
         $this->assertTrue((bool)$cash->is_cash_bank);
@@ -125,7 +125,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_journal_entry_balance_enforcement_and_non_postable_parent_block(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $parentAssets = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1')->first();
 
@@ -174,7 +174,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_journal_entry_reversal_creates_compensating_entry(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $capital = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '3010')->first();
 
         $entry = $this->accountingService->createJournalEntry([
@@ -215,7 +215,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_fiscal_period_posting_guard_and_reopen_workflow(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // إنشاء سنة مالية 2026
@@ -275,7 +275,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_financial_accounts_and_inter_account_transfers(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cashCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $bankCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1020')->first();
 
         // إنشاء خزينة رئيسية برصيد افتتاحي 15000
@@ -354,7 +354,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_cost_centers_creation_and_journal_linking(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $expense = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '6010')->first();
 
         // إنشاء مركز تكلفة: قسم القص والتشغيل
@@ -499,7 +499,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_financial_reports_derived_strictly_from_real_transactions(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $cogs = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '5010')->first();
         $inventory = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1230')->first();
@@ -557,7 +557,7 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantB->id);
 
-        $cashA = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashA = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revA = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // قيد للمستأجر A بمبلغ 77000

@@ -245,8 +245,8 @@ class AccountingService
         $fallbackCodes = [
             'ar_control' => '1110',
             'ap_control' => '2010',
-            'default_cash' => '1010',
-            'default_bank' => '1020',
+            'default_cash' => '1011',
+            'default_bank' => '1021',
             'sales_revenue' => '4010',
             'cmt_revenue' => '4020',
             'cogs' => '5010',

@@ -370,6 +370,7 @@ class WorkforceAndPayrollPhaseCTest extends TestCase
 
         $worker = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-QC-01',
             'name' => 'Kareem QC Worker',
             'department' => 'sewing',

@@ -496,7 +496,7 @@ class ProcurementService
                 }
 
                 $inventoryWeights = [];
-                foreach ($grn->items as $grnItem) {
+                foreach ($grnItems as $grnItem) {
                     $acceptedQuantity = (float) $grnItem->accepted_quantity;
                     if ($acceptedQuantity <= 0) {
                         continue;

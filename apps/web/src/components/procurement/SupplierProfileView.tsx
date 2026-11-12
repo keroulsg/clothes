@@ -212,26 +212,6 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
     }
   };
 
-  const handleDeleteTransaction = async (line: any) => {
-    const isPayment = line.type === 'payment' || line.type === 'discount';
-    const confirmMsg = isPayment
-      ? (isAr ? `هل أنت متأكد من إلغاء وحذف سند الدفعة رقم [${line.reference}]؟ سيتم رد القيمة فورياً للرصيد المستحق.` : `Delete payment voucher ${line.reference}?`)
-      : (isAr ? `هل أنت متأكد من حذف فاتورة التوريد رقم [${line.reference}]؟` : `Delete invoice ${line.reference}?`);
-
-    if (!window.confirm(confirmMsg)) return;
-
-    try {
-      if (isPayment) {
-        await api.suppliers.deletePayment(supplier.id, line.raw_id);
-      } else {
-        await api.suppliers.deleteInvoice(supplier.id, line.raw_id);
-      }
-      await fetchStatement();
-    } catch (err: any) {
-      alert(err.message || (isAr ? 'فشل حذف الحركة' : 'Failed to delete transaction'));
-    }
-  };
-
   const activeSup = statement?.supplier || supplier;
 
   // Compute normalized invoices from statement or initialInvoices

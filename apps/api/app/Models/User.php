@@ -210,7 +210,7 @@ class User extends Authenticatable
                 return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
             case 'quality_controller':
             case 'qc':
-                return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'inventory.view'];
+                return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'branches.view', 'inventory.view'];
             case 'sales_rep':
                 return ['sales.view', 'sales.create', 'sales.discount', 'branches.view', 'inventory.view', 'storefront.view'];
             case 'worker':

@@ -1035,40 +1035,35 @@ class SalesService
                     throw new InvalidArgumentException("حساب الصرف المحدد غير موجود أو غير تابع للمستأجر الحالي.");
                 }
 
-                if (!$cashAccount->is_active) {
-                    throw new InvalidArgumentException("حساب الصرف المحدد غير نشط.");
-                }
-
-                if ($cashAccount->type !== 'asset' || $cashAccount->category !== 'current_asset') {
-                    throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب نقدية أو بنك مسموح به (يجب أن يكون أصل متداول).");
+                if (
+                    !$cashAccount->is_active
+                    || !$cashAccount->is_postable
+                    || !$cashAccount->is_cash_bank
+                    || $cashAccount->type !== 'asset'
+                    || $cashAccount->category !== 'current_asset'
+                ) {
+                    throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب خزينة/بنك فرعياً نشطاً وقابلاً للترحيل.");
                 }
             } else {
-                $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? '1021' : '1011';
-                $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                    ->where('code', $preferredCode)
-                    ->lockForUpdate()
-                    ->first();
+                $mappingKey = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? 'default_bank' : 'default_cash';
+                $cashAccount = app(\App\Services\AccountingService::class)->getMappedAccount($tenantId, $mappingKey);
 
-                if (!$cashAccount && $preferredCode === '1021') {
-                    $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                        ->where('code', '1011')
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                if (!$cashAccount || !$cashAccount->is_active || $cashAccount->type !== 'asset' || $cashAccount->category !== 'current_asset') {
-                    throw new InvalidArgumentException("حساب النقدية/البنك غير متوفر أو غير نشط في شجرة الحسابات لصرف الاسترداد.");
+                if (
+                    !$cashAccount->is_active
+                    || !$cashAccount->is_postable
+                    || !$cashAccount->is_cash_bank
+                    || $cashAccount->type !== 'asset'
+                    || $cashAccount->category !== 'current_asset'
+                ) {
+                    throw new InvalidArgumentException("حساب النقدية/البنك غير مضبوط كحساب فرعي نشط وقابل للترحيل لصرف الاسترداد.");
                 }
             }
 
-            // التحقق الصارم من حساب العملاء والمدينين (1110) قبل إنشاء أي سند أو تعديل مالي (Finding 2 & Scope B)
-            $arAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                ->where('code', '1110')
-                ->lockForUpdate()
-                ->first();
+            // Resolve the tenant's configured, postable receivables control account.
+            $arAccount = app(\App\Services\AccountingService::class)->getMappedAccount($tenantId, 'ar_control');
 
-            if (!$arAccount || !$arAccount->is_active || $arAccount->type !== 'asset') {
-                throw new InvalidArgumentException("حساب العملاء والمدينين (1110) غير متوفر أو غير نشط في شجرة الحسابات لإثبات القيد المحاسبي للاسترداد.");
+            if (!$arAccount->is_active || !$arAccount->is_postable || $arAccount->type !== 'asset') {
+                throw new InvalidArgumentException("حساب العملاء والمدينين غير متوفر أو غير قابل للترحيل لإثبات قيد الاسترداد.");
             }
 
             // حساب المبالغ التراكمية للفاتورة لمنع استرداد يتجاوز الرصيد المسدد الفعلي (AUDIT-07B-05)

@@ -308,6 +308,14 @@ class SubcontractingController extends Controller
 
     public function confirmJob(Request $request, string $id): JsonResponse
     {
+        if (!in_array($request->user()?->role, ['company_owner', 'production_manager', 'accountant'], true)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'UnauthorizedRole',
+                'message' => 'ليس لديك صلاحية تأكيد أوامر التشغيل للغير.',
+            ], 403);
+        }
+
         $tenantId = app('current_tenant_id');
         $job = JobOrder::withoutGlobalScopes()->find($id);
 

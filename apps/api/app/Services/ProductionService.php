@@ -572,17 +572,14 @@ class ProductionService
                 }
             }
 
-            // إثبات صرف الخامات محاسبياً (Debit WIP 1220, Credit Raw Materials 1210)
+            // Keep stock issue and WIP journal posting atomic; never hide accounting failures.
             if ($fabricSource === 'factory_owned' && $actualMeters > 0 && $fabricItemCost > 0) {
-                try {
-                    $rawMatAmount = round($actualMeters * $fabricItemCost, 4);
-                    app(\App\Services\AccountingService::class)->postRawMaterialsIssue(
-                        $contextTenantId,
-                        $cuttingOrder,
-                        $rawMatAmount,
-                        (bool)($prodOrder->is_cmt ?? false)
-                    );
-                } catch (\Throwable) {}
+                $rawMatAmount = round($actualMeters * $fabricItemCost, 4);
+                app(\App\Services\AccountingService::class)->postRawMaterialsIssue(
+                    $contextTenantId,
+                    $cuttingOrder,
+                    $rawMatAmount
+                );
             }
 
             // التأكد من توفر مراحل الإنتاج
@@ -997,12 +994,15 @@ class ProductionService
                         'notes' => "إضافة منتج تام جاهز للتوزيع بعد الفحص النهائي لأمر الإنتاج [{$prodOrder->order_number}]",
                     ]);
 
-                    // إثبات قيد استلام الإنتاج التام محاسبياً (Debit Finished Goods 1230, Credit WIP 1220)
+                    // Capitalize finished goods in the same transaction as the stock receipt.
                     if ((float)$fgItem->average_cost > 0) {
-                        try {
-                            $fgAmount = round($passedQty * (float)$fgItem->average_cost, 4);
-                            app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt($tenantId, $prodOrder, $fgAmount);
-                        } catch (\Throwable) {}
+                        $fgAmount = round($passedQty * (float)$fgItem->average_cost, 4);
+                        app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt(
+                            $tenantId,
+                            $prodOrder,
+                            $fgAmount,
+                            $passedQty
+                        );
                     }
                 }
             }

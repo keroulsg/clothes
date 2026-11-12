@@ -555,6 +555,16 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->assertEquals(4800.0, (float) ProductionCostSheet::findOrFail($sheet['id'])->total_cost);
         $this->assertSame('approved', ProductionCostSheet::findOrFail($sheet['id'])->status);
 
+        // Even a direct force_recalculate request cannot rewrite an approved historical cost sheet.
+        $forcedRecalc = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson("/api/v1/accounting/cost-sheets/{$order->id}/calculate", [
+                'direct_materials_cost' => 9000,
+                'force_recalculate' => true,
+            ]);
+        $forcedRecalc->assertStatus(200);
+        $this->assertEquals(4800.0, (float) $forcedRecalc->json('cost_sheet.total_cost'));
+        $this->assertSame('approved', $forcedRecalc->json('cost_sheet.status'));
+
         // فحص تشغيل الغير (CMT): أمر إنتاج CMT يستبعد تكلفة الخامات الموردة من العميل
         $cmtOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,

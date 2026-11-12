@@ -1512,5 +1512,27 @@ class AuthAndRoleAuthorizationTest extends TestCase
             ->assertJsonPath('error', 'UnauthorizedRole');
     }
 
+    public function test_staff_cannot_access_subscription_administration_routes_without_permission(): void
+    {
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->getJson('/api/v1/subscriptions/my-status')
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'InsufficientPermission')
+            ->assertJsonPath('required_permission', 'admin.settings');
+    }
+
+    public function test_platform_admin_can_reach_platform_subscription_admin_but_not_tenant_inventory(): void
+    {
+        Sanctum::actingAs($this->platformAdminUser);
+
+        $this->getJson('/api/v1/admin/subscriptions')
+            ->assertOk();
+
+        $this->getJson('/api/v1/inventory/items')
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'UnauthorizedRole');
+    }
+
 }
 

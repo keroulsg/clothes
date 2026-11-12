@@ -864,7 +864,7 @@ class StorefrontService
                 $order->update([
                     'payment_status' => 'rejected',
                     'payment_rejection_reason' => $reason,
-                    'payment_reviewed_by' => $userId,
+                    'payment_reviewed_by_user_id' => $userId,
                     'payment_reviewed_at' => now(),
                 ]);
             }

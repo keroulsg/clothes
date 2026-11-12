@@ -31,7 +31,6 @@ class PieceWorkLog extends Model
         'total_amount',
         'status',
         'approved_by',
-        'approved_by_user_id',
         'approved_at',
         'rejection_reason',
         'notes',
@@ -54,7 +53,7 @@ class PieceWorkLog extends Model
 
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by_user_id');
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function productionOrder(): BelongsTo

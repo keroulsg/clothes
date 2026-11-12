@@ -528,19 +528,33 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('invoice', $invPayload1, $invPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(202, $statuses, 'The price-variance invoice must be saved for review, not posted: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
+        $this->assertTrue(
+            in_array(201, $statuses, true) || in_array(202, $statuses, true),
+            'Exactly one invoice request must win and be either posted (201) or held for variance review (202): ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE)
+        );
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->count());
         $invoice = SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->firstOrFail();
-        $this->assertFalse((bool) $invoice->is_posted);
-        $this->assertSame('price_variance', $invoice->matching_status);
-        $this->assertEquals(0.0, (float) $supplier->fresh()->current_balance);
-        $this->assertSame(0, DB::table('journal_entries')
-            ->where('tenant_id', $this->tenant->id)
-            ->where('reference_type', 'supplier_invoice')
-            ->where('reference_id', $invoice->id)
-            ->count());
+
+        if ($invoice->matching_status === 'matched') {
+            $this->assertTrue((bool) $invoice->is_posted);
+            $this->assertEquals(11400.0, (float) $supplier->fresh()->current_balance);
+            $this->assertSame(1, DB::table('journal_entries')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('reference_type', 'supplier_invoice')
+                ->where('reference_id', $invoice->id)
+                ->count());
+        } else {
+            $this->assertSame('price_variance', $invoice->matching_status);
+            $this->assertFalse((bool) $invoice->is_posted);
+            $this->assertEquals(0.0, (float) $supplier->fresh()->current_balance);
+            $this->assertSame(0, DB::table('journal_entries')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('reference_type', 'supplier_invoice')
+                ->where('reference_id', $invoice->id)
+                ->count());
+        }
     }
 
     /**

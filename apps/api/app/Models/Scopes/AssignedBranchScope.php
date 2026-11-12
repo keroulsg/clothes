@@ -15,6 +15,16 @@ class AssignedBranchScope implements Scope
 
     public function apply(Builder $builder, Model $model): void
     {
+        $table = $model->getTable();
+        $hasBranchId = $this->hasColumn($table, 'branch_id');
+        $hasWarehouseId = $this->hasColumn($table, 'warehouse_id');
+
+        // Models that are not branch-bound (including Branch itself) must not
+        // perform user/branch relationship queries from inside this global scope.
+        if (!$hasBranchId && !$hasWarehouseId) {
+            return;
+        }
+
         $user = auth()->user();
         if (!$user || $user->role === 'company_owner' || !$user->tenant_id) {
             return;
@@ -23,19 +33,19 @@ class AssignedBranchScope implements Scope
         // Branch scoping becomes mandatory as soon as a user has explicit branch
         // assignments or granular permission configuration. Legacy accounts with
         // neither remain compatible until the owner reviews and assigns their branches.
-        if (!$user->hasExplicitPermissionConfiguration() && !$user->branches()->exists()) {
+        $hasAssignments = DB::table('branch_user')->where('user_id', $user->id)->exists();
+        if (!$user->hasExplicitPermissionConfiguration() && !$hasAssignments) {
             return;
         }
 
         $branchIds = $user->assignedBranchIds();
-        $table = $model->getTable();
 
-        if ($this->hasColumn($table, 'branch_id')) {
+        if ($hasBranchId) {
             $builder->whereIn($model->qualifyColumn('branch_id'), $branchIds);
             return;
         }
 
-        if ($this->hasColumn($table, 'warehouse_id')) {
+        if ($hasWarehouseId) {
             $warehouseIds = DB::table('warehouses')
                 ->where('tenant_id', $user->tenant_id)
                 ->whereIn('branch_id', $branchIds)

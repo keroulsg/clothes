@@ -66,6 +66,27 @@ class GoodsReceiptController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $poWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($po->warehouse_id);
+        if (!$poWarehouse) {
+            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'مخزن أمر الشراء غير متاح.'], 422);
+        }
+        if ($enforceBranchScope && !in_array($poWarehouse->branch_id, $assignedBranchIds, true)) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك استلام أمر شراء تابع لفرع غير معيّن لحسابك.'], 403);
+        }
+        if (!empty($validated['warehouse_id'])) {
+            $receiptWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+            if (!$receiptWarehouse) {
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'مخزن الاستلام غير تابع لشركتك أو غير متاح.'], 422);
+            }
+            if ($enforceBranchScope && !in_array($receiptWarehouse->branch_id, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك الاستلام في مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+            }
+        }
+
         $validated['tenant_id'] = $tenantId;
         $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 

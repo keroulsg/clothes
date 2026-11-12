@@ -204,6 +204,43 @@ class AccountingService
             return $mapping->account;
         }
 
+        // Ensure the recoverable input VAT control account exists for tenants initialized before this mapping was introduced.
+        if ($mappingKey === 'input_tax') {
+            $parent = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('code', '11')
+                ->first();
+
+            if (!$parent) {
+                throw ValidationException::withMessages([
+                    'account_mapping' => ['تعذر تهيئة حساب ضريبة المدخلات: حساب الأصول المتداولة الرئيسي غير موجود.'],
+                ]);
+            }
+
+            $inputTaxAccount = ChartOfAccount::withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $tenantId, 'code' => '1120'],
+                [
+                    'name' => 'ضريبة قيمة مضافة مدخلات قابلة للخصم',
+                    'type' => 'asset',
+                    'category' => 'current_asset',
+                    'parent_id' => $parent->id,
+                    'level' => 3,
+                    'normal_balance' => 'debit',
+                    'is_control_account' => false,
+                    'is_postable' => true,
+                    'current_balance' => 0,
+                    'is_active' => true,
+                ]
+            );
+
+            TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'mapping_key' => 'input_tax'],
+                ['account_id' => $inputTaxAccount->id]
+            );
+
+            return $inputTaxAccount;
+        }
+
         // Fallback to standard code if initialized
         $fallbackCodes = [
             'ar_control' => '1110',

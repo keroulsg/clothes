@@ -1144,6 +1144,7 @@ class AccountingController extends Controller
             }
 
             if ($sheet->status === 'approved') {
+                $this->accountingService->postProductionCostSheetToWip($sheet);
                 return $sheet;
             }
 
@@ -1155,6 +1156,9 @@ class AccountingController extends Controller
 
             $sheet->status = 'approved';
             $sheet->save();
+
+            // The approved cost sheet is the WIP subledger source; post it atomically.
+            $this->accountingService->postProductionCostSheetToWip($sheet);
 
             AuditLog::create([
                 'tenant_id' => $tenantId,

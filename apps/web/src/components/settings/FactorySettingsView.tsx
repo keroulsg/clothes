@@ -140,7 +140,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
         break;
       case 'production_manager':
       case 'production_engineer':
-        defaultPerms = ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage'];
+        defaultPerms = ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage', 'production.work'];
         break;
       case 'inventory_custodian':
       case 'storekeeper':
@@ -160,7 +160,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
         break;
       case 'worker':
       case 'operator':
-        defaultPerms = ['cutting.view', 'production.manage'];
+        defaultPerms = ['cutting.view', 'production.work'];
         break;
       default:
         defaultPerms = [];

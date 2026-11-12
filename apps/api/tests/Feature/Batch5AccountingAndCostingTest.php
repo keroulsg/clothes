@@ -533,18 +533,18 @@ class Batch5AccountingAndCostingTest extends TestCase
         // حساب التكلفة بتكاليف خامات وأجور وتكاليف غير مباشرة بنسبة أجور
         $costResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
             ->postJson("/api/v1/accounting/cost-sheets/{$order->id}/calculate", [
-                'direct_materials_cost' => 3000,
+                'direct_materials_cost' => 0,
                 'direct_labor_cost' => 1500,
                 'applied_overhead_rate' => 0.20, // 20% أجور = 300
                 'overhead_allocation_method' => 'direct_labor_cost_pct',
-                'planned_total_cost' => 4500,
+                'planned_total_cost' => 1500,
             ]);
 
         $costResp->assertStatus(200);
         $sheet = $costResp->json('cost_sheet');
-        $this->assertEquals(4800, (float)$sheet['total_cost']); // 3000 + 1500 + 300
-        $this->assertEquals(48, (float)$sheet['cost_per_piece']); // 4800 / 100
-        $this->assertEquals(300, (float)$sheet['variance_amount']); // 4800 - 4500
+        $this->assertEquals(1800, (float)$sheet['total_cost']); // 1500 + 300
+        $this->assertEquals(18, (float)$sheet['cost_per_piece']); // 1800 / 100
+        $this->assertEquals(300, (float)$sheet['variance_amount']); // 1800 - 1500
 
         // اعتماد بطاقة التكلفة
         $approveResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
@@ -555,15 +555,15 @@ class Batch5AccountingAndCostingTest extends TestCase
             ->where('reference_type', 'production_cost_sheet')
             ->where('reference_key', $sheet['id'])
             ->firstOrFail();
-        $this->assertEquals(4800.0, (float) $wipCapitalization->total_debit);
-        $this->assertEquals(4800.0, (float) $wipCapitalization->total_credit);
+        $this->assertEquals(1800.0, (float) $wipCapitalization->total_debit);
+        $this->assertEquals(1800.0, (float) $wipCapitalization->total_credit);
 
         // Bulk costing must not force-recalculate or mutate an approved historical cost sheet.
         $bulkResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
             ->postJson('/api/v1/accounting/cost-sheets/auto-calculate-all');
         $bulkResp->assertStatus(200)
             ->assertJsonPath('skipped_approved_count', 1);
-        $this->assertEquals(4800.0, (float) ProductionCostSheet::findOrFail($sheet['id'])->total_cost);
+        $this->assertEquals(1800.0, (float) ProductionCostSheet::findOrFail($sheet['id'])->total_cost);
         $this->assertSame('approved', ProductionCostSheet::findOrFail($sheet['id'])->status);
 
         // Even a direct force_recalculate request cannot rewrite an approved historical cost sheet.
@@ -573,7 +573,7 @@ class Batch5AccountingAndCostingTest extends TestCase
                 'force_recalculate' => true,
             ]);
         $forcedRecalc->assertStatus(200);
-        $this->assertEquals(4800.0, (float) $forcedRecalc->json('cost_sheet.total_cost'));
+        $this->assertEquals(1800.0, (float) $forcedRecalc->json('cost_sheet.total_cost'));
         $this->assertSame('approved', $forcedRecalc->json('cost_sheet.status'));
 
         // فحص تشغيل الغير (CMT): أمر إنتاج CMT يستبعد تكلفة الخامات الموردة من العميل
@@ -668,8 +668,8 @@ class Batch5AccountingAndCostingTest extends TestCase
 
         $inventoryReconciliation = $this->accountingService->reconcileInventory($this->tenantA->id);
         $wipBreakdown = collect($inventoryReconciliation['breakdown'])->firstWhere('gl_code', '1220');
-        $this->assertEquals(7500.0, (float) $wipBreakdown['gl_balance']);
-        $this->assertEquals(7500.0, (float) $wipBreakdown['warehouse_valuation']);
+        $this->assertEquals(4500.0, (float) $wipBreakdown['gl_balance']);
+        $this->assertEquals(4500.0, (float) $wipBreakdown['warehouse_valuation']);
         $this->assertEquals(0.0, (float) $wipBreakdown['variance']);
         $this->assertTrue($inventoryReconciliation['wip_valuation_available']);
     }

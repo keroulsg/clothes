@@ -41,7 +41,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('store_orders', function (Blueprint $table) {
-            $table->dropForeign(['payment_reviewed_by']);
+            // The legacy UUID reviewer column no longer has a mismatched FK.
             $table->dropColumn([
                 'payment_status',
                 'instapay_reference',

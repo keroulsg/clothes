@@ -2074,7 +2074,7 @@ class AccountingService
         $components = [
             ['amount' => (float) $sheet->direct_materials_cost, 'mapping' => 'raw_materials_inventory', 'description' => 'صرف خامات الإنتاج إلى تحت التشغيل'],
             ['amount' => (float) $sheet->direct_labor_cost, 'mapping' => 'direct_labor_expense', 'description' => 'رسملة أجور الإنتاج المباشرة'],
-            ['amount' => (float) $sheet->subcontracted_services_cost, 'mapping' => 'ap_control', 'description' => 'استحقاق خدمات التشغيل الخارجي المقبولة'],
+            ['amount' => (float) $sheet->subcontracted_services_cost, 'account' => ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '5030')->where('is_active', true)->where('is_postable', true)->firstOrFail(), 'mapping' => 'direct_labor_expense', 'description' => 'رسملة مصروف خدمات التشغيل الخارجي المقبولة'],
         ];
 
         $overhead = (float) $sheet->allocated_overhead_cost;

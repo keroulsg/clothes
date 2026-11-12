@@ -107,7 +107,7 @@ class FinancialReportingPhase08BTest extends TestCase
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $cogs = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '5010')->first();
         $inventory = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1230')->first();
@@ -156,7 +156,7 @@ class FinancialReportingPhase08BTest extends TestCase
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // قيد مرحل سليم
@@ -232,7 +232,7 @@ class FinancialReportingPhase08BTest extends TestCase
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $cogs = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '5010')->first();
         $wipInventory = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1220')->first();
@@ -302,7 +302,7 @@ class FinancialReportingPhase08BTest extends TestCase
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $capital = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '3010')->first();
         $revenue = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $expense = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '6010')->first();
@@ -575,7 +575,7 @@ class FinancialReportingPhase08BTest extends TestCase
         // تهيئة حسابات المستأجر A
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cashA = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashA = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revA = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $this->accountingService->createJournalEntry([
             'description' => 'قيد المستأجر A',
@@ -589,7 +589,7 @@ class FinancialReportingPhase08BTest extends TestCase
         // تهيئة حسابات المستأجر B
         app()->instance('current_tenant_id', $this->tenantB->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantB->id);
-        $cashB = ChartOfAccount::where('tenant_id', $this->tenantB->id)->where('code', '1010')->first();
+        $cashB = ChartOfAccount::where('tenant_id', $this->tenantB->id)->where('code', '1011')->first();
         $revB = ChartOfAccount::where('tenant_id', $this->tenantB->id)->where('code', '4010')->first();
         $this->accountingService->createJournalEntry([
             'description' => 'قيد المستأجر B',
@@ -723,7 +723,7 @@ class FinancialReportingPhase08BTest extends TestCase
         app()->instance('current_tenant_id', $this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $capital = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '3010')->first();
         $rev = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 

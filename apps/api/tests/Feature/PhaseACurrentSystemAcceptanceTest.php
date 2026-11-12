@@ -297,7 +297,7 @@ class PhaseACurrentSystemAcceptanceTest extends TestCase
         ];
 
         $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", $orderPayload);
-        $orderRes->assertStatus(201);
+        $this->assertSame(201, $orderRes->status(), json_encode($orderRes->json(), JSON_UNESCAPED_UNICODE));
         $orderNumber = $orderRes->json('order.order_number');
         $orderId = $orderRes->json('order.id');
 

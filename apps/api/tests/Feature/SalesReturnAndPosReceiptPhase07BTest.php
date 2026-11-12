@@ -750,7 +750,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
             'payment_method' => 'cash',
         ]);
 
-        $refundRes->assertStatus(200);
+        $this->assertSame(200, $refundRes->status(), json_encode($refundRes->json(), JSON_UNESCAPED_UNICODE));
         $refundRes->assertJsonPath('sales_return.refund_status', 'refunded');
 
         // تحقق من حالة الفاتورة بعد الصرف الفعلي

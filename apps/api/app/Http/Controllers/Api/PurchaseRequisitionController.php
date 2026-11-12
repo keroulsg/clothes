@@ -56,7 +56,7 @@ class PurchaseRequisitionController extends Controller
             && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
-            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 404);
         }
         if ($enforceBranchScope) {
             if (!$branchId && count($assignedBranchIds) === 1) {

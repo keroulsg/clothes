@@ -121,7 +121,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/tenant/users/{id}', [TenantController::class, 'updateUser'])->middleware('role:company_owner');
         Route::post('/tenant/users/{id}/toggle-active', [TenantController::class, 'toggleUserActive'])->middleware('role:company_owner');
         Route::delete('/tenant/users/{id}', [TenantController::class, 'deleteUser'])->middleware('role:company_owner');
-        Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription']);
+        Route::post('/tenant/subscription/activate', [TenantController::class, 'activateSubscription'])->middleware('role:company_owner');
 
         // دورة رفع إثباتات السداد ومتابعة الحصص (Stage C.4: Customer Payment Requests & Subscriptions)
         Route::post('/subscriptions/payment-requests', [\App\Http\Controllers\Api\SubscriptionPaymentRequestController::class, 'submitPaymentRequest']);

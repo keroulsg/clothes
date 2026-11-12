@@ -294,11 +294,16 @@ class SalesService
                     ]);
                 }
 
-                $needed = $item->ordered_quantity - $item->reserved_quantity;
+                $needed = (float) $item->ordered_quantity - (float) $item->reserved_quantity;
                 if ($needed > 0) {
-                    // إذا كان رصيد المخزن الحالي أقل من المطلوب للحجز، يتم توفير الرصيد فوراً لضمان تدفق عملية الحجز والبيع
-                    if ($inventoryItem->current_balance < $needed) {
-                        $inventoryItem->current_balance += max($needed * 2, 50);
+                    $onHand = (float) $inventoryItem->current_balance;
+                    $alreadyReserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                    $available = max(0, $onHand - $alreadyReserved);
+
+                    if ($available < $needed) {
+                        throw new InvalidArgumentException(
+                            "المخزون غير كافٍ للصنف [{$inventoryItem->name}]. المتاح للحجز: [{$available}]، المطلوب: [{$needed}]."
+                        );
                     }
 
                     $item->reserved_quantity += $needed;
@@ -376,14 +381,20 @@ class SalesService
                         ->first();
                 }
 
-                if ($inventoryItem) {
-                    if ($inventoryItem->current_balance < $qtyToFulfill) {
-                        $inventoryItem->current_balance += max($qtyToFulfill, 50);
-                        $inventoryItem->save();
-                    }
+                if (!$inventoryItem) {
+                    throw new InvalidArgumentException("لا يوجد سجل مخزني للصنف المطلوب تسليمه [{$item->variant_id}].");
+                }
 
-                    // تسجيل حركة صرف مخزني رسمية عبر محرك المخزون لمنع الرصيد السالب
-                    $this->inventoryService->recordTransaction([
+                $reservedForThisLine = (float) $item->reserved_quantity;
+                $onHand = (float) $inventoryItem->current_balance;
+                if ($reservedForThisLine < $qtyToFulfill || $onHand < $qtyToFulfill) {
+                    throw new InvalidArgumentException(
+                        "لا يوجد مخزون محجوز/فعلي كافٍ لتسليم الصنف [{$inventoryItem->name}]. المحجوز: [{$reservedForThisLine}]، الرصيد: [{$onHand}]، المطلوب: [{$qtyToFulfill}]."
+                    );
+                }
+
+                // تسجيل حركة صرف مخزني رسمية عبر محرك المخزون؛ لا يتم إنشاء مخزون تلقائياً.
+                $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $inventoryItem->id,
                         'warehouse_id' => $inventoryItem->warehouse_id,
@@ -397,8 +408,14 @@ class SalesService
                     ]);
                 }
 
+                $inventoryItem->reserved_balance = max(
+                    0,
+                    (float) ($inventoryItem->reserved_balance ?? 0) - $qtyToFulfill
+                );
+                $inventoryItem->save();
+
                 $item->fulfilled_quantity += $qtyToFulfill;
-                $item->reserved_quantity = max(0, $item->reserved_quantity - $qtyToFulfill);
+                $item->reserved_quantity = max(0, (float) $item->reserved_quantity - $qtyToFulfill);
                 $item->save();
 
                 SalesInvoiceItem::create([
@@ -527,9 +544,13 @@ class SalesService
                     ]);
                 }
 
-                if ($inventoryItem->current_balance < $qty) {
-                    $inventoryItem->current_balance += max($qty * 2, 50);
-                    $inventoryItem->save();
+                $onHand = (float) $inventoryItem->current_balance;
+                $reserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                $available = max(0, $onHand - $reserved);
+                if ($available < $qty) {
+                    throw new InvalidArgumentException(
+                        "المخزون غير كافٍ للصنف [{$inventoryItem->name}]. المتاح للبيع: [{$available}]، المطلوب: [{$qty}]."
+                    );
                 }
 
                 $this->inventoryService->recordTransaction([
@@ -1471,8 +1492,24 @@ class SalesService
                 throw new InvalidArgumentException("أمر البيع ملغي مسبقاً");
             }
 
-            // فك حجز المخزون المحجوز
+            // Release the reservation on the inventory row in the same transaction.
             foreach ($order->items as $item) {
+                $reservedToRelease = (float) $item->reserved_quantity;
+                if ($reservedToRelease > 0 && $item->inventory_item_id) {
+                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('id', $item->inventory_item_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($inventoryItem) {
+                        $inventoryItem->reserved_balance = max(
+                            0,
+                            (float) ($inventoryItem->reserved_balance ?? 0) - $reservedToRelease
+                        );
+                        $inventoryItem->save();
+                    }
+                }
+
                 $item->reserved_quantity = 0;
                 $item->save();
             }

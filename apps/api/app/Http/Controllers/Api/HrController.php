@@ -124,14 +124,24 @@ class HrController extends Controller
             ->sum('remaining_balance');
 
         // البحث عن أوامر صالة القص وأوامر التشغيل للغير المرتبطة بهذا الفني/العامل
-        $cuttingOrders = \App\Models\CuttingOrder::where('tenant_id', $tenantId)
+        $cuttingOrdersQuery = \App\Models\CuttingOrder::where('tenant_id', $tenantId)
             ->where(function ($q) use ($employee) {
                 $q->whereHas('bundles', function ($bQ) use ($employee) {
                     $bQ->where('assigned_employee_id', $employee->id);
                 })
                 ->orWhere('notes', 'like', "%{$employee->name}%")
                 ->orWhere('notes', 'like', "%{$employee->employee_code}%");
-            })
+            });
+        $requestUser = request()->user();
+        if ($requestUser && $requestUser->role !== 'company_owner') {
+            $branchIds = $requestUser->assignedBranchIds();
+            $cuttingOrdersQuery->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('jobOrder', fn ($jobQuery) => $jobQuery->whereIn('branch_id', $branchIds));
+            });
+        }
+        $cuttingOrders = $cuttingOrdersQuery
             ->with(['fabricColor', 'customerMaterial', 'productionOrder', 'jobOrder'])
             ->latest()
             ->limit(30)

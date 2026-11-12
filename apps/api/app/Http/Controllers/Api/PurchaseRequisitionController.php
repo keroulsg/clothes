@@ -49,6 +49,25 @@ class PurchaseRequisitionController extends Controller
             'items.*.notes' => 'nullable|string',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $branchId = $validated['branch_id'] ?? null;
+        if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
+            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+        }
+        if ($enforceBranchScope) {
+            if (!$branchId && count($assignedBranchIds) === 1) {
+                $branchId = $assignedBranchIds[0];
+            }
+            if (!$branchId || !in_array($branchId, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب إنشاء طلب الشراء على فرع معيّن لحسابك.'], 403);
+            }
+            $validated['branch_id'] = $branchId;
+        }
+
         try {
             $requisition = $this->procurementService->createPurchaseRequisition($validated);
             return response()->json([

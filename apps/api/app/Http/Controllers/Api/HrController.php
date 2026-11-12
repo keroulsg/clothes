@@ -191,7 +191,7 @@ class HrController extends Controller
         }
 
         // منع تكرار كود الموظف داخل نفس المستأجر
-        $existing = Employee::where('tenant_id', $tenantId)->where('employee_code', $validated['employee_code'])->first();
+        $existing = Employee::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('employee_code', $validated['employee_code'])->first();
         if ($existing) {
             return response()->json([
                 'error' => 'DuplicateEmployeeCode',
@@ -270,7 +270,7 @@ class HrController extends Controller
         }
 
         if (!empty($validated['employee_code']) && $validated['employee_code'] !== $employee->employee_code) {
-            $conflict = Employee::where('tenant_id', $tenantId)
+            $conflict = Employee::withoutGlobalScopes()->where('tenant_id', $tenantId)
                 ->where('employee_code', $validated['employee_code'])
                 ->where('id', '!=', $employee->id)
                 ->first();

@@ -1096,10 +1096,19 @@ class StorefrontService
             ->with(['storeOrder.salesOrder.warehouse', 'salesOrder.warehouse', 'reviewer']);
 
         if ($branchIds !== null) {
-            $query->where(function ($branchQuery) use ($branchIds) {
-                $branchQuery->whereHas('storeOrder.salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
-                    ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
-            });
+            $query
+                ->where(function ($branchQuery) use ($branchIds) {
+                    $branchQuery->whereHas('storeOrder.salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                        ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($branchQuery) use ($branchIds) {
+                    $branchQuery->whereDoesntHave('storeOrder')
+                        ->orWhereHas('storeOrder.salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($branchQuery) use ($branchIds) {
+                    $branchQuery->whereDoesntHave('salesOrder')
+                        ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                });
         }
 
         return $query->latest()->get();

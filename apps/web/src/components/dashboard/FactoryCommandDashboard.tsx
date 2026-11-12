@@ -87,8 +87,7 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<ProductionOrder | null>(null);
 
   // Live Refresh State
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [lastRefreshedAt] = useState<Date>(new Date());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Table Controls - Production Orders
@@ -294,7 +293,7 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
               title={isAr ? 'تحديث لحظي لكافة مؤشرات الخطوط' : 'Refresh Floor Signals'}
               className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white border border-white/15 backdrop-blur-md transition-all cursor-pointer hover:border-[#ff8ba0]/50"
             >
-              <RefreshCw className={`w-4 h-4 text-[#ff8ba0] ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className="w-4 h-4 text-[#ff8ba0]" />
             </button>
 
             <button

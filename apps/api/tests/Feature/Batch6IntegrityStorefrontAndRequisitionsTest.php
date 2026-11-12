@@ -155,6 +155,15 @@ class Batch6IntegrityStorefrontAndRequisitionsTest extends TestCase
             'average_cost' => 200.00,
             'is_customer_owned' => false,
         ]);
+
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenantA->id,
+            'store_name' => 'متجر الاختبار',
+            'is_store_enabled' => true,
+            'allow_cod' => true,
+            'allow_card_payment' => false,
+            'allow_instapay' => false,
+        ]);
     }
 
     /**
@@ -286,6 +295,7 @@ class Batch6IntegrityStorefrontAndRequisitionsTest extends TestCase
                 'store_name' => 'متجر مصنع الأهرام الرسمي',
                 'is_store_enabled' => true,
                 'allow_instapay' => true,
+                'instapay_account_verified' => true,
                 'instapay_identifier' => 'ahram_factory@instapay',
                 'instapay_display_name' => 'شركة مصنع الأهرام للملابس',
                 'instapay_instructions' => 'يرجى التحويل لمعرف إنستاباي الموضح وإدخال رقم العملية.',

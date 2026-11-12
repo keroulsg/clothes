@@ -40,7 +40,7 @@ class EnsurePermission
             $assignedBranchIds = $user->assignedBranchIds();
             // Legacy inherited finance accounts without branch assignments remain
             // tenant-wide until the owner completes their branch assignment review.
-            if (!empty($assignedBranchIds) && !empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
+            if (!empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
                 return response()->json([
                     'error' => 'InsufficientBranchCoverage',
                     'message' => 'عرض مسيرات الرواتب يتطلب تعيين الحساب إلى جميع فروع المنشأة.',

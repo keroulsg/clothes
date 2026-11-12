@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\BillOfMaterial;
 use App\Models\Branch;
+use App\Models\StockCount;
 use App\Models\Customer;
 use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
@@ -1491,6 +1492,27 @@ class AuthAndRoleAuthorizationTest extends TestCase
             ->assertJsonPath('warehouses.0.id', $warehouseA->id);
 
         $this->getJson('/api/v1/inventory/items')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        StockCount::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'count_number' => 'CNT-BR-A',
+            'warehouse_id' => $warehouseA->id,
+            'status' => 'draft',
+            'count_date' => now()->toDateString(),
+            'created_by' => $this->productionManagerUser->id,
+        ]);
+        StockCount::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'count_number' => 'CNT-BR-B',
+            'warehouse_id' => $warehouseB->id,
+            'status' => 'draft',
+            'count_date' => now()->toDateString(),
+            'created_by' => $this->ownerUser->id,
+        ]);
+
+        $this->getJson('/api/v1/inventory/counts')
             ->assertOk()
             ->assertJsonCount(1, 'data');
 

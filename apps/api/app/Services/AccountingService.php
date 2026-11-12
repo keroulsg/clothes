@@ -1695,15 +1695,17 @@ class AccountingService
             ->unique()
             ->values();
 
-        $postedCostSheets = ProductionCostSheet::withoutGlobalScopes()
+        $approvedCostSheets = ProductionCostSheet::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('status', 'approved')
-            ->whereIn('id', $postedCostSheetIds)
             ->get(['id', 'production_order_id', 'total_cost', 'direct_materials_cost']);
-        $approvedConversionCost = (float) $postedCostSheets->sum(
+        $postedConversionCostSheets = $approvedCostSheets->whereIn('id', $postedCostSheetIds);
+        $approvedConversionCost = (float) $postedConversionCostSheets->sum(
             fn ($sheet) => max(0, (float) $sheet->total_cost - (float) $sheet->direct_materials_cost)
         );
-        $postedProductionOrderIds = $postedCostSheets->pluck('production_order_id')->unique()->values();
+        // Include approved materials-only sheets too: they have no conversion journal,
+        // but their final QC receipts still transfer the already-posted cutting WIP into FG.
+        $postedProductionOrderIds = $approvedCostSheets->pluck('production_order_id')->unique()->values();
         $postedReceiptInspectionIds = DB::table('quality_inspections')
             ->where('tenant_id', $tenantId)
             ->whereIn('production_order_id', $postedProductionOrderIds)

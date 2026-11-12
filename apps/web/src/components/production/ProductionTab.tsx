@@ -428,7 +428,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
                 <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                {isAr ? 'تتبع الباركود الذكي للحزم والراقات' : 'Smart QR Bundle Tracking'}
+                {isAr ? 'متابعة الحزم بأكواد التعريف' : 'Bundle ID Tracking'}
               </span>
             </div>
 

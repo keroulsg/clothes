@@ -336,7 +336,7 @@ class StorefrontThemesAndPaymentsTest extends TestCase
 
         $this->assertEquals('rejected', $updatedOrder['payment_status']);
         $this->assertEquals('رقم العملية المرجعي غير مسجل في الكشف البنكي اليومي', $updatedOrder['payment_rejection_reason']);
-        $this->assertEquals($this->accountantA->id, $updatedOrder['payment_reviewed_by']);
+        $this->assertEquals($this->accountantA->id, $updatedOrder['payment_reviewed_by_user_id']);
     }
 
     public function test_inventory_synchronization_deducts_stock_on_order_and_restores_on_cancellation(): void

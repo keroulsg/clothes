@@ -458,13 +458,20 @@ class SalesService
                     ->first();
             }
 
-            $subtotal = 0;
-            $taxTotal = 0;
+            $tenant = Tenant::findOrFail($tenantId);
+            $taxSettings = $tenant->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+            $defaultTaxRate = (!empty($taxSettings['enabled']) && isset($taxSettings['rate']))
+                ? (float) $taxSettings['rate']
+                : 0.0;
+
+            $subtotal = 0.0;
+            $taxTotal = 0.0;
+            $totalCogs = 0.0;
 
             foreach ($data['items'] as $item) {
                 $qty = (float) $item['quantity'];
                 $price = (float) $item['unit_price'];
-                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : $defaultTaxRate;
 
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
@@ -524,26 +531,9 @@ class SalesService
                 }
 
                 if (!$inventoryItem) {
-                    $variant = ProductVariant::with(['garmentModel', 'size', 'color'])->find($item['variant_id']);
-                    $productName = $variant
-                        ? (($variant->garmentModel?->name ?? 'موديل ملابس') . ' - ' . ($variant->size?->name ?? 'M') . ' / ' . ($variant->color?->name ?? 'أساسي'))
-                        : 'منتج تام جاهز للبيع';
-
-                    $inventoryItem = InventoryItem::create([
-                        'tenant_id' => $tenantId,
-                        'warehouse_id' => $posWarehouseId,
-                        'variant_id' => $item['variant_id'],
-                        'item_type' => 'finished_goods',
-                        'code' => $variant?->sku ?? ('SKU-' . strtoupper(substr(uniqid(), -6))),
-                        'name' => $productName,
-                        'barcode' => $variant?->barcode ?? ('BAR-' . rand(100000, 999999)),
-                        'unit_of_measure' => 'piece',
-                        'current_balance' => 0,
-                        'reserved_balance' => 0,
-                        'average_cost' => $price,
-                        'is_customer_owned' => false,
-                        'is_active' => true,
-                    ]);
+                    throw new InvalidArgumentException(
+                        "لا يوجد سجل مخزني للصنف المطلوب بيعه [{$item['variant_id']}]. سجّل الاستلام أو الإنتاج أولاً."
+                    );
                 }
 
                 $onHand = (float) $inventoryItem->current_balance;
@@ -554,6 +544,8 @@ class SalesService
                         "المخزون غير كافٍ للصنف [{$inventoryItem->name}]. المتاح للبيع: [{$available}]، المطلوب: [{$qty}]."
                     );
                 }
+
+                $totalCogs = round($totalCogs + ($qty * (float) $inventoryItem->average_cost), 4);
 
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $tenantId,
@@ -587,31 +579,37 @@ class SalesService
                 $session->save();
             }
 
-            if ($discount > 0) {
-                try {
-                    $cashAccount = \App\Models\ChartOfAccount::where('tenant_id', $tenantId)->where('account_code', '1010')->first();
-                    $discountAccount = \App\Models\ChartOfAccount::where('tenant_id', $tenantId)
-                        ->where(function($q) {
-                            $q->where('account_code', '5100')->orWhere('account_code', '4120')->orWhere('account_type', 'expense');
-                        })->first();
+            // Post the complete POS transaction to the general ledger atomically.
+            $accounting = app(AccountingService::class);
+            $cashMapping = ($data['payment_method'] ?? 'cash') === 'cash' ? 'default_cash' : 'default_bank';
+            $cashAccount = $accounting->getMappedAccount($tenantId, $cashMapping);
+            $revenueAccount = $accounting->getMappedAccount($tenantId, 'sales_revenue');
+            $journalLines = [
+                ['account_id' => $cashAccount->id, 'debit' => $total, 'credit' => 0],
+                ['account_id' => $revenueAccount->id, 'debit' => $discount, 'credit' => 0],
+                ['account_id' => $revenueAccount->id, 'debit' => 0, 'credit' => $subtotal],
+            ];
 
-                    if ($cashAccount && $discountAccount) {
-                        app(AccountingService::class)->createJournalEntry([
-                            'entry_number' => 'JE-POS-DISC-' . $invoice->invoice_number,
-                            'entry_date' => now()->toDateString(),
-                            'description' => "إثبات خصم تجاري مباشر لمعرض المصنع بالفاتورة {$invoice->invoice_number} بمبلغ {$discount} ج.م",
-                            'reference_type' => 'sales_invoices',
-                            'reference_id' => $invoice->id,
-                            'lines' => [
-                                ['account_id' => $discountAccount->id, 'debit' => $discount, 'credit' => 0],
-                                ['account_id' => $cashAccount->id, 'debit' => 0, 'credit' => $discount],
-                            ],
-                        ]);
-                    }
-                } catch (\Throwable $e) {
-                    // Safe fallback
-                }
+            if ($taxTotal > 0) {
+                $taxAccount = $accounting->getMappedAccount($tenantId, 'sales_tax_payable');
+                $journalLines[] = ['account_id' => $taxAccount->id, 'debit' => 0, 'credit' => $taxTotal];
             }
+
+            if ($totalCogs > 0) {
+                $cogsAccount = $accounting->getMappedAccount($tenantId, 'cogs');
+                $inventoryAccount = $accounting->getMappedAccount($tenantId, 'finished_goods_inventory');
+                $journalLines[] = ['account_id' => $cogsAccount->id, 'debit' => $totalCogs, 'credit' => 0];
+                $journalLines[] = ['account_id' => $inventoryAccount->id, 'debit' => 0, 'credit' => $totalCogs];
+            }
+
+            $accounting->createJournalEntry([
+                'entry_number' => 'JE-POS-' . $invoice->invoice_number,
+                'entry_date' => now()->toDateString(),
+                'description' => "ترحيل عملية نقطة البيع للفاتورة {$invoice->invoice_number}",
+                'reference_type' => 'sales_invoices',
+                'reference_id' => $invoice->id,
+                'lines' => $journalLines,
+            ]);
 
             return $invoice->load([
                 'tenant',

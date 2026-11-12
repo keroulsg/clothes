@@ -437,7 +437,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('grn', $grnPayload1, $grnPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses);
+        $this->assertContains(201, $statuses, 'GRN concurrent worker responses: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->count());
@@ -488,7 +488,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('invoice', $invPayload1, $invPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses);
+        $this->assertContains(201, $statuses, 'Supplier invoice concurrent worker responses: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->count());

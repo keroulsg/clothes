@@ -80,13 +80,21 @@ class SubcontractingController extends Controller
         }
 
         $customer->load([
-            'jobOrders' => function ($q) {
-                $q->with(['garmentModel:id,name,code', 'assignedEmployee:id,name'])->orderByDesc('created_at');
+            'jobOrders' => function ($q) use ($request) {
+                $this->scopeJobsToAssignedBranches($q, $request)
+                    ->with(['garmentModel:id,name,code', 'assignedEmployee:id,name'])
+                    ->orderByDesc('created_at');
             },
             'customerMaterials',
-            'materialReceipts.warehouse',
-            'deliveryNotes',
-            'invoices.items',
+            'materialReceipts' => function ($q) use ($request) {
+                $this->scopeRelatedJobRecords($q, $request)->with('warehouse');
+            },
+            'deliveryNotes' => function ($q) use ($request) {
+                $this->scopeRelatedJobRecords($q, $request);
+            },
+            'invoices' => function ($q) use ($request) {
+                $this->scopeRelatedJobRecords($q, $request)->with('items');
+            },
         ]);
 
         // الحسابات المالية والتشغيلية المجمعة

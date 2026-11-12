@@ -68,12 +68,11 @@ class SubscriptionController extends Controller
         $validated = $request->validate([
             'plan_code' => 'required|string|exists:subscription_plans,code',
             'billing_cycle' => 'nullable|string|in:monthly,annual',
-            'direct_activate' => 'nullable|boolean',
         ]);
 
         $tenantId = app('current_tenant_id');
         $plan = SubscriptionPlan::where('code', $validated['plan_code'])->firstOrFail();
-        $isDirect = $request->boolean('direct_activate') || in_array($request->user()?->role, ['company_owner', 'platform_admin', 'super_admin']);
+        $isDirect = in_array($request->user()?->role, ['platform_admin', 'super_admin'], true);
 
         if ($isDirect) {
             $subscription = $this->subscriptionService->getOrCreateFactorySubscription($tenantId);

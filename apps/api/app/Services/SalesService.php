@@ -324,9 +324,15 @@ class SalesService
                 throw new InvalidArgumentException("أمر البيع مكتمل أو ملغي مسبقاً");
             }
 
-            $targetWarehouseId = $order->warehouse_id
-                ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
-                ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+            $targetWarehouseId = $order->warehouse_id;
+            if (!$targetWarehouseId) {
+                throw new InvalidArgumentException('أمر البيع غير مرتبط بمستودع محدد؛ أعد حجز المخزون قبل التسليم.');
+            }
+
+            Warehouse::where('tenant_id', $tenantId)
+                ->where('id', $targetWarehouseId)
+                ->where('is_active', true)
+                ->firstOrFail();
 
             // إنشاء فاتورة المبيعات
             $invoice = SalesInvoice::create([
@@ -355,19 +361,13 @@ class SalesService
 
                 $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
                     ->where('id', $item->inventory_item_id)
+                    ->where('warehouse_id', $targetWarehouseId)
+                    ->where('is_customer_owned', false)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$inventoryItem) {
-                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
-                        ->where('variant_id', $item->variant_id)
-                        ->where('is_customer_owned', false)
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                if (!$inventoryItem) {
-                    throw new InvalidArgumentException("لا يوجد سجل مخزني للصنف المطلوب تسليمه [{$item->variant_id}].");
+                    throw new InvalidArgumentException("سجل مخزون الصنف [{$item->variant_id}] غير موجود في مستودع أمر البيع؛ أعد الحجز من المستودع الصحيح.");
                 }
 
                 $reservedForThisLine = (float) $item->reserved_quantity;
@@ -396,8 +396,7 @@ class SalesService
                         'reference_id' => $order->id,
                         'idempotency_key' => 'SO-DELIV-' . $order->id . '-' . $item->id,
                     'consume_reserved' => true,
-                    ]);
-                }
+                ]);
 
                 $inventoryItem->reserved_balance = $inventoryReserved - $qtyToFulfill;
                 $inventoryItem->save();

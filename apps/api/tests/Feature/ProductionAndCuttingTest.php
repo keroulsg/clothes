@@ -312,6 +312,7 @@ class ProductionAndCuttingTest extends TestCase
         // Finished-goods receipts may only capitalize a reviewed, approved unit cost.
         $costSheet->status = 'approved';
         $costSheet->save();
+        app(AccountingService::class)->postProductionCostSheetToWip($costSheet);
 
         // التحقق من خصم القماش من المخزن الفعلي عبر InventoryService
         $this->fabricItemA->refresh();

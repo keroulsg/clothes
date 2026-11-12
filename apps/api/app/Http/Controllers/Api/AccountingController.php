@@ -354,6 +354,12 @@ class AccountingController extends Controller
         $tenantId = app('current_tenant_id');
         $coa = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($validated['chart_of_account_id']);
 
+        if (!$coa->is_active || !$coa->is_postable || !$coa->is_cash_bank) {
+            throw Illuminate\Validation\ValidationException::withMessages([
+                'chart_of_account_id' => ['يجب اختيار حساب خزينة أو بنك فرعي نشط وقابل للترحيل، وليس حساباً رئيسياً أو تجميعياً.'],
+            ]);
+        }
+
         $openingBal = round((float)($validated['opening_balance'] ?? 0), 4);
 
         $account = FinancialAccount::create([

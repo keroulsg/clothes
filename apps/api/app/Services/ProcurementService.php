@@ -391,6 +391,15 @@ class ProcurementService
                     if (!$grn) {
                         throw new InvalidArgumentException('أمان: إذن الاستلام غير موجود أو غير تابع لهذه الشركة.');
                     }
+                    if (
+                        (string) $grn->purchase_order_id !== (string) $po->id
+                        || (string) $grn->supplier_id !== (string) $supplier->id
+                    ) {
+                        throw new InvalidArgumentException('إذن الاستلام المحدد لا يخص أمر الشراء والمورد المحددين للفاتورة.');
+                    }
+                    if ($grn->status !== 'posted' || in_array($grn->inspection_status, ['failed', 'rejected'], true)) {
+                        throw new InvalidArgumentException('لا يمكن ترحيل فاتورة المورد قبل اعتماد إذن الاستلام واجتياز فحص الجودة.');
+                    }
                 }
 
                 $tenantRecord = \App\Models\Tenant::find($tenantId);
@@ -443,7 +452,7 @@ class ProcurementService
                         'variance_notes' => !empty($varianceNotes) ? implode('; ', $varianceNotes) : null,
                         'is_posted' => false,
                         'posted_at' => null,
-                        'posted_by' => $data['posted_by'] ?? auth()->id(),
+                        'posted_by' => null,
                         'idempotency_key' => $idempotencyKey,
                     ]);
                 } catch (QueryException $e) {
@@ -469,6 +478,11 @@ class ProcurementService
 
                 if (abs($invoiceTotal - ($invoiceSubtotal + $invoiceTax)) > 0.01) {
                     throw new InvalidArgumentException('إجمالي فاتورة المورد لا يساوي صافي الفاتورة مضافاً إليه الضريبة. راجع المبالغ قبل الترحيل.');
+                }
+
+                // A three-way matching variance is a review state, not permission to post an unapproved liability.
+                if ($matchingStatus !== 'matched') {
+                    return $invoice->load('supplier', 'purchaseOrder');
                 }
 
                 $inventoryWeights = [];

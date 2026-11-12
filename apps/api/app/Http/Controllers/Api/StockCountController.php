@@ -33,6 +33,11 @@ class StockCountController extends Controller
         $query = StockCount::where('tenant_id', $tenantId)
             ->with(['warehouse.branch', 'creator', 'approver'])
             ->withCount('items');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
 
         if ($request->filled('warehouse_id')) {
             $query->where('warehouse_id', $request->warehouse_id);
@@ -64,6 +69,13 @@ class StockCountController extends Controller
         ]);
 
         $warehouse = Warehouse::where('tenant_id', $tenantId)->findOrFail($validated['warehouse_id']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner' && !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
+            return response()->json([
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك إنشاء جرد لمخزن تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
 
         $stockCount = DB::transaction(function () use ($tenantId, $validated, $warehouse) {
             $countNumber = 'CNT-' . date('Ymd') . '-' . rand(1000, 9999);
@@ -126,7 +138,12 @@ class StockCountController extends Controller
     public function record(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $count = StockCount::where('tenant_id', $tenantId)->findOrFail($id);
+        $countQuery = StockCount::where('tenant_id', $tenantId);
+        if ($request->user() && $request->user()->role !== 'company_owner') {
+            $branchIds = $request->user()->assignedBranchIds();
+            $countQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $count = $countQuery->findOrFail($id);
 
         if ($count->status === 'approved') {
             return response()->json([
@@ -178,7 +195,13 @@ class StockCountController extends Controller
 
         $count = DB::transaction(function () use ($id, $tenantId) {
             // Serialize approvals: two concurrent requests must never apply the same count twice.
-            $count = StockCount::where('tenant_id', $tenantId)
+            $countQuery = StockCount::where('tenant_id', $tenantId);
+            $user = request()->user();
+            if ($user && $user->role !== 'company_owner') {
+                $branchIds = $user->assignedBranchIds();
+                $countQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            }
+            $count = $countQuery
                 ->whereKey($id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -246,9 +269,13 @@ class StockCountController extends Controller
     public function show(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $count = StockCount::where('tenant_id', $tenantId)
-            ->with(['warehouse.branch', 'items.inventoryItem', 'creator', 'approver'])
-            ->findOrFail($id);
+        $countQuery = StockCount::where('tenant_id', $tenantId)
+            ->with(['warehouse.branch', 'items.inventoryItem', 'creator', 'approver']);
+        if (request()->user() && request()->user()->role !== 'company_owner') {
+            $branchIds = request()->user()->assignedBranchIds();
+            $countQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $count = $countQuery->findOrFail($id);
 
         $totalSystemQty = $count->items->sum('system_quantity');
         $totalPhysicalQty = $count->items->sum('physical_quantity');

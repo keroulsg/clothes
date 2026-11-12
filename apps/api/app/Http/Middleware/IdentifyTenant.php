@@ -24,6 +24,13 @@ class IdentifyTenant
             ], 401);
         }
 
+        // Platform-wide subscription administration is intentionally tenant-agnostic.
+        // It is protected by the dedicated platform_admin role middleware and must not
+        // require an X-Tenant-ID header or inherit any tenant context.
+        if ($user->role === 'platform_admin' && $request->is('api/v1/admin/subscriptions*')) {
+            return $next($request);
+        }
+
         // 2. التحقق من حالة تفعيل حساب المستخدم
         if (!$user->is_active) {
             return response()->json([

@@ -210,7 +210,7 @@ class EnsureRole
             }
             return $isRead ? 'waslat_worsh.view' : 'waslat_worsh.manage';
         }
-        if ($root === 'subscription') {
+        if ($root === 'subscription' || $root === 'subscriptions') {
             return 'admin.settings';
         }
         if ($root === 'admin') {

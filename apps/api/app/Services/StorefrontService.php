@@ -169,17 +169,14 @@ class StorefrontService
             }
         }
 
+        // Storefront availability is sourced only from an active finished-goods warehouse.
+        // Never expose raw-material or arbitrary warehouse stock as sellable finished products.
         $stockWarehouse = Warehouse::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->where('type', 'finished_goods')
             ->orderBy('id')
-            ->first()
-            ?? Warehouse::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->where('is_active', true)
-                ->orderBy('id')
-                ->first();
+            ->first();
         $firstWarehouseId = $stockWarehouse?->id;
 
         $variants = ProductVariant::withoutGlobalScopes()
@@ -501,12 +498,8 @@ class StorefrontService
                 ->where('is_active', true)
                 ->where('type', 'finished_goods')
                 ->orderBy('id')
-                ->first()
-                ?? Warehouse::withoutGlobalScopes()
-                    ->where('tenant_id', $tenantId)
-                    ->where('is_active', true)
-                    ->orderBy('id')
-                    ->first();
+                ->lockForUpdate()
+                ->first();
             $firstWarehouseId = $warehouse?->id;
 
             if (!$firstWarehouseId) {
@@ -528,6 +521,7 @@ class StorefrontService
                 // Inventory Synchronization: check available balance accounting for existing reservations!
                 $invItem = InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
+                    ->where('warehouse_id', $firstWarehouseId)
                     ->where('variant_id', $variant->id)
                     ->where('is_customer_owned', false)
                     ->lockForUpdate()
@@ -539,10 +533,6 @@ class StorefrontService
 
                 if ($availableStock < $qty) {
                     throw new InvalidArgumentException("الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر للبيع: " . (int)$availableStock);
-                }
-
-                if (!$firstWarehouseId && $invItem) {
-                    $firstWarehouseId = $invItem->warehouse_id;
                 }
 
                 $inventoryItemsMap[$variant->id] = $invItem;

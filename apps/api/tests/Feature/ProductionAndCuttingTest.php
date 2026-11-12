@@ -306,7 +306,10 @@ class ProductionAndCuttingTest extends TestCase
 
         // Actual WIP material cost must be reproducible from the immutable inventory subledger.
         app()->instance('current_tenant_id', $this->tenantA->id);
-        $costSheet = app(AccountingService::class)->calculateProductionCost($orderId);
+        $costSheet = app(AccountingService::class)->calculateProductionCost($orderId, [
+            'direct_labor_cost' => 1000,
+            'applied_overhead_rate' => 0.10,
+        ]);
         $this->assertEquals(
             round(105.0 * (float) $this->fabricItemA->average_cost, 4),
             (float) $costSheet->direct_materials_cost
@@ -317,7 +320,8 @@ class ProductionAndCuttingTest extends TestCase
         $wipJournal = app(AccountingService::class)->postProductionCostSheetToWip($costSheet);
         $this->assertSame('production_cost_sheet', $wipJournal->reference_type);
         $this->assertSame((string) $costSheet->id, (string) $wipJournal->reference_key);
-        $this->assertEquals((float) $costSheet->total_cost, (float) $wipJournal->total_debit);
+        $expectedConversionCost = round((float) $costSheet->total_cost - (float) $costSheet->direct_materials_cost, 4);
+        $this->assertEquals($expectedConversionCost, (float) $wipJournal->total_debit);
         $this->assertEquals((float) $costSheet->total_cost, (float) $wipJournal->total_credit);
         $this->assertSame($wipJournal->id, app(AccountingService::class)->postProductionCostSheetToWip($costSheet)->id);
 
@@ -454,7 +458,7 @@ class ProductionAndCuttingTest extends TestCase
             ->where('account_id', $wipAccount->id)
             ->sum('credit');
         $this->assertEquals($expectedWipCredits, $actualWipCredits, 'Each QC receipt journal must credit the same WIP control account.');
-        $this->assertEquals((float) $costSheet->total_cost, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+        $this->assertEquals($expectedConversionCost, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
             ->where('account_id', $wipAccount->id)->sum('debit'));
         $wipLedgerLines = JournalEntryLine::where('account_id', $wipAccount->id)->get();
         $wipLedgerEntries = JournalEntry::whereIn('id', $wipLedgerLines->pluck('journal_entry_id'))->get()->keyBy('id');

@@ -410,6 +410,19 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertSame($receiptJournal->id, $duplicateJournal->id);
         $this->assertEquals($balanceBeforeDuplicate, (float) $finishedGoodsAccount->fresh()->current_balance);
 
+        try {
+            app(AccountingService::class)->postFinishedGoodsReceipt(
+                $this->tenantA->id,
+                ProductionOrder::findOrFail($orderId),
+                QualityInspection::findOrFail($inspectionId),
+                $expectedReceiptCost + 1,
+                98
+            );
+            $this->fail('A duplicate QC receipt with a different cost must be rejected.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('تعارض Idempotency', $exception->getMessage());
+        }
+
         // The remaining two accepted pieces are a distinct partial QC receipt for the same order.
         $secondQcRes = $this->actingAs($this->userA)
             ->postJson('/api/v1/quality-inspections', [

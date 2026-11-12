@@ -386,44 +386,10 @@ export const PosReceiptModal: React.FC<PosReceiptModalProps> = ({
               )}
             </div>
 
-            {/* Realistic Barcode / Verification Stamp */}
+            {/* Human-readable invoice reference; no non-scannable barcode is presented. */}
             <div className="pt-3 text-center space-y-1.5">
-              {/* Barcode Graphic */}
-              <div className="flex justify-center">
-                <svg className="w-44 h-8 mx-auto" viewBox="0 0 200 35">
-                  <rect x="5" y="0" width="3" height="35" fill="black" />
-                  <rect x="11" y="0" width="2" height="35" fill="black" />
-                  <rect x="16" y="0" width="5" height="35" fill="black" />
-                  <rect x="24" y="0" width="2" height="35" fill="black" />
-                  <rect x="29" y="0" width="4" height="35" fill="black" />
-                  <rect x="36" y="0" width="2" height="35" fill="black" />
-                  <rect x="41" y="0" width="6" height="35" fill="black" />
-                  <rect x="50" y="0" width="3" height="35" fill="black" />
-                  <rect x="56" y="0" width="2" height="35" fill="black" />
-                  <rect x="61" y="0" width="5" height="35" fill="black" />
-                  <rect x="69" y="0" width="2" height="35" fill="black" />
-                  <rect x="74" y="0" width="4" height="35" fill="black" />
-                  <rect x="81" y="0" width="3" height="35" fill="black" />
-                  <rect x="87" y="0" width="6" height="35" fill="black" />
-                  <rect x="96" y="0" width="2" height="35" fill="black" />
-                  <rect x="101" y="0" width="4" height="35" fill="black" />
-                  <rect x="108" y="0" width="3" height="35" fill="black" />
-                  <rect x="114" y="0" width="5" height="35" fill="black" />
-                  <rect x="122" y="0" width="2" height="35" fill="black" />
-                  <rect x="127" y="0" width="4" height="35" fill="black" />
-                  <rect x="134" y="0" width="6" height="35" fill="black" />
-                  <rect x="143" y="0" width="3" height="35" fill="black" />
-                  <rect x="149" y="0" width="2" height="35" fill="black" />
-                  <rect x="154" y="0" width="5" height="35" fill="black" />
-                  <rect x="162" y="0" width="3" height="35" fill="black" />
-                  <rect x="168" y="0" width="4" height="35" fill="black" />
-                  <rect x="175" y="0" width="2" height="35" fill="black" />
-                  <rect x="180" y="0" width="5" height="35" fill="black" />
-                  <rect x="188" y="0" width="3" height="35" fill="black" />
-                </svg>
-              </div>
-              <div className="font-mono text-[9px] font-bold text-slate-700 tracking-wider">
-                * {invoice.invoice_number} *
+              <div className="font-mono text-xs font-bold text-slate-800 tracking-wider">
+                {invoice.invoice_number}
               </div>
               <p className="text-[9px] text-slate-600 leading-relaxed pt-1">
                 {isAr

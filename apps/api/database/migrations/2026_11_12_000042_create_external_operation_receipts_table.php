@@ -80,6 +80,11 @@ return new class extends Migration
                             ->update(['total_cost' => $actualCost]);
                     }
                 });
+
+            // Old dispatch-time estimates without any returned quantity are not incurred costs.
+            DB::table('external_operations')
+                ->whereRaw('(COALESCE(received_accepted_quantity, 0) + COALESCE(received_rejected_quantity, 0) + COALESCE(scrap_quantity, 0)) = 0')
+                ->update(['total_cost' => 0]);
         }
     }
 

@@ -184,12 +184,16 @@ class CatalogAndInventoryTest extends TestCase
             'current_balance' => 100, // متاح 100 قطعة فقط
         ]);
 
+        // Strict Stock is absolute: even a warehouse configured for negative stock cannot go below zero.
+        $this->warehouseA->allow_negative_stock = true;
+        $this->warehouseA->save();
+
         $service = app(InventoryService::class);
 
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('رصيد الصنف [أزرار كبس أطفال] في المخزن غير كافٍ');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('رصيد الصنف [أزرار كبس أطفال]');
 
-        // محاولة صرف 150 قطعة
+        // محاولة صرف 150 قطعة من رصيد فعلي 100 فقط.
         $service->recordTransaction([
             'inventory_item_id' => $item->id,
             'transaction_type' => 'material_issuance',

@@ -178,3 +178,24 @@ This section records additional source changes made after the preceding CI evide
 - Production cloud backup/restore and disaster-recovery execution still require a verified target environment and restore drill.
 - Inventory asset GL posting coverage for every manual adjustment and warehouse-transfer path requires a separate transaction-by-transaction accounting verification before claiming full financial close readiness.
 
+
+
+### Follow-up Remediation — Inventory, WIP Cost Evidence, and Cost-Sheet Safety (2026-11-12)
+
+- Stock-count approval PHP syntax was corrected. The resulting CI run on 192e73bd566614a2d0882f9bd39f56fd8bf0456e passed both backend and frontend jobs.
+- Warehouse transfer dispatch and receipt now serialize on the transfer row, use stable per-line idempotency keys, preserve the transfer-time unit-cost snapshot, and return the committed transfer on safe replays. A lifecycle regression test covers duplicate dispatch and receipt.
+- CI on c83f842a537112e5cf001be469ad62d5e5ace20f: PostgreSQL migrations and concurrency tests passed; full backend suite 532 passed; frontend TypeScript and Vite build passed.
+- Cutting material issues are now recorded only after the cutting document exists, with reference_id, reference_number, actual weighted-average unit_cost, and an idempotency key. This repairs the broken link used by calculateProductionCost() to derive direct material cost for WIP.
+- Cutting cancellation now reverses the original immutable issue quantity and original total_cost, not the item's potentially changed current average cost. Missing or mismatched original issue records block cancellation for manual reconciliation instead of fabricating a reversal.
+- Manufacturing cost-sheet bulk calculation no longer force-recalculates approved sheets, excludes closed/cancelled orders, and reports failures rather than silently discarding them. Cost-sheet approval is serialized with a row lock and its audit record is in the same transaction.
+- A PostgreSQL concurrency test was corrected to accept either valid race winner: a matched invoice may be posted (201), or a price-variance invoice may be held for review (202); the competing conflicting request must be 409. It verifies supplier balance and GL journal behavior for the actual winner.
+- CI on eeb24f029a603235874d7d280f3fe7bf3aeffac6: PostgreSQL migrations and concurrency tests passed; full backend suite 532 passed, 3,297 assertions; frontend TypeScript and Vite build passed.
+
+### Still Open — Not Production Sign-Off
+
+- WIP remains not fully authoritative: approved/actual cost sheets are not yet tied into a complete WIP subledger and finished-goods capitalization flow for partial receipts. reconcileInventory() therefore continues to report incomplete_wip_valuation; do not interpret the known warehouse categories total as a full inventory valuation.
+- Finished-goods capitalization currently requires a transaction-by-transaction review against approved cost sheets, partial QC receipts, and the actual inventory valuation method before it can be called reconciled.
+- Manual inventory adjustment GL postings still need an approved gain/loss account policy and complete coverage tests. Intra-tenant warehouse transfers do not change total inventory value, but branch/accounting dimensions still need review.
+- FIFO is not implemented; weighted-average cost remains the current method.
+- Branch-level user access policy, external live payment credentials/settlement, and production backup/restore drill remain open dependencies.
+- The above CI evidence applies to the exact commits listed, not to later commits until their own workflows complete.

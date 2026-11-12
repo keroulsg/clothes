@@ -833,4 +833,28 @@ class SubcontractingController extends Controller
             ], 422);
         }
     }
+    /**
+     * Job orders have no direct branch column; ownership is derived from their
+     * production order, assigned employee, or linked cutting-order warehouse.
+     */
+    private function scopeJobsToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
+            return $query;
+        }
+
+        return $query->where(function ($branchQuery) use ($branchIds) {
+            $branchQuery
+                ->whereHas('productionOrder', fn ($q) => $q->whereIn('branch_id', $branchIds))
+                ->orWhereHas('assignedEmployee', fn ($q) => $q->whereIn('branch_id', $branchIds))
+                ->orWhereHas('cuttingOrders.warehouse', fn ($q) => $q->whereIn('branch_id', $branchIds));
+        });
+    }
+
 }

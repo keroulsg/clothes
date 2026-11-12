@@ -274,4 +274,97 @@ class WarehouseAndInventoryPhaseBTest extends TestCase
 
         $labelRes->assertStatus(404);
     }
+
+    public function test_stock_transfer_dispatch_and_receipt_are_atomic_and_idempotent(): void
+    {
+        $source = Warehouse::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مخزن المصدر',
+            'code' => 'WH-SRC-TR',
+            'type' => 'fabric',
+            'allow_negative_stock' => false,
+            'is_active' => true,
+        ]);
+
+        $destination = Warehouse::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مخزن الوجهة',
+            'code' => 'WH-DST-TR',
+            'type' => 'fabric',
+            'allow_negative_stock' => false,
+            'is_active' => true,
+        ]);
+
+        $item = InventoryItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'warehouse_id' => $source->id,
+            'item_type' => 'fabric_raw',
+            'code' => 'TR-FAB-001',
+            'name' => 'قماش اختبار التحويل',
+            'unit_of_measure' => 'kg',
+            'current_balance' => 20,
+            'reserved_balance' => 0,
+            'average_cost' => 75,
+        ]);
+
+        $headers = ['X-Tenant-ID' => $this->tenantA->id];
+        $create = $this->actingAs($this->ownerA, 'sanctum')
+            ->withHeaders($headers)
+            ->postJson('/api/v1/inventory/transfers', [
+                'source_warehouse_id' => $source->id,
+                'destination_warehouse_id' => $destination->id,
+                'items' => [
+                    ['inventory_item_id' => $item->id, 'quantity' => 8],
+                ],
+            ]);
+
+        $create->assertStatus(201);
+        $transferId = $create->json('transfer.id');
+
+        $this->actingAs($this->ownerA, 'sanctum')
+            ->withHeaders($headers)
+            ->postJson("/api/v1/inventory/transfers/{$transferId}/dispatch")
+            ->assertOk()
+            ->assertJsonPath('transfer.status', 'dispatched');
+
+        // A repeated dispatch must not deduct source stock a second time.
+        $this->actingAs($this->ownerA, 'sanctum')
+            ->withHeaders($headers)
+            ->postJson("/api/v1/inventory/transfers/{$transferId}/dispatch")
+            ->assertOk()
+            ->assertJsonPath('transfer.status', 'dispatched');
+
+        $this->assertSame(12.0, (float) $item->fresh()->current_balance);
+        $this->assertSame(1, InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'stock_transfer')
+            ->where('direction', 'OUT')
+            ->count());
+
+        $this->actingAs($this->ownerA, 'sanctum')
+            ->withHeaders($headers)
+            ->postJson("/api/v1/inventory/transfers/{$transferId}/receive")
+            ->assertOk()
+            ->assertJsonPath('transfer.status', 'received');
+
+        // A repeated receipt must not increment destination stock twice.
+        $this->actingAs($this->ownerA, 'sanctum')
+            ->withHeaders($headers)
+            ->postJson("/api/v1/inventory/transfers/{$transferId}/receive")
+            ->assertOk()
+            ->assertJsonPath('transfer.status', 'received');
+
+        $destinationItem = InventoryItem::where('tenant_id', $this->tenantA->id)
+            ->where('warehouse_id', $destination->id)
+            ->where('code', 'TR-FAB-001')
+            ->firstOrFail();
+
+        $this->assertSame(8.0, (float) $destinationItem->current_balance);
+        $this->assertSame(2, InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'stock_transfer')
+            ->count());
+        $this->assertSame(1, InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('idempotency_key', 'STOCK-TRANSFER-OUT-' . $create->json('transfer.items.0.id'))
+            ->count());
+    }
+
 }

@@ -79,6 +79,7 @@ class AccountingController extends Controller
         $validated = $request->validate([
             'mapping_key' => 'required|string|max:100',
             'account_id' => 'required|uuid',
+            'contra_account_id' => 'nullable|uuid',
         ]);
 
         $tenantId = app('current_tenant_id');

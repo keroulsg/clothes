@@ -377,7 +377,7 @@ Route::prefix('v1')->group(function () {
 
         // الحسابات العامة وقيود اليومية والتكاليف (Phase 8: Accounting & Costing - Protected by erp.accounting feature)
         Route::middleware(['feature:erp.accounting'])->group(function () {
-            Route::get('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'accounts']);
+            Route::get('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'accounts'])->middleware('role:accountant,financial_accountant,company_owner');
             Route::post('/accounting/accounts/init-default', [\App\Http\Controllers\Api\AccountingController::class, 'initDefaultAccounts'])->middleware('role:accountant,company_owner');
             Route::post('/accounting/accounts', [\App\Http\Controllers\Api\AccountingController::class, 'storeAccount'])->middleware('role:accountant,company_owner');
             Route::put('/accounting/accounts/{id}', [\App\Http\Controllers\Api\AccountingController::class, 'updateAccount'])->middleware('role:accountant,company_owner');

@@ -492,7 +492,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/storefront/design/rollback', [\App\Http\Controllers\Api\StorefrontController::class, 'rollback'])->middleware('role:company_owner,production_manager');
             Route::post('/storefront/instapay-settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateInstaPaySettings'])->middleware('role:company_owner,accountant');
             Route::get('/storefront/orders', [\App\Http\Controllers\Api\StorefrontController::class, 'orders']);
-            Route::patch('/storefront/orders/{id}/status', [\App\Http\Controllers\Api\StorefrontController::class, 'updateStatus']);
+            Route::patch('/storefront/orders/{id}/status', [\App\Http\Controllers\Api\StorefrontController::class, 'updateStatus'])->middleware('role:company_owner,production_manager,accountant,sales_manager');
             Route::post('/storefront/orders/{id}/verify-payment', [\App\Http\Controllers\Api\StorefrontController::class, 'verifyPayment'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');
             Route::get('/storefront/payments/pending', [\App\Http\Controllers\Api\StorefrontController::class, 'pendingPayments'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');
             Route::post('/storefront/payments/{id}/approve', [\App\Http\Controllers\Api\StorefrontController::class, 'verifyPayment'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');

@@ -1603,7 +1603,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
             ->assertJsonPath('error', 'BranchAssignmentRequired');
     }
 
-    public function test_unassigned_legacy_staff_user_sees_no_branch_bound_data(): void
+    public function test_unassigned_custom_staff_user_sees_no_branch_bound_data(): void
     {
         $unassigned = User::create([
             'tenant_id' => $this->tenant->id,
@@ -1611,6 +1611,8 @@ class AuthAndRoleAuthorizationTest extends TestCase
             'email' => 'unassigned@nile.com',
             'password' => bcrypt('StrongPass123!'),
             'role' => 'production_manager',
+            'permissions_mode' => 'custom',
+            'permissions' => ['branches.view', 'inventory.view'],
             'is_active' => true,
         ]);
 

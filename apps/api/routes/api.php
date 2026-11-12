@@ -361,7 +361,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/sales/returns/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager,sales_manager');
         Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,sales_manager');
         Route::post('/sales/returns/{id}/refund', [\App\Http\Controllers\Api\SalesController::class, 'refundSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_manager');
-        Route::get('/sales/payments', [\App\Http\Controllers\Api\SalesController::class, 'payments']);
+        Route::get('/sales/payments', [\App\Http\Controllers\Api\SalesController::class, 'payments'])->middleware('role:company_owner,accountant,financial_accountant,sales_manager');
         Route::post('/sales/payments', [\App\Http\Controllers\Api\SalesController::class, 'storePayment'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,sales_officer,sales_manager,sales_officer');
         Route::post('/sales/payments/{id}/reverse', [\App\Http\Controllers\Api\SalesController::class, 'reversePayment'])->middleware('role:company_owner,accountant,financial_accountant,sales_manager,sales_officer');
         Route::get('/sales/credit-notes', [\App\Http\Controllers\Api\SalesController::class, 'creditNotes']);

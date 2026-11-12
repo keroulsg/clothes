@@ -230,32 +230,14 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
       : `Mark production order [${order.order_number}] as completed?`;
     if (!window.confirm(confirmMsg)) return;
 
-    const cutQty = Number(
-      (order as any).total_cut_quantity ??
-      order.cut_quantity ??
-      (order as any).total_planned_quantity ??
-      0
-    );
-
-    if (!Number.isFinite(cutQty) || cutQty <= 0) {
-      window.alert(isAr
-        ? 'لا يمكن إكمال أمر الإنتاج دون كمية إنتاج فعلية مسجلة.'
-        : 'Cannot complete an order without a recorded production quantity.');
-      return;
-    }
-
     try {
-      await api.production.completeProductionOrder(order.id);
+      const response = await api.production.completeProductionOrder(order.id);
+      if (!response?.success || !response.data) {
+        throw new Error(response?.message || (isAr ? 'لم يؤكد الخادم إتمام أمر الإنتاج.' : 'The server did not confirm production completion.'));
+      }
 
-      const updated: ProductionOrder = {
-        ...order,
-        status: 'completed' as const,
-        completed_quantity: cutQty,
-        total_completed_quantity: cutQty,
-        actual_completion_date: new Date().toISOString().split('T')[0],
-      };
-
-      onProductionOrderUpdated?.(updated);
+      // Use the persisted server record only; do not synthesize completion quantities or timestamps locally.
+      onProductionOrderUpdated?.(response.data as ProductionOrder);
     } catch (error: any) {
       window.alert(error?.message || (isAr
         ? 'فشل اعتماد إتمام أمر الإنتاج. لم يتم تغيير الحالة.'

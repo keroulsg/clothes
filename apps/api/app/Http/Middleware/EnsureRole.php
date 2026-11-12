@@ -126,7 +126,7 @@ class EnsureRole
         }
 
         if ($root === 'branches') {
-            return 'admin.settings';
+            return $isRead ? 'branches.view' : 'admin.settings';
         }
         if (in_array($root, ['categories', 'clothing-categories', 'size-categories', 'sizes', 'colors', 'models', 'garment-models'], true)) {
             return 'production.manage';

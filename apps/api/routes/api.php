@@ -463,8 +463,8 @@ Route::prefix('v1')->group(function () {
             // تسويات عيوب الجودة والخصومات المعتمدة (Phase 09B)
             Route::get('/hr/defect-adjustments', [\App\Http\Controllers\Api\HrController::class, 'defectAdjustments']);
             Route::post('/hr/defect-adjustments', [\App\Http\Controllers\Api\HrController::class, 'storeDefectAdjustment'])->middleware('role:production_manager,quality_controller,accountant,company_owner');
-            Route::post('/hr/defect-adjustments/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approveDefectAdjustment']);
-            Route::post('/hr/defect-adjustments/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectDefectAdjustment']);
+            Route::post('/hr/defect-adjustments/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approveDefectAdjustment'])->middleware('role:production_manager,quality_controller,accountant,company_owner');
+            Route::post('/hr/defect-adjustments/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectDefectAdjustment'])->middleware('role:production_manager,quality_controller,accountant,company_owner');
             Route::post('/hr/defect-adjustments/{id}/object', [\App\Http\Controllers\Api\HrController::class, 'recordWorkerObjection']);
             Route::post('/hr/defect-adjustments/{id}/reverse', [\App\Http\Controllers\Api\HrController::class, 'reverseDefectAdjustment']);
 

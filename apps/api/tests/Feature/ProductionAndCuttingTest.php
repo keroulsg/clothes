@@ -555,4 +555,53 @@ class ProductionAndCuttingTest extends TestCase
         $resList->assertStatus(200);
         $this->assertCount(0, $resList->json('data'));
     }
+
+    public function test_production_completion_requires_recorded_output_and_completed_cutting_orders(): void
+    {
+        $order = ProductionOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'order_number' => 'PO-COMPLETE-GATE-' . uniqid(),
+            'garment_model_id' => $this->modelA->id,
+            'planned_start_date' => date('Y-m-d'),
+            'target_delivery_date' => date('Y-m-d', strtotime('+7 days')),
+            'total_planned_quantity' => 20,
+            'total_cut_quantity' => 20,
+            'total_completed_quantity' => 0,
+            'status' => 'in_progress',
+        ]);
+
+        $response = $this->actingAs($this->userA)
+            ->postJson("/api/v1/production-orders/{$order->id}/complete");
+        $response->assertStatus(422);
+        $this->assertSame('in_progress', $order->fresh()->status);
+        $this->assertSame(0.0, (float) $order->fresh()->total_completed_quantity);
+
+        $order->total_completed_quantity = 20;
+        $order->save();
+
+        $cuttingOrder = CuttingOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'cutting_order_number' => 'CUT-COMPLETE-GATE-' . uniqid(),
+            'production_order_id' => $order->id,
+            'warehouse_id' => $this->warehouseFabA->id,
+            'lay_length_meters' => 1.0,
+            'layers_count' => 20,
+            'status' => 'in_progress',
+        ]);
+
+        $unfinishedCutResponse = $this->actingAs($this->userA)
+            ->postJson("/api/v1/production-orders/{$order->id}/complete");
+        $unfinishedCutResponse->assertStatus(422);
+        $this->assertSame('in_progress', $order->fresh()->status);
+
+        $cuttingOrder->status = 'cut_completed';
+        $cuttingOrder->save();
+
+        $completedResponse = $this->actingAs($this->userA)
+            ->postJson("/api/v1/production-orders/{$order->id}/complete");
+        $completedResponse->assertOk();
+        $this->assertSame('completed', $order->fresh()->status);
+        $this->assertSame(20.0, (float) $order->fresh()->total_completed_quantity);
+    }
+
 }

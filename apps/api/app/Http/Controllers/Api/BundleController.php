@@ -198,8 +198,8 @@ class BundleController extends Controller
         }
     }
     /**
-     * Bundles have no direct branch_id; scope them through their production order
-     * or the warehouse attached to their cutting order.
+     * Bundles have no direct branch_id; every existing branch anchor must be
+     * inside the user's assignments, and at least one valid anchor is required.
      */
     private function scopeToAssignedBranches($query, Request $request)
     {
@@ -209,15 +209,22 @@ class BundleController extends Controller
         }
 
         $branchIds = $user->assignedBranchIds();
-        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
-            return $query;
-        }
-
-        return $query->where(function ($branchQuery) use ($branchIds) {
-            $branchQuery
-                ->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
-                ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
-        });
+        return $query
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery
+                    ->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery
+                    ->whereDoesntHave('productionOrder')
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery
+                    ->whereDoesntHave('cuttingOrder')
+                    ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            });
     }
 
     private function resolveBundleBranchId(CuttingBundle $bundle): ?string

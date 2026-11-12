@@ -386,6 +386,9 @@ class StorefrontController extends Controller
         // Check if $id belongs to a PaymentSubmission or a StoreOrder
         $submission = PaymentSubmission::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($id);
         $orderId = $submission ? $submission->store_order_id : $id;
+        if (!$orderId) {
+            return response()->json(['error' => 'StoreOrderNotFound'], 404);
+        }
         $this->scopeStoreOrdersToAssignedBranches(
             StoreOrder::where('tenant_id', $tenantId),
             $request

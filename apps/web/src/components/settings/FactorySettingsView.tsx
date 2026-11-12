@@ -280,10 +280,12 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (userRole !== 'company_owner' && availableBranches.length > 0 && userBranchIds.length === 0) {
+    if (userRole !== 'company_owner' && (availableBranches.length === 0 || userBranchIds.length === 0)) {
       setStatusMsg({
         type: 'error',
-        text: isAr ? 'يجب تعيين المستخدم إلى فرع واحد على الأقل قبل حفظ الحساب.' : 'Assign this user to at least one branch before saving.',
+        text: isAr
+          ? 'أنشئ فرعاً أولاً ثم عيّن المستخدم إلى فرع واحد على الأقل قبل حفظ الحساب.'
+          : 'Create a branch first, then assign this user to at least one branch before saving.',
       });
       return;
     }

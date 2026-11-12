@@ -626,7 +626,7 @@ class AccountingService
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'journal_entry_id' => $je->id,
-                'created_by' => auth()->id(),
+                'created_by_user_id' => auth()->id(),
             ]);
 
             return $transfer->load(['fromAccount', 'toAccount', 'journalEntry']);
@@ -737,7 +737,7 @@ class AccountingService
 
         $period->status = 'closed';
         $period->closed_at = now();
-        $period->closed_by = $userId ?? auth()->id();
+        $period->closed_by_user_id = $userId ?? auth()->id();
         $period->save();
 
         try {
@@ -770,7 +770,7 @@ class AccountingService
 
         $period->status = 'open';
         $period->reopened_at = now();
-        $period->reopened_by = $userId ?? auth()->id();
+        $period->reopened_by_user_id = $userId ?? auth()->id();
         $period->reopening_reason = $reason;
         $period->save();
 
@@ -807,7 +807,7 @@ class AccountingService
             // إغلاق كافة الفترات
             FiscalPeriod::where('tenant_id', $tenantId)
                 ->where('fiscal_year_id', $year->id)
-                ->update(['status' => 'closed', 'closed_at' => now(), 'closed_by' => $userId ?? auth()->id()]);
+                ->update(['status' => 'closed', 'closed_at' => now(), 'closed_by_user_id' => $userId ?? auth()->id()]);
 
             // إقفال الإيرادات والمصروفات إلى حساب الأرباح المحتجزة
             $retainedEarningsAccount = $this->getMappedAccount($tenantId, 'retained_earnings');
@@ -883,7 +883,7 @@ class AccountingService
 
             $year->status = 'closed';
             $year->closed_at = now();
-            $year->closed_by = $userId ?? auth()->id();
+            $year->closed_by_user_id = $userId ?? auth()->id();
             $year->save();
 
             return $year->load('periods');

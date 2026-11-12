@@ -840,8 +840,7 @@ class StorefrontService
                 $order->update([
                     'payment_status' => 'verified_paid',
                     'status' => 'confirmed',
-                                        'payment_reviewed_by' => (string) $userId,
-                    'payment_reviewed_by_user_id' => (string) $userId,
+                                        'payment_reviewed_by_user_id' => (string) $userId,
                     'payment_reviewed_at' => now(),
                     'payment_rejection_reason' => null,
                 ]);
@@ -875,7 +874,11 @@ class StorefrontService
                 ]);
             }
 
-            return $order->fresh(['items', 'paymentReviewer', 'salesOrder']);
+            $reviewedOrder = $order->fresh(['items', 'paymentReviewer', 'salesOrder']);
+            // Keep the legacy API response field without writing a numeric ID into its legacy UUID DB column.
+            $reviewedOrder->setAttribute('payment_reviewed_by', (string) $userId);
+
+            return $reviewedOrder;
         });
     }
 

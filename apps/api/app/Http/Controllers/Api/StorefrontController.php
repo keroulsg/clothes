@@ -364,6 +364,16 @@ class StorefrontController extends Controller
     public function verifyPayment(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $tenantId)->pluck('id')->all();
+            if (!empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $user->assignedBranchIds()) !== []) {
+                return response()->json([
+                    'error' => 'InsufficientBranchCoverage',
+                    'message' => 'اعتماد تحويلات InstaPay وترحيلها محاسبيًا يتطلب صلاحية جميع فروع المنشأة.',
+                ], 403);
+            }
+        }
 
         $isRejectRoute = str_ends_with($request->path(), '/reject');
         $isApproveRoute = str_ends_with($request->path(), '/approve');

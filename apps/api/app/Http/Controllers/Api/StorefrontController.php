@@ -322,6 +322,13 @@ class StorefrontController extends Controller
 
                     if ($statusRank[$nextStatus] >= $statusRank['shipped']
                         && $statusRank[$currentStatus] < $statusRank['shipped']) {
+                        if ($order->payment_method === 'instapay' && $order->payment_status !== 'verified_paid') {
+                            return response()->json([
+                                'error' => 'UnverifiedPayment',
+                                'message' => 'لا يمكن شحن أو تسليم طلب InstaPay قبل اعتماد وتأكيد التحويل البنكي من الإدارة.',
+                            ], 422);
+                        }
+
                         if (!$order->sales_order_id) {
                             throw new InvalidArgumentException('طلب المتجر غير مرتبط بأمر بيع ERP؛ لا يمكن شحنه قبل إصلاح الربط.');
                         }

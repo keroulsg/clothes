@@ -504,6 +504,7 @@ class SubcontractingController extends Controller
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['branch_id'] = $jobBranchId;
             $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
             $receipt = $this->subcontractingService->receiveCustomerMaterialReceipt($data);

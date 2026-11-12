@@ -201,6 +201,18 @@ class EnsureRole
         if ($root === 'maintenance') {
             return $isRead ? 'maintenance.view' : 'maintenance.manage';
         }
+        if ($root === 'waslat-worsh') {
+            if (str_contains($path, 'payment') || str_contains($path, 'commission')) {
+                return 'waslat_worsh.payments';
+            }
+            return $isRead ? 'waslat_worsh.view' : 'waslat_worsh.manage';
+        }
+        if ($root === 'subscription') {
+            return 'admin.settings';
+        }
+        if ($root === 'admin') {
+            return 'admin.users';
+        }
 
         return null;
     }

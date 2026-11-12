@@ -38,8 +38,9 @@ class EnsurePermission
         if ($requiredPermission === 'hr.payroll') {
             $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $user->tenant_id)->pluck('id')->all();
             $assignedBranchIds = $user->assignedBranchIds();
-            $enforceBranchCoverage = $user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds);
-            if ($enforceBranchCoverage && !empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
+            // Legacy inherited finance accounts without branch assignments remain
+            // tenant-wide until the owner completes their branch assignment review.
+            if (!empty($assignedBranchIds) && !empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
                 return response()->json([
                     'error' => 'InsufficientBranchCoverage',
                     'message' => 'عرض مسيرات الرواتب يتطلب تعيين الحساب إلى جميع فروع المنشأة.',

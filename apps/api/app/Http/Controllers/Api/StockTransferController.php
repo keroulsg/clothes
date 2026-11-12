@@ -119,7 +119,7 @@ class StockTransferController extends Controller
     {
         $tenantId = app('current_tenant_id');
 
-        $transfer = DB::transaction(function () use ($id, $tenantId) {
+        $transfer = DB::transaction(function () use ($id, $tenantId, $request) {
             $transfer = $this->scopeTransfersToAssignedBranches(
                 StockTransfer::where('tenant_id', $tenantId),
                 $request

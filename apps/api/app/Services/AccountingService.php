@@ -2077,13 +2077,47 @@ class AccountingService
      * idempotent journal entry. The cost components are credited to their
      * originating inventory/expense/liability control accounts.
      */
-    public function postProductionCostSheetToWip(ProductionCostSheet $sheet): JournalEntry
+    public function postProductionCostSheetToWip(ProductionCostSheet $sheet): ?JournalEntry
     {
         $tenantId = (string) $sheet->tenant_id;
+        $cuttingOrderIds = DB::table('cutting_orders')
+            ->where('tenant_id', $tenantId)
+            ->where('production_order_id', $sheet->production_order_id)
+            ->pluck('id');
+
+        // Raw materials already enter WIP when each factory-owned cutting issue is posted.
+        // Never capitalize the same material cost a second time from the cost sheet.
+        $materialIssueDebit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_issue')
+            ->where('status', 'posted')
+            ->whereIn('reference_key', $cuttingOrderIds)
+            ->sum('total_debit');
+        $materialReversalCredit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_reversal')
+            ->where('status', 'posted')
+            ->whereIn('reference_key', $cuttingOrderIds)
+            ->sum('total_credit');
+        $netMaterialIssue = round($materialIssueDebit - $materialReversalCredit, 4);
+        $sheetMaterialCost = round((float) $sheet->direct_materials_cost, 4);
+
+        if (abs($netMaterialIssue - $sheetMaterialCost) > 0.01) {
+            throw new InvalidArgumentException(
+                "لا يمكن اعتماد ترحيل بطاقة التكلفة: تكلفة الخامات [{$sheetMaterialCost}] لا تطابق صافي قيود صرف القص إلى WIP [{$netMaterialIssue}]. راجع أذون القص والمرتجعات أولاً."
+            );
+        }
+
+        $conversionCost = round((float) $sheet->total_cost - $sheetMaterialCost, 4);
+        if ($conversionCost < -0.0001) {
+            throw new InvalidArgumentException('إجمالي تكلفة بطاقة الإنتاج أقل من تكلفة الخامات المثبتة في WIP.');
+        }
+        $conversionCost = max(0.0, $conversionCost);
+
         $existing = $this->findJournalEntryByReference($tenantId, 'production_cost_sheet', $sheet->id);
         if ($existing) {
-            if (abs((float) $existing->total_debit - round((float) $sheet->total_cost, 4)) > 0.0001) {
-                throw new InvalidArgumentException('تعارض Idempotency: بطاقة التكلفة مرتبطة مسبقاً بقيد WIP بقيمة مختلفة.');
+            if (abs((float) $existing->total_debit - $conversionCost) > 0.0001) {
+                throw new InvalidArgumentException('تعارض Idempotency: بطاقة التكلفة مرتبطة مسبقاً بقيد تحويل تكاليف صناعية بقيمة مختلفة.');
             }
 
             return $existing;
@@ -2093,35 +2127,42 @@ class AccountingService
             throw new InvalidArgumentException('لا يمكن ترحيل تكلفة تحت التشغيل إلا من بطاقة تكلفة معتمدة وبقيمة موجبة.');
         }
 
+        // A materials-only order is already fully represented in WIP by its cutting issue journal.
+        if ($conversionCost <= 0.0001) {
+            return null;
+        }
+
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
         $lines = [[
             'account_id' => $wipAccount->id,
-            'debit' => (float) $sheet->total_cost,
+            'debit' => $conversionCost,
             'credit' => 0,
-            'description' => "رسملة تكلفة أمر الإنتاج {$sheet->production_order_id} إلى مخزون تحت التشغيل",
+            'description' => "رسملة أجور وتحميل وتشغيل خارجي لأمر الإنتاج {$sheet->production_order_id} إلى WIP",
         ]];
 
         $components = [
-            ['amount' => (float) $sheet->direct_materials_cost, 'mapping' => 'raw_materials_inventory', 'description' => 'صرف خامات الإنتاج إلى تحت التشغيل'],
-            ['amount' => (float) $sheet->direct_labor_cost, 'mapping' => 'direct_labor_expense', 'description' => 'رسملة أجور الإنتاج المباشرة'],
-            ['amount' => (float) $sheet->subcontracted_services_cost, 'account' => ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '5030')->where('is_active', true)->where('is_postable', true)->firstOrFail(), 'mapping' => 'direct_labor_expense', 'description' => 'رسملة مصروف خدمات التشغيل الخارجي المقبولة'],
-        ];
-
-        $overhead = (float) $sheet->allocated_overhead_cost;
-        if ($overhead > 0) {
-            $overheadAccount = ChartOfAccount::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->where('code', '6010')
-                ->where('is_active', true)
-                ->where('is_postable', true)
-                ->first();
-            $components[] = [
-                'amount' => $overhead,
-                'account' => $overheadAccount,
-                'mapping' => 'direct_labor_expense',
+            ['amount' => (float) $sheet->direct_labor_cost, 'account' => $this->getMappedAccount($tenantId, 'direct_labor_expense'), 'description' => 'رسملة أجور الإنتاج المباشرة'],
+            [
+                'amount' => (float) $sheet->subcontracted_services_cost,
+                'account' => ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('code', '5030')
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->firstOrFail(),
+                'description' => 'رسملة مصروف خدمات التشغيل الخارجي المقبولة',
+            ],
+            [
+                'amount' => (float) $sheet->allocated_overhead_cost,
+                'account' => ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('code', '6010')
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->firstOrFail(),
                 'description' => 'رسملة التحميل الصناعي غير المباشر',
-            ];
-        }
+            ],
+        ];
 
         $creditedTotal = 0.0;
         foreach ($components as $component) {
@@ -2129,9 +2170,9 @@ class AccountingService
             if ($amount <= 0) {
                 continue;
             }
-            $account = $component['account'] ?? $this->getMappedAccount($tenantId, $component['mapping']);
+
             $lines[] = [
-                'account_id' => $account->id,
+                'account_id' => $component['account']->id,
                 'debit' => 0,
                 'credit' => $amount,
                 'description' => $component['description'],
@@ -2139,15 +2180,15 @@ class AccountingService
             $creditedTotal += $amount;
         }
 
-        if (abs(round($creditedTotal, 4) - round((float) $sheet->total_cost, 4)) > 0.0001) {
-            throw new InvalidArgumentException('مكونات بطاقة التكلفة لا تتطابق مع إجمالي التكلفة؛ تم إيقاف ترحيل WIP لحماية الأستاذ العام.');
+        if (abs(round($creditedTotal, 4) - $conversionCost) > 0.0001) {
+            throw new InvalidArgumentException('مكونات التحويل الصناعي لا تتطابق مع تكلفة العمالة والمقاولين والتحميل؛ تم إيقاف ترحيل WIP.');
         }
 
         return $this->createJournalEntry([
             'tenant_id' => $tenantId,
             'entry_number' => 'JE-WIP-' . substr(md5((string) $sheet->id), 0, 12),
             'entry_date' => now()->toDateString(),
-            'description' => "رسملة بطاقة التكلفة الصناعية لأمر الإنتاج {$sheet->production_order_id}",
+            'description' => "رسملة تكاليف التحويل الصناعي لبطاقة الإنتاج {$sheet->production_order_id}",
             'reference_type' => 'production_cost_sheet',
             'reference_id' => $sheet->id,
             'lines' => $lines,

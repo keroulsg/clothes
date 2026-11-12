@@ -195,7 +195,7 @@ class StockCountController extends Controller
                 $item = $countItem->inventoryItem;
 
                 if (!$item) {
-                    throw new \\RuntimeException("صنف الجرد [{$countItem->id}] لم يعد مرتبطاً بسجل مخزني صالح.");
+                    throw new \RuntimeException("صنف الجرد [{$countItem->id}] لم يعد مرتبطاً بسجل مخزني صالح.");
                 }
 
                 if ($diff > 0.0001 || $diff < -0.0001) {

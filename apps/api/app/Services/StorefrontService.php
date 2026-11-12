@@ -169,6 +169,17 @@ class StorefrontService
             }
         }
 
+        $stockWarehouse = Warehouse::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('type', 'finished_goods')
+            ->orderBy('id')
+            ->first()
+            ?? Warehouse::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->orderBy('id')
+                ->first();
+        $firstWarehouseId = $stockWarehouse?->id;
+
         $variants = ProductVariant::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->with(['garmentModel', 'size', 'color', 'product'])
@@ -181,12 +192,15 @@ class StorefrontService
                 return true;
             })
             ->map(function ($variant) use ($tenantId) {
-                $availableStock = (float) InventoryItem::withoutGlobalScopes()
-                    ->where('tenant_id', $tenantId)
-                    ->where('variant_id', $variant->id)
-                    ->where('warehouse_id', $firstWarehouseId)
-                    ->where('is_customer_owned', false)
-                    ->sum('current_balance');
+                $availableStock = $firstWarehouseId
+                    ? InventoryItem::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->where('variant_id', $variant->id)
+                        ->where('warehouse_id', $firstWarehouseId)
+                        ->where('is_customer_owned', false)
+                        ->get(['current_balance', 'reserved_balance'])
+                        ->sum(fn ($stockRow) => max(0, (float) $stockRow->current_balance - (float) $stockRow->reserved_balance))
+                    : 0.0;
 
                 // سعر البيع المعتمد للمتجر الإلكتروني (Website Price)
                 $websitePrice = (float) (

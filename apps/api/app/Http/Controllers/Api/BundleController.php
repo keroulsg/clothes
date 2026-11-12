@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CuttingBundle;
+use App\Models\Employee;
 use App\Services\ProductionService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -94,6 +95,18 @@ class BundleController extends Controller
             'due_date' => 'nullable|date',
         ]);
 
+        if (!empty($validated['employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+            $bundleBranchId = $this->resolveBundleBranchId($bundle);
+            if ($bundleBranchId && $employee->branch_id !== $bundleBranchId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب إسناد الحزمة إلى عامل من نفس فرع أمر الإنتاج.',
+                ], 422);
+            }
+        }
+
         try {
             $updated = $this->productionService->assignBundle($bundle->id, $validated);
 
@@ -153,6 +166,18 @@ class BundleController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        if (!empty($validated['employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+            $bundleBranchId = $this->resolveBundleBranchId($bundle);
+            if ($bundleBranchId && $employee->branch_id !== $bundleBranchId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب تسجيل حركة الحزمة بعامل من نفس فرع أمر الإنتاج.',
+                ], 422);
+            }
+        }
+
         try {
             $log = $this->productionService->transferBundleStage(
                 $bundle->id,
@@ -193,6 +218,14 @@ class BundleController extends Controller
                 ->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
                 ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
         });
+    }
+
+    private function resolveBundleBranchId(CuttingBundle $bundle): ?string
+    {
+        $bundle->loadMissing(['productionOrder', 'cuttingOrder.warehouse']);
+
+        return $bundle->productionOrder?->branch_id
+            ?? $bundle->cuttingOrder?->warehouse?->branch_id;
     }
 
 }

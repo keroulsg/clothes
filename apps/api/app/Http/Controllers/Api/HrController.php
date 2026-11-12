@@ -753,13 +753,20 @@ class HrController extends Controller
 
         $tenantId = app('current_tenant_id');
         $initialStatus = $request->input('status', 'draft');
-        $payroll = $this->payrollService->generatePayroll(
-            $tenantId,
-            $validated['payroll_period'],
-            $validated['period_start'],
-            $validated['period_end'],
-            $initialStatus
-        );
+        try {
+            $payroll = $this->payrollService->generatePayroll(
+                $tenantId,
+                $validated['payroll_period'],
+                $validated['period_start'],
+                $validated['period_end'],
+                $initialStatus
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'PayrollPeriodLocked',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
         return response()->json([
             'message' => 'تم احتساب مسير الرواتب لجميع فئات التعويض بنجاح',

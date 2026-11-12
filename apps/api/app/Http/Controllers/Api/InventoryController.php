@@ -683,6 +683,12 @@ class InventoryController extends Controller
             ], 404);
         }
 
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner'
+            && !in_array($item->warehouse?->branch_id, $user->assignedBranchIds(), true)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
+
         $labelData = [
             'item_id' => $item->id,
             'company_name' => $item->tenant?->name ?? 'GarmentOS Cloud',
@@ -1126,7 +1132,7 @@ class InventoryController extends Controller
      */
     public function transactions(Request $request): JsonResponse
     {
-        $query = InventoryTransaction::with(['item', 'warehouse', 'user']);
+        $query = InventoryTransaction::where('tenant_id', app('current_tenant_id'))->with(['item', 'warehouse', 'user']);
         $user = $request->user();
         if ($user && $user->role !== 'company_owner') {
             $branchIds = $user->assignedBranchIds();
@@ -1183,7 +1189,12 @@ class InventoryController extends Controller
      */
     public function customerMaterials(Request $request): JsonResponse
     {
-        $materials = CustomerMaterial::with('warehouse')->orderBy('created_at', 'desc')->get();
+        $query = CustomerMaterial::where('tenant_id', app('current_tenant_id'))->with('warehouse');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $user->assignedBranchIds()));
+        }
+        $materials = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'customer_materials' => $materials,
@@ -1205,6 +1216,15 @@ class InventoryController extends Controller
             'warehouse_id' => 'required|uuid|exists:warehouses,id',
             'notes' => 'nullable|string',
         ]);
+
+        $warehouse = Warehouse::where('tenant_id', app('current_tenant_id'))->find($validated['warehouse_id']);
+        $user = $request->user();
+        if (!$warehouse) {
+            return response()->json(['error' => 'WarehouseNotFound'], 404);
+        }
+        if ($user && $user->role !== 'company_owner' && !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
 
         try {
             $material = $this->inventoryService->receiveCustomerMaterial($validated);
@@ -1232,6 +1252,12 @@ class InventoryController extends Controller
         ]);
 
         $wasteMeters = (float) ($validated['waste_meters'] ?? 0.0);
+        $materialQuery = CustomerMaterial::where('tenant_id', app('current_tenant_id'))->whereKey($id);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $materialQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $user->assignedBranchIds()));
+        }
+        $materialQuery->firstOrFail();
 
         try {
             $material = $this->inventoryService->consumeCustomerMaterial($id, (float) $validated['consumed_meters'], $wasteMeters);

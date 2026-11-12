@@ -687,6 +687,7 @@ class TenantController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $users = User::where('tenant_id', $tenantId)
+            ->with('branches:id')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -700,6 +701,7 @@ class TenantController extends Controller
                 'is_active' => (bool)$u->is_active,
                 'permissions' => $u->permissions ?? [],
                 'permissions_mode' => $u->permissions_mode ?? 'inherit',
+                'branch_ids' => $u->branches->pluck('id')->values()->all(),
                 'effective_permissions' => $u->getEffectivePermissions(),
                 'created_at' => $u->created_at?->format('Y-m-d H:i:s'),
             ];
@@ -727,6 +729,8 @@ class TenantController extends Controller
             'role' => 'required|string|in:company_owner,production_manager,production_engineer,inventory_custodian,storekeeper,warehouse_manager,accountant,financial_accountant,quality_controller,qc,sales_rep,worker,operator',
             'permissions' => 'nullable|array',
             'permissions.*' => ['string', Rule::in($request->input('role') === 'company_owner' ? ['*'] : User::getAllPermissionKeys())],
+            'branch_ids' => 'nullable|array',
+            'branch_ids.*' => ['uuid', Rule::exists('branches', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
             'is_active' => 'boolean',
         ]);
 
@@ -749,6 +753,10 @@ class TenantController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
+        if ($user->role !== 'company_owner') {
+            $user->branches()->sync($validated['branch_ids'] ?? []);
+        }
+
         return response()->json([
             'message' => 'تم إنشاء حساب المستخدم وتعيين الصلاحيات بنجاح.',
             'user' => [
@@ -759,6 +767,7 @@ class TenantController extends Controller
                 'role' => $user->role,
                 'permissions' => $user->permissions ?? [],
                 'permissions_mode' => $user->permissions_mode ?? 'inherit',
+                'branch_ids' => $user->assignedBranchIds(),
                 'effective_permissions' => $user->getEffectivePermissions(),
                 'is_active' => (bool)$user->is_active,
             ],
@@ -781,6 +790,8 @@ class TenantController extends Controller
             'role' => 'sometimes|required|string|in:company_owner,production_manager,production_engineer,inventory_custodian,storekeeper,warehouse_manager,accountant,financial_accountant,quality_controller,qc,sales_rep,worker,operator',
             'permissions' => 'nullable|array',
             'permissions.*' => ['string', Rule::in($request->input('role', $user->role) === 'company_owner' ? ['*'] : User::getAllPermissionKeys())],
+            'branch_ids' => 'sometimes|array',
+            'branch_ids.*' => ['uuid', Rule::exists('branches', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
             'is_active' => 'boolean',
         ]);
 
@@ -810,6 +821,13 @@ class TenantController extends Controller
         if (array_key_exists('is_active', $validated)) $user->is_active = $validated['is_active'];
 
         $user->save();
+
+        if (array_key_exists('branch_ids', $validated) && $user->role !== 'company_owner') {
+            $user->branches()->sync($validated['branch_ids'] ?? []);
+        }
+        if ($user->role === 'company_owner') {
+            $user->branches()->detach();
+        }
 
         return response()->json([
             'message' => 'تم تحديث بيانات المستخدم وصلاحياته بنجاح.',

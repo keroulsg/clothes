@@ -48,6 +48,17 @@ class EnsurePermission
             }
         }
 
+        if ($requiredPermission === 'sales.payments.view') {
+            $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $user->tenant_id)->pluck('id')->all();
+            $assignedBranchIds = $user->assignedBranchIds();
+            if (!empty($assignedBranchIds) && !empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
+                return response()->json([
+                    'error' => 'InsufficientBranchCoverage',
+                    'message' => 'عرض سندات قبض العملاء يتطلب تعيين الحساب إلى جميع فروع المنشأة.',
+                ], 403);
+            }
+        }
+
         if ($requiredPermission === null) {
             return response()->json([
                 'error' => 'PermissionNotConfigured',

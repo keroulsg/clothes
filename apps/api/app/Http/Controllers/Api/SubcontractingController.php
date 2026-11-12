@@ -561,8 +561,16 @@ class SubcontractingController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $operationBranchIds = [];
+
         if (!empty($validated['job_order_id'])) {
-            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
+            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)
+                ->with(['productionOrder', 'assignedEmployee', 'cuttingOrders.warehouse'])
+                ->find($validated['job_order_id']);
             if (!$job || $job->tenant_id !== $tenantId) {
                 return response()->json([
                     'success' => false,
@@ -570,6 +578,44 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
+            $operationBranchIds[] = $job->productionOrder?->branch_id
+                ?? $job->assignedEmployee?->branch_id
+                ?? $job->cuttingOrders->first()?->warehouse?->branch_id;
+        }
+        if (!empty($validated['production_order_id'])) {
+            $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->find($validated['production_order_id']);
+            if (!$productionOrder) {
+                return response()->json(['error' => 'ProductionOrderNotFound'], 404);
+            }
+            $operationBranchIds[] = $productionOrder->branch_id;
+        }
+        if (!empty($validated['cutting_bundle_id'])) {
+            $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)
+                ->with(['productionOrder', 'cuttingOrder.warehouse'])
+                ->find($validated['cutting_bundle_id']);
+            if (!$bundle) {
+                return response()->json(['error' => 'BundleNotFound'], 404);
+            }
+            $operationBranchIds[] = $bundle->productionOrder?->branch_id
+                ?? $bundle->cuttingOrder?->warehouse?->branch_id;
+        }
+        if (!empty($validated['assigned_employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->find($validated['assigned_employee_id']);
+            if (!$employee) {
+                return response()->json(['error' => 'EmployeeNotFound'], 404);
+            }
+            $operationBranchIds[] = $employee->branch_id;
+        }
+        $operationBranchIds = array_values(array_unique(array_filter($operationBranchIds)));
+        if ($enforceBranchScope && (
+            count($operationBranchIds) !== 1
+            || !in_array($operationBranchIds[0] ?? null, $assignedBranchIds, true)
+        )) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'يجب ربط التشغيل الخارجي بفرع واحد معيّن لحسابك.',
+            ], 403);
         }
 
         try {

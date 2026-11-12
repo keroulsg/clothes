@@ -191,7 +191,7 @@ class StorefrontService
                 }
                 return true;
             })
-            ->map(function ($variant) use ($tenantId) {
+            ->map(function ($variant) use ($tenantId, $firstWarehouseId) {
                 $availableStock = $firstWarehouseId
                     ? InventoryItem::withoutGlobalScopes()
                         ->where('tenant_id', $tenantId)

@@ -449,6 +449,13 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
 
         $wipAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1220')->firstOrFail();
+        $expectedWipCredits = (float) $receiptJournal->total_debit + (float) $secondReceiptJournal->total_debit;
+        $actualWipCredits = (float) JournalEntryLine::whereIn('journal_entry_id', [$receiptJournal->id, $secondReceiptJournal->id])
+            ->where('account_id', $wipAccount->id)
+            ->sum('credit');
+        $this->assertEquals($expectedWipCredits, $actualWipCredits, 'Each QC receipt journal must credit the same WIP control account.');
+        $this->assertEquals((float) $costSheet->total_cost, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+            ->where('account_id', $wipAccount->id)->sum('debit'));
         $this->assertEquals(0.0, (float) $wipAccount->fresh()->current_balance, 'Fully received approved production cost must leave no WIP balance.');
         $wipReconciliation = app(AccountingService::class)->reconcileInventory($this->tenantA->id);
         $this->assertTrue($wipReconciliation['wip_valuation_available']);

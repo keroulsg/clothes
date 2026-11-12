@@ -385,6 +385,10 @@ class ProcurementService
                     return $duplicateInvoice->load('supplier', 'purchaseOrder');
                 }
 
+                if (empty($data['goods_receipt_note_id'])) {
+                    throw new InvalidArgumentException('لا يمكن إنشاء أو ترحيل فاتورة مورد دون إذن استلام معتمد واجتياز فحص الجودة.');
+                }
+
                 $grn = null;
                 if (isset($data['goods_receipt_note_id'])) {
                     $grn = GoodsReceiptNote::with('items.inventoryItem')->where('tenant_id', $tenantId)->where('id', $data['goods_receipt_note_id'])->first();

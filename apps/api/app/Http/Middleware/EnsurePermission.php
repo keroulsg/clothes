@@ -38,8 +38,7 @@ class EnsurePermission
         if ($requiredPermission === 'hr.payroll') {
             $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $user->tenant_id)->pluck('id')->all();
             $assignedBranchIds = $user->assignedBranchIds();
-            // Legacy inherited finance accounts without branch assignments remain
-            // tenant-wide until the owner completes their branch assignment review.
+            // Payroll is tenant-wide; require explicit coverage of every branch.
             if (!empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
                 return response()->json([
                     'error' => 'InsufficientBranchCoverage',
@@ -51,7 +50,7 @@ class EnsurePermission
         if ($requiredPermission === 'sales.payments.view') {
             $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $user->tenant_id)->pluck('id')->all();
             $assignedBranchIds = $user->assignedBranchIds();
-            if (!empty($assignedBranchIds) && !empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
+            if (!empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
                 return response()->json([
                     'error' => 'InsufficientBranchCoverage',
                     'message' => 'عرض سندات قبض العملاء يتطلب تعيين الحساب إلى جميع فروع المنشأة.',

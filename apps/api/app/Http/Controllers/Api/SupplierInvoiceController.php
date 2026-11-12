@@ -65,7 +65,7 @@ class SupplierInvoiceController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         $purchaseOrder = \App\Models\PurchaseOrder::where('tenant_id', $tenantId)->find($validated['purchase_order_id']);
         $goodsReceipt = \App\Models\GoodsReceiptNote::where('tenant_id', $tenantId)->find($validated['goods_receipt_note_id']);
         if (!$purchaseOrder || !$goodsReceipt) {

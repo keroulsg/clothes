@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Printer,
-  QrCode,
   Scissors,
   ShieldCheck,
   Building2,
@@ -323,11 +322,11 @@ export const ProductionPrintModal: React.FC<ProductionPrintModalProps> = ({
             {/* Sticker / Card Header */}
             <div className="flex items-center justify-between border-b-2 border-slate-900 pb-3">
               <div className="flex items-center gap-2">
-                <QrCode className="w-6 h-6 text-purple-700" />
+                <Scissors className="w-6 h-6 text-purple-700" />
                 <div>
                   <h1 className="text-base font-black text-slate-900">{factoryName}</h1>
                   <span className="text-[11px] font-bold text-purple-700">
-                    {isAr ? 'بطاقة الحزمة الذكية وتتبع خطوط التشغيل' : 'Smart QR Bundle Tracking Sticker'}
+                    {isAr ? 'بطاقة تعريف الحزمة وتتبع خطوط التشغيل' : 'Bundle Identification & Tracking Sticker'}
                   </span>
                 </div>
               </div>

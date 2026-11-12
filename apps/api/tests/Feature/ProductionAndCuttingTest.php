@@ -456,7 +456,19 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals($expectedWipCredits, $actualWipCredits, 'Each QC receipt journal must credit the same WIP control account.');
         $this->assertEquals((float) $costSheet->total_cost, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
             ->where('account_id', $wipAccount->id)->sum('debit'));
-        $this->assertEquals(0.0, (float) $wipAccount->fresh()->current_balance, 'Fully received approved production cost must leave no WIP balance.');
+        $wipLedgerLines = JournalEntryLine::where('account_id', $wipAccount->id)->get();
+        $wipLedgerEntries = JournalEntry::whereIn('id', $wipLedgerLines->pluck('journal_entry_id'))->get()->keyBy('id');
+        $wipLedgerEvidence = $wipLedgerLines->map(function ($line) use ($wipLedgerEntries) {
+            $entry = $wipLedgerEntries->get($line->journal_entry_id);
+            return [
+                'reference_type' => $entry?->reference_type,
+                'reference_key' => $entry?->reference_key,
+                'debit' => (float) $line->debit,
+                'credit' => (float) $line->credit,
+            ];
+        })->values()->all();
+        $this->assertEquals(0.0, (float) $wipAccount->fresh()->current_balance,
+            'Fully received approved production cost must leave no WIP balance. Ledger: ' . json_encode($wipLedgerEvidence));
         $wipReconciliation = app(AccountingService::class)->reconcileInventory($this->tenantA->id);
         $this->assertTrue($wipReconciliation['wip_valuation_available']);
         $this->assertEquals(0.0, (float) $wipReconciliation['breakdown'][2]['variance']);

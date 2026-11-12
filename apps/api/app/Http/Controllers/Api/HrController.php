@@ -167,6 +167,28 @@ class HrController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $branchId = $validated['branch_id'] ?? null;
+        if ($branchId !== null) {
+            $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($branchId);
+            if (!$branch) {
+                return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+            }
+        }
+        if ($enforceBranchScope) {
+            if (!$branchId && count($assignedBranchIds) === 1) {
+                $branchId = $assignedBranchIds[0];
+            }
+            if (!$branchId) {
+                return response()->json(['error' => 'BranchAssignmentRequired', 'message' => 'يجب تحديد فرع للموظف قبل إنشاء حسابه.'], 422);
+            }
+            if (!in_array($branchId, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إنشاء موظف في فرع غير معيّن لحسابك.'], 403);
+            }
+        }
 
         // منع تكرار كود الموظف داخل نفس المستأجر
         $existing = Employee::where('tenant_id', $tenantId)->where('employee_code', $validated['employee_code'])->first();
@@ -179,7 +201,7 @@ class HrController extends Controller
 
         $employee = Employee::create([
             'tenant_id' => $tenantId,
-            'branch_id' => $validated['branch_id'] ?? null,
+            'branch_id' => $branchId,
             'employee_code' => $validated['employee_code'],
             'name' => $validated['name'],
             'department' => $validated['department'],
@@ -229,6 +251,23 @@ class HrController extends Controller
             'national_id' => 'nullable|string|max:50',
             'is_active' => 'nullable|boolean',
         ]);
+
+        if (array_key_exists('branch_id', $validated)) {
+            $newBranchId = $validated['branch_id'];
+            if ($newBranchId !== null) {
+                $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($newBranchId);
+                if (!$branch) {
+                    return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+                }
+            }
+            $user = $request->user();
+            $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+            $enforceBranchScope = $user && $user->role !== 'company_owner'
+                && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            if ($enforceBranchScope && ($newBranchId === null || !in_array($newBranchId, $assignedBranchIds, true))) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك نقل الموظف إلى فرع غير معيّن لحسابك أو إزالة تعيين فرعه.'], 403);
+            }
+        }
 
         if (!empty($validated['employee_code']) && $validated['employee_code'] !== $employee->employee_code) {
             $conflict = Employee::where('tenant_id', $tenantId)
@@ -340,6 +379,28 @@ class HrController extends Controller
 
         if ($validated['status'] === 'leave') {
             $validated['status'] = 'excused_leave';
+        }
+
+        $tenantId = app('current_tenant_id');
+        $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $attendanceBranchId = $validated['branch_id'] ?? $employee->branch_id;
+        if ($enforceBranchScope && (
+            !$attendanceBranchId
+            || !in_array($attendanceBranchId, $assignedBranchIds, true)
+            || $employee->branch_id !== $attendanceBranchId
+        )) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك تسجيل حضور موظف تابع لفرع غير معيّن لحسابك.'], 403);
+        }
+        if ($attendanceBranchId !== null) {
+            $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($attendanceBranchId);
+            if (!$branch || ($employee->branch_id && $employee->branch_id !== $attendanceBranchId)) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'الفرع المحدد لا يطابق فرع الموظف.'], 422);
+            }
+            $validated['branch_id'] = $attendanceBranchId;
         }
 
         try {

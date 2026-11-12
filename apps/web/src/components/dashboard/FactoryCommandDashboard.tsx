@@ -221,7 +221,7 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
     return filteredFabricItems.slice(start, start + fabricPerPage);
   }, [filteredFabricItems, fabricCurrentPage, fabricPerPage]);
 
-  const storeSlug = tenantSubdomain || tenantCode || 'garment-factory-store';
+  const storeSlug = tenantSubdomain || tenantCode || '';
 
   return (
     <div className="space-y-6 min-w-0 max-w-full overflow-hidden" dir={isAr ? 'rtl' : 'ltr'}>
@@ -248,7 +248,7 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-slate-300 border border-white/10 backdrop-blur-md">
                 <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                {isAr ? 'متابعة لحظية نشطة 100%' : 'Real-Time Active'}
+                {isAr ? 'بيانات آخر تحميل من النظام' : 'Last server-loaded data'}
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono text-slate-400 bg-white/5 border border-white/10">
                 <Clock className="w-3 h-3 text-slate-400" />
@@ -273,15 +273,15 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
             <div className="flex items-center gap-3 pt-1 flex-wrap text-xs text-slate-300">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10">
                 <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isAr ? 'كفاءة الخطوط OEE:' : 'Line OEE:'} <strong className="text-white font-mono">88.5%</strong></span>
+                <span>{isAr ? 'كفاءة الخطوط OEE:' : 'Line OEE:'} <strong className="text-white font-mono">{isAr ? 'غير متاح' : 'N/A'}</strong></span>
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10">
                 <Scissors className="w-3.5 h-3.5 text-[#ff8ba0]" />
-                <span>{isAr ? 'طاولات القص:' : 'Cutting Tables:'} <strong className="text-white font-mono">3 نشطة</strong></span>
+                <span>{isAr ? 'طاولات القص:' : 'Cutting Tables:'} <strong className="text-white font-mono">{cuttingOrders.filter((order) => !['completed', 'cancelled', 'archived'].includes(String(order.status))).length}</strong></span>
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10">
                 <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
-                <span>{isAr ? 'نسبة الهالك:' : 'Scrap Rate:'} <strong className="text-emerald-400 font-mono">2.1% (ممتاز)</strong></span>
+                <span>{isAr ? 'نسبة الهالك:' : 'Scrap Rate:'} <strong className="text-emerald-400 font-mono">{isAr ? 'غير متاح' : 'N/A'}</strong></span>
               </div>
             </div>
           </div>
@@ -335,9 +335,12 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
 
             <button
               type="button"
-              onClick={() => window.open(`#/store/${storeSlug}`, '_blank')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-500/30 backdrop-blur-md transition-all cursor-pointer"
-              title={isAr ? `فتح موقع ومتجر ${tenantName} الإلكتروني المستقل` : `Open Online Store`}
+              disabled={!storeSlug}
+              onClick={() => storeSlug && window.open(`#/store/${storeSlug}`, '_blank')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-500/30 backdrop-blur-md transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={!storeSlug
+                ? (isAr ? 'لا يوجد معرّف متجر صالح لهذا المصنع' : 'This factory has no valid storefront identifier')
+                : (isAr ? `فتح موقع ومتجر ${tenantName} الإلكتروني المستقل` : `Open Online Store`)}
             >
               <Globe className="w-4 h-4 text-emerald-400" />
               <span>{isAr ? 'متجر وموقع المصنع' : 'Storefront'}</span>

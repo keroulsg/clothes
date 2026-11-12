@@ -128,12 +128,14 @@ class SecurityRegressionDay3Test extends TestCase
 
         $this->accountA = ChartOfAccount::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenantA->id,
-            'code' => '1010',
-            'name' => 'خزينة النيل الرئيسية',
+            'code' => '1011',
+            'name' => 'خزينة النيل - حساب فرعي قابل للترحيل',
             'type' => 'asset',
             'category' => 'current_asset',
             'current_balance' => 1000.0,
             'is_active' => true,
+            'is_postable' => true,
+            'is_cash_bank' => true,
         ]);
 
         $this->employeeA = Employee::withoutGlobalScopes()->create([

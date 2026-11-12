@@ -11,7 +11,6 @@ return new class extends Migration
         'financial_account_transfers' => ['created_by_user_id'],
         'fiscal_years' => ['closed_by_user_id'],
         'fiscal_periods' => ['closed_by_user_id', 'reopened_by_user_id'],
-        'piece_work_logs' => ['approved_by_user_id'],
         'payrolls' => ['approved_by_user_id', 'finalized_by_user_id'],
         'attendances' => ['created_by_user_id', 'updated_by_user_id'],
         'employee_adjustments' => ['approved_by_user_id', 'created_by_user_id'],

@@ -2055,6 +2055,7 @@ class AccountingService
         ];
 
         return $this->createJournalEntry([
+            'tenant_id' => $tenantId,
             'entry_number' => 'JE-FG-' . substr(md5($receiptId), 0, 12),
             'entry_date' => $entryDate ?? now()->toDateString(),
             'description' => "استلام إنتاج تام لمحضر الجودة {$receiptNumber} لأمر التشغيل {$orderNumber}",

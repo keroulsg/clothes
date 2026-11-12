@@ -554,7 +554,11 @@ class SubcontractingController extends Controller
             'scrap_quantity' => 'nullable|integer|min:0',
             'assigned_employee_id' => 'nullable|uuid',
             'worker_unit_rate' => 'nullable|numeric|min:0',
+            'idempotency_key' => 'nullable|string|max:120',
+            'notes' => 'nullable|string',
         ]);
+
+        $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
         try {
             $received = $this->subcontractingService->receiveExternalOperation($id, $validated);

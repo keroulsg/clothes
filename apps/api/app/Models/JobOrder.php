@@ -15,7 +15,6 @@ class JobOrder extends Model
 
     protected $fillable = [
         'tenant_id',
-        'branch_id',
         'order_number',
         'customer_id',
         'customer_name',

@@ -23,6 +23,7 @@ class PayrollPayment extends Model
         'reference_number',
         'notes',
         'paid_by',
+        'paid_by_user_id',
     ];
 
     protected $casts = [
@@ -47,6 +48,6 @@ class PayrollPayment extends Model
 
     public function payer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'paid_by');
+        return $this->belongsTo(User::class, 'paid_by_user_id');
     }
 }

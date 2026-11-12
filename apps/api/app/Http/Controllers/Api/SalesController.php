@@ -552,7 +552,7 @@ class SalesController extends Controller
             }
             if (!empty($returnInvoice->warehouse_id)) {
                 $invoiceWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($returnInvoice->warehouse_id);
-                if ($invoiceWarehouse && $invoiceWarehouse->branch_id !== $returnWarehouse->branch_id) {
+                if (!$invoiceWarehouse || $invoiceWarehouse->branch_id !== $returnWarehouse->branch_id) {
                     return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب تسجيل المرتجع في نفس فرع فاتورة البيع.'], 422);
                 }
             }
@@ -565,7 +565,7 @@ class SalesController extends Controller
             }
             if (!empty($returnOrder->warehouse_id)) {
                 $orderWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($returnOrder->warehouse_id);
-                if ($orderWarehouse && $orderWarehouse->branch_id !== $returnWarehouse->branch_id) {
+                if (!$orderWarehouse || $orderWarehouse->branch_id !== $returnWarehouse->branch_id) {
                     return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب تسجيل المرتجع في نفس فرع أمر البيع.'], 422);
                 }
             }

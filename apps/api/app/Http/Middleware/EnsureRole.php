@@ -73,20 +73,6 @@ class EnsureRole
             || !empty(array_intersect($effectiveUserRoles, $allowedRoles));
 
         if ($isAuthorized) {
-            $requiredPermission = $this->permissionForRequest($request);
-            if (
-                $requiredPermission !== null
-                && $userRole !== 'platform_admin'
-                && $user->hasExplicitPermissionConfiguration()
-                && !$user->hasPermission($requiredPermission)
-            ) {
-                return response()->json([
-                    'error' => 'InsufficientPermission',
-                    'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة لتنفيذ هذا الإجراء.',
-                    'required_permission' => $requiredPermission,
-                ], 403);
-            }
-
             return $next($request);
         }
 

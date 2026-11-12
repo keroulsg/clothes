@@ -794,6 +794,9 @@ class ProcurementService
         $query = PurchaseRequisition::where('tenant_id', $tenantId)
             ->with(['requester:id,name,email', 'approver:id,name,email', 'items.inventoryItem', 'branch', 'convertedPurchaseOrder']);
 
+        if (array_key_exists('branch_ids', $filters)) {
+            $query->whereIn('branch_id', $filters['branch_ids']);
+        }
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }

@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\ChartOfAccount;
 use App\Models\CustomerMaterial;
 use App\Models\GoodsReceiptNote;
+use App\Models\GoodsReceiptNoteItem;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\PurchaseOrder;
@@ -616,11 +617,58 @@ class Batch2InventoryAndProcurementTest extends TestCase
             'total_amount' => 50000.0,
         ]);
 
-        // 1. Post Supplier Invoice (50,000 EGP)
+        $inventoryItem = InventoryItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'warehouse_id' => $wh->id,
+            'item_type' => 'fabric_raw',
+            'code' => 'FAB-INV-' . uniqid(),
+            'name' => 'Cotton fabric for supplier invoice test',
+            'unit_of_measure' => 'meter',
+            'current_balance' => 0,
+            'average_cost' => 100,
+            'is_customer_owned' => false,
+        ]);
+
+        $poItem = PurchaseOrderItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $inventoryItem->id,
+            'ordered_quantity' => 500,
+            'received_quantity' => 500,
+            'remaining_quantity' => 0,
+            'unit_price' => 100,
+            'total_price' => 50000,
+        ]);
+
+        $grn = GoodsReceiptNote::create([
+            'tenant_id' => $this->tenantA->id,
+            'grn_number' => 'GRN-INV-' . uniqid(),
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $wh->id,
+            'receipt_date' => date('Y-m-d'),
+            'status' => 'posted',
+            'inspection_status' => 'passed',
+            'received_by' => $this->accountantA->id,
+        ]);
+
+        GoodsReceiptNoteItem::create([
+            'tenant_id' => $this->tenantA->id,
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'inventory_item_id' => $inventoryItem->id,
+            'delivered_quantity' => 500,
+            'accepted_quantity' => 500,
+            'rejected_quantity' => 0,
+            'unit_cost' => 100,
+        ]);
+
+        // 1. Post Supplier Invoice (50,000 EGP) after a posted, inspected GRN.
         $invRes = $this->withHeader('Authorization', 'Bearer ' . $this->tokenAccountantA)
             ->postJson('/api/v1/supplier-invoices', [
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $po->id,
+                'goods_receipt_note_id' => $grn->id,
                 'invoice_number' => 'INV-SUP-9988',
                 'invoice_date' => date('Y-m-d'),
                 'due_date' => date('Y-m-d', strtotime('+30 days')),

@@ -189,6 +189,9 @@ class EnsureRole
             return $isRead ? 'subcontracting.view' : 'subcontracting.manage';
         }
         if (in_array($root, ['sales', 'sales-orders', 'pos', 'customers'], true)) {
+            if (str_contains($path, 'payments')) {
+                return 'sales.payments.view';
+            }
             if (str_contains($path, 'discount')) {
                 return 'sales.discount';
             }

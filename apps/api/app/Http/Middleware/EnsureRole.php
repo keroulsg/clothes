@@ -120,6 +120,9 @@ class EnsureRole
             if (str_starts_with($path, 'tenant/backup')) {
                 return 'admin.backup';
             }
+            if (str_starts_with($path, 'tenant/subscription')) {
+                return 'admin.settings';
+            }
             if (str_starts_with($path, 'tenant/settings/costing')) {
                 return $isRead ? 'costing.view' : 'costing.manage';
             }

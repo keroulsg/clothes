@@ -276,7 +276,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
         $cashCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
-        $bankCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1020')->first();
+        $bankCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1021')->first();
 
         // إنشاء خزينة رئيسية برصيد افتتاحي 15000
         $vaultResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)

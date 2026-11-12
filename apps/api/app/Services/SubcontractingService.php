@@ -518,7 +518,8 @@ class SubcontractingService
         }
 
         $unitRate = (float) ($data['unit_rate'] ?? 0.0);
-        $totalCost = round($sentQty * $unitRate, 4);
+        // Subcontracting cost is recognized only as returned work is recorded in receipt batches.
+        $totalCost = 0.0;
 
         if ($idempotencyKey) {
             $existing = ExternalOperation::where('tenant_id', $tenantId)

@@ -455,6 +455,19 @@ class SalesController extends Controller
             }
         }
 
+        if (!empty($validated['sales_order_id'])) {
+            $returnOrder = \App\Models\SalesOrder::where('tenant_id', $tenantId)->find($validated['sales_order_id']);
+            if (!$returnOrder) {
+                return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
+            }
+            if (!empty($returnOrder->warehouse_id)) {
+                $orderWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($returnOrder->warehouse_id);
+                if ($orderWarehouse && $orderWarehouse->branch_id !== $returnWarehouse->branch_id) {
+                    return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب تسجيل المرتجع في نفس فرع أمر البيع.'], 422);
+                }
+            }
+        }
+
         if ($request->header('X-Idempotency-Key') && empty($validated['idempotency_key'])) {
             $validated['idempotency_key'] = $request->header('X-Idempotency-Key');
         }

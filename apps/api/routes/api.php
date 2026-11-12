@@ -516,8 +516,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/subscription/current', [\App\Http\Controllers\Api\SubscriptionController::class, 'current']);
         Route::get('/subscription/overrides', [\App\Http\Controllers\Api\SubscriptionController::class, 'activeOverrides']);
         Route::post('/subscription/upgrade', [\App\Http\Controllers\Api\SubscriptionController::class, 'upgrade'])->middleware('role:company_owner');
-        Route::get('/admin/subscriptions', [\App\Http\Controllers\Api\SubscriptionController::class, 'adminList'])->middleware('role:platform_admin,company_owner');
-        Route::post('/admin/subscriptions/override', [\App\Http\Controllers\Api\SubscriptionController::class, 'grantOverride'])->middleware('role:platform_admin,company_owner');
+        Route::get('/admin/subscriptions', [\App\Http\Controllers\Api\SubscriptionController::class, 'adminList'])->middleware('role:platform_admin');
+        Route::post('/admin/subscriptions/override', [\App\Http\Controllers\Api\SubscriptionController::class, 'grantOverride'])->middleware('role:platform_admin');
 
         // منصة وصلة ورش الصناعية للتشغيل وسوق المشاغل (Phase G: Waslat Worsh B2B Marketplace - Enterprise Exclusive)
         Route::get('/waslat-worsh/eligibility', [\App\Http\Controllers\Api\WaslatWorshController::class, 'eligibility']);

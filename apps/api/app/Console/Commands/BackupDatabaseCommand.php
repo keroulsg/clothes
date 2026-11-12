@@ -30,6 +30,11 @@ class BackupDatabaseCommand extends Command
         $connection = config('database.default', 'sqlite');
         $dbConfig = config("database.connections.{$connection}", []);
         $backupDir = storage_path('app/private/backups/database');
+        $destination = $this->option('destination');
+        if (!in_array($destination, ['local', 's3', 'all'], true)) {
+            $this->error("Unsupported backup destination [{$destination}]. Use local, s3, or all.");
+            return Command::FAILURE;
+        }
 
         if ($this->option('dry-run')) {
             $this->warn("DRY RUN: Validation passed for connection [{$connection}]. Backup directory: {$backupDir}");
@@ -69,9 +74,14 @@ class BackupDatabaseCommand extends Command
             }
 
             // Step 3: Atomic rename from .part to final dump path
-            rename($partPath, $finalDumpPath);
+            if (!rename($partPath, $finalDumpPath)) {
+                throw new \RuntimeException("Unable to atomically finalize backup artifact: {$finalDumpPath}");
+            }
             $fileSizeBytes = filesize($finalDumpPath);
             $sha256Checksum = hash_file('sha256', $finalDumpPath);
+            if ($fileSizeBytes === false || $fileSizeBytes <= 0 || $sha256Checksum === false) {
+                throw new \RuntimeException('Backup artifact is empty or could not be checksummed.');
+            }
 
             // Step 4: Gather business integrity counts for disaster recovery baseline
             $tenantCount = 0;
@@ -103,14 +113,16 @@ class BackupDatabaseCommand extends Command
                 ],
             ];
 
-            file_put_contents($manifestPath, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $manifestJson = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            if ($manifestJson === false || file_put_contents($manifestPath, $manifestJson, LOCK_EX) === false) {
+                throw new \RuntimeException("Unable to write backup manifest: {$manifestPath}");
+            }
 
             $this->info("✓ Dump completed successfully: {$dumpFileName} (" . number_format($fileSizeBytes / 1024, 2) . " KB)");
             $this->info("✓ SHA-256: {$sha256Checksum}");
             $this->info("✓ Manifest generated: {$manifestPath}");
 
             // Step 6: Offsite Sync to S3 if requested
-            $destination = $this->option('destination');
             if (in_array($destination, ['s3', 'all'], true)) {
                 $this->syncToOffsiteStorage($finalDumpPath, $dumpFileName, $manifestPath, "{$backupId}.manifest.json");
             }
@@ -179,9 +191,9 @@ class BackupDatabaseCommand extends Command
             $pdo = new \PDO("sqlite:{$dbPath}");
             $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             $pdo->exec("VACUUM INTO '{$escapedTarget}'");
-        } catch (\Throwable) {
-            // Fallback to copy if VACUUM INTO is unsupported by older sqlite
-            copy($dbPath, $targetPart);
+        } catch (\Throwable $e) {
+            // A raw file copy can capture an inconsistent live SQLite database; fail closed instead.
+            throw new \RuntimeException('SQLite consistent snapshot failed; refusing an unsafe file-copy fallback: ' . $e->getMessage(), previous: $e);
         }
     }
 
@@ -231,8 +243,23 @@ class BackupDatabaseCommand extends Command
         $this->comment("Uploading backup to offsite S3-compatible storage...");
         try {
             $s3Disk = Storage::disk('s3');
-            $s3Disk->put("backups/database/{$dumpName}", fopen($dumpPath, 'r'));
-            $s3Disk->put("backups/database/{$manifestName}", file_get_contents($manifestPath));
+            $stream = fopen($dumpPath, 'r');
+            if ($stream === false) {
+                throw new \RuntimeException('Unable to open the completed backup artifact for offsite upload.');
+            }
+            try {
+                $dumpUploaded = $s3Disk->put("backups/database/{$dumpName}", $stream);
+            } finally {
+                fclose($stream);
+            }
+            $manifestContents = file_get_contents($manifestPath);
+            if ($manifestContents === false) {
+                throw new \RuntimeException('Unable to read the backup manifest for offsite upload.');
+            }
+            $manifestUploaded = $s3Disk->put("backups/database/{$manifestName}", $manifestContents);
+            if ($dumpUploaded !== true || $manifestUploaded !== true) {
+                throw new \RuntimeException('S3-compatible storage returned false while uploading the backup or manifest.');
+            }
             $this->info("✓ Offsite S3 upload completed.");
         } catch (\Throwable $e) {
             // An explicitly requested offsite backup is a required destination, not a best-effort hint.

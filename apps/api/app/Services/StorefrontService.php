@@ -1088,14 +1088,21 @@ class StorefrontService
     /**
      * استرجاع قائمة التحويلات المعلقة بانتظار المراجعة والتدقيق المالي
      */
-    public function getPendingPaymentSubmissions(string $tenantId): \Illuminate\Database\Eloquent\Collection
+    public function getPendingPaymentSubmissions(string $tenantId, ?array $branchIds = null): \Illuminate\Database\Eloquent\Collection
     {
-        return PaymentSubmission::withoutGlobalScopes()
+        $query = PaymentSubmission::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('status', 'pending_review')
-            ->with(['storeOrder', 'salesOrder', 'reviewer'])
-            ->latest()
-            ->get();
+            ->with(['storeOrder.salesOrder.warehouse', 'salesOrder.warehouse', 'reviewer']);
+
+        if ($branchIds !== null) {
+            $query->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereHas('storeOrder.salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            });
+        }
+
+        return $query->latest()->get();
     }
 
     /**

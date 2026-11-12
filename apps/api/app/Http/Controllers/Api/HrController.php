@@ -653,6 +653,13 @@ class HrController extends Controller
 
     public function approveDefectAdjustment(Request $request, string $id): JsonResponse
     {
+        if (!in_array($request->user()?->role, ['company_owner', 'production_manager'], true)) {
+            return response()->json([
+                'error' => 'UnauthorizedRole',
+                'message' => 'اعتماد خصم عيب الجودة متاح لمالك المصنع أو مدير الإنتاج فقط.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'approved_amount' => 'nullable|numeric|min:0',
         ]);

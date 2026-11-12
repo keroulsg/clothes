@@ -497,7 +497,7 @@ class ProcurementService
                     throw new InvalidArgumentException('لا توجد كميات مستلمة مقبولة بقيمة موجبة لترحيل فاتورة المورد.');
                 }
 
-                $accounting = app(\\App\\Services\\AccountingService::class);
+                $accounting = app(\App\Services\AccountingService::class);
                 $journalLines = [];
                 $allocatedSubtotal = 0.0;
                 $weightKeys = array_keys($inventoryWeights);

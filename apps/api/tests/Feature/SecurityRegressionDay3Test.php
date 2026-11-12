@@ -389,7 +389,7 @@ class SecurityRegressionDay3Test extends TestCase
                 'party_type' => 'other',
                 'party_name' => 'مصروفات صيانة',
                 'account_id' => $this->accountA->id,
-                'contra_account_id' => $otherExpenseAccountA->id,
+                'contra_account_id' => ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '6012')->value('id'),
                 'amount' => 200.0,
                 'payment_method' => 'cash',
             ]);

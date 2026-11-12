@@ -456,39 +456,27 @@ class ProductionService
             $fabricItemId = $data['fabric_inventory_item_id'] ?? null;
             $customerMaterialId = $data['customer_material_id'] ?? null;
 
-            // صرف القماش نظامياً من خلال خدمة المخزون أو رصيد أمانة العميل
+            // Validate the source before creating the cutting document; stock movement follows document creation.
+            $fabricItem = null;
             $fabricItemCost = 0.0;
             if ($fabricSource === 'factory_owned') {
                 if (!$fabricItemId) {
                     throw new InvalidArgumentException('يجب تحديد صنف القماش عند الصرف من خامات المصنع.');
                 }
 
-                // التحقق من ملكية الصنف للشركة
-                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)->where('id', $fabricItemId)->first();
+                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)
+                    ->whereKey($fabricItemId)
+                    ->first();
+
                 if (!$fabricItem) {
                     throw new InvalidArgumentException('أمان: صنف القماش غير تابع للشركة الحالية.');
                 }
-                $fabricItemCost = (float) $fabricItem->average_cost;
-
-                // استدعاء خدمة المخزون لصرف كمية القماش الفعلية مع حظر السالب والتحقق من التزامن
-                $this->inventoryService->recordTransaction([
-                    'tenant_id' => $contextTenantId,
-                    'inventory_item_id' => $fabricItemId,
-                    'warehouse_id' => $warehouseId,
-                    'quantity' => $actualMeters,
-                    'direction' => 'OUT',
-                    'transaction_type' => 'production_issue',
-                    'reference_type' => 'cutting_order',
-                    'notes' => "صرف قماش لأمر القص وتغذية أمر الإنتاج [{$prodOrder->order_number}]",
-                ]);
-            } elseif ($fabricSource === 'customer_deposit') {
-                if (!$customerMaterialId) {
-                    throw new InvalidArgumentException('يجب تحديد محضر أمانة خامة العميل عند الصرف من خامات العملاء.');
+                if ((string) $fabricItem->warehouse_id !== (string) $warehouseId) {
+                    throw new InvalidArgumentException('المخزن المحدد لا يطابق مخزن صنف القماش.');
                 }
-
-                // استدعاء consumeCustomerMaterial الآمنة مع قفل السجل ومنع الأرصدة السالبة
-                $waste = ($endLoss * $layersCount) + $remnant;
-                $this->inventoryService->consumeCustomerMaterial($customerMaterialId, $theoreticalMeters, $waste);
+                $fabricItemCost = (float) $fabricItem->average_cost;
+            } elseif ($fabricSource === 'customer_deposit' && !$customerMaterialId) {
+                throw new InvalidArgumentException('يجب تحديد محضر أمانة خامة العميل عند الصرف من خامات العملاء.');
             }
 
             $totalCutPieces = (int) ($data['total_cut_pieces'] ?? ($layersCount * count($prodOrder->items)));
@@ -527,6 +515,28 @@ class ProductionService
                 'status' => 'cut_completed',
                 'notes' => $data['notes'] ?? null,
             ]);
+
+            // Record the material issue after the cutting document exists. This preserves the
+            // immutable stock reference and makes actual material cost available to WIP costing.
+            if ($fabricSource === 'factory_owned') {
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
+                    'inventory_item_id' => $fabricItem->id,
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => $actualMeters,
+                    'direction' => 'OUT',
+                    'transaction_type' => 'production_issue',
+                    'unit_cost' => $fabricItemCost,
+                    'reference_type' => 'cutting_order',
+                    'reference_id' => (string) $cuttingOrder->id,
+                    'reference_number' => $cuttingOrder->cutting_order_number,
+                    'idempotency_key' => 'CUTTING-ISSUE-' . $cuttingOrder->id,
+                    'notes' => "صرف قماش لأمر القص وتغذية أمر الإنتاج [{$prodOrder->order_number}]",
+                ]);
+            } elseif ($fabricSource === 'customer_deposit') {
+                $waste = ($endLoss * $layersCount) + $remnant;
+                $this->inventoryService->consumeCustomerMaterial($customerMaterialId, $theoreticalMeters, $waste);
+            }
 
             // احتساب وقيد أجر القطعة آلياً للمقصدار المسؤول
             if (!empty($assignedCutterId) && $totalCutPieces > 0) {

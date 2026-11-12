@@ -233,3 +233,34 @@ This addendum supersedes the earlier WIP/finished-goods items above for the isol
 - No merge, production migration, deployment, or production data change was performed.
 
 **Phase 1 disposition:** code-level WIP/production-cost/partial-receipt fixes and the listed CI gates are closed on this commit. A real factory walkthrough remains required for operational acceptance (purchase/receipt → cutting issue → production labor/subcontract returns → approved cost sheet → multiple QC receipts → inventory and GL reconciliation). Do not claim the complete SaaS or production launch ready until that walkthrough and the other independent launch gates are completed.
+
+
+---
+
+## Remaining Release-Gate Remediation — Backup/Restore Safety (2026-11-12)
+
+The following code-level safeguards were added on the isolated hardening branch after review of the outstanding release gates:
+
+- **Active database protection:** `garmentos:restore` now rejects a target matching the configured active database unconditionally. The `--force` flag cannot bypass this boundary.
+- **No overwrite of existing restore targets:** SQLite restore refuses to overwrite an existing target file. PostgreSQL restore requires `createdb` to create a new database successfully before proceeding; an existing/uncreatable target is rejected.
+- **Restore error handling:** any non-zero `pg_restore` exit code is now treated as a failed restore; exit code 1 is no longer silently accepted.
+- **Restore integrity:** post-restore verification now compares the restored journal-entry count with the backup manifest, in addition to tenant and sales-order counts.
+- **Requested offsite backup semantics:** when `--destination=s3` or `all` is explicitly requested, an S3 upload failure now fails the backup command rather than logging a warning and reporting overall success.
+- **Regression test:** added a test proving that even `--force` cannot target the active database.
+
+### Verification evidence
+
+- Code commit: `c794c20f475ec210a195e6ea0af609386686ef4b`
+- GitHub Actions run: `43300001334` — **success**
+- PostgreSQL 16 migrations: passed.
+- PostgreSQL concurrency integration: **5 passed, 24 assertions**.
+- Full backend suite: **534 passed, 3,354 assertions**.
+- Frontend TypeScript and Vite production build: passed (2,279 modules transformed).
+- This validates CI behavior only. A production backup/restore drill against a separate, approved recovery environment remains outstanding; no production restore or deployment was performed.
+
+### Remaining owner/external acceptance gates
+
+- Branch-level access policy requires an owner-approved assignment/default-access rule before adding branch scoping.
+- Inventory adjustment gains/losses require approved tenant chart-of-account mappings before posting GL entries; do not invent accounts or post against unrelated expense/revenue accounts.
+- Live Paymob settlement requires approved merchant credentials, public webhook configuration, and a sandbox/live payment round trip.
+- Physical factory walkthrough remains an operational acceptance step and cannot be simulated or signed off from CI.

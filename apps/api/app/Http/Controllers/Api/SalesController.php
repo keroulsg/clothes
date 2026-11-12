@@ -389,7 +389,12 @@ class SalesController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
-        $session = PosSession::where('tenant_id', $tenantId)->where('id', $id)->firstOrFail();
+        $sessionQuery = PosSession::where('tenant_id', $tenantId)->where('id', $id);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $sessionQuery->whereIn('branch_id', $user->assignedBranchIds());
+        }
+        $session = $sessionQuery->firstOrFail();
 
         $session->closing_cash = $validated['closing_cash'];
         $session->status = 'closed';

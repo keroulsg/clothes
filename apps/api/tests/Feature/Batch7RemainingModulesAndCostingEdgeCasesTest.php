@@ -418,7 +418,7 @@ class Batch7RemainingModulesAndCostingEdgeCasesTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $costSheet = $this->accountingService->calculateProductionCost($order->id);
+        $costSheet = $this->accountingService->calculateProductionCost($order->id, ['overhead_allocation_method' => 'materials_and_labor_pct']);
 
         // التحقق من أن صافي الخامات = 15000 - 3000 = 12000
         $this->assertEquals(12000.00, (float)$costSheet->direct_materials_cost);

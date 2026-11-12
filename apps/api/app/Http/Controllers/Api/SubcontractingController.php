@@ -250,6 +250,23 @@ class SubcontractingController extends Controller
             }
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        if ($enforceBranchScope && !empty($validated['production_order_id'])) {
+            $productionOrder = \App\Models\ProductionOrder::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->find($validated['production_order_id']);
+            if (!$productionOrder || !in_array($productionOrder->branch_id, $assignedBranchIds, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAccessDenied',
+                    'message' => 'لا يمكنك إنشاء أمر تشغيل مرتبط بأمر إنتاج من فرع غير معيّن لحسابك.',
+                ], 403);
+            }
+        }
+
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
@@ -387,6 +404,18 @@ class SubcontractingController extends Controller
                 'success' => false,
                 'error' => 'CrossTenantAccessDenied',
                 'message' => 'أمان: المستودع المحدد غير تابع لشركتك.',
+            ], 403);
+        }
+
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        if ($enforceBranchScope && !in_array($warehouse->branch_id, $assignedBranchIds, true)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك استلام خامات في مخزن تابع لفرع غير معيّن لحسابك.',
             ], 403);
         }
 

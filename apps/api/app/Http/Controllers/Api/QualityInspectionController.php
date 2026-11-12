@@ -23,6 +23,13 @@ class QualityInspectionController extends Controller
         $tenantId = app('current_tenant_id');
         $query = QualityInspection::where('tenant_id', $tenantId)
             ->with(['productionOrder.garmentModel', 'cuttingBundle', 'productionStage', 'defects']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            if ($user->hasExplicitPermissionConfiguration() || !empty($branchIds)) {
+                $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            }
+        }
 
         if ($request->has('production_order_id')) {
             $query->where('production_order_id', $request->query('production_order_id'));

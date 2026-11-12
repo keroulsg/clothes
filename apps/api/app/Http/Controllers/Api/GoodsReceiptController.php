@@ -69,7 +69,7 @@ class GoodsReceiptController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         $poWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($po->warehouse_id);
         if (!$poWarehouse) {
             return response()->json(['error' => 'WarehouseNotFound', 'message' => 'مخزن أمر الشراء غير متاح.'], 404);

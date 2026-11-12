@@ -309,6 +309,9 @@ class ProductionAndCuttingTest extends TestCase
             round(105.0 * (float) $this->fabricItemA->average_cost, 4),
             (float) $costSheet->direct_materials_cost
         );
+        // Finished-goods receipts may only capitalize a reviewed, approved unit cost.
+        $costSheet->status = 'approved';
+        $costSheet->save();
 
         // التحقق من خصم القماش من المخزن الفعلي عبر InventoryService
         $this->fabricItemA->refresh();
@@ -368,6 +371,23 @@ class ProductionAndCuttingTest extends TestCase
         // التحقق من دخول الـ 98 قطعة إلى مخزن المنتج التام عبر InventoryService
         $this->finishedGoodItemA->refresh();
         $this->assertEquals(98.0, (float) $this->finishedGoodItemA->current_balance);
+
+        $inspectionId = $qcRes->json('data.id');
+        $receiptMovement = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'quality_inspection')
+            ->where('reference_id', $inspectionId)
+            ->where('transaction_type', 'production_receipt')
+            ->firstOrFail();
+        $this->assertEquals('QC-FG-RECEIPT-' . $inspectionId, $receiptMovement->idempotency_key);
+        $this->assertEquals((float) $costSheet->cost_per_piece, (float) $receiptMovement->unit_cost);
+
+        $receiptJournal = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'production_receipt')
+            ->where('reference_key', $inspectionId)
+            ->firstOrFail();
+        $expectedReceiptCost = round(98 * (float) $costSheet->cost_per_piece, 4);
+        $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_debit);
+        $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_credit);
 
         // A second final-audit receipt cannot overproduce the remaining two planned pieces.
         $overReceipt = $this->actingAs($this->userA)

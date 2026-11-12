@@ -1515,38 +1515,40 @@ class AccountingService
 
         $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
 
-        $inventoryItems = \App\Models\InventoryItem::withoutGlobalScopes()
+        $inventoryItems = \\App\\Models\\InventoryItem::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->get();
+            ->get(['item_type', 'average_cost', 'current_balance']);
 
-        $warehouseFabricsValuation = 0;
-        $warehouseAccessoriesValuation = 0;
-        $warehouseFinishedValuation = 0;
+        $warehouseFabricsValuation = 0.0;
+        $warehouseAccessoriesValuation = 0.0;
+        $warehouseFinishedValuation = 0.0;
 
         foreach ($inventoryItems as $item) {
-            $cost = (float)($item->unit_cost ?? $item->cost_price ?? 0);
-            $qty = (float)($item->current_stock ?? $item->quantity ?? 0);
-            $val = $cost * $qty;
-            $cat = strtolower($item->category ?? '');
+            $value = (float) $item->average_cost * (float) $item->current_balance;
+            $type = strtolower((string) $item->item_type);
 
-            if (str_contains($cat, 'fabric') || str_contains($cat, 'قماش')) {
-                $warehouseFabricsValuation += $val;
-            } elseif (str_contains($cat, 'access') || str_contains($cat, 'مستلزم') || str_contains($cat, 'خيط') || str_contains($cat, 'زرار')) {
-                $warehouseAccessoriesValuation += $val;
-            } else {
-                $warehouseFinishedValuation += $val;
+            if (in_array($type, ['fabric_raw', 'fabric', 'yarn'], true)) {
+                $warehouseFabricsValuation += $value;
+            } elseif (in_array($type, ['accessory_raw', 'accessory', 'packaging', 'raw_material', 'thread', 'trims'], true)) {
+                $warehouseAccessoriesValuation += $value;
+            } elseif (in_array($type, ['finished_good', 'finished_product', 'finished_goods'], true)) {
+                $warehouseFinishedValuation += $value;
             }
         }
 
-        $totalWarehouseValuation = round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation + $glWip, 2);
-        $variance = round($totalGlInventory - $totalWarehouseValuation, 2);
+        $totalWarehouseValuation = round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation, 2);
+        // WIP has no authoritative InventoryItem subledger valuation yet. Never compare the GL balance to itself.
+        $variance = null;
 
         return [
             'tenant_id' => $tenantId,
             'gl_inventory_total' => $totalGlInventory,
-            'warehouse_valuation_total' => $totalWarehouseValuation,
+            'warehouse_valuation_total' => null,
+            'warehouse_known_categories_total' => $totalWarehouseValuation,
             'variance' => $variance,
-            'is_matched' => abs($variance) < 0.01,
+            'is_matched' => false,
+            'wip_valuation_available' => false,
+            'reconciliation_status' => 'incomplete_wip_valuation',
             'breakdown' => [
                 [
                     'category' => 'الأقمشة والغزول والمنسوجات',
@@ -1566,8 +1568,9 @@ class AccountingService
                     'category' => 'الإنتاج تحت التشغيل (WIP)',
                     'gl_code' => '1220',
                     'gl_balance' => $glWip,
-                    'warehouse_valuation' => $glWip,
-                    'variance' => 0,
+                    'warehouse_valuation' => null,
+                    'variance' => null,
+                    'status' => 'not_valued_from_subledger',
                 ],
                 [
                     'category' => 'المنتجات التامة الجاهزة للبيع',

@@ -31,7 +31,9 @@ return new class extends Migration
                 }
 
                 Schema::table($tableName, function (Blueprint $table) use ($column) {
-                    $table->foreignId($column)->nullable()->constrained('users')->nullOnDelete();
+                    // Store actor identifiers as strings so legacy UUID-based audit columns and
+                    // numeric user IDs are both represented without a mismatched FK type.
+                    $table->string($column, 36)->nullable()->index();
                 });
             }
         }
@@ -63,7 +65,7 @@ return new class extends Migration
                 }
 
                 Schema::table($tableName, function (Blueprint $table) use ($column) {
-                    $table->dropConstrainedForeignId($column);
+                    $table->dropColumn($column);
                 });
             }
         }

@@ -724,6 +724,13 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
                           }`}>
                             {permCount}
                           </span>
+                          {!isOwner && (
+                            <div className={`mt-1 text-[10px] ${u.permissions_mode === 'custom' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                              {u.permissions_mode === 'custom'
+                                ? (isAr ? 'صلاحيات مخصصة ومطبّقة' : 'Custom permissions enforced')
+                                : (isAr ? 'صلاحيات موروثة — تحتاج مراجعة' : 'Inherited permissions — review required')}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3 px-4 text-center">

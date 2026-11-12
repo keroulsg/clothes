@@ -78,6 +78,7 @@ class SupplierInvoiceController extends Controller
                 !$poWarehouse || !$grnWarehouse
                 || !in_array($poWarehouse->branch_id, $assignedBranchIds, true)
                 || !in_array($grnWarehouse->branch_id, $assignedBranchIds, true)
+                || $poWarehouse->branch_id !== $grnWarehouse->branch_id
             ) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك مطابقة فاتورة شراء من فرع غير معيّن لحسابك.'], 403);
             }

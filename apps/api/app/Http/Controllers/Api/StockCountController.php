@@ -172,71 +172,66 @@ class StockCountController extends Controller
     public function approve(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $count = StockCount::where('tenant_id', $tenantId)
-            ->with(['items.inventoryItem', 'warehouse'])
-            ->findOrFail($id);
 
-        if ($count->status === 'approved') {
-            return response()->json([
-                'error' => 'CountAlreadyApproved',
-                'message' => 'تم اعتماد هذا الجرد مسبقاً وترحيل تسوياته.',
-            ], 422);
-        }
+        $count = DB::transaction(function () use ($id, $tenantId) {
+            // Serialize approvals: two concurrent requests must never apply the same count twice.
+            $count = StockCount::where('tenant_id', $tenantId)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        DB::transaction(function () use ($count, $tenantId) {
+            if ($count->status === 'approved') {
+                return $count->load(['warehouse', 'items.inventoryItem', 'approver']);
+            }
+
+            if ($count->status !== 'in_progress') {
+                abort(422, 'لا يمكن اعتماد الجرد قبل تسجيل الكميات الفعلية ومراجعتها.');
+            }
+
+            $count->load(['items.inventoryItem', 'warehouse']);
+
             foreach ($count->items as $countItem) {
                 $diff = (float) $countItem->difference_quantity;
                 $item = $countItem->inventoryItem;
 
-                if ($diff > 0.0001) {
-                    // تسوية زيادة جردية (IN)
+                if (!$item) {
+                    throw new \\RuntimeException("صنف الجرد [{$countItem->id}] لم يعد مرتبطاً بسجل مخزني صالح.");
+                }
+
+                if ($diff > 0.0001 || $diff < -0.0001) {
+                    $direction = $diff > 0 ? 'IN' : 'OUT';
+                    $quantity = abs($diff);
                     $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $item->id,
                         'warehouse_id' => $count->warehouse_id,
-                        'transaction_type' => 'adjustment_positive',
-                        'direction' => 'IN',
-                        'quantity' => $diff,
+                        'transaction_type' => $diff > 0 ? 'adjustment_positive' : 'adjustment_negative',
+                        'direction' => $direction,
+                        'quantity' => $quantity,
                         'unit_cost' => (float) $countItem->unit_cost,
                         'reference_type' => 'stock_count',
+                        'reference_id' => (string) $countItem->id,
                         'reference_number' => $count->count_number,
-                        'notes' => 'تسوية زيادة جردية معتمدة بجلسة ' . $count->count_number,
+                        'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,
+                        'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,
                     ]);
                     $countItem->adjustment_status = 'adjusted';
-                    $countItem->save();
-                } elseif ($diff < -0.0001) {
-                    // تسوية عجز جردي (OUT)
-                    $absDiff = abs($diff);
-                    $this->inventoryService->recordTransaction([
-                        'tenant_id' => $tenantId,
-                        'inventory_item_id' => $item->id,
-                        'warehouse_id' => $count->warehouse_id,
-                        'transaction_type' => 'adjustment_negative',
-                        'direction' => 'OUT',
-                        'quantity' => $absDiff,
-                        'unit_cost' => (float) $countItem->unit_cost,
-                        'reference_type' => 'stock_count',
-                        'reference_number' => $count->count_number,
-                        'notes' => 'تسوية عجز جردي معتمدة بجلسة ' . $count->count_number,
-                    ]);
-                    $countItem->adjustment_status = 'adjusted';
-                    $countItem->save();
                 } else {
                     $countItem->adjustment_status = 'matched';
-                    $countItem->save();
                 }
+                $countItem->save();
             }
 
             $count->status = 'approved';
             $count->approved_by = auth()->id();
             $count->approved_at = now();
             $count->save();
+
+            return $count->fresh(['warehouse', 'items.inventoryItem', 'approver']);
         });
 
-        $count->load(['warehouse', 'items.inventoryItem', 'approver']);
-
         return response()->json([
-            'message' => 'تم اعتماد محضر الجرد وترحيل كافة التسويات رسمياً إلى دفتر الأستاذ المخزني.',
+            'message' => 'تم اعتماد محضر الجرد وترحيل التسويات رسمياً إلى دفتر الأستاذ المخزني.',
             'stock_count' => $count,
         ]);
     }

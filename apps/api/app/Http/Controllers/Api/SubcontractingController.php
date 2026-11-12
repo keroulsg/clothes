@@ -952,8 +952,8 @@ class SubcontractingController extends Controller
         }
     }
     /**
-     * Job orders have no direct branch column; ownership is derived from their
-     * production order, assigned employee, or linked cutting-order warehouse.
+     * Non-owner access is restricted to explicitly assigned branches.
+     * An empty assignment is fail-closed (no branch records are visible).
      */
     private function scopeJobsToAssignedBranches($query, Request $request)
     {
@@ -963,10 +963,6 @@ class SubcontractingController extends Controller
         }
 
         $branchIds = $user->assignedBranchIds();
-        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
-            return $query;
-        }
-
         return $query->whereIn('branch_id', $branchIds);
     }
 
@@ -978,10 +974,6 @@ class SubcontractingController extends Controller
         }
 
         $branchIds = $user->assignedBranchIds();
-        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
-            return $query;
-        }
-
         return $query->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request));
     }
 
@@ -993,10 +985,6 @@ class SubcontractingController extends Controller
         }
 
         $branchIds = $user->assignedBranchIds();
-        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
-            return $query;
-        }
-
         return $query->where(function ($branchQuery) use ($branchIds, $request) {
             $branchQuery
                 ->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request))

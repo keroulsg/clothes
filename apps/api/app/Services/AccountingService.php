@@ -891,6 +891,28 @@ class AccountingService
     }
 
     /**
+     * Find an existing journal by its polymorphic reference without comparing
+     * numeric identifiers against the legacy UUID column on PostgreSQL.
+     */
+    private function findJournalEntryByReference(string $tenantId, string $referenceType, $referenceId): ?JournalEntry
+    {
+        $referenceId = (string) $referenceId;
+        $query = JournalEntry::where('tenant_id', $tenantId)
+            ->where('reference_type', $referenceType)
+            ->where('reference_key', $referenceId);
+
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $referenceId)) {
+            $query->orWhere(function ($legacy) use ($tenantId, $referenceType, $referenceId) {
+                $legacy->where('tenant_id', $tenantId)
+                    ->where('reference_type', $referenceType)
+                    ->where('reference_id', $referenceId);
+            });
+        }
+
+        return $query->first();
+    }
+
+    /**
      * ترحيل فاتورة مبيعات آلياً إلى دفتر الأستاذ العام
      */
     public function postSalesInvoice(SalesInvoice $invoice): ?JournalEntry
@@ -898,10 +920,7 @@ class AccountingService
         $tenantId = $invoice->tenant_id;
 
         // التحقق من عدم الترحيل المسبق
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'sales_invoice')
-            ->where('reference_id', $invoice->id)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'sales_invoice', $invoice->id);
 
         if ($existing) {
             return $existing;
@@ -1793,10 +1812,7 @@ class AccountingService
         $orderNumber = is_object($cuttingOrder) ? ($cuttingOrder->order_number ?? $orderId) : $orderId;
 
         // التحقق من الترحيل المسبق
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'cutting_order_issue')
-            ->where('reference_id', $orderId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'cutting_order_issue', $orderId);
         if ($existing) return $existing;
 
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
@@ -1837,10 +1853,7 @@ class AccountingService
         $orderId = is_object($cuttingOrder) ? $cuttingOrder->id : $cuttingOrder;
         $orderNumber = is_object($cuttingOrder) ? ($cuttingOrder->order_number ?? $orderId) : $orderId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'cutting_order_reversal')
-            ->where('reference_id', $orderId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'cutting_order_reversal', $orderId);
         if ($existing) return $existing;
 
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
@@ -1881,10 +1894,7 @@ class AccountingService
         $orderId = is_object($order) ? $order->id : $order;
         $orderNumber = is_object($order) ? ($order->order_number ?? $orderId) : $orderId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'production_receipt')
-            ->where('reference_id', $orderId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'production_receipt', $orderId);
         if ($existing) return $existing;
 
         $finishedAccount = $this->getMappedAccount($tenantId, 'finished_goods_inventory');
@@ -1925,10 +1935,7 @@ class AccountingService
         $dnId = is_object($deliveryNote) ? $deliveryNote->id : $deliveryNote;
         $dnNumber = is_object($deliveryNote) ? ($deliveryNote->delivery_number ?? $dnId) : $dnId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'sales_delivery_cogs')
-            ->where('reference_id', $dnId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'sales_delivery_cogs', $dnId);
         if ($existing) return $existing;
 
         $cogsAccount = $this->getMappedAccount($tenantId, 'cogs');
@@ -1969,10 +1976,7 @@ class AccountingService
         $dnId = is_object($deliveryNote) ? $deliveryNote->id : $deliveryNote;
         $dnNumber = is_object($deliveryNote) ? ($deliveryNote->delivery_number ?? $dnId) : $dnId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'sales_delivery_cogs_reversal')
-            ->where('reference_id', $dnId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'sales_delivery_cogs_reversal', $dnId);
         if ($existing) return $existing;
 
         $cogsAccount = $this->getMappedAccount($tenantId, 'cogs');
@@ -2012,10 +2016,7 @@ class AccountingService
         $amount = (float)$cn->total_amount;
         if ($amount <= 0) return null;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'credit_note')
-            ->where('reference_id', $cn->id)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'credit_note', $cn->id);
         if ($existing) return $existing;
 
         $revenueAccount = $this->getMappedAccount($tenantId, 'sales_revenue');
@@ -2068,10 +2069,7 @@ class AccountingService
         $totalCost = (float) $wo->total_cost;
         if ($totalCost <= 0) return null;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'maintenance_work_order')
-            ->where('reference_id', $wo->id)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'maintenance_work_order', $wo->id);
         if ($existing) return $existing;
 
         $machine = $wo->machine;

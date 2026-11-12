@@ -797,7 +797,7 @@ class ApiClient {
       });
     },
 
-    recordPayment: async (id: string, payload: { amount: number; payment_method: string; voucher_date?: string; reference_number?: string; supplier_invoice_id?: string; notes?: string }): Promise<{ message: string; voucher: any; supplier_current_balance: number }> => {
+    recordPayment: async (id: string, payload: { amount: number; payment_method: string; voucher_date?: string; reference_number?: string; supplier_invoice_id?: string; account_id?: string; notes?: string }): Promise<{ message: string; voucher: any; supplier_current_balance: number }> => {
       return this.request<{ message: string; voucher: any; supplier_current_balance: number }>(`/suppliers/${id}/payments`, {
         method: 'POST',
         body: JSON.stringify(payload),

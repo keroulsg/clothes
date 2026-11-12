@@ -604,10 +604,18 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
-            $operationBranchIds[] = $job->branch_id
-                ?? $job->productionOrder?->branch_id
-                ?? $job->assignedEmployee?->branch_id
-                ?? $job->cuttingOrders->first()?->warehouse?->branch_id;
+            $operationBranchIds[] = $job->branch_id;
+            if ($job->productionOrder) {
+                $operationBranchIds[] = $job->productionOrder->branch_id;
+            }
+            if ($job->assignedEmployee) {
+                $operationBranchIds[] = $job->assignedEmployee->branch_id;
+            }
+            foreach ($job->cuttingOrders as $linkedCuttingOrder) {
+                if ($linkedCuttingOrder->warehouse) {
+                    $operationBranchIds[] = $linkedCuttingOrder->warehouse->branch_id;
+                }
+            }
         }
         if (!empty($validated['production_order_id'])) {
             $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->find($validated['production_order_id']);
@@ -623,8 +631,12 @@ class SubcontractingController extends Controller
             if (!$bundle) {
                 return response()->json(['error' => 'BundleNotFound'], 404);
             }
-            $operationBranchIds[] = $bundle->productionOrder?->branch_id
-                ?? $bundle->cuttingOrder?->warehouse?->branch_id;
+            if ($bundle->productionOrder) {
+                $operationBranchIds[] = $bundle->productionOrder->branch_id;
+            }
+            if ($bundle->cuttingOrder?->warehouse) {
+                $operationBranchIds[] = $bundle->cuttingOrder->warehouse->branch_id;
+            }
         }
         if (!empty($validated['assigned_employee_id'])) {
             $employee = Employee::where('tenant_id', $tenantId)->find($validated['assigned_employee_id']);

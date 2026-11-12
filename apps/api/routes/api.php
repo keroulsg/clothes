@@ -110,7 +110,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // المسارات المحمية بعزل الشركات
-    Route::middleware(['auth:sanctum', IdentifyTenant::class])->group(function () {
+    Route::middleware(['auth:sanctum', IdentifyTenant::class, \\App\\Http\\Middleware\\EnsurePermission::class])->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
         Route::put('/tenant/profile', [TenantController::class, 'updateProfile'])->middleware('role:company_owner');
         Route::get('/tenant/permissions-catalog', [TenantController::class, 'getPermissionsCatalog']);

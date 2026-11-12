@@ -163,8 +163,10 @@ class SubcontractingController extends Controller
     public function jobs(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = JobOrder::where('tenant_id', $tenantId)
-            ->with(['customer', 'garmentModel', 'assignedEmployee', 'items', 'invoices', 'deliveryNotes', 'materialReceipts', 'externalOperations.assignedEmployee'])
+        $query = $this->scopeJobsToAssignedBranches(
+            JobOrder::where('tenant_id', $tenantId),
+            $request
+        )->with(['customer', 'garmentModel', 'assignedEmployee', 'items', 'invoices', 'deliveryNotes', 'materialReceipts', 'externalOperations.assignedEmployee'])
             ->orderBy('created_at', 'desc');
 
         if ($request->has('status') && $request->status !== '') {
@@ -386,7 +388,7 @@ class SubcontractingController extends Controller
     public function materialReceipts(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $receipts = CustomerMaterialReceipt::where('tenant_id', $tenantId)
+        $receipts = $this->scopeRelatedJobRecords(CustomerMaterialReceipt::where('tenant_id', $tenantId), $request)
             ->with(['customer', 'warehouse', 'jobOrder'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -495,7 +497,7 @@ class SubcontractingController extends Controller
     public function externalOperations(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = ExternalOperation::where('tenant_id', $tenantId)
+        $query = $this->scopeRelatedJobRecords(ExternalOperation::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder.customer', 'productionOrder', 'bundle', 'assignedEmployee'])
             ->orderBy('created_at', 'desc');
 
@@ -588,7 +590,7 @@ class SubcontractingController extends Controller
     public function receiveExternalOperation(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $op = ExternalOperation::withoutGlobalScopes()->find($id);
+        $op = $this->scopeRelatedJobRecords(ExternalOperation::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$op || $op->tenant_id !== $tenantId) {
             return response()->json([
@@ -631,7 +633,7 @@ class SubcontractingController extends Controller
     public function deliveryNotes(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $notes = JobDeliveryNote::where('tenant_id', $tenantId)
+        $notes = $this->scopeRelatedJobRecords(JobDeliveryNote::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder', 'items', 'customer'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -715,7 +717,7 @@ class SubcontractingController extends Controller
     public function invoices(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $invoices = JobInvoice::where('tenant_id', $tenantId)
+        $invoices = $this->scopeRelatedJobRecords(JobInvoice::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder', 'items', 'customer'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -796,7 +798,7 @@ class SubcontractingController extends Controller
     public function recordPayment(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $invoice = JobInvoice::withoutGlobalScopes()->find($id);
+        $invoice = $this->scopeRelatedJobRecords(JobInvoice::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$invoice || $invoice->tenant_id !== $tenantId) {
             return response()->json([
@@ -876,6 +878,21 @@ class SubcontractingController extends Controller
                 ->orWhereHas('assignedEmployee', fn ($q) => $q->whereIn('branch_id', $branchIds))
                 ->orWhereHas('cuttingOrders.warehouse', fn ($q) => $q->whereIn('branch_id', $branchIds));
         });
+    }
+
+    private function scopeRelatedJobRecords($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
+            return $query;
+        }
+
+        return $query->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request));
     }
 
 }

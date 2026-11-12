@@ -894,6 +894,15 @@ class ProductionService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            // Final-audit receipts must never push accepted finished goods beyond the order's remaining planned quantity.
+            // The production-order row is already locked above, so concurrent inspections serialize this check.
+            if (($data['inspection_type'] ?? 'inline') === 'final_audit' && $passedQty > 0) {
+                $remainingPlanned = max(0, (int) $prodOrder->total_planned_quantity - (int) $prodOrder->total_completed_quantity);
+                if ($passedQty > $remainingPlanned) {
+                    throw new InvalidArgumentException("كمية الاستلام النهائي تتجاوز الكمية المتبقية لأمر الإنتاج. المتبقي: {$remainingPlanned}، المطلوب استلامه: {$passedQty}.");
+                }
+            }
+
             $decision = $data['decision'] ?? ($rejectedQty > 0 ? 'rejected' : ($reworkQty > 0 ? 'rework_required' : 'passed'));
 
             $inspection = QualityInspection::create([

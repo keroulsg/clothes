@@ -120,3 +120,16 @@ The next workflow run (43243446906) was started before those follow-up commits w
 - The CI workflow currently runs on pushes to `main` and pull requests targeting `main`; Draft PR #1 is open to trigger CI; no workflow result is currently visible or claimed.
 - Manufacturing cost variance posting remains intentionally unimplemented pending verification of the actual variance accounting policy and configured ledger accounts. The current chart of accounts does not establish the reported 5200/5300 account pair as valid posting targets; inventing those accounts or posting a second expense could double-count costs.
 - The complete demo path and all remaining audit items still require targeted verification. Production remains unchanged and deployment is not authorized.
+
+
+## Verified CI Gate — 2026-11-12 16:04 UTC
+
+- Branch: `garmentos/pre-sunday-hardening`
+- Verified commit: `319b017f48795ff91fe3e3e69e40acf92c39f7b9`
+- GitHub Actions run: `43254443503`
+- PostgreSQL migrations: PASS
+- PostgreSQL concurrency integration tests: PASS
+- Complete backend suite: PASS — 526 tests, 3,241 assertions
+- Frontend TypeScript and Vite build: PASS
+- This is CI evidence for the branch only. It does not authorize merge, production migration, deployment, or production data changes.
+- Remaining audit disposition must be completed separately; a green CI run does not by itself prove every static-audit finding is closed. In particular, WIP inventory valuation remains explicitly incomplete in the reconciliation response and must not be represented as reconciled.

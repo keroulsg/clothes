@@ -84,6 +84,7 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
   const [plans, setPlans] = useState<any[]>([]);
   const [featuresCatalog, setFeaturesCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -96,6 +97,7 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
         }
       } catch (err) {
         console.error('Failed to load ERP pricing plans:', err);
+        if (mounted) setLoadError(true);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -106,71 +108,8 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
     };
   }, []);
 
-  const fallbackPlans = [
-    {
-      id: 'starter',
-      code: 'starter',
-      name_ar: 'باقة الورش والمشاغل',
-      name_en: 'Starter Workshop',
-      monthly_price: 1450,
-      annual_price: 14500,
-      description_ar: 'مثالية للورش وصالات القص الصغيرة (حتى خطين إنتاج).',
-      description_en: 'Ideal for small cutting workshops and independent sewing units.',
-      features: ['erp.inventory', 'erp.cutting', 'erp.purchasing', 'erp.sales'],
-      is_popular: false,
-    },
-    {
-      id: 'pro',
-      code: 'pro',
-      name_ar: 'باقة المصانع المتكاملة',
-      name_en: 'Professional Factory',
-      monthly_price: 3850,
-      annual_price: 38500,
-      description_ar: 'الخيار الأكثر طلباً لمصانع الملابس المتوسطة والمتكاملة.',
-      description_en: 'Most popular choice for medium full-cycle apparel plants.',
-      features: [
-        'erp.inventory',
-        'erp.cutting',
-        'erp.purchasing',
-        'erp.sales',
-        'erp.production',
-        'erp.costing',
-        'erp.accounting',
-        'erp.payroll',
-        'erp.storefront',
-        'erp.subcontracting',
-      ],
-      is_popular: true,
-    },
-    {
-      id: 'enterprise',
-      code: 'enterprise',
-      name_ar: 'باقة كبرى المجموعات',
-      name_en: 'Enterprise Scale',
-      monthly_price: 7900,
-      annual_price: 79000,
-      description_ar: 'للمصانع الكبرى متعددة الفروع والمخازن وخطوط التصدير.',
-      description_en: 'For large industrial groups with multi-branch production.',
-      features: [
-        'erp.inventory',
-        'erp.cutting',
-        'erp.purchasing',
-        'erp.sales',
-        'erp.production',
-        'erp.costing',
-        'erp.accounting',
-        'erp.payroll',
-        'erp.storefront',
-        'erp.subcontracting',
-        'erp.advanced_reports',
-        'erp.maintenance',
-        'waslat_worsh.marketplace_provider',
-      ],
-      is_popular: false,
-    },
-  ];
-
-  const displayedPlans = plans.length > 0 ? plans : fallbackPlans;
+  // Pricing cards are rendered only from the authoritative plans API.
+  const displayedPlans = plans;
 
   // Feature keys and human labels
   const featureLabel = (key: string) => {
@@ -253,6 +192,12 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
         <div className="py-16 text-center text-xs text-slate-400">
           <Sparkles className="w-6 h-6 animate-spin mx-auto mb-3 text-rose-600" />
           <span>{isAr ? 'جارِ تحميل باقات الاشتراك المعتمدة...' : 'Loading verified SaaS packages...'}</span>
+        </div>
+      ) : displayedPlans.length === 0 ? (
+        <div role="alert" className="py-16 px-6 text-center rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200">
+          <p className="font-bold">{isAr ? 'تعذر تحميل الأسعار المعتمدة' : 'Verified pricing is unavailable'}</p>
+          <p className="mt-2 text-sm">{isAr ? 'لا نعرض أسعاراً تجريبية أو قديمة. يرجى المحاولة لاحقاً أو التواصل مع المبيعات.' : 'Demo or stale prices are hidden. Please retry later or contact sales.'}</p>
+          {loadError && <button type="button" onClick={() => window.location.reload()} className="mt-4 underline font-semibold">{isAr ? 'إعادة المحاولة' : 'Retry'}</button>}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">

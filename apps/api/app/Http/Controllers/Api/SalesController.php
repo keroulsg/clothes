@@ -52,7 +52,7 @@ class SalesController extends Controller
 
     public function salesOrders(): JsonResponse
     {
-        $orders = SalesOrder::with([
+        $orders = $this->scopeWarehouseBranchRecords(SalesOrder::where('tenant_id', app('current_tenant_id')), 'warehouse')->with([
             'customer',
             'warehouse',
             'items.variant.garmentModel',
@@ -69,7 +69,7 @@ class SalesController extends Controller
     public function showSalesOrder(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = SalesOrder::where('tenant_id', $tenantId)
+        $order = $this->scopeWarehouseBranchRecords(SalesOrder::where('tenant_id', $tenantId), 'warehouse')
             ->with([
                 'customer',
                 'warehouse',
@@ -168,7 +168,7 @@ class SalesController extends Controller
     public function invoices(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $invoices = SalesInvoice::where('tenant_id', $tenantId)
+        $invoices = $this->scopeWarehouseBranchRecords(SalesInvoice::where('tenant_id', $tenantId), 'warehouse')
             ->with([
                 'tenant',
                 'customer',
@@ -187,7 +187,7 @@ class SalesController extends Controller
     public function showInvoice(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $invoice = SalesInvoice::where('tenant_id', $tenantId)
+        $invoice = $this->scopeWarehouseBranchRecords(SalesInvoice::where('tenant_id', $tenantId), 'warehouse')
             ->with([
                 'tenant',
                 'customer',
@@ -246,7 +246,12 @@ class SalesController extends Controller
 
     public function posSessions(): JsonResponse
     {
-        $sessions = PosSession::with(['user', 'branch'])->latest()->paginate(20);
+        $sessions = PosSession::where('tenant_id', app('current_tenant_id'));
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $sessions->whereIn('branch_id', $user->assignedBranchIds());
+        }
+        $sessions = $sessions->with(['user', 'branch'])->latest()->paginate(20);
 
         return response()->json($sessions);
     }
@@ -322,7 +327,10 @@ class SalesController extends Controller
 
     public function deliveryNotes(): JsonResponse
     {
-        $notes = $this->salesService->getDeliveryNotes();
+        $notes = $this->scopeWarehouseBranchRecords(
+            SalesDeliveryNote::where('tenant_id', app('current_tenant_id')),
+            'warehouse'
+        )->with(['customer', 'salesOrder', 'warehouse', 'cartons'])->latest()->paginate(20);
 
         return response()->json($notes);
     }
@@ -381,7 +389,10 @@ class SalesController extends Controller
 
     public function salesReturns(): JsonResponse
     {
-        $returns = $this->salesService->getSalesReturns();
+        $returns = $this->scopeWarehouseBranchRecords(
+            SalesReturn::where('tenant_id', app('current_tenant_id')),
+            'warehouse'
+        )->with(['customer', 'salesOrder', 'salesInvoice', 'warehouse', 'items'])->latest()->paginate(20);
 
         return response()->json($returns);
     }
@@ -796,5 +807,22 @@ class SalesController extends Controller
 
         return response()->json(['item' => $item]);
     }
+    /**
+     * Restrict warehouse-owned sales records to the authenticated user's branches.
+     * Company owners retain tenant-wide access; unassigned staff fail closed.
+     */
+    private function scopeWarehouseBranchRecords($query, string $relation)
+    {
+        $user = request()->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+
+        return $query->whereHas($relation, fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+    }
+
+
 }
 

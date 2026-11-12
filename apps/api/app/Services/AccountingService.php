@@ -57,7 +57,8 @@ class AccountingService
             ['code' => '1111', 'name' => 'عملاء جملة وتوكيلات ملابس كبرى', 'name_en' => 'Wholesale Commercial Clients', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
             ['code' => '1112', 'name' => 'عملاء تجزئة ومعارض أفراد', 'name_en' => 'Retail Customers', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
             ['code' => '1113', 'name' => 'عملاء تشغيل وقص للغير (CMT)', 'name_en' => 'CMT Subcontracting Clients', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
-            
+            ['code' => '1120', 'name' => 'ضريبة قيمة مضافة مدخلات قابلة للخصم', 'name_en' => 'Recoverable Input VAT', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '11'],
+
             // 1200: المخزون والمستودعات
             ['code' => '1200', 'name' => 'مخزون المستودعات والمهمات', 'name_en' => 'Inventory & Stock Warehouses', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '11'],
             ['code' => '1210', 'name' => 'مخزون الأقمشة والخامات وتريكو قطن', 'name_en' => 'Raw Fabrics & Knits Inventory', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
@@ -168,6 +169,8 @@ class AccountingService
             'payroll_payable' => isset($createdMap['2021']) ? '2021' : '2020',
             'retained_earnings' => '3020',
             'sales_tax_payable' => '2030',
+            'input_tax' => '1120',
+            'accessories_inventory' => '1213',
         ];
 
         foreach ($defaultMappings as $key => $code) {
@@ -217,6 +220,8 @@ class AccountingService
             'payroll_payable' => '2020',
             'retained_earnings' => '3020',
             'sales_tax_payable' => '2030',
+            'input_tax' => '1120',
+            'accessories_inventory' => '1213',
         ];
 
         if (isset($fallbackCodes[$mappingKey])) {

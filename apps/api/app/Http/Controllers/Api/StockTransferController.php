@@ -118,8 +118,10 @@ class StockTransferController extends Controller
         $tenantId = app('current_tenant_id');
 
         $transfer = DB::transaction(function () use ($id, $tenantId) {
-            $transfer = StockTransfer::where('tenant_id', $tenantId)
-                ->whereKey($id)
+            $transfer = $this->scopeTransfersToAssignedBranches(
+                StockTransfer::where('tenant_id', $tenantId),
+                $request
+            )->whereKey($id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -268,10 +270,13 @@ class StockTransferController extends Controller
     /**
      * عرض تفاصيل تحويل محدد
      */
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $transfer = StockTransfer::where('tenant_id', $tenantId)
+        $transfer = $this->scopeTransfersToAssignedBranches(
+            StockTransfer::where('tenant_id', $tenantId),
+            $request
+        )
             ->with(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem', 'creator', 'receiver'])
             ->findOrFail($id);
 
@@ -279,5 +284,26 @@ class StockTransferController extends Controller
             'transfer' => $transfer,
         ]);
     }
+    /**
+     * A transfer crosses two warehouses. Staff must be assigned to both branches
+     * before they can inspect, dispatch, or receive that transfer.
+     */
+    private function scopeTransfersToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
+            return $query;
+        }
+
+        return $query
+            ->whereHas('sourceWarehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+            ->whereHas('destinationWarehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+    }
+
 }
 

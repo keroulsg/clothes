@@ -387,7 +387,7 @@ class ProcurementService
 
                 $grn = null;
                 if (isset($data['goods_receipt_note_id'])) {
-                    $grn = GoodsReceiptNote::with('items')->where('tenant_id', $tenantId)->where('id', $data['goods_receipt_note_id'])->first();
+                    $grn = GoodsReceiptNote::with('items.inventoryItem')->where('tenant_id', $tenantId)->where('id', $data['goods_receipt_note_id'])->first();
                     if (!$grn) {
                         throw new InvalidArgumentException('أمان: إذن الاستلام غير موجود أو غير تابع لهذه الشركة.');
                     }
@@ -441,8 +441,8 @@ class ProcurementService
                         'payment_status' => 'unpaid',
                         'matching_status' => $matchingStatus,
                         'variance_notes' => !empty($varianceNotes) ? implode('; ', $varianceNotes) : null,
-                        'is_posted' => true,
-                        'posted_at' => now(),
+                        'is_posted' => false,
+                        'posted_at' => null,
                         'posted_by' => $data['posted_by'] ?? auth()->id(),
                         'idempotency_key' => $idempotencyKey,
                     ]);
@@ -463,7 +463,99 @@ class ProcurementService
                     throw $e;
                 }
 
-                // إثبات الالتزام المالي الحقيقي للمورد
+                if (!$grn) {
+                    throw new InvalidArgumentException('لا يمكن ترحيل فاتورة المورد قبل تسجيل إذن استلام معتمد يثبت دخول الخامات للمخزن.');
+                }
+
+                if (abs($invoiceTotal - ($invoiceSubtotal + $invoiceTax)) > 0.01) {
+                    throw new InvalidArgumentException('إجمالي فاتورة المورد لا يساوي صافي الفاتورة مضافاً إليه الضريبة. راجع المبالغ قبل الترحيل.');
+                }
+
+                $inventoryWeights = [];
+                foreach ($grn->items as $grnItem) {
+                    $acceptedQuantity = (float) $grnItem->accepted_quantity;
+                    if ($acceptedQuantity <= 0) {
+                        continue;
+                    }
+
+                    $inventoryItem = $grnItem->inventoryItem;
+                    if (!$inventoryItem) {
+                        throw new InvalidArgumentException('يوجد بند استلام غير مرتبط بصنف مخزني؛ لا يمكن ترحيل فاتورة المورد.');
+                    }
+
+                    $itemType = strtolower((string) $inventoryItem->item_type);
+                    $mappingKey = in_array($itemType, ['accessory_raw', 'accessory', 'packaging', 'thread', 'trims'], true)
+                        ? 'accessories_inventory'
+                        : 'raw_materials_inventory';
+
+                    $inventoryWeights[$mappingKey] = ($inventoryWeights[$mappingKey] ?? 0.0)
+                        + ($acceptedQuantity * (float) $grnItem->unit_cost);
+                }
+
+                $weightTotal = array_sum($inventoryWeights);
+                if ($weightTotal <= 0) {
+                    throw new InvalidArgumentException('لا توجد كميات مستلمة مقبولة بقيمة موجبة لترحيل فاتورة المورد.');
+                }
+
+                $accounting = app(\\App\\Services\\AccountingService::class);
+                $journalLines = [];
+                $allocatedSubtotal = 0.0;
+                $weightKeys = array_keys($inventoryWeights);
+
+                foreach ($weightKeys as $index => $mappingKey) {
+                    $allocatedAmount = $index === count($weightKeys) - 1
+                        ? round($invoiceSubtotal - $allocatedSubtotal, 4)
+                        : round($invoiceSubtotal * ($inventoryWeights[$mappingKey] / $weightTotal), 4);
+
+                    $allocatedSubtotal += $allocatedAmount;
+                    if ($allocatedAmount > 0) {
+                        $inventoryAccount = $accounting->getMappedAccount($tenantId, $mappingKey);
+                        $journalLines[] = [
+                            'account_id' => $inventoryAccount->id,
+                            'debit' => $allocatedAmount,
+                            'credit' => 0,
+                            'description' => "إثبات قيمة خامات مستلمة بفاتورة المورد {$invoice->invoice_number}",
+                        ];
+                    }
+                }
+
+                if ($invoiceTax > 0) {
+                    $inputTaxAccount = $accounting->getMappedAccount($tenantId, 'input_tax');
+                    $journalLines[] = [
+                        'account_id' => $inputTaxAccount->id,
+                        'debit' => $invoiceTax,
+                        'credit' => 0,
+                        'description' => "ضريبة مدخلات فاتورة المورد {$invoice->invoice_number}",
+                    ];
+                }
+
+                $apAccount = $accounting->getMappedAccount($tenantId, 'ap_control');
+                $journalLines[] = [
+                    'account_id' => $apAccount->id,
+                    'debit' => 0,
+                    'credit' => $invoiceTotal,
+                    'description' => "إثبات التزام المورد {$supplier->name} عن الفاتورة {$invoice->invoice_number}",
+                    'party_type' => 'supplier',
+                    'party_id' => $supplier->id,
+                ];
+
+                $accounting->createJournalEntry([
+                    'tenant_id' => $tenantId,
+                    'entry_number' => 'JE-SINV-' . $invoice->internal_reference,
+                    'entry_date' => $invoice->invoice_date,
+                    'reference_type' => 'supplier_invoice',
+                    'reference_id' => $invoice->id,
+                    'description' => "ترحيل فاتورة المورد {$invoice->invoice_number}",
+                    'lines' => $journalLines,
+                ]);
+
+                $invoice->update([
+                    'is_posted' => true,
+                    'posted_at' => now(),
+                    'posted_by' => auth()->id(),
+                ]);
+
+                // Update the supplier subledger only after the balanced GL journal succeeds.
                 $supplier->current_balance = (float) $supplier->current_balance + $invoiceTotal;
                 $supplier->save();
 

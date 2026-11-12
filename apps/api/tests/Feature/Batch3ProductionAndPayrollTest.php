@@ -49,6 +49,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
     protected User $ownerB;
     protected string $tokenB;
 
+    protected Branch $branchA;
     protected Warehouse $warehouseA;
     protected GarmentModel $modelA;
     protected Color $colorBlue;
@@ -70,6 +71,15 @@ class Batch3ProductionAndPayrollTest extends TestCase
             'plan_tier' => 'professional',
         ]);
 
+        $this->branchA = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'الفرع الرئيسي',
+            'code' => 'BR-BATCH3-MAIN',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
         $this->ownerA = User::create([
             'tenant_id' => $this->tenantA->id,
             'name' => 'أحمد مالك المصنع A',
@@ -89,6 +99,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
             'is_active' => true,
         ]);
         $this->tokenProdA = $this->prodManagerA->createToken('test')->plainTextToken;
+        $this->prodManagerA->branches()->sync([$this->branchA->id]);
 
         $this->accountantA = User::create([
             'tenant_id' => $this->tenantA->id,
@@ -99,6 +110,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
             'is_active' => true,
         ]);
         $this->tokenAccountantA = $this->accountantA->createToken('test')->plainTextToken;
+        $this->accountantA->branches()->sync([$this->branchA->id]);
 
         // 2. إعداد الشركة B لاختبار العزل التام للبيانات (Multi-Tenant Isolation)
         $this->tenantB = Tenant::withoutGlobalScopes()->create([
@@ -122,6 +134,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // مستودع وموديل وألوان وأصناف خام للشركة A
         $this->warehouseA = Warehouse::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'name' => 'مستودع الأقمشة المركزي A',
             'code' => 'WH-FAB-A',
             'type' => 'fabric',
@@ -274,6 +287,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // تجهيز أمر إنتاج معتمد
         $prodOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-PRD-TEST-CUT',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),

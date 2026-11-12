@@ -133,22 +133,36 @@ class SalesController extends Controller
 
     public function reserveOrderStock(string $id): JsonResponse
     {
-        $order = $this->salesService->reserveOrderStock($id);
+        try {
+            $order = $this->salesService->reserveOrderStock($id);
 
-        return response()->json([
-            'message' => 'تم حجز رصيد المخزون للمنتجات التامة بنجاح',
-            'order' => $order,
-        ]);
+            return response()->json([
+                'message' => 'تم حجز رصيد المخزون للمنتجات التامة بنجاح',
+                'order' => $order,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'StockReservationError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function fulfillOrder(string $id): JsonResponse
     {
-        $invoice = $this->salesService->fulfillOrder($id);
+        try {
+            $invoice = $this->salesService->fulfillOrder($id);
 
-        return response()->json([
-            'message' => 'تم صرف البضاعة من المخزن وإصدار فاتورة المبيعات بنجاح',
-            'invoice' => $invoice,
-        ]);
+            return response()->json([
+                'message' => 'تم صرف البضاعة من المخزن وإصدار فاتورة المبيعات بنجاح',
+                'invoice' => $invoice,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'OrderFulfillmentError',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function invoices(): JsonResponse

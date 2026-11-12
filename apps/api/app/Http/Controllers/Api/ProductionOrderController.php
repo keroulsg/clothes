@@ -24,8 +24,10 @@ class ProductionOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = ProductionOrder::where('tenant_id', $tenantId)
-            ->with(['garmentModel', 'billOfMaterial', 'branch', 'customer', 'items.color', 'items.size']);
+        $query = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->with(['garmentModel', 'billOfMaterial', 'branch', 'customer', 'items.color', 'items.size']);
 
         // 1. بحث بالرقم أو الملاحظات أو المسؤول
         if ($request->filled('search')) {
@@ -193,7 +195,10 @@ class ProductionOrderController extends Controller
     public function update(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         if (in_array($order->status, ['completed', 'cancelled'])) {
             return response()->json([
@@ -287,7 +292,10 @@ class ProductionOrderController extends Controller
     public function cancel(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            request()
+        )->findOrFail($id);
 
         if (in_array($order->status, ['completed', 'cancelled'])) {
             return response()->json([
@@ -334,8 +342,10 @@ class ProductionOrderController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)
-            ->with([
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->with([
                 'garmentModel',
                 'billOfMaterial',
                 'items.color',
@@ -399,8 +409,10 @@ class ProductionOrderController extends Controller
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($request, $id, $tenantId) {
-            $order = ProductionOrder::where('tenant_id', $tenantId)
-                ->whereKey($id)
+            $order = $this->scopeProductionOrdersToAssignedBranches(
+                ProductionOrder::where('tenant_id', $tenantId),
+                $request
+            )->whereKey($id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -462,4 +474,15 @@ class ProductionOrderController extends Controller
             ]);
         });
     }
+    private function scopeProductionOrdersToAssignedBranches($query, ?Request $request = null)
+    {
+        $user = ($request ?? request())->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        return $query->whereIn('branch_id', $user->assignedBranchIds());
+    }
+
+
 }

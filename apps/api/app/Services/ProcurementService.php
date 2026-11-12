@@ -402,6 +402,16 @@ class ProcurementService
                     }
                 }
 
+                $grnItems = GoodsReceiptNoteItem::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('goods_receipt_note_id', $grn->id)
+                    ->orderBy('id')
+                    ->get();
+
+                if ($grnItems->isEmpty() || $grnItems->every(fn ($item) => (float) $item->accepted_quantity <= 0)) {
+                    throw new InvalidArgumentException('إذن الاستلام لا يحتوي على كميات مقبولة قابلة للفوترة.');
+                }
+
                 $tenantRecord = \App\Models\Tenant::find($tenantId);
                 $tenantTax = $tenantRecord?->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
                 $configuredRate = (!empty($tenantTax['enabled']) && isset($tenantTax['rate'])) ? (float) $tenantTax['rate'] : 0.0;
@@ -417,7 +427,7 @@ class ProcurementService
                 // مقارنة مع استلام البضاعة إذا وجد
                 if ($grn) {
                     $grnTotalValue = 0;
-                    foreach ($grn->items as $grnItem) {
+                    foreach ($grnItems as $grnItem) {
                         $grnTotalValue += ((float) $grnItem->accepted_quantity * (float) $grnItem->unit_cost);
                     }
 
@@ -492,9 +502,12 @@ class ProcurementService
                         continue;
                     }
 
-                    $inventoryItem = $grnItem->inventoryItem;
+                    $inventoryItem = InventoryItem::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->whereKey($grnItem->inventory_item_id)
+                        ->first();
                     if (!$inventoryItem) {
-                        throw new InvalidArgumentException('يوجد بند استلام غير مرتبط بصنف مخزني؛ لا يمكن ترحيل فاتورة المورد.');
+                        throw new InvalidArgumentException('يوجد بند استلام غير مرتبط بصنف مخزني تابع لنفس الشركة؛ لا يمكن ترحيل فاتورة المورد.');
                     }
 
                     $itemType = strtolower((string) $inventoryItem->item_type);

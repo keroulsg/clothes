@@ -186,6 +186,49 @@ class SubcontractingAndCmtTest extends TestCase
             ->assertJsonPath('data.status', 'confirmed');
     }
 
+    public function test_staff_without_branch_assignment_cannot_view_subcontracting_jobs(): void
+    {
+        $branch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع محمي',
+            'code' => 'SUB-BRANCH-LOCKED',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
+        $job = $this->subService->createJobOrder([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branch->id,
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'service_type' => 'contract_cutting',
+            'total_target_quantity' => 5,
+        ]);
+
+        $staff = User::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'موظف بلا تعيين فرع',
+            'email' => 'unassigned-branch-staff@nile.com',
+            'role' => 'production_manager',
+            'is_active' => true,
+            'password' => bcrypt('password123'),
+        ]);
+
+        $listResponse = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->getJson('/api/v1/subcontracting/jobs');
+
+        $listResponse->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $showResponse = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->getJson("/api/v1/subcontracting/jobs/{$job->id}");
+
+        $showResponse->assertStatus(403);
+    }
+
     public function test_subcontracting_job_order_persists_its_branch_anchor(): void
     {
         $branch = Branch::create([

@@ -198,6 +198,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         $res = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
             ->postJson('/api/v1/production-orders', [
                 'garment_model_id' => $this->modelA->id,
+                'branch_id' => $this->branchA->id,
                 'planned_start_date' => date('Y-m-d'),
                 'target_delivery_date' => date('Y-m-d', strtotime('+10 days')),
                 'priority' => 'high',

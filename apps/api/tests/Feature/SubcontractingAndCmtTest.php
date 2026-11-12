@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Color;
 use App\Models\Customer;
 use App\Models\CustomerMaterial;
@@ -183,6 +184,38 @@ class SubcontractingAndCmtTest extends TestCase
         $confirmResponse->assertStatus(200)
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'confirmed');
+    }
+
+    public function test_subcontracting_job_order_persists_its_branch_anchor(): void
+    {
+        $branch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الاختبار',
+            'code' => 'SUB-BRANCH-01',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
+        $job = $this->subService->createJobOrder([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branch->id,
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'service_type' => 'contract_cutting',
+            'garment_model_id' => $this->modelA->id,
+            'fabric_source' => 'customer_supplied',
+            'pricing_basis' => 'per_piece',
+            'unit_rate' => 6.50,
+            'total_target_quantity' => 10,
+        ]);
+
+        $this->assertSame($branch->id, $job->branch_id);
+        $this->assertDatabaseHas('job_orders', [
+            'id' => $job->id,
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branch->id,
+        ]);
     }
 
     /**

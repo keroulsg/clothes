@@ -647,18 +647,30 @@ class HrController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
-        Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        $user = $request->user();
+        $branchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds));
         if (!empty($validated['production_order_id'])) {
-            ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
+            $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
+            if ($enforceBranchScope && $employee->branch_id !== $productionOrder->branch_id) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب تسجيل إنتاجية العامل على أمر إنتاج من نفس فرعه.'], 422);
+            }
         }
         if (!empty($validated['cutting_bundle_id'])) {
             $bundleQuery = CuttingBundle::where('tenant_id', $tenantId);
-            $user = $request->user();
-            $branchIds = $user?->assignedBranchIds() ?? [];
-            if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
-                $bundleQuery->whereHas('productionOrder', fn ($q) => $q->whereIn('branch_id', $branchIds));
+            if ($enforceBranchScope) {
+                $bundleQuery->where(function ($q) use ($branchIds) {
+                    $q->whereHas('productionOrder', fn ($p) => $p->whereIn('branch_id', $branchIds))
+                        ->orWhereHas('cuttingOrder.warehouse', fn ($w) => $w->whereIn('branch_id', $branchIds));
+                });
             }
-            $bundleQuery->findOrFail($validated['cutting_bundle_id']);
+            $bundle = $bundleQuery->with(['productionOrder', 'cuttingOrder.warehouse'])->findOrFail($validated['cutting_bundle_id']);
+            $bundleBranchId = $bundle->productionOrder?->branch_id ?? $bundle->cuttingOrder?->warehouse?->branch_id;
+            if ($enforceBranchScope && (!$bundleBranchId || $employee->branch_id !== $bundleBranchId)) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب تسجيل إنتاجية العامل على حزمة من نفس فرعه.'], 422);
+            }
         }
         $log = $this->payrollService->recordPieceWork($validated);
 
@@ -737,8 +749,15 @@ class HrController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
-        Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
-        ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
+        $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
+        $user = $request->user();
+        $branchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds));
+        if ($enforceBranchScope && (!$productionOrder->branch_id || $employee->branch_id !== $productionOrder->branch_id)) {
+            return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب أن يتبع العامل وأمر الإنتاج نفس الفرع.'], 422);
+        }
         $adjustment = $this->payrollService->createQualityDefectAdjustment($validated, $request->user()->id);
 
         return response()->json([

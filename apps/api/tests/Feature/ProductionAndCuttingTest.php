@@ -10,6 +10,7 @@ use App\Models\CuttingBundle;
 use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
+use App\Models\JournalEntry;
 use App\Models\InventoryTransaction;
 use App\Models\ProductionOrder;
 use App\Models\ProductionStage;
@@ -621,6 +622,73 @@ class ProductionAndCuttingTest extends TestCase
         $completedResponse->assertOk();
         $this->assertSame('completed', $order->fresh()->status);
         $this->assertSame(20.0, (float) $order->fresh()->total_completed_quantity);
+    }
+
+
+    public function test_cutting_cancellation_reverses_original_material_cost_not_current_average_cost(): void
+    {
+        $order = ProductionOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'garment_model_id' => $this->modelA->id,
+            'order_number' => 'PO-CANCEL-COST-01',
+            'planned_start_date' => now()->toDateString(),
+            'target_delivery_date' => now()->addDays(5)->toDateString(),
+            'total_planned_quantity' => 10,
+            'status' => 'approved',
+        ]);
+
+        $cut = $this->actingAs($this->userA)
+            ->postJson('/api/v1/cutting-orders', [
+                'production_order_id' => $order->id,
+                'warehouse_id' => $this->warehouseFabA->id,
+                'fabric_inventory_item_id' => $this->fabricItemA->id,
+                'fabric_source' => 'factory_owned',
+                'lay_length_meters' => 2,
+                'layers_count' => 2,
+                'end_loss_meters' => 0,
+                'remnant_meters' => 0,
+                'total_cut_pieces' => 10,
+            ]);
+
+        $cut->assertStatus(201);
+        $cuttingOrderId = $cut->json('data.id');
+
+        $issue = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order')
+            ->where('reference_id', $cuttingOrderId)
+            ->where('direction', 'OUT')
+            ->firstOrFail();
+
+        // Simulate a later weighted-average change before cancellation.
+        $this->fabricItemA->refresh();
+        $this->fabricItemA->average_cost = 180;
+        $this->fabricItemA->save();
+
+        $cancel = $this->actingAs($this->userA)
+            ->postJson("/api/v1/cutting-orders/{$cuttingOrderId}/cancel", [
+                'cancellation_reason' => 'اختبار عكس التكلفة الأصلية',
+            ]);
+
+        $cancel->assertStatus(200)->assertJsonPath('data.status', 'cancelled');
+
+        $reversal = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order')
+            ->where('reference_id', $cuttingOrderId)
+            ->where('direction', 'IN')
+            ->where('transaction_type', 'cutting_reversal')
+            ->firstOrFail();
+
+        $this->assertEquals((float) $issue->unit_cost, (float) $reversal->unit_cost);
+        $this->assertEquals((float) $issue->total_cost, (float) $reversal->total_cost);
+        $this->assertEquals(1000.0, (float) $this->fabricItemA->fresh()->current_balance);
+
+        $journal = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order_reversal')
+            ->where('reference_id', $cuttingOrderId)
+            ->firstOrFail();
+
+        $this->assertEquals((float) $issue->total_cost, (float) $journal->total_debit);
+        $this->assertEquals((float) $issue->total_cost, (float) $journal->total_credit);
     }
 
 }

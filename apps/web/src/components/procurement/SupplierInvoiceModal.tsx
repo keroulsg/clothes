@@ -55,6 +55,12 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invoiceNumber || numSubtotal <= 0) return;
+    if (!goodsReceiptNote?.id) {
+      setErrorMsg(isAr
+        ? 'لا يمكن تسجيل فاتورة قبل استلام البضاعة واعتماد إذن الاستلام.'
+        : 'A goods receipt note must be posted before recording the supplier invoice.');
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorMsg('');
@@ -62,7 +68,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
       const res = await api.procurement.createSupplierInvoice({
         invoice_number: invoiceNumber,
         purchase_order_id: purchaseOrder.id,
-        goods_receipt_note_id: goodsReceiptNote?.id || undefined,
+        goods_receipt_note_id: goodsReceiptNote.id,
         invoice_date: invoiceDate,
         due_date: dueDate || undefined,
         subtotal: numSubtotal,
@@ -71,6 +77,17 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
       });
 
       if (res.supplier_invoice) {
+        if (res.is_posted !== true) {
+          onSuccess(res.supplier_invoice);
+          window.alert(
+            isAr
+              ? 'تم حفظ الفاتورة للمراجعة بسبب فرق المطابقة. لم يتم ترحيلها أو تسجيل التزام أو سداد.'
+              : 'Invoice saved for review due to a matching variance. No liability or payment was posted.'
+          );
+          onClose();
+          return;
+        }
+
         // If immediate payment was selected, automatically record the payment voucher
         if (paymentPlan === 'paid_now') {
           try {

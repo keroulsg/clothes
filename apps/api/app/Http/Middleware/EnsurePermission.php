@@ -50,7 +50,13 @@ class EnsurePermission
             ], 403);
         }
 
-        if (!$user->hasPermission($requiredPermission)) {
+        // Legacy accounts retain their existing role gates until an owner saves
+        // an explicit permission set. New and edited users, plus customized roles,
+        // are checked against the exact granular permission set.
+        if (
+            $user->hasExplicitPermissionConfiguration()
+            && !$user->hasPermission($requiredPermission)
+        ) {
             return response()->json([
                 'error' => 'InsufficientPermission',
                 'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة للوصول إلى هذا المورد.',

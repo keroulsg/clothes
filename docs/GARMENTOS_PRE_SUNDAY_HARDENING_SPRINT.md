@@ -106,6 +106,14 @@ The following source changes have been committed to this isolated branch. They a
 - Pricing no longer falls back to hardcoded plans/dates; fabricated production size/color variants were removed; dashboard fake OEE/scrap metrics and demo storefront slug were removed; receipt/bundle printouts no longer pretend static artwork is a scannable barcode/QR; Waslat attachment download returns the uploaded filename.
 - Regression tests were added for preserving chart balances during re-seeding and storing numeric journal references.
 
+### CI findings and follow-up fixes
+
+The first PR workflow run (run 43242951273) exposed:
+- PostgreSQL migration failure at `2026_11_03_000023` while adding the self-referencing `clothing_categories.parent_id` FK. The FK was moved to a separate schema operation after table creation; this change is awaiting a fresh PostgreSQL run.
+- Frontend TypeScript unused-state errors in the disabled bank-loan screen and dashboard refresh indicators. The unused state/setters were removed; this change is awaiting a fresh build.
+
+The next workflow run (43243446906) was started before those follow-up commits were present in its merge ref, so its failures do not validate the follow-up fixes. A new run against the latest PR head is required.
+
 ### Still not closed
 
 - No PHP test suite, PostgreSQL migration run, frontend typecheck/build, browser test, or concurrency test has been executed in this environment. All of the above changes still require CI/runtime validation.

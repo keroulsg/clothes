@@ -649,6 +649,6 @@ class SecurityRegressionDay3Test extends TestCase
         $response = $this->actingAs($this->userA, 'sanctum')
             ->postJson("/api/v1/sales/orders/{$salesOrder->id}/reserve");
 
-        $response->assertStatus(422)->assertJsonPath('error', 'InvalidSalesOrder');
+        $response->assertStatus(422)->assertJsonPath('error', 'StockReservationError');
     }
 }

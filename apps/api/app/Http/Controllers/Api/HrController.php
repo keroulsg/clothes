@@ -499,7 +499,10 @@ class HrController extends Controller
     public function adjustments(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = EmployeeAdjustment::where('tenant_id', $tenantId)->with(['employee', 'approver']);
+        $query = $this->scopeToAssignedEmployeeBranches(
+            EmployeeAdjustment::where('tenant_id', $tenantId),
+            $request
+        )->with(['employee', 'approver']);
 
         if ($request->has('employee_id')) {
             $query->where('employee_id', $request->query('employee_id'));
@@ -537,6 +540,9 @@ class HrController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+
         $userId = $request->user()?->id ?? 'system';
         $adj = $this->payrollService->createEmployeeAdjustment($validated, $userId);
 
@@ -548,6 +554,8 @@ class HrController extends Controller
 
     public function approveAdjustment(Request $request, string $id): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(EmployeeAdjustment::where('tenant_id', $tenantId), $request)->findOrFail($id);
         $userId = $request->user()?->id ?? 'system';
         $adj = $this->payrollService->approveEmployeeAdjustment($id, $userId);
 
@@ -563,6 +571,8 @@ class HrController extends Controller
             'reason' => 'required|string|max:255',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(EmployeeAdjustment::where('tenant_id', $tenantId), $request)->findOrFail($id);
         $userId = $request->user()?->id ?? 'system';
         $adj = $this->payrollService->rejectEmployeeAdjustment($id, $userId, $validated['reason']);
 
@@ -616,7 +626,7 @@ class HrController extends Controller
     public function pieceWorkLogs(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $logs = PieceWorkLog::where('tenant_id', $tenantId)
+        $logs = $this->scopeToAssignedEmployeeBranches(PieceWorkLog::where('tenant_id', $tenantId), request())
             ->with(['employee', 'productionOrder.garmentModel', 'cuttingOrder', 'pieceRate', 'cuttingBundle', 'jobOrder'])
             ->latest('created_at')
             ->paginate(25);
@@ -636,6 +646,20 @@ class HrController extends Controller
             'work_date' => 'nullable|date',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        if (!empty($validated['production_order_id'])) {
+            ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
+        }
+        if (!empty($validated['cutting_bundle_id'])) {
+            $bundleQuery = CuttingBundle::where('tenant_id', $tenantId);
+            $user = $request->user();
+            $branchIds = $user?->assignedBranchIds() ?? [];
+            if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
+                $bundleQuery->whereHas('productionOrder', fn ($q) => $q->whereIn('branch_id', $branchIds));
+            }
+            $bundleQuery->findOrFail($validated['cutting_bundle_id']);
+        }
         $log = $this->payrollService->recordPieceWork($validated);
 
         return response()->json([
@@ -646,6 +670,8 @@ class HrController extends Controller
 
     public function approvePieceWorkLog(Request $request, string $id): JsonResponse
     {
+        $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(PieceWorkLog::where('tenant_id', $tenantId), $request)->findOrFail($id);
         $userId = $request->user()?->id ?? 'system';
         $log = $this->payrollService->approvePieceWorkLog($id, $userId);
 
@@ -661,6 +687,8 @@ class HrController extends Controller
             'rejection_reason' => 'required|string|max:255',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(PieceWorkLog::where('tenant_id', $tenantId), $request)->findOrFail($id);
         $userId = $request->user()?->id ?? 'system';
         $log = $this->payrollService->rejectPieceWorkLog($id, $userId, $validated['rejection_reason']);
 
@@ -676,7 +704,11 @@ class HrController extends Controller
 
     public function defectAdjustments(Request $request): JsonResponse
     {
-        $query = QualityDefectAdjustment::with(['employee', 'productionOrder', 'cuttingBundle', 'approver', 'reporter', 'reverser'])
+        $query = $this->scopeToAssignedEmployeeBranches(
+            QualityDefectAdjustment::where('tenant_id', app('current_tenant_id')),
+            $request,
+            true
+        )->with(['employee', 'productionOrder', 'cuttingBundle', 'approver', 'reporter', 'reverser'])
             ->latest();
 
         if ($request->has('employee_id')) {
@@ -704,6 +736,9 @@ class HrController extends Controller
             'adjustment_reason' => 'required|string|max:255',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
         $adjustment = $this->payrollService->createQualityDefectAdjustment($validated, $request->user()->id);
 
         return response()->json([
@@ -725,7 +760,10 @@ class HrController extends Controller
             'approved_amount' => 'nullable|numeric|min:0',
         ]);
 
-        $adjustment = $this->payrollService->approveQualityDefectAdjustment(
+        $adjustment = $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
+
+        $this->payrollService->approveQualityDefectAdjustment(
             $id,
             $request->user()->id,
             isset($validated['approved_amount']) ? (float)$validated['approved_amount'] : null
@@ -743,7 +781,10 @@ class HrController extends Controller
             'rejection_reason' => 'required|string|max:255',
         ]);
 
-        $adjustment = $this->payrollService->rejectQualityDefectAdjustment(
+        $adjustment = $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
+
+        $this->payrollService->rejectQualityDefectAdjustment(
             $id,
             $request->user()->id,
             $validated['rejection_reason']
@@ -761,7 +802,10 @@ class HrController extends Controller
             'objection_notes' => 'required|string|max:1000',
         ]);
 
-        $adjustment = $this->payrollService->recordWorkerObjection(
+        $adjustment = $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
+
+        $this->payrollService->recordWorkerObjection(
             $id,
             $validated['objection_notes']
         );
@@ -778,7 +822,10 @@ class HrController extends Controller
             'reversal_reason' => 'required|string|max:255',
         ]);
 
-        $adjustment = $this->payrollService->reverseQualityDefectAdjustment(
+        $adjustment = $tenantId = app('current_tenant_id');
+        $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
+
+        $this->payrollService->reverseQualityDefectAdjustment(
             $id,
             $request->user()->id,
             $validated['reversal_reason']
@@ -1039,4 +1086,28 @@ class HrController extends Controller
             ],
         ]);
     }
+    /**
+     * HR adjustments, piece-work logs, and quality penalties are branch-owned
+     * through their employee and (where present) production-order relationships.
+     */
+    private function scopeToAssignedEmployeeBranches($query, Request $request, bool $alsoProductionOrder = false)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
+            return $query;
+        }
+
+        $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+        if ($alsoProductionOrder) {
+            $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+        }
+
+        return $query;
+    }
+
 }

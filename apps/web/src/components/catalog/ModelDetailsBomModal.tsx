@@ -59,12 +59,25 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     },
   ]);
   const [isSubmittingBom, setIsSubmittingBom] = useState(false);
+  const [actualVariants, setActualVariants] = useState<any[]>([]);
+  const [isLoadingVariants, setIsLoadingVariants] = useState(false);
 
   // Fetch BOM for this model when opened
   useEffect(() => {
     if (isOpen && model?.id) {
       setBomName(isAr ? `شجرة مكونات ${model.name}` : `BOM for ${model.name}`);
       fetchBoms();
+      setIsLoadingVariants(true);
+      api.models.getModel(model.id)
+        .then((response) => {
+          const variants = response?.model?.variants;
+          setActualVariants(Array.isArray(variants) ? variants : []);
+        })
+        .catch((error) => {
+          setActualVariants([]);
+          setErrorMsg(error?.message || (isAr ? 'تعذر تحميل متغيرات الموديل' : 'Failed to load model variants'));
+        })
+        .finally(() => setIsLoadingVariants(false));
     }
   }, [isOpen, model, isAr]);
 
@@ -146,22 +159,8 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     }
   };
 
-  // Mocked variants calculation if model has variants_count
-  const generatedVariants = Array.from({ length: Math.max(1, model.variants_count || 4) }).map((_, idx) => {
-    const sizes = ['2Y', '4Y', '6Y', '8Y', '10Y'];
-    const colors = isAr ? ['كحلي', 'أحمر', 'أبيض', 'رمادي'] : ['Navy', 'Red', 'White', 'Grey'];
-    const size = sizes[idx % sizes.length];
-    const color = colors[idx % colors.length];
-    return {
-      id: `var-${model.id}-${idx + 1}`,
-      size,
-      color,
-      sku: `${model.code}-${color === 'كحلي' || color === 'Navy' ? 'NVY' : color === 'أحمر' || color === 'Red' ? 'RED' : 'WHT'}-${size}`,
-      barcode: `6221${Math.floor(100000 + idx * 1111)}`,
-      wholesale_price: model.wholesale_price,
-      retail_price: model.retail_price,
-    };
-  });
+  // Display only variants persisted by the backend; never synthesize sizes, colors, SKUs, or barcodes.
+  const generatedVariants = actualVariants;
 
   return (
     <Modal
@@ -539,7 +538,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-medium">
-                  {generatedVariants.map((v) => (
+                  {isLoadingVariants ? (
+                    <tr><td colSpan={6} className="py-6 text-center text-slate-500">{isAr ? 'جارٍ تحميل المتغيرات...' : 'Loading variants...'}</td></tr>
+                  ) : generatedVariants.length === 0 ? (
+                    <tr><td colSpan={6} className="py-6 text-center text-slate-500">{isAr ? 'لا توجد متغيرات مسجلة لهذا الموديل.' : 'No persisted variants are registered for this model.'}</td></tr>
+                  ) : generatedVariants.map((v) => (
                     <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="py-3 px-4 font-mono font-bold text-slate-950 dark:text-slate-100">{v.size}</td>
                       <td className="py-3 px-4">{v.color}</td>

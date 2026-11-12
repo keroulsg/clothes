@@ -103,23 +103,7 @@ export const CuttingRequestDetailsModal: React.FC<CuttingRequestDetailsModalProp
 
   const handleDownloadAttachment = async (attachment: any) => {
     try {
-      const token = localStorage.getItem('token') || '';
-      const url = `/api/waslat-worsh/rfqs/${rfq.id}/attachments/${attachment.id}`;
-      
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        alert(errorData.message || 'فشل تحميل الملف');
-        return;
-      }
-
-      const blob = await res.blob();
+      const blob = await api.waslatWorsh.downloadRfqAttachment(rfq.id, attachment.id);
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;

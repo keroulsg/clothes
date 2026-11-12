@@ -89,8 +89,8 @@ class SubcontractingController extends Controller
                     ->orderByDesc('created_at');
             },
             'customerMaterials',
-            'materialReceipts' => function ($q) use ($request) {
-                $this->scopeRelatedJobRecords($q, $request)->with('warehouse');
+            'materialReceipts' => function ($q) {
+                $q->with('warehouse');
             },
             'deliveryNotes' => function ($q) use ($request) {
                 $this->scopeRelatedJobRecords($q, $request);
@@ -420,7 +420,7 @@ class SubcontractingController extends Controller
     public function materialReceipts(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $receipts = $this->scopeRelatedJobRecords(CustomerMaterialReceipt::where('tenant_id', $tenantId), $request)
+        $receipts = CustomerMaterialReceipt::where('tenant_id', $tenantId)
             ->with(['customer', 'warehouse', 'jobOrder'])
             ->orderBy('created_at', 'desc')
             ->get();

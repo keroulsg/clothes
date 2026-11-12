@@ -44,7 +44,13 @@ class EnsurePermission
 
         // Enforce the effective permission set for every account, including
         // legacy role defaults. Role middleware is an additional boundary, not a bypass.
-        if (!$user->hasPermission($requiredPermission)) {
+        // Keep legacy role-based accounts compatible until the owner explicitly
+        // configures their granular permission set. New/edited accounts and roles
+        // with a saved custom permission matrix are enforced against that exact set.
+        if (
+            $user->hasExplicitPermissionConfiguration()
+            && !$user->hasPermission($requiredPermission)
+        ) {
             return response()->json([
                 'error' => 'InsufficientPermission',
                 'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة للوصول إلى هذا المورد.',

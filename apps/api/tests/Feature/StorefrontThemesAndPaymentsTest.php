@@ -592,4 +592,64 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         ]);
     }
 
+
+    public function test_shipping_storefront_order_fulfills_erp_order_and_posts_stock_issue(): void
+    {
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل طلب شحن',
+            'customer_phone' => '01066666666',
+            'shipping_address' => 'مدينة نصر',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 2],
+            ],
+        ]);
+        $orderRes->assertCreated();
+
+        $storeOrderId = $orderRes->json('order.id');
+        $salesOrderId = $orderRes->json('order.sales_order_id');
+
+        $this->assertEquals(20.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(2.0, (float) $this->inventoryA->fresh()->reserved_balance);
+
+        Sanctum::actingAs($this->managerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $shipRes = $this->patchJson("/api/v1/storefront/orders/{$storeOrderId}/status", [
+            'status' => 'shipped',
+        ]);
+        $shipRes->assertOk()
+            ->assertJsonPath('order.status', 'shipped');
+
+        $this->assertEquals(18.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float) $this->inventoryA->fresh()->reserved_balance);
+        $this->assertDatabaseHas('sales_orders', [
+            'id' => $salesOrderId,
+            'tenant_id' => $this->tenantA->id,
+            'status' => 'fulfilled',
+        ]);
+        $this->assertDatabaseHas('sales_invoices', [
+            'sales_order_id' => $salesOrderId,
+            'tenant_id' => $this->tenantA->id,
+            'status' => 'issued',
+        ]);
+        $this->assertDatabaseHas('inventory_transactions', [
+            'tenant_id' => $this->tenantA->id,
+            'inventory_item_id' => $this->inventoryA->id,
+            'direction' => 'OUT',
+            'transaction_type' => 'sales_delivery',
+            'reference_type' => 'sales_orders',
+            'reference_id' => $salesOrderId,
+        ]);
+
+        // Repeating the same shipped transition must not issue stock or create another invoice.
+        $repeatShip = $this->patchJson("/api/v1/storefront/orders/{$storeOrderId}/status", [
+            'status' => 'shipped',
+        ]);
+        $repeatShip->assertOk();
+        $this->assertEquals(18.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertDatabaseCount('sales_invoices', 1);
+    }
+
 }

@@ -955,81 +955,62 @@ class AccountingService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            // ترحيل قيد اليومية التلقائي للسند إذا توفرت حسابات الربط، أو تحديث الرصيد مباشرة
-            $journalPosted = false;
-            try {
-                $contraAccountId = null;
-                if ($voucher->party_type === 'customer') {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'ar_control')->id;
-                } elseif ($voucher->party_type === 'supplier') {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'ap_control')->id;
-                } elseif ($voucher->party_type === 'employee') {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'payroll_payable')->id;
-                } else {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'cogs')->id;
-                }
-
-                $lines = [];
-                if ($voucher->voucher_type === 'receipt') {
-                    // قبض: الصندوق/البنك مدين، والعميل/الطرف الآخر دائن
-                    $lines = [
-                        [
-                            'account_id' => $account->id,
-                            'debit' => $amount,
-                            'credit' => 0,
-                            'description' => "قبض نقدي/بنكي بسند رقم {$voucher->voucher_number}",
-                        ],
-                        [
-                            'account_id' => $contraAccountId,
-                            'debit' => 0,
-                            'credit' => $amount,
-                            'description' => "سداد لحساب الطرف: {$voucher->party_name}",
-                            'party_type' => $voucher->party_type,
-                            'party_id' => $voucher->party_id,
-                        ],
-                    ];
-                } else {
-                    // صرف: المورد/المستحق مدين، والصندوق/البنك دائن
-                    $lines = [
-                        [
-                            'account_id' => $contraAccountId,
-                            'debit' => $amount,
-                            'credit' => 0,
-                            'description' => "صرف لحساب الطرف: {$voucher->party_name}",
-                            'party_type' => $voucher->party_type,
-                            'party_id' => $voucher->party_id,
-                        ],
-                        [
-                            'account_id' => $account->id,
-                            'debit' => 0,
-                            'credit' => $amount,
-                            'description' => "صرف نقدي/بنكي بسند رقم {$voucher->voucher_number}",
-                        ],
-                    ];
-                }
-
-                $this->createJournalEntry([
-                    'tenant_id' => $tenantId,
-                    'entry_number' => 'JE-VOUCH-' . $voucher->voucher_number,
-                    'entry_date' => $voucher->voucher_date,
-                    'reference_type' => 'payment_voucher',
-                    'reference_id' => $voucher->id,
-                    'description' => "قيد سند " . ($voucher->voucher_type === 'receipt' ? 'قبض' : 'صرف') . " رقم {$voucher->voucher_number} - {$voucher->party_name}",
-                    'lines' => $lines,
-                ]);
-                $journalPosted = true;
-            } catch (\Throwable $e) {
-                // في حال عدم اكتمال ضبط حسابات الربط المقابلة، يتم تحديث رصيد حساب السند مباشرة
+            // The voucher and its GL journal are one atomic operation. Never mutate balances outside the ledger.
+            if ($voucher->party_type === 'customer') {
+                $contraAccountId = $this->getMappedAccount($tenantId, 'ar_control')->id;
+            } elseif ($voucher->party_type === 'supplier') {
+                $contraAccountId = $this->getMappedAccount($tenantId, 'ap_control')->id;
+            } elseif ($voucher->party_type === 'employee') {
+                $contraAccountId = $this->getMappedAccount($tenantId, 'payroll_payable')->id;
+            } else {
+                throw new InvalidArgumentException('يجب تحديد حساب مقابل صحيح لسند الطرف الآخر قبل الترحيل.');
             }
 
-            if (!$journalPosted) {
-                if ($voucher->voucher_type === 'receipt') {
-                    $account->current_balance += $amount;
-                } else {
-                    $account->current_balance -= $amount;
-                }
-                $account->save();
+            if ($voucher->voucher_type === 'receipt') {
+                $lines = [
+                    [
+                        'account_id' => $account->id,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "قبض نقدي/بنكي بسند رقم {$voucher->voucher_number}",
+                    ],
+                    [
+                        'account_id' => $contraAccountId,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "سداد لحساب الطرف: {$voucher->party_name}",
+                        'party_type' => $voucher->party_type,
+                        'party_id' => $voucher->party_id,
+                    ],
+                ];
+            } else {
+                $lines = [
+                    [
+                        'account_id' => $contraAccountId,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "صرف لحساب الطرف: {$voucher->party_name}",
+                        'party_type' => $voucher->party_type,
+                        'party_id' => $voucher->party_id,
+                    ],
+                    [
+                        'account_id' => $account->id,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "صرف نقدي/بنكي بسند رقم {$voucher->voucher_number}",
+                    ],
+                ];
             }
+
+            $this->createJournalEntry([
+                'tenant_id' => $tenantId,
+                'entry_number' => 'JE-VOUCH-' . $voucher->voucher_number,
+                'entry_date' => $voucher->voucher_date,
+                'reference_type' => 'payment_voucher',
+                'reference_id' => $voucher->id,
+                'description' => "قيد سند " . ($voucher->voucher_type === 'receipt' ? 'قبض' : 'صرف') . " رقم {$voucher->voucher_number} - {$voucher->party_name}",
+                'lines' => $lines,
+            ]);
 
             return $voucher->load('account');
         });

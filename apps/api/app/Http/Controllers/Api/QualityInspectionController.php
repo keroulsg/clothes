@@ -26,9 +26,7 @@ class QualityInspectionController extends Controller
         $user = $request->user();
         if ($user && $user->role !== 'company_owner') {
             $branchIds = $user->assignedBranchIds();
-            if ($user->hasExplicitPermissionConfiguration() || !empty($branchIds)) {
-                $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
-            }
+            $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
         }
 
         if ($request->has('production_order_id')) {
@@ -76,8 +74,7 @@ class QualityInspectionController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         if ($enforceBranchScope && !in_array($prodOrder->branch_id, $assignedBranchIds, true)) {
             return response()->json([
                 'success' => false,

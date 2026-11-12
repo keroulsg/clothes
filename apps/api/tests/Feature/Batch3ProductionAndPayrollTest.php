@@ -854,7 +854,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
                 'period_end' => '2026-11-07',
             ]);
 
-        $blockedGenRes->assertStatus(500); // InvalidArgumentException thrown
+        $blockedGenRes->assertStatus(422)->assertJsonPath('error', 'PayrollPeriodLocked');
     }
 
     /**

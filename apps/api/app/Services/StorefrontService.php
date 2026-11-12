@@ -493,6 +493,7 @@ class StorefrontService
             $subtotal = 0;
             $orderItemsData = [];
             $inventoryItemsMap = [];
+            $requestedQuantitiesByVariant = [];
             $warehouse = Warehouse::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
                 ->where('is_active', true)
@@ -531,10 +532,20 @@ class StorefrontService
                 $reservedBalance = $invItem ? (float)($invItem->reserved_balance ?? 0) : 0.0;
                 $availableStock = max(0, $currentBalance - $reservedBalance);
 
-                if ($availableStock < $qty) {
-                    throw new InvalidArgumentException("الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر للبيع: " . (int)$availableStock);
+                // Aggregate repeated cart lines for the same variant before checking stock.
+                // Otherwise two individually-valid lines could reserve more than the available quantity.
+                $requestedForVariant = ($requestedQuantitiesByVariant[$variant->id] ?? 0) + $qty;
+
+                if ($availableStock < $requestedForVariant) {
+                    throw new InvalidArgumentException(
+                        "الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر للبيع: "
+                        . (int) $availableStock
+                        . "، إجمالي الكمية المطلوبة: "
+                        . (int) $requestedForVariant
+                    );
                 }
 
+                $requestedQuantitiesByVariant[$variant->id] = $requestedForVariant;
                 $inventoryItemsMap[$variant->id] = $invItem;
 
                 if ($variant->product && $variant->product->status !== 'active') {

@@ -98,7 +98,7 @@ class BundleController extends Controller
         if (!empty($validated['employee_id'])) {
             $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
             $bundleBranchId = $this->resolveBundleBranchId($bundle);
-            if ($bundleBranchId && $employee->branch_id !== $bundleBranchId) {
+            if (!$bundleBranchId || !$employee->branch_id || $employee->branch_id !== $bundleBranchId) {
                 return response()->json([
                     'success' => false,
                     'error' => 'BranchMismatch',
@@ -231,8 +231,14 @@ class BundleController extends Controller
     {
         $bundle->loadMissing(['productionOrder', 'cuttingOrder.warehouse']);
 
-        return $bundle->productionOrder?->branch_id
-            ?? $bundle->cuttingOrder?->warehouse?->branch_id;
+        $productionBranchId = $bundle->productionOrder?->branch_id;
+        $warehouseBranchId = $bundle->cuttingOrder?->warehouse?->branch_id;
+
+        if ($productionBranchId && $warehouseBranchId && $productionBranchId !== $warehouseBranchId) {
+            return null;
+        }
+
+        return $productionBranchId ?? $warehouseBranchId;
     }
 
 }

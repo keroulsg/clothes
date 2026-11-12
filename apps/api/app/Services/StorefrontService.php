@@ -465,7 +465,8 @@ class StorefrontService
             $paymentMethod = $data['payment_method'] ?? 'cod';
             $paymentAllowed = match ($paymentMethod) {
                 'cod' => (bool) $storeSettings->allow_cod,
-                'card_mock' => (bool) $storeSettings->allow_card_payment,
+                // Card checkout is unavailable until a real, verified payment gateway is integrated.
+                'card_mock' => false,
                 'instapay' => (bool) $storeSettings->allow_instapay && (bool) $storeSettings->instapay_account_verified,
                 default => false,
             };

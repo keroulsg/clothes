@@ -45,7 +45,7 @@ class SupplierInvoiceController extends Controller
         $validated = $request->validate([
             'invoice_number' => 'required|string|max:100',
             'purchase_order_id' => 'required|exists:purchase_orders,id',
-            'goods_receipt_note_id' => 'nullable|exists:goods_receipt_notes,id',
+            'goods_receipt_note_id' => 'required|uuid|exists:goods_receipt_notes,id',
             'invoice_date' => 'nullable|date',
             'due_date' => 'nullable|date',
             'subtotal' => 'required|numeric|min:0.01',
@@ -72,13 +72,18 @@ class SupplierInvoiceController extends Controller
             ], 422);
         }
 
-        $statusCode = $invoice->wasRecentlyCreated ? 201 : 200;
+        $statusCode = !$invoice->is_posted
+            ? 202
+            : ($invoice->wasRecentlyCreated ? 201 : 200);
 
         return response()->json([
-            'message' => $invoice->wasRecentlyCreated
-                ? 'تم مطابقة فاتورة المورد وترحيل الالتزام المالي بنجاح.'
-                : 'تم استرجاع فاتورة المورد المسجلة مسبقاً (Replay Idempotency).',
+            'message' => !$invoice->is_posted
+                ? 'تم حفظ الفاتورة للمراجعة؛ لم يتم ترحيلها أو إثبات التزام على المورد بسبب فرق المطابقة.'
+                : ($invoice->wasRecentlyCreated
+                    ? 'تمت المطابقة الثلاثية وترحيل فاتورة المورد محاسبياً بنجاح.'
+                    : 'تم استرجاع فاتورة المورد المسجلة مسبقاً (Replay Idempotency).'),
             'is_duplicate' => !$invoice->wasRecentlyCreated,
+            'is_posted' => (bool) $invoice->is_posted,
             'supplier_invoice' => $invoice,
         ], $statusCode);
     }

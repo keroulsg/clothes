@@ -183,7 +183,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
     setUserPhone(user.phone || '');
     setUserPassword('');
     setUserRole(user.role);
-    setUserPermissions(user.permissions && user.permissions.length > 0 ? user.permissions : user.effective_permissions || []);
+    setUserPermissions(user.permissions_mode === 'custom' ? (user.permissions || []) : (user.effective_permissions || []));
     setUserIsActive(Boolean(user.is_active));
     setIsUserModalOpen(true);
   };

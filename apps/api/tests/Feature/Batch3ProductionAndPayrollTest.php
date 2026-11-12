@@ -419,6 +419,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         $prodOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-CMT-01',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -487,6 +488,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         $dummyProd = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-PRD-DUMMY',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -726,6 +728,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         $prodOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-DEFECT-01',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -879,6 +882,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // إنشاء أمر إنتاج في الشركة A
         $orderA = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-ISO-A',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),

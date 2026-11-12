@@ -1005,7 +1005,7 @@ class TenantController extends Controller
 
             return array_merge($r, [
                 'permissions' => $currentPerms,
-                'is_customized' => !empty($customRoles[$key]),
+                'is_customized' => array_key_exists($key, $customRoles) && is_array($customRoles[$key]),
                 'users_count' => $assignedUsers->count(),
                 'users' => $assignedUsers,
             ]);
@@ -1032,9 +1032,22 @@ class TenantController extends Controller
             ], 422);
         }
 
+        $assignableRoles = [
+            'production_manager', 'production_engineer', 'inventory_custodian',
+            'warehouse', 'storekeeper', 'warehouse_manager', 'accountant',
+            'financial_accountant', 'quality_controller', 'qc', 'sales_rep',
+            'worker', 'operator',
+        ];
+        if (!in_array($roleKey, $assignableRoles, true)) {
+            return response()->json([
+                'error' => 'UnknownRole',
+                'message' => 'الدور المطلوب غير معتمد داخل المصنع.',
+            ], 404);
+        }
+
         $validated = $request->validate([
             'permissions' => 'required|array',
-            'permissions.*' => 'string',
+            'permissions.*' => ['string', Rule::in(User::getAllPermissionKeys())],
         ]);
 
         $settings = $tenant->settings ?? [];

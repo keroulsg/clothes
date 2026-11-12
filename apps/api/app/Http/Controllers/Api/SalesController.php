@@ -945,7 +945,9 @@ class SalesController extends Controller
      */
     public function barcodeLookup(string $barcode): JsonResponse
     {
-        $item = $this->salesService->barcodeLookup($barcode);
+        $user = request()->user();
+        $branchIds = $user && $user->role !== 'company_owner' ? $user->assignedBranchIds() : null;
+        $item = $this->salesService->barcodeLookup($barcode, $branchIds);
 
         if (!$item) {
             return response()->json([

@@ -24,6 +24,13 @@ class EnsurePermission
             ], 401);
         }
 
+        if ($user->role === 'platform_admin') {
+            return response()->json([
+                'error' => 'UnauthorizedRole',
+                'message' => 'مشرف المنصة لا يملك صلاحيات تشغيلية داخل حسابات المصانع.',
+            ], 403);
+        }
+
         if ($user->role === 'company_owner') {
             return $next($request);
         }

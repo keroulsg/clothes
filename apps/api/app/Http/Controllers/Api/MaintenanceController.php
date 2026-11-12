@@ -48,7 +48,7 @@ class MaintenanceController extends Controller
             && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
-            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 404);
         }
         if ($enforceBranchScope) {
             if (!$branchId && count($assignedBranchIds) === 1) {
@@ -193,7 +193,7 @@ class MaintenanceController extends Controller
         if (!empty($validated['warehouse_id'])) {
             $warehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$warehouse) {
-                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
             }
             if ($enforceBranchScope && !in_array($warehouse->branch_id, $assignedBranchIds, true)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إضافة قطع غيار إلى مخزن تابع لفرع غير معيّن لحسابك.'], 403);

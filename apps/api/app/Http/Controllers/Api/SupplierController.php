@@ -463,6 +463,9 @@ class SupplierController extends Controller
         $checkPaid = (float) $payments->where('voucher_type', 'payment')->whereIn('payment_method', ['check', 'cheque'])->sum('amount');
         $discountsTotal = (float) $payments->where('voucher_type', 'discount')->sum('amount');
         $actualPaymentsTotal = (float) $payments->where('voucher_type', 'payment')->sum('amount');
+        $totalPaid = $hasPaymentVouchers
+            ? $actualPaymentsTotal
+            : (float) $invoices->sum('paid_amount');
 
         // توزيع المدفوعات على الفواتير لتحديد الفواتير المسددة بالكامل والتي عليها دفعات
         $explicitPaidSum = (float) $invoices->sum('paid_amount');
@@ -499,7 +502,7 @@ class SupplierController extends Controller
         });
 
         $totalInvoiced = (float) $invoices->sum('total_amount');
-        $netPayable = max(0, round($totalInvoiced - $actualPaymentsTotal - $discountsTotal, 2));
+        $netPayable = max(0, round($totalInvoiced - $totalPaid - $discountsTotal, 2));
 
         $fullyPaidCount = $computedInvoices->where('payment_status', 'paid')->count();
         $partiallyPaidCount = $computedInvoices->where('payment_status', 'partially_paid')->count();
@@ -511,8 +514,8 @@ class SupplierController extends Controller
                 'total_pos_count' => $purchaseOrders->count(),
                 'total_po_value' => round($purchaseOrders->sum('total_amount'), 2),
                 'total_invoiced' => round($totalInvoiced, 2),
-                'total_paid' => round($actualPaymentsTotal, 2),
-                'total_actual_paid' => round($actualPaymentsTotal, 2),
+                'total_paid' => round($totalPaid, 2),
+                'total_actual_paid' => round($totalPaid, 2),
                 'total_discounts' => round($discountsTotal, 2),
                 'closing_balance' => $netPayable,
                 'total_transactions' => $ledgerLines->count(),

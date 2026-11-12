@@ -124,6 +124,36 @@ class SalesController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $assignedBranchIds = $user->assignedBranchIds();
+            if (empty($assignedBranchIds)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب تعيين حسابك إلى فرع قبل إنشاء أوامر البيع.'], 403);
+            }
+
+            if (empty($validated['warehouse_id'])) {
+                if (count($assignedBranchIds) !== 1) {
+                    return response()->json(['error' => 'WarehouseRequired', 'message' => 'اختر مخزنًا من أحد الفروع المعيّنة لحسابك.'], 422);
+                }
+                $defaultWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                    ->where('branch_id', $assignedBranchIds[0])
+                    ->where('type', 'finished_goods')
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->first();
+                if (!$defaultWarehouse) {
+                    return response()->json(['error' => 'WarehouseNotFound', 'message' => 'لا يوجد مخزن منتجات تامة نشط في الفرع المعيّن لحسابك.'], 422);
+                }
+                $validated['warehouse_id'] = $defaultWarehouse->id;
+            } else {
+                $selectedWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                    ->find($validated['warehouse_id']);
+                if (!$selectedWarehouse || !in_array($selectedWarehouse->branch_id, $assignedBranchIds, true)) {
+                    return response()->json(['error' => 'BranchAccessDenied', 'message' => 'المخزن المحدد لا يتبع فرعًا معيّنًا لحسابك.'], 403);
+                }
+            }
+        }
+
         $order = $this->salesService->createSalesOrder($validated);
 
         return response()->json([
@@ -229,6 +259,7 @@ class SalesController extends Controller
         $validated = $request->validate([
             'customer_name' => 'nullable|string|max:255',
             'pos_session_id' => 'nullable|uuid',
+            'warehouse_id' => 'nullable|uuid',
             'payment_method' => 'required|string|in:cash,card,bank_transfer',
             'items' => 'required|array|min:1',
             'items.*.variant_id' => 'required|uuid',
@@ -237,6 +268,45 @@ class SalesController extends Controller
             'items.*.tax_rate' => 'nullable|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
         ]);
+
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $assignedBranchIds = $user->assignedBranchIds();
+            if (empty($assignedBranchIds)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب تعيين حسابك إلى فرع قبل تنفيذ مبيعات نقطة البيع.'], 403);
+            }
+
+            if (empty($validated['warehouse_id'])) {
+                if (count($assignedBranchIds) !== 1) {
+                    return response()->json(['error' => 'WarehouseRequired', 'message' => 'اختر مخزن نقطة البيع التابع لأحد فروعك المعيّنة.'], 422);
+                }
+                $posWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                    ->where('branch_id', $assignedBranchIds[0])
+                    ->where('type', 'finished_goods')
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->first();
+            } else {
+                $posWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                    ->where('id', $validated['warehouse_id'])
+                    ->where('is_active', true)
+                    ->first();
+            }
+
+            if (!$posWarehouse || !in_array($posWarehouse->branch_id, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'مخزن نقطة البيع غير تابع لفرع معيّن لحسابك.'], 403);
+            }
+            $validated['warehouse_id'] = $posWarehouse->id;
+
+            if (!empty($validated['pos_session_id'])) {
+                $session = PosSession::where('tenant_id', app('current_tenant_id'))
+                    ->where('id', $validated['pos_session_id'])
+                    ->first();
+                if (!$session || $session->branch_id !== $posWarehouse->branch_id) {
+                    return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب أن تتبع جلسة الكاشير والمخزن نفس الفرع.'], 422);
+                }
+            }
+        }
 
         $invoice = $this->salesService->processPosSale($validated);
 

@@ -177,6 +177,12 @@ class RoleRoutingAndLogoutAcceptanceTest extends TestCase
         ]);
         $acctToken = $acctLogin->json('access_token');
 
+        // Accounting access is tenant-wide: grant the accountant every current tenant branch.
+        // The endpoint intentionally denies partial branch coverage.
+        $this->accountant->branches()->sync(
+            Branch::where('tenant_id', $this->tenant->id)->pluck('id')->all()
+        );
+
         // Accountant can read accounting accounts
         $acctAccountsRes = $this->withHeader('Authorization', 'Bearer ' . $acctToken)
             ->getJson('/api/v1/accounting/accounts');

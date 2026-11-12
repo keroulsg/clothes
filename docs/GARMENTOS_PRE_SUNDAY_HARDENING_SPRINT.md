@@ -80,9 +80,9 @@ The owner approved **Strict Stock**:
 
 | Workstream | Status |
 |---|---|
-| Strict Stock decision | Approved |
+| Strict Stock decision | Approved |\n| Synthetic stock increments in sales | Removed from reservation, POS, and delivery/fulfillment paths |\n| Reservation accounting | Added transactional release and mismatch guards; requires tests |\n| Inventory ledger negative-stock override | Disabled; requires regression tests |
 | Isolated repair branch | Created |
-| Source fixes | Not yet committed |
-| Regression tests | Not yet run |
+| Strict-stock source changes | Committed to isolated branch; awaiting regression tests |
+| Regression tests | Not yet run; required before merge |
 | PostgreSQL runtime verification | Pending |
 | Production deployment | Not authorized |

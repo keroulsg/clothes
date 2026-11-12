@@ -134,6 +134,7 @@ class PhaseACurrentSystemAcceptanceTest extends TestCase
             'is_store_enabled' => true,
             'allow_cod' => true,
             'allow_instapay' => true,
+            'instapay_account_verified' => true,
             'instapay_account_name' => 'Alpha Apparel Bank Account',
             'instapay_handle' => 'alpha@instapay',
             'instapay_instructions' => 'يرجى التحويل إلى المعرف أعلاه وإدخال رقم العملية للتأكيد.',

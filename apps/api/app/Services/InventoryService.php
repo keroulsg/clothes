@@ -96,8 +96,9 @@ class InventoryService
                 $balanceBefore = (float) $item->current_balance;
 
                 if ($direction === 'OUT') {
-                    if ($balanceBefore < $quantity && !$warehouse->allow_negative_stock) {
-                        throw new Exception("رصيد الصنف [{$item->name}] في المخزن غير كافٍ. المتاح: [{$balanceBefore}] {$item->unit_of_measure}، المطلوب صرفه: [{$quantity}].");
+                    // Strict Stock is invariant: warehouse settings cannot authorize negative inventory.
+                    if ($balanceBefore < $quantity) {
+                        throw new InvalidArgumentException("رصيد الصنف [{$item->name}] غير كافٍ. الرصيد الفعلي: [{$balanceBefore}] {$item->unit_of_measure}، المطلوب صرفه: [{$quantity}].");
                     }
                     $balanceAfter = $balanceBefore - $quantity;
                 } else {

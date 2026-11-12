@@ -395,6 +395,7 @@ class SalesService
                         'reference_type' => 'sales_orders',
                         'reference_id' => $order->id,
                         'idempotency_key' => 'SO-DELIV-' . $order->id . '-' . $item->id,
+                    'consume_reserved' => true,
                     ]);
                 }
 
@@ -1984,6 +1985,7 @@ class SalesService
                         'reference_id' => $voucher->id,
                         'entry_date' => $voucher->voucher_date ? $voucher->voucher_date->toDateString() : now()->toDateString(),
                         'lines' => $lines,
+                    'consume_reserved' => true,
                     ]);
                 } catch (\Throwable) {
                     // فشل غير مانع إذا كانت الحسابات تجريبية

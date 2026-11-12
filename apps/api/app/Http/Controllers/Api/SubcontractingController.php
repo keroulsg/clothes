@@ -985,14 +985,39 @@ class SubcontractingController extends Controller
         }
 
         $branchIds = $user->assignedBranchIds();
-        return $query->where(function ($branchQuery) use ($branchIds, $request) {
-            $branchQuery
-                ->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request))
-                ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
-                ->orWhereHas('bundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
-                ->orWhereHas('bundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
-                ->orWhereHas('assignedEmployee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
-        });
+
+        // At least one ownership anchor must exist in an assigned branch, and
+        // every other populated anchor must agree. OR-only scoping can leak a
+        // mixed-branch operation to users assigned to just one of its branches.
+        return $query
+            ->where(function ($branchQuery) use ($branchIds, $request) {
+                $branchQuery
+                    ->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request))
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('bundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('bundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('assignedEmployee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds, $request) {
+                $branchQuery->whereDoesntHave('jobOrder')
+                    ->orWhereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('productionOrder')
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('bundle.productionOrder')
+                    ->orWhereHas('bundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('bundle.cuttingOrder.warehouse')
+                    ->orWhereHas('bundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('assignedEmployee')
+                    ->orWhereHas('assignedEmployee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+            });
     }
 
 }

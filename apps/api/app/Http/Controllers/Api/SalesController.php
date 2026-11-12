@@ -725,10 +725,12 @@ class SalesController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
+        if (!$this->canAccessSalesOrderBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            ;
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         if (!empty($validated['warehouse_id'])) {
             $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$deliveryWarehouse) {
@@ -772,6 +774,10 @@ class SalesController extends Controller
         $validated = $request->validate([
             'reason' => 'required|string|max:500',
         ]);
+
+        if (!$this->canAccessDeliveryNoteBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
 
         try {
             $deliveryNote = $this->salesService->cancelDeliveryNote($id, $validated['reason']);
@@ -942,6 +948,14 @@ class SalesController extends Controller
     {
         return $this->scopeWarehouseBranchRecords(
             SalesReturn::where('tenant_id', app('current_tenant_id')),
+            'warehouse'
+        )->where('id', $id)->exists();
+    }
+
+    private function canAccessDeliveryNoteBranch(string $id): bool
+    {
+        return $this->scopeWarehouseBranchRecords(
+            SalesDeliveryNote::where('tenant_id', app('current_tenant_id')),
             'warehouse'
         )->where('id', $id)->exists();
     }

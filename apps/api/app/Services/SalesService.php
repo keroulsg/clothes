@@ -250,48 +250,33 @@ class SalesService
                 throw new InvalidArgumentException("لا يمكن حجز مخزون لأمر بيع بحالة {$order->status}");
             }
 
-            foreach ($order->items as $item) {
-                // البحث عن الصنف المخزني التام المرتبط بالمتغير في المخزن المحدد
-                $inventoryQuery = InventoryItem::where('tenant_id', $tenantId)
-                    ->where('variant_id', $item->variant_id)
-                    ->where('is_customer_owned', false); // أمان: حظر حجز أمانات العملاء للبيع التجاري
+            if (!$order->warehouse_id) {
+                $warehouse = Warehouse::where('tenant_id', $tenantId)
+                    ->where('type', 'finished_goods')
+                    ->orderBy('id')
+                    ->first()
+                    ?? Warehouse::where('tenant_id', $tenantId)->orderBy('id')->first();
 
-                if ($order->warehouse_id) {
-                    $inventoryQuery->where('warehouse_id', $order->warehouse_id);
+                if (!$warehouse) {
+                    throw new InvalidArgumentException('يجب تحديد مخزن صالح قبل حجز المخزون.');
                 }
 
-                $inventoryItem = $inventoryQuery->lockForUpdate()->first();
+                $order->warehouse_id = $warehouse->id;
+                $order->save();
+            }
 
-                // توفير الصنف في مخزن المنتج التام تلقائياً إذا لم يكن مضافاً مسبقاً
+            foreach ($order->items as $item) {
+                $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
+                    ->where('variant_id', $item->variant_id)
+                    ->where('warehouse_id', $order->warehouse_id)
+                    ->where('is_customer_owned', false)
+                    ->lockForUpdate()
+                    ->first();
+
                 if (!$inventoryItem) {
-                    $whId = $order->warehouse_id;
-                    if (!$whId) {
-                        $fgWarehouse = Warehouse::where('tenant_id', $tenantId)
-                            ->where('warehouse_type', 'finished_goods')
-                            ->first() ?? Warehouse::where('tenant_id', $tenantId)->first();
-                        $whId = $fgWarehouse?->id;
-                    }
-
-                    $variant = ProductVariant::with(['garmentModel', 'size', 'color'])->find($item->variant_id);
-                    $productName = $variant
-                        ? (($variant->garmentModel?->name ?? 'موديل ملابس') . ' - ' . ($variant->size?->name ?? 'M') . ' / ' . ($variant->color?->name ?? 'أساسي'))
-                        : 'منتج تام جاهز للتسليم';
-
-                    $inventoryItem = InventoryItem::create([
-                        'tenant_id' => $tenantId,
-                        'warehouse_id' => $whId,
-                        'variant_id' => $item->variant_id,
-                        'item_type' => 'finished_goods',
-                        'code' => $variant?->sku ?? ('SKU-' . strtoupper(substr(uniqid(), -6))),
-                        'name' => $productName,
-                        'barcode' => $variant?->barcode ?? ('BAR-' . rand(100000, 999999)),
-                        'unit_of_measure' => 'piece',
-                        'current_balance' => 0,
-                        'reserved_balance' => 0,
-                        'average_cost' => $item->unit_price ?? 0,
-                        'is_customer_owned' => false,
-                        'is_active' => true,
-                    ]);
+                    throw new InvalidArgumentException(
+                        "لا يوجد سجل مخزني للصنف [{$item->variant_id}] في المخزن المحدد. سجّل الاستلام أو الإنتاج أولاً."
+                    );
                 }
 
                 $needed = (float) $item->ordered_quantity - (float) $item->reserved_quantity;

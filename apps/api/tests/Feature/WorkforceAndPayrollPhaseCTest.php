@@ -345,8 +345,8 @@ class WorkforceAndPayrollPhaseCTest extends TestCase
         ]);
 
         $payroll = $this->payrollService->generatePayroll($this->tenantA->id, '2026-10', '2026-10-01', '2026-10-31', $this->accountantA->id);
-        $this->payrollService->approvePayroll($payroll->id, $this->tenantA->id, $this->ownerA->id);
-        $this->payrollService->finalizePayroll($payroll->id, $this->tenantA->id, $this->ownerA->id);
+        $this->payrollService->approvePayroll($payroll->id, $this->ownerA->id);
+        $this->payrollService->finalizePayroll($payroll->id, $this->ownerA->id);
 
         $this->assertEquals('finalized', $payroll->fresh()->status);
         $originalNet = (float) $payroll->fresh()->total_net;

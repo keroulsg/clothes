@@ -1516,7 +1516,9 @@ class AuthAndRoleAuthorizationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data');
 
-        $this->assertSame(1, PurchaseOrder::where('tenant_id', $this->tenant->id)->count());
+        $this->getJson('/api/v1/purchase-orders')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
 
         $this->postJson('/api/v1/branches', [
             'name' => 'فرع ممنوع',

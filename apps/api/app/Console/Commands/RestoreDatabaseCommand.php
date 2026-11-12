@@ -44,10 +44,27 @@ class RestoreDatabaseCommand extends Command
             return Command::FAILURE;
         }
 
-        $manifest = json_decode(file_get_contents($manifestPath), true);
-        $dumpPath = dirname($manifestPath) . '/' . $manifest['dump_file'];
+        $manifestContents = file_get_contents($manifestPath);
+        $manifest = $manifestContents === false ? null : json_decode($manifestContents, true);
+        if (
+            !is_array($manifest)
+            || !isset($manifest['backup_id'], $manifest['dump_file'], $manifest['sha256'], $manifest['database_driver'], $manifest['file_size_bytes'])
+            || !is_string($manifest['backup_id'])
+            || !is_string($manifest['dump_file'])
+            || basename($manifest['dump_file']) !== $manifest['dump_file']
+            || !is_string($manifest['sha256'])
+            || !preg_match('/^[a-f0-9]{64}$/i', $manifest['sha256'])
+            || !is_int($manifest['file_size_bytes'])
+            || $manifest['file_size_bytes'] <= 0
+            || !in_array($manifest['database_driver'], ['sqlite', 'pgsql'], true)
+        ) {
+            $this->error('Invalid or unsafe backup manifest; refusing restore.');
+            return Command::FAILURE;
+        }
 
-        if (!file_exists($dumpPath)) {
+        $dumpPath = dirname($manifestPath) . DIRECTORY_SEPARATOR . $manifest['dump_file'];
+
+        if (!file_exists($dumpPath) || !is_file($dumpPath)) {
             $this->error("Dump file not found: {$dumpPath}");
             return Command::FAILURE;
         }
@@ -55,8 +72,13 @@ class RestoreDatabaseCommand extends Command
         $this->info("==> [DISASTER RECOVERY] Validating Backup: {$manifest['backup_id']}");
 
         // Step 1: Pre-restore Checksum Verification
+        $actualSize = filesize($dumpPath);
+        if ($actualSize === false || $actualSize !== $manifest['file_size_bytes']) {
+            $this->error('CRITICAL: Backup file size does not match its manifest.');
+            return Command::FAILURE;
+        }
         $actualSha = hash_file('sha256', $dumpPath);
-        if (!hash_equals($manifest['sha256'], $actualSha)) {
+        if (!is_string($actualSha) || !hash_equals($manifest['sha256'], $actualSha)) {
             $this->error("CRITICAL: Checksum verification failed before restore!");
             return Command::FAILURE;
         }
@@ -78,7 +100,11 @@ class RestoreDatabaseCommand extends Command
         // Hard safety boundary: --force must NEVER permit overwriting the active database.
         // A restore is only allowed into a separately named/path-isolated target.
         $currentDb = config("database.connections.{$driver}.database");
-        if ($targetDb === $currentDb) {
+        $sameRestoreTarget = $targetDb === $currentDb;
+        if ($driver === 'sqlite' && is_string($currentDb) && $currentDb !== ':memory:' && file_exists($targetDb) && file_exists($currentDb)) {
+            $sameRestoreTarget = realpath($targetDb) !== false && realpath($targetDb) === realpath($currentDb);
+        }
+        if ($sameRestoreTarget) {
             $this->error("CRITICAL SAFETY BLOCK: Restore target matches the active database [{$currentDb}]. Choose a separate isolated target; --force cannot bypass this protection.");
             return Command::FAILURE;
         }

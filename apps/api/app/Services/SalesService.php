@@ -194,7 +194,7 @@ class SalesService
                 'customer_id' => $customerId,
                 'customer_name' => $data['customer_name'],
                 'quotation_id' => $data['quotation_id'] ?? null,
-                'warehouse_id' => $data['warehouse_id'] ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id') ?? Warehouse::where('tenant_id', $tenantId)->value('id'),
+                'warehouse_id' => $data['warehouse_id'] ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->where('is_active', true)->orderBy('id')->value('id'),
                 'order_type' => $data['order_type'] ?? 'wholesale',
                 'status' => $data['status'] ?? 'confirmed',
                 'payment_status' => 'unpaid',
@@ -253,9 +253,9 @@ class SalesService
             if (!$order->warehouse_id) {
                 $warehouse = Warehouse::where('tenant_id', $tenantId)
                     ->where('type', 'finished_goods')
+                    ->where('is_active', true)
                     ->orderBy('id')
-                    ->first()
-                    ?? Warehouse::where('tenant_id', $tenantId)->orderBy('id')->first();
+                    ->first();
 
                 if (!$warehouse) {
                     throw new InvalidArgumentException('يجب تحديد مخزن صالح قبل حجز المخزون.');
@@ -1582,13 +1582,13 @@ class SalesService
 
             $warehouseId = $data['warehouse_id'] ?? $order->warehouse_id;
             if (!$warehouseId) {
-                $wh = Warehouse::where('tenant_id', $tenantId)->first();
-                $warehouseId = $wh?->id;
+                throw new InvalidArgumentException("يجب تحديد مستودع البضاعة التامة قبل إصدار إذن التسليم.");
             }
 
-            if (!$warehouseId) {
-                throw new InvalidArgumentException("يجب تحديد مستودع الصرف لتسليم أمر البيع");
-            }
+            Warehouse::where('tenant_id', $tenantId)
+                ->where('id', $warehouseId)
+                ->where('is_active', true)
+                ->firstOrFail();
 
             $deliveryNumber = $data['delivery_number'] ?? ('DN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
 
@@ -1651,14 +1651,6 @@ class SalesService
                     ->first();
 
                 if (!$invItem) {
-                    $invItem = InventoryItem::where('tenant_id', $tenantId)
-                        ->where('variant_id', $orderItem->variant_id)
-                        ->where('is_customer_owned', false)
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                if (!$invItem) {
                     throw new InvalidArgumentException("لا يوجد سجل مخزني للصنف المطلوب تسليمه [{$orderItem->variant_id}].");
                 }
 
@@ -1670,6 +1662,18 @@ class SalesService
                     throw new InvalidArgumentException(
                         "المخزون المتاح غير كافٍ لتسليم الصنف [{$invItem->name}]. المتاح بعد حماية حجوزات الطلبات الأخرى: [{$availableForThisOrder}]، المطلوب: [{$qtyToDeliver}]."
                     );
+                }
+
+                // Atomically reserve any unreserved part of this delivery before consuming it.
+                $reservationToAdd = max(0, $qtyToDeliver - $lineReserved);
+                if ($reservationToAdd > 0) {
+                    $totalReserved += $reservationToAdd;
+                    $lineReserved += $reservationToAdd;
+                    $invItem->reserved_balance = $totalReserved;
+                    $invItem->save();
+
+                    $orderItem->reserved_quantity = $lineReserved;
+                    $orderItem->save();
                 }
 
                 $unitCost = (float)($invItem->average_cost ?? 0);

@@ -135,7 +135,7 @@ class EnsureRole
             return $isRead ? 'sales.view' : 'sales.create';
         }
         if (in_array($root, ['warehouses', 'warehouse-types'], true)) {
-            return $isRead ? 'inventory.view' : 'inventory.dispatch';
+            return $isRead ? 'inventory.view' : 'admin.settings';
         }
         if ($root === 'inventory') {
             if ($isRead) {
@@ -145,6 +145,9 @@ class EnsureRole
                 return strtolower((string) $request->input('transaction_type')) === 'goods_receipt'
                     ? 'inventory.receive'
                     : 'inventory.dispatch';
+            }
+            if (str_contains($path, 'items') || str_contains($path, 'units')) {
+                return 'inventory.manage';
             }
             return str_contains($path, 'receive') || str_contains($path, 'receipt')
                 ? 'inventory.receive'

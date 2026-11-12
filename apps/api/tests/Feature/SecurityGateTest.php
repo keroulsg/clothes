@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Color;
 use App\Models\GarmentModel;
 use App\Models\GoodsReceiptNote;
+use App\Models\GoodsReceiptNoteItem;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\ProductionOrder;

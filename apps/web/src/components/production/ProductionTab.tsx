@@ -234,25 +234,32 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
       (order as any).total_cut_quantity ??
       order.cut_quantity ??
       (order as any).total_planned_quantity ??
-      180
+      0
     );
 
-    const updated: ProductionOrder = {
-      ...order,
-      status: 'completed' as const,
-      completed_quantity: cutQty,
-      total_completed_quantity: cutQty,
-      actual_completion_date: new Date().toISOString().split('T')[0],
-    };
+    if (!Number.isFinite(cutQty) || cutQty <= 0) {
+      window.alert(isAr
+        ? 'لا يمكن إكمال أمر الإنتاج دون كمية إنتاج فعلية مسجلة.'
+        : 'Cannot complete an order without a recorded production quantity.');
+      return;
+    }
 
     try {
       await api.production.completeProductionOrder(order.id);
-    } catch (e) {
-      console.warn('API error completing order:', e);
-    }
 
-    if (onProductionOrderUpdated) {
-      onProductionOrderUpdated(updated);
+      const updated: ProductionOrder = {
+        ...order,
+        status: 'completed' as const,
+        completed_quantity: cutQty,
+        total_completed_quantity: cutQty,
+        actual_completion_date: new Date().toISOString().split('T')[0],
+      };
+
+      onProductionOrderUpdated?.(updated);
+    } catch (error: any) {
+      window.alert(error?.message || (isAr
+        ? 'فشل اعتماد إتمام أمر الإنتاج. لم يتم تغيير الحالة.'
+        : 'Production completion failed. The order status was not changed.'));
     }
   };
 

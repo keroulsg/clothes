@@ -1559,7 +1559,7 @@ class AccountingService
 
         $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
 
-        $inventoryItems = \\App\\Models\\InventoryItem::withoutGlobalScopes()
+        $inventoryItems = \App\Models\InventoryItem::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->get(['item_type', 'average_cost', 'current_balance']);
 

@@ -502,6 +502,9 @@ class StorefrontController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $submission = \App\Models\PaymentSubmission::where('tenant_id', $tenantId)->findOrFail($submissionId);
+        if (!$submission->store_order_id) {
+            return response()->json(['error' => 'StoreOrderNotFound'], 404);
+        }
         $this->scopeStoreOrdersToAssignedBranches(
             StoreOrder::where('tenant_id', $tenantId),
             $request

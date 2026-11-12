@@ -35,6 +35,17 @@ class EnsurePermission
         }
 
         $requiredPermission = (new EnsureRole())->permissionForRequest($request);
+        if ($requiredPermission === 'hr.payroll') {
+            $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $user->tenant_id)->pluck('id')->all();
+            $assignedBranchIds = $user->assignedBranchIds();
+            if (!empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $assignedBranchIds) !== []) {
+                return response()->json([
+                    'error' => 'InsufficientBranchCoverage',
+                    'message' => 'عرض مسيرات الرواتب يتطلب تعيين الحساب إلى جميع فروع المنشأة.',
+                ], 403);
+            }
+        }
+
         if ($requiredPermission === null) {
             return response()->json([
                 'error' => 'PermissionNotConfigured',

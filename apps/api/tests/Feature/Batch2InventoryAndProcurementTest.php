@@ -584,6 +584,17 @@ class Batch2InventoryAndProcurementTest extends TestCase
         $this->assertEquals('OUT', $adjTx->direction);
         $this->assertEquals(100.0, (float)$adjTx->balance_before);
         $this->assertEquals(92.0, (float)$adjTx->balance_after);
+
+        // A repeated approval must be harmless: no second stock movement is created.
+        $repeatApproval = $this->withHeader('Authorization', 'Bearer ' . $this->tokenAccountantA)
+            ->postJson("/api/v1/inventory/counts/{$countId}/approve");
+        $repeatApproval->assertStatus(200);
+        $this->assertEquals(92.0, (float) $itemA->fresh()->current_balance);
+        $this->assertSame(1, DB::table('inventory_transactions')
+            ->where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'stock_count')
+            ->where('reference_id', (string) $countItemId)
+            ->count());
     }
 
     /**

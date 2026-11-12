@@ -200,7 +200,12 @@ class AccountingService
             }])
             ->first();
 
-        if ($mapping && $mapping->account && $mapping->account->is_active) {
+        if (
+            $mapping
+            && $mapping->account
+            && $mapping->account->is_active
+            && $mapping->account->is_postable
+        ) {
             return $mapping->account;
         }
 
@@ -266,6 +271,7 @@ class AccountingService
                 ->where('tenant_id', $tenantId)
                 ->where('code', $fallbackCodes[$mappingKey])
                 ->where('is_active', true)
+                ->where('is_postable', true)
                 ->first();
 
             if ($account) {

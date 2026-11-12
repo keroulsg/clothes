@@ -624,6 +624,17 @@ class Batch5AccountingAndCostingTest extends TestCase
         $subcontractingService->receiveExternalOperation($externalOperation->id, $firstBatch);
         // Retrying the exact same batch must not add quantities or cost again.
         $subcontractingService->receiveExternalOperation($externalOperation->id, $firstBatch);
+        try {
+            $subcontractingService->receiveExternalOperation($externalOperation->id, [
+                'received_accepted_quantity' => 41,
+                'received_rejected_quantity' => 0,
+                'scrap_quantity' => 0,
+                'idempotency_key' => 'EXT-RECEIPT-TEST-01',
+            ]);
+            $this->fail('Reusing a subcontract receipt key with changed quantities must be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('تعارض Idempotency', $exception->getMessage());
+        }
 
         $subcontractingService->receiveExternalOperation($externalOperation->id, [
             'received_accepted_quantity' => 60,

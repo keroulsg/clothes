@@ -266,7 +266,7 @@ class AccountingService
             'accessories_inventory' => '1213',
         ];
 
-        if (!$mapping && isset($fallbackCodes[$mappingKey])) {
+        if ((!$mapping || !$mapping->account || !$mapping->account->is_active || !$mapping->account->is_postable) && isset($fallbackCodes[$mappingKey])) {
             $accountQuery = fn () => ChartOfAccount::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
                 ->where('code', $fallbackCodes[$mappingKey])
@@ -304,7 +304,7 @@ class AccountingService
             }
 
             if ($account) {
-                TenantAccountMapping::withoutGlobalScopes()->firstOrCreate(
+                TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
                     ['tenant_id' => $tenantId, 'mapping_key' => $mappingKey],
                     ['account_id' => $account->id]
                 );

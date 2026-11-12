@@ -133,7 +133,9 @@ class SubscriptionController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $validated = $request->validate([
-            'tenant_id' => 'nullable|uuid|exists:tenants,id',
+            'tenant_id' => $request->user()?->role === 'platform_admin'
+                ? 'required|uuid|exists:tenants,id'
+                : 'nullable|uuid|exists:tenants,id',
             'meter_key' => 'required|string',
             'temporary_limit' => 'required|integer|min:1',
             'reason' => 'required|string|max:500',

@@ -1652,7 +1652,7 @@ class AccountingService
         $glWip = $glAccounts->has('1220') ? (float) $glAccounts->get('1220')->current_balance : 0;
         $glFinished = $glAccounts->has('1230') ? (float) $glAccounts->get('1230')->current_balance : 0;
 
-        $inventoryItems = \\App\\Models\\InventoryItem::withoutGlobalScopes()
+        $inventoryItems = \App\Models\InventoryItem::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->get(['item_type', 'average_cost', 'current_balance']);
 

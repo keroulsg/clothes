@@ -31,7 +31,7 @@ return new class extends Migration
             $table->string('payment_rejection_reason', 255)->nullable()->after('payment_reviewed_at');
             $table->boolean('inventory_synced')->default(false)->after('total_amount');
 
-            $table->foreign('payment_reviewed_by')->references('id')->on('users')->onDelete('set null');
+            // Legacy UUID reviewer column retained for backward compatibility; use payment_reviewed_by_user_id.
         });
     }
 

@@ -733,18 +733,26 @@ class InventoryController extends Controller
 
         $tenantId = app('current_tenant_id');
 
-        // التحقق الصارم من ملكية الصنف للشركة الحالية ومنع التسلل بين الشركات
-        $itemQuery = InventoryItem::where('tenant_id', $tenantId);
-        if ($request->user() && $request->user()->role !== 'company_owner') {
-            $branchIds = $request->user()->assignedBranchIds();
-            $itemQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
-        }
-        $item = $itemQuery->find($validated['inventory_item_id']);
+        // Validate tenant ownership first, then enforce the assigned branch against the
+        // concrete warehouse. Keeping these checks separate preserves the correct denial
+        // reason for unauthorized roles and avoids ambiguous relationship-scope behavior.
+        $item = InventoryItem::where('tenant_id', $tenantId)->find($validated['inventory_item_id']);
         if (!$item) {
             return response()->json([
                 'error' => 'CrossTenantAccessDenied',
                 'message' => 'أمان: لا يمكن تسجيل حركة مخزنية لصنف غير تابع لشركتك.',
             ], 403);
+        }
+
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $warehouse = Warehouse::where('tenant_id', $tenantId)->find($item->warehouse_id);
+            if (!$warehouse || !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
+                return response()->json([
+                    'error' => 'BranchAccessDenied',
+                    'message' => 'أمان: لا يمكنك الوصول إلى مخزن تابع لفرع غير معيّن لحسابك.',
+                ], 403);
+            }
         }
 
         // استخراج مفتاح عدم التكرار من الـ Header أو الـ Body

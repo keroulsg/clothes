@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PosSession;
+use App\Models\CreditNote;
 use App\Models\Quotation;
 use App\Models\SalesInvoice;
 use App\Models\SalesDeliveryNote;
@@ -896,8 +897,20 @@ class SalesController extends Controller
      */
     public function creditNotes(): JsonResponse
     {
-        $notes = $this->salesService->getCreditNotes();
-        return response()->json($notes);
+        $tenantId = app('current_tenant_id');
+        $user = request()->user();
+        $notesQuery = CreditNote::where('tenant_id', $tenantId)
+            ->with(['customer', 'salesInvoice', 'salesReturn']);
+
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $notesQuery->where(function ($query) use ($branchIds) {
+                $query->whereHas('salesReturn.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('salesInvoice.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            });
+        }
+
+        return response()->json($notesQuery->latest()->paginate(20));
     }
 
     /**

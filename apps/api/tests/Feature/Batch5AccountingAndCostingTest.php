@@ -7,6 +7,8 @@ use App\Models\CostCenter;
 use App\Models\Customer;
 use App\Models\FinancialAccount;
 use App\Models\FinancialAccountTransfer;
+use App\Models\ExternalOperation;
+use App\Models\ExternalOperationReceipt;
 use App\Models\FiscalPeriod;
 use App\Models\FiscalYear;
 use App\Models\GarmentModel;
@@ -25,6 +27,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\AccountingService;
 use App\Services\FinancialReportService;
+use App\Services\SubcontractingService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -586,6 +589,54 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->assertEquals(0, (float)$cmtCost->direct_materials_cost);
         $this->assertEquals(2000, (float)$cmtCost->direct_labor_cost);
         $this->assertEquals(2200, (float)$cmtCost->total_cost);
+
+        // Subcontracting is recognized by returned receipt batches, not by dispatch commitments.
+        $externalOperation = ExternalOperation::create([
+            'tenant_id' => $this->tenantA->id,
+            'operation_number' => 'EXT-CMT-RECEIPTS-01',
+            'production_order_id' => $cmtOrder->id,
+            'subcontractor_name' => 'مقاول اختبار',
+            'operation_type' => 'printing',
+            'sent_quantity' => 100,
+            'received_accepted_quantity' => 0,
+            'received_rejected_quantity' => 0,
+            'scrap_quantity' => 0,
+            'unit_rate' => 5,
+            'total_cost' => 0,
+            'status' => 'dispatched',
+            'idempotency_key' => 'EXT-DISPATCH-TEST-01',
+        ]);
+
+        $subcontractingService = app(SubcontractingService::class);
+        $firstBatch = [
+            'received_accepted_quantity' => 40,
+            'received_rejected_quantity' => 0,
+            'scrap_quantity' => 0,
+            'idempotency_key' => 'EXT-RECEIPT-TEST-01',
+        ];
+        $subcontractingService->receiveExternalOperation($externalOperation->id, $firstBatch);
+        // Retrying the exact same batch must not add quantities or cost again.
+        $subcontractingService->receiveExternalOperation($externalOperation->id, $firstBatch);
+
+        $subcontractingService->receiveExternalOperation($externalOperation->id, [
+            'received_accepted_quantity' => 60,
+            'received_rejected_quantity' => 0,
+            'scrap_quantity' => 0,
+            'idempotency_key' => 'EXT-RECEIPT-TEST-02',
+        ]);
+
+        $externalOperation->refresh();
+        $this->assertSame(100, (int) $externalOperation->received_accepted_quantity);
+        $this->assertSame('completed', $externalOperation->status);
+        $this->assertEquals(500, (float) $externalOperation->total_cost);
+        $this->assertSame(2, ExternalOperationReceipt::where('external_operation_id', $externalOperation->id)->count());
+
+        $cmtCostWithSubcontract = $this->accountingService->calculateProductionCost($cmtOrder->id, [
+            'direct_labor_cost' => 2000,
+            'applied_overhead_rate' => 0.10,
+        ]);
+        $this->assertEquals(500, (float) $cmtCostWithSubcontract->subcontracted_services_cost);
+        $this->assertEquals(2700, (float) $cmtCostWithSubcontract->total_cost);
     }
 
     /**

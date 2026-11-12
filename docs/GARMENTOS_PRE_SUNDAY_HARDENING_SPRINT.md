@@ -208,3 +208,28 @@ This section records additional source changes made after the preceding CI evide
 - CI run 43264279894 on commit 204a6e9476ee97e73fbddf0098ee7b5c391ffe9f: PostgreSQL migrations and concurrency integration passed; full backend suite **533 passed, 3,305 assertions**; frontend TypeScript and Vite build passed. This run includes the regression test for reversing the original cutting issue cost after the item's average cost changes.
 - CI run 43264617247 on commit 964408b81ba60b65039998feb8cd3d460d3e36a0: PostgreSQL migrations and concurrency integration passed; full backend suite **533 passed, 3,308 assertions**; frontend TypeScript and Vite build passed.
 - CI evidence above is isolated-branch verification only. No merge, production migration, deployment, or production data modification was performed.
+
+
+### Phase 1 Closure Evidence — WIP, Production Cost, Partial QC Receipts (2026-11-12)
+
+This addendum supersedes the earlier WIP/finished-goods items above for the isolated hardening branch. It records code and regression evidence only; it is not a production deployment or a live-factory acceptance sign-off.
+
+- **Finished goods / partial QC:** every accepted final-QC inspection is the idempotency reference for its own stock receipt and GL journal. Distinct partial receipts for one production order post distinct balanced journals; replaying the same inspection returns the existing journal, and changing the replayed cost/quantity is rejected.
+- **Finished-goods valuation:** accepted quantity is capitalized at the approved production cost-sheet unit cost. The moving average of the finished-goods inventory item is no longer used as the source of production cost.
+- **WIP double-count prevention:** cutting-order material issues already debit WIP and credit raw-material inventory. The approved cost-sheet posting now adds conversion cost only (direct labor, subcontracting, and allocated overhead); it does not debit WIP for materials a second time. Approval fails closed when the cost sheet's material cost does not reconcile to the net posted cutting issue/reversal journals.
+- **WIP reconciliation:** the WIP subledger valuation is calculated from posted cutting issues less cutting reversals, plus approved conversion-cost postings, less individually posted QC finished-goods receipts. Legacy order-level finished-goods journals are not mistaken for new inspection-level receipts.
+- **External operations:** dispatch creates no incurred subcontract cost. Each actual returned batch has its own idempotency key and receipt-ledger row; accepted/rejected/scrap quantities and actual batch cost accumulate under a locked external-operation row. Costing reads the receipt ledger rather than dispatch estimates. The additive migration backfills legacy returned quantities at the recorded unit rate and clears dispatch-only estimates with no returned quantity.
+- **Subcontract GL treatment:** accepted subcontract service cost is capitalized against the outwork expense account 5030, not credited to Accounts Payable a second time.
+- **Regression coverage:** multi-batch and duplicate subcontract receipts, changed-key-payload rejection, two distinct partial QC receipts on one order, duplicate QC posting, approved-cost valuation, conversion-only WIP capitalization, and WIP/GL reconciliation.
+
+**Verified CI evidence**
+- Branch: `garmentos/pre-sunday-hardening`
+- Commit: `51f11f64be00c5efabe640229395a8b9aa301413`
+- GitHub Actions run: `43298595579`
+- PostgreSQL migrations: PASS
+- PostgreSQL concurrency integration: PASS — 5 tests, 24 assertions
+- Complete backend suite: PASS — 533 tests, 3,350 assertions
+- Frontend TypeScript and Vite build: PASS — 2,279 modules transformed
+- No merge, production migration, deployment, or production data change was performed.
+
+**Phase 1 disposition:** code-level WIP/production-cost/partial-receipt fixes and the listed CI gates are closed on this commit. A real factory walkthrough remains required for operational acceptance (purchase/receipt → cutting issue → production labor/subcontract returns → approved cost sheet → multiple QC receipts → inventory and GL reconciliation). Do not claim the complete SaaS or production launch ready until that walkthrough and the other independent launch gates are completed.

@@ -549,6 +549,12 @@ class Batch5AccountingAndCostingTest extends TestCase
             ->postJson("/api/v1/accounting/cost-sheets/{$sheet['id']}/approve");
         $approveResp->assertStatus(200);
         $this->assertEquals('approved', $approveResp->json('cost_sheet.status'));
+        $wipCapitalization = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'production_cost_sheet')
+            ->where('reference_key', $sheet['id'])
+            ->firstOrFail();
+        $this->assertEquals(4800.0, (float) $wipCapitalization->total_debit);
+        $this->assertEquals(4800.0, (float) $wipCapitalization->total_credit);
 
         // Bulk costing must not force-recalculate or mutate an approved historical cost sheet.
         $bulkResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)

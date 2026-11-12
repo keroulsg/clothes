@@ -15,6 +15,7 @@ use App\Models\FiscalYear;
 use App\Models\ExternalOperation;
 use App\Models\ExternalOperationReceipt;
 use App\Models\GarmentModel;
+use App\Models\InventoryTransaction;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\PaymentVoucher;

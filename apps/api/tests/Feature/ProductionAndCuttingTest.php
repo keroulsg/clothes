@@ -10,6 +10,7 @@ use App\Models\CuttingBundle;
 use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
+use App\Models\InventoryTransaction;
 use App\Models\ProductionOrder;
 use App\Models\ProductionStage;
 use App\Models\QualityInspection;
@@ -17,6 +18,7 @@ use App\Models\Size;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\AccountingService;
 use App\Services\InventoryService;
 use App\Services\ProductionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -289,6 +291,23 @@ class ProductionAndCuttingTest extends TestCase
 
         $cutRes->assertStatus(201);
         $cutOrderId = $cutRes->json('data.id');
+
+        // The stock issue must point to the cutting document and retain its real unit cost.
+        $materialIssue = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order')
+            ->where('reference_id', $cutOrderId)
+            ->where('direction', 'OUT')
+            ->firstOrFail();
+        $this->assertEquals(105.0, (float) $materialIssue->quantity);
+        $this->assertEquals((float) $this->fabricItemA->average_cost, (float) $materialIssue->unit_cost);
+
+        // Actual WIP material cost must be reproducible from the immutable inventory subledger.
+        app()->instance('current_tenant_id', $this->tenantA->id);
+        $costSheet = app(AccountingService::class)->calculateProductionCost($orderId);
+        $this->assertEquals(
+            round(105.0 * (float) $this->fabricItemA->average_cost, 4),
+            (float) $costSheet->direct_materials_cost
+        );
 
         // التحقق من خصم القماش من المخزن الفعلي عبر InventoryService
         $this->fabricItemA->refresh();

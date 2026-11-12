@@ -100,7 +100,11 @@ class EnsureRole
         $isRead = in_array($method, ['GET', 'HEAD'], true);
 
         if ($root === 'tenant') {
-            if (str_starts_with($path, 'tenant/users') || str_starts_with($path, 'tenant/roles')) {
+            if (
+                str_starts_with($path, 'tenant/users')
+                || str_starts_with($path, 'tenant/roles')
+                || str_starts_with($path, 'tenant/permissions-catalog')
+            ) {
                 return 'admin.users';
             }
             if (str_starts_with($path, 'tenant/backup')) {
@@ -115,7 +119,7 @@ class EnsureRole
             if (str_starts_with($path, 'tenant/settings/tax')) {
                 return $isRead ? 'accounting.view' : 'accounting.post';
             }
-            if ($path === 'tenant/profile' && !$isRead) {
+            if ($path === 'tenant/profile') {
                 return 'admin.settings';
             }
             return null;

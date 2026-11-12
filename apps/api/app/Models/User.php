@@ -100,6 +100,7 @@ class User extends Authenticatable
                     ['key' => 'sales.view', 'name_ar' => 'عرض فواتير ومردودات البيع', 'name_en' => 'View Sales Invoices'],
                     ['key' => 'sales.create', 'name_ar' => 'إصدار أوامر وفواتير البيع للعملاء', 'name_en' => 'Issue Sales Invoices'],
                     ['key' => 'sales.discount', 'name_ar' => 'منح خصومات تجارية للعملاء', 'name_en' => 'Grant Customer Discounts'],
+                    ['key' => 'sales.payments.view', 'name_ar' => 'عرض سندات قبض العملاء', 'name_en' => 'View Customer Payment Receipts'],
                 ],
             ],
             [
@@ -210,9 +211,9 @@ class User extends Authenticatable
             case 'warehouse_manager':
                 return ['inventory.view', 'inventory.manage', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'branches.view', 'procurement.view', 'procurement.create'];
             case 'accountant':
-                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.manage', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
+                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.manage', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
             case 'financial_accountant':
-                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
+                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
             case 'quality_controller':
             case 'qc':
                 return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'branches.view', 'inventory.view'];

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BillOfMaterial;
+use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
@@ -1378,6 +1379,88 @@ class AuthAndRoleAuthorizationTest extends TestCase
         $this->postJson('/api/v1/accounting/journal-entries', [])
             ->assertStatus(403)
             ->assertJsonPath('error', 'InsufficientPermission');
+    }
+
+    public function test_staff_branch_assignment_scopes_branch_warehouse_and_inventory_visibility(): void
+    {
+        $branchA = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'فرع أ',
+            'code' => 'BR-AUTH-A',
+            'type' => 'factory',
+            'is_main' => false,
+            'is_active' => true,
+        ]);
+        $branchB = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'فرع ب',
+            'code' => 'BR-AUTH-B',
+            'type' => 'outlet',
+            'is_main' => false,
+            'is_active' => true,
+        ]);
+
+        $this->productionManagerUser->branches()->sync([$branchA->id]);
+
+        $warehouseA = Warehouse::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'branch_id' => $branchA->id,
+            'name' => 'مخزن الفرع أ',
+            'code' => 'WH-BR-A',
+            'type' => 'fabric',
+            'allow_negative_stock' => false,
+        ]);
+        $warehouseB = Warehouse::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'branch_id' => $branchB->id,
+            'name' => 'مخزن الفرع ب',
+            'code' => 'WH-BR-B',
+            'type' => 'fabric',
+            'allow_negative_stock' => false,
+        ]);
+
+        InventoryItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouseA->id,
+            'item_type' => 'fabric_raw',
+            'code' => 'FAB-BR-A',
+            'name' => 'خامة الفرع أ',
+            'unit_of_measure' => 'm',
+            'current_balance' => 10,
+            'average_cost' => 1,
+        ]);
+        InventoryItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouseB->id,
+            'item_type' => 'fabric_raw',
+            'code' => 'FAB-BR-B',
+            'name' => 'خامة الفرع ب',
+            'unit_of_measure' => 'm',
+            'current_balance' => 20,
+            'average_cost' => 1,
+        ]);
+
+        Sanctum::actingAs($this->productionManagerUser);
+
+        $this->getJson('/api/v1/branches')
+            ->assertOk()
+            ->assertJsonCount(1, 'branches')
+            ->assertJsonPath('branches.0.id', $branchA->id);
+
+        $this->getJson('/api/v1/warehouses')
+            ->assertOk()
+            ->assertJsonCount(1, 'warehouses')
+            ->assertJsonPath('warehouses.0.id', $warehouseA->id);
+
+        $this->getJson('/api/v1/inventory/items')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->postJson('/api/v1/branches', [
+            'name' => 'فرع ممنوع',
+            'code' => 'BR-FORBIDDEN',
+            'type' => 'factory',
+        ])->assertStatus(403);
     }
 
 }

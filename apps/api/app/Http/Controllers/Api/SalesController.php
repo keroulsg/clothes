@@ -613,6 +613,16 @@ class SalesController extends Controller
             if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك صرف أمر بيع من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
             }
+            $salesOrder = \App\Models\SalesOrder::where('tenant_id', $tenantId)->find($id);
+            if (!$salesOrder) {
+                return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
+            }
+            if (!empty($salesOrder->warehouse_id) && $salesOrder->warehouse_id !== $deliveryWarehouse->id) {
+                $orderWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($salesOrder->warehouse_id);
+                if ($orderWarehouse && $orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
+                    return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب صرف أمر البيع من نفس فرع المخزن المحدد به.'], 422);
+                }
+            }
         }
 
         try {

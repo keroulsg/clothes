@@ -444,8 +444,11 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->count());
-        $this->assertEquals(40.0, (float)$poItem->fresh()->received_quantity);
-        $this->assertEquals(60.0, (float)$poItem->fresh()->remaining_quantity);
+        $winningGrn = GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->firstOrFail();
+        $winningAcceptedQuantity = (float) $winningGrn->items()->sum('accepted_quantity');
+        $this->assertContains($winningAcceptedQuantity, [30.0, 40.0]);
+        $this->assertEquals($winningAcceptedQuantity, (float) $poItem->fresh()->received_quantity);
+        $this->assertEquals(100.0 - $winningAcceptedQuantity, (float) $poItem->fresh()->remaining_quantity);
     }
 
     /**

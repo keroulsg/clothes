@@ -95,7 +95,7 @@ class PayrollService
                 'unit_rate' => $rate,
                 'total_amount' => $totalAmount,
                 'status' => $status,
-                'approved_by_user_id' => $status === 'approved' ? auth()->id() : null,
+                'approved_by' => $status === 'approved' ? auth()->id() : null,
                 'approved_at' => $status === 'approved' ? now() : null,
             ]);
 
@@ -118,7 +118,7 @@ class PayrollService
             }
 
             $log->status = 'approved';
-            $log->approved_by_user_id = $userId;
+            $log->approved_by = $userId;
             $log->approved_at = now();
             $log->rejection_reason = null;
             $log->save();
@@ -446,7 +446,7 @@ class PayrollService
             }
 
             $adjustment->status = 'approved';
-            $adjustment->approved_by_user_id = $approvedBy;
+            $adjustment->approved_by = $approvedBy;
             $adjustment->approved_at = now();
             $adjustment->save();
 

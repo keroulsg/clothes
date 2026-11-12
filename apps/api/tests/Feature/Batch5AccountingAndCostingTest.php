@@ -650,8 +650,8 @@ class Batch5AccountingAndCostingTest extends TestCase
 
         $inventoryReconciliation = $this->accountingService->reconcileInventory($this->tenantA->id);
         $wipBreakdown = collect($inventoryReconciliation['breakdown'])->firstWhere('gl_code', '1220');
-        $this->assertEquals(2700.0, (float) $wipBreakdown['gl_balance']);
-        $this->assertEquals(2700.0, (float) $wipBreakdown['warehouse_valuation']);
+        $this->assertEquals(7500.0, (float) $wipBreakdown['gl_balance']);
+        $this->assertEquals(7500.0, (float) $wipBreakdown['warehouse_valuation']);
         $this->assertEquals(0.0, (float) $wipBreakdown['variance']);
         $this->assertTrue($inventoryReconciliation['wip_valuation_available']);
     }

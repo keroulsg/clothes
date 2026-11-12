@@ -26,7 +26,15 @@ class QualityInspectionController extends Controller
         $user = $request->user();
         if ($user && $user->role !== 'company_owner') {
             $branchIds = $user->assignedBranchIds();
-            $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                ->where(function ($bundleQuery) use ($branchIds) {
+                    $bundleQuery->whereDoesntHave('cuttingBundle.productionOrder')
+                        ->orWhereHas('cuttingBundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($bundleQuery) use ($branchIds) {
+                    $bundleQuery->whereDoesntHave('cuttingBundle.cuttingOrder.warehouse')
+                        ->orWhereHas('cuttingBundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                });
         }
 
         if ($request->has('production_order_id')) {

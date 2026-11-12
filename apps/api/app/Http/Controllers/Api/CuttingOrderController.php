@@ -128,7 +128,7 @@ class CuttingOrderController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         if ($enforceBranchScope && (
             !$prodOrder->branch_id
             || $warehouse->branch_id !== $prodOrder->branch_id

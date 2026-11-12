@@ -931,10 +931,19 @@ class SalesController extends Controller
 
         if ($user && $user->role !== 'company_owner') {
             $branchIds = $user->assignedBranchIds();
-            $notesQuery->where(function ($query) use ($branchIds) {
-                $query->whereHas('salesReturn.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
-                    ->orWhereHas('salesInvoice.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
-            });
+            $notesQuery
+                ->where(function ($query) use ($branchIds) {
+                    $query->whereHas('salesReturn.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                        ->orWhereHas('salesInvoice.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($query) use ($branchIds) {
+                    $query->whereDoesntHave('salesReturn')
+                        ->orWhereHas('salesReturn.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($query) use ($branchIds) {
+                    $query->whereDoesntHave('salesInvoice')
+                        ->orWhereHas('salesInvoice.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                });
         }
 
         return response()->json($notesQuery->latest()->paginate(20));

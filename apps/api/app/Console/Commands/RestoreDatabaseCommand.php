@@ -75,10 +75,11 @@ class RestoreDatabaseCommand extends Command
 
         $targetDb = $this->option('target-db') ?: $defaultIsolatedTarget;
 
-        // Prevent restoring over production database
+        // Hard safety boundary: --force must NEVER permit overwriting the active database.
+        // A restore is only allowed into a separately named/path-isolated target.
         $currentDb = config("database.connections.{$driver}.database");
-        if ($targetDb === $currentDb && !$this->option('force')) {
-            $this->error("CRITICAL SAFETY BLOCK: Restoring directly over the active database [{$currentDb}] is blocked without explicit isolated target.");
+        if ($targetDb === $currentDb) {
+            $this->error("CRITICAL SAFETY BLOCK: Restore target matches the active database [{$currentDb}]. Choose a separate isolated target; --force cannot bypass this protection.");
             return Command::FAILURE;
         }
 
@@ -168,7 +169,8 @@ class RestoreDatabaseCommand extends Command
         exec($cmd, $output, $returnCode);
         putenv("PGPASSWORD");
 
-        if ($returnCode > 1) { // pg_restore returns 1 on minor warnings
+        // pg_restore exit code 1 indicates at least one restore error; never treat it as success.
+        if ($returnCode !== 0) {
             throw new \RuntimeException("pg_restore failed with exit code {$returnCode}: " . implode("\n", $output));
         }
     }
@@ -219,6 +221,10 @@ class RestoreDatabaseCommand extends Command
             $passed = false;
         }
         if ($expectedOrders !== null && $salesOrdersCount !== $expectedOrders) {
+            $passed = false;
+        }
+        $expectedJournalEntries = $expectedSnap['journal_entries_count'] ?? null;
+        if ($expectedJournalEntries !== null && $journalEntriesCount !== $expectedJournalEntries) {
             $passed = false;
         }
 

@@ -83,8 +83,16 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
                 ? `سداد فوري لفاتورة المورد ${invoiceNumber} لأمر الشراء ${purchaseOrder.po_number}`
                 : `Immediate settlement for invoice ${invoiceNumber} on PO ${purchaseOrder.po_number}`,
             });
-          } catch (payErr) {
-            console.warn('Could not auto-record payment voucher:', payErr);
+          } catch (payErr: any) {
+            // The invoice has already been created. Make the partial outcome explicit; never report the payment as successful.
+            onSuccess(res.supplier_invoice);
+            window.alert(
+              isAr
+                ? `تم حفظ فاتورة المورد بنجاح، لكن فشل تسجيل سند السداد الفوري: ${payErr?.message || 'خطأ غير معروف'}. الفاتورة ما زالت غير مسددة؛ افتح ملف المورد لإعادة محاولة السداد.`
+                : `Supplier invoice was saved, but immediate payment failed: ${payErr?.message || 'Unknown error'}. The invoice remains unpaid; open the supplier profile to retry payment.`
+            );
+            onClose();
+            return;
           }
         }
 

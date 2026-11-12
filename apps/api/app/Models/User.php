@@ -303,7 +303,10 @@ class User extends Authenticatable
 
     public function assignedBranchIds(): array
     {
-        return $this->branches()->pluck('branches.id')->all();
+        return $this->branches()
+            ->where('branches.tenant_id', $this->tenant_id)
+            ->pluck('branches.id')
+            ->all();
     }
 
     protected static function boot(): void

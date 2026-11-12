@@ -2123,20 +2123,26 @@ class SalesService
     /**
      * فحص باركود فوري للـ POS
      */
-    public function barcodeLookup(string $barcode): ?array
+    public function barcodeLookup(string $barcode, ?array $branchIds = null): ?array
     {
         $tenantId = app('current_tenant_id');
 
-        $variant = ProductVariant::where('tenant_id', $tenantId)
-            ->where('barcode', $barcode)
-            ->with(['garmentModel', 'size', 'color'])
-            ->first();
+        $variantQuery = ProductVariant::where('tenant_id', $tenantId)
+            ->where('barcode', $barcode);
+        if ($branchIds !== null) {
+            $variantQuery->whereHas('inventoryItems', fn ($itemQuery) => $itemQuery
+                ->where('tenant_id', $tenantId)
+                ->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds)));
+        }
+        $variant = $variantQuery->with(['garmentModel', 'size', 'color'])->first();
 
         if (!$variant) {
-            $invItem = InventoryItem::where('tenant_id', $tenantId)
-                ->where('barcode', $barcode)
-                ->with(['variant.garmentModel', 'variant.size', 'variant.color'])
-                ->first();
+            $itemQuery = InventoryItem::where('tenant_id', $tenantId)
+                ->where('barcode', $barcode);
+            if ($branchIds !== null) {
+                $itemQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            }
+            $invItem = $itemQuery->with(['variant.garmentModel', 'variant.size', 'variant.color'])->first();
 
             if ($invItem && $invItem->variant) {
                 $variant = $invItem->variant;
@@ -2147,9 +2153,12 @@ class SalesService
             return null;
         }
 
-        $stock = InventoryItem::where('tenant_id', $tenantId)
-            ->where('variant_id', $variant->id)
-            ->sum('current_balance');
+        $stockQuery = InventoryItem::where('tenant_id', $tenantId)
+            ->where('variant_id', $variant->id);
+        if ($branchIds !== null) {
+            $stockQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $stock = $stockQuery->sum('current_balance');
 
         return [
             'id' => $variant->id,

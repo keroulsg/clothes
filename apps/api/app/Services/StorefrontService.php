@@ -147,13 +147,11 @@ class StorefrontService
                     'font_family' => 'Cairo, sans-serif',
                     'direction' => 'rtl',
                 ],
-                'is_store_enabled' => true,
-                'allow_cod' => true,
+                // A newly provisioned storefront remains unpublished until the tenant owner configures it.
+                'is_store_enabled' => false,
+                'allow_cod' => false,
                 'allow_card_payment' => false,
-                'allow_instapay' => true,
-                'instapay_account_name' => 'GarmentOS Factory Operations',
-                'instapay_handle' => 'factory@instapay',
-                'instapay_instructions' => 'يرجى تحويل قيمة الفاتورة عبر تطبيق InstaPay إلى المعرف أعلاه، ثم إرفاق رقم العملية المرجعي لتأكيد الشحن.',
+                'allow_instapay' => false,
                 'currency' => 'EGP',
                 'direction' => 'rtl',
                 'banner_title' => 'أرقى منتجات الملابس من المصنع مباشرة',
@@ -186,6 +184,7 @@ class StorefrontService
                 $availableStock = (float) InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
                     ->where('variant_id', $variant->id)
+                    ->where('warehouse_id', $firstWarehouseId)
                     ->where('is_customer_owned', false)
                     ->sum('current_balance');
 
@@ -438,6 +437,26 @@ class StorefrontService
     public function placeStoreOrder(string $tenantId, array $data): StoreOrder
     {
         return DB::transaction(function () use ($tenantId, $data) {
+            $storeSettings = TenantStoreSetting::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$storeSettings || !$storeSettings->is_store_enabled) {
+                throw new InvalidArgumentException('المتجر الإلكتروني غير منشور أو متوقف حالياً.');
+            }
+
+            $paymentMethod = $data['payment_method'] ?? 'cod';
+            $paymentAllowed = match ($paymentMethod) {
+                'cod' => (bool) $storeSettings->allow_cod,
+                'card_mock' => (bool) $storeSettings->allow_card_payment,
+                'instapay' => (bool) $storeSettings->allow_instapay && (bool) $storeSettings->instapay_account_verified,
+                default => false,
+            };
+            if (!$paymentAllowed) {
+                throw new InvalidArgumentException('طريقة الدفع المختارة غير مفعلة أو غير معتمدة لهذا المتجر.');
+            }
+
             $items = $data['items'] ?? [];
             if (empty($items)) {
                 throw new InvalidArgumentException('يجب إضافة منتج واحد على الأقل لسلة الشراء.');
@@ -460,7 +479,20 @@ class StorefrontService
             $subtotal = 0;
             $orderItemsData = [];
             $inventoryItemsMap = [];
-            $firstWarehouseId = null;
+            $warehouse = Warehouse::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('type', 'finished_goods')
+                ->orderBy('id')
+                ->first()
+                ?? Warehouse::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->orderBy('id')
+                    ->first();
+            $firstWarehouseId = $warehouse?->id;
+
+            if (!$firstWarehouseId) {
+                throw new InvalidArgumentException('لا يوجد مخزن نشط مرتبط بهذا المتجر لاستلام الطلبات.');
+            }
 
             foreach ($items as $item) {
                 $variantId = $item['variant_id'] ?? null;
@@ -527,20 +559,9 @@ class StorefrontService
                 ];
             }
 
-            // Fallback warehouse if needed
-            if (!$firstWarehouseId) {
-                $wh = Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
-                $firstWarehouseId = $wh?->id;
-            }
-
             // Security P0: Calculate shipping authoritatively on the server. Never trust client-supplied shipping_fee!
             $shipping = $this->calculateAuthoritativeShipping($tenantId, $data['city'] ?? 'Cairo', $subtotal);
             $total = round($subtotal + $shipping, 4);
-
-            $paymentMethod = $data['payment_method'] ?? 'cod';
-            if (!in_array($paymentMethod, ['cod', 'card_mock', 'instapay'], true)) {
-                throw new InvalidArgumentException('طريقة الدفع المختارة غير مقبولة.');
-            }
 
             // Determine initial payment status
             $paymentStatus = match ($paymentMethod) {

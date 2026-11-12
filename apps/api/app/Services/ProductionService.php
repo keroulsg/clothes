@@ -12,6 +12,7 @@ use App\Models\CuttingOrder;
 use App\Models\CustomerMaterial;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
+use App\Models\InventoryTransaction;
 use App\Models\Pattern;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderItem;
@@ -466,6 +467,7 @@ class ProductionService
 
                 $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)
                     ->whereKey($fabricItemId)
+                    ->lockForUpdate()
                     ->first();
 
                 if (!$fabricItem) {
@@ -1096,32 +1098,45 @@ class ProductionService
                 throw new InvalidArgumentException('لا يمكن إلغاء أمر القص نظراً لانتقال بعض الحزم إلى مراحل تشغيل متقدمة بخطوط الإنتاج.');
             }
 
-            // استرجاع القماش المصروف إلى المخزون (Factory Owned)
+            // Reverse the exact immutable issue snapshot; current average cost may have changed since dispatch.
             if ($cuttingOrder->fabric_source === 'factory_owned' && (float)$cuttingOrder->actual_fabric_meters_used > 0 && $cuttingOrder->fabric_inventory_item_id) {
-                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)->where('id', $cuttingOrder->fabric_inventory_item_id)->first();
+                $originalIssue = InventoryTransaction::where('tenant_id', $contextTenantId)
+                    ->where('reference_type', 'cutting_order')
+                    ->where('reference_id', $cuttingOrder->id)
+                    ->where('direction', 'OUT')
+                    ->where('transaction_type', 'production_issue')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$originalIssue) {
+                    throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: حركة صرف الخامة الأصلية غير مرتبطة بسجل الأمر. يلزم إجراء مطابقة مخزنية أولاً.');
+                }
+
+                if (abs((float) $originalIssue->quantity - (float) $cuttingOrder->actual_fabric_meters_used) > 0.0001) {
+                    throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: كمية حركة الصرف الأصلية لا تطابق كمية الأمر.');
+                }
+
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $contextTenantId,
-                    'inventory_item_id' => $cuttingOrder->fabric_inventory_item_id,
-                    'warehouse_id' => $cuttingOrder->warehouse_id,
-                    'quantity' => (float) $cuttingOrder->actual_fabric_meters_used,
+                    'inventory_item_id' => $originalIssue->inventory_item_id,
+                    'warehouse_id' => $originalIssue->warehouse_id,
+                    'quantity' => (float) $originalIssue->quantity,
                     'direction' => 'IN',
                     'transaction_type' => 'cutting_reversal',
+                    'unit_cost' => (float) $originalIssue->unit_cost,
                     'reference_type' => 'cutting_order',
-                    'reference_id' => $cuttingOrder->id,
+                    'reference_id' => (string) $cuttingOrder->id,
                     'reference_number' => $cuttingOrder->cutting_order_number,
+                    'idempotency_key' => 'CUTTING-REVERSAL-' . $cuttingOrder->id,
                     'notes' => "استرجاع قماش لإلغاء أمر القص [{$cuttingOrder->cutting_order_number}]. سبب الإلغاء: {$reason}",
                 ]);
 
-                // Reverse the original WIP issue in the same transaction; never suppress ledger failures.
-                if ($fabricItem && (float)$fabricItem->average_cost > 0) {
-                    $reversalAmount = round((float)$cuttingOrder->actual_fabric_meters_used * (float)$fabricItem->average_cost, 4);
-                    app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal(
-                        $contextTenantId,
-                        $cuttingOrder,
-                        $reversalAmount,
-                        $reason
-                    );
-                }
+                app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal(
+                    $contextTenantId,
+                    $cuttingOrder,
+                    (float) $originalIssue->total_cost,
+                    $reason
+                );
             } elseif ($cuttingOrder->fabric_source === 'customer_deposit' && $cuttingOrder->customer_material_id) {
                 // استرجاع رصيد أمانة العميل
                 $custMaterial = CustomerMaterial::where('tenant_id', $contextTenantId)

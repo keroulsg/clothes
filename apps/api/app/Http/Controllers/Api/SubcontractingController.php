@@ -522,7 +522,7 @@ class SubcontractingController extends Controller
     public function externalOperations(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = $this->scopeRelatedJobRecords(ExternalOperation::where('tenant_id', $tenantId), $request)
+        $query = $this->scopeExternalOperationsToAssignedBranches(ExternalOperation::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder.customer', 'productionOrder', 'bundle', 'assignedEmployee'])
             ->orderBy('created_at', 'desc');
 
@@ -661,7 +661,7 @@ class SubcontractingController extends Controller
     public function receiveExternalOperation(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $op = $this->scopeRelatedJobRecords(ExternalOperation::where('tenant_id', $tenantId), $request)->find($id);
+        $op = $this->scopeExternalOperationsToAssignedBranches(ExternalOperation::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$op || $op->tenant_id !== $tenantId) {
             return response()->json([
@@ -964,6 +964,28 @@ class SubcontractingController extends Controller
         }
 
         return $query->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request));
+    }
+
+    private function scopeExternalOperationsToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
+            return $query;
+        }
+
+        return $query->where(function ($branchQuery) use ($branchIds, $request) {
+            $branchQuery
+                ->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request))
+                ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                ->orWhereHas('bundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                ->orWhereHas('bundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                ->orWhereHas('assignedEmployee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+        });
     }
 
 }

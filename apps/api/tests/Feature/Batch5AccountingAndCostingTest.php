@@ -240,6 +240,12 @@ class Batch5AccountingAndCostingTest extends TestCase
         $closeResp->assertStatus(200);
         $this->assertEquals('closed', $period1->fresh()->status);
 
+        // Repeating a close request must remain safe and must not change the closed state.
+        $repeatCloseResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson("/api/v1/accounting/fiscal-periods/{$period1->id}/close");
+        $repeatCloseResp->assertStatus(200);
+        $this->assertEquals('closed', $period1->fresh()->status);
+
         // محاولة ترحيل قيد في تاريخ الفترة المقفلة (2026-01-15)
         $blockedResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
             ->postJson('/api/v1/accounting/journal-entries', [
@@ -258,6 +264,14 @@ class Batch5AccountingAndCostingTest extends TestCase
                 'reason' => 'تسوية تسليمات نهاية شهر يناير بموافقة الإدارة المالية',
             ]);
         $reopenResp->assertStatus(200);
+
+        // Repeating an already-completed reopen request is idempotent.
+        $repeatReopenResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson("/api/v1/accounting/fiscal-periods/{$period1->id}/reopen", [
+                'reason' => 'طلب إعادة فتح مكرر لا يغير الحالة مرة أخرى',
+            ]);
+        $repeatReopenResp->assertStatus(200);
+        $this->assertEquals('open', $period1->fresh()->status);
 
         // الآن ينجح الترحيل في نفس التاريخ
         $successResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)

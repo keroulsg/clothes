@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TenantController extends Controller
 {
@@ -698,6 +699,7 @@ class TenantController extends Controller
                 'role' => $u->role,
                 'is_active' => (bool)$u->is_active,
                 'permissions' => $u->permissions ?? [],
+                'permissions_mode' => $u->permissions_mode ?? 'inherit',
                 'effective_permissions' => $u->getEffectivePermissions(),
                 'created_at' => $u->created_at?->format('Y-m-d H:i:s'),
             ];
@@ -724,6 +726,7 @@ class TenantController extends Controller
             'phone' => 'nullable|string|max:50',
             'role' => 'required|string|in:company_owner,production_manager,production_engineer,inventory_custodian,storekeeper,warehouse_manager,accountant,financial_accountant,quality_controller,qc,sales_rep,worker,operator',
             'permissions' => 'nullable|array',
+            'permissions.*' => ['string', Rule::in($request->input('role') === 'company_owner' ? ['*'] : User::getAllPermissionKeys())],
             'is_active' => 'boolean',
         ]);
 
@@ -740,7 +743,8 @@ class TenantController extends Controller
             'email' => $validated['email'],
             'phone' => $validated['phone'] ?? null,
             'role' => $validated['role'],
-            'permissions' => $validated['permissions'] ?? [],
+            'permissions' => $validated['permissions'] ?? null,
+            'permissions_mode' => array_key_exists('permissions', $validated) ? 'custom' : 'inherit',
             'is_active' => $validated['is_active'] ?? true,
             'password' => Hash::make($validated['password']),
         ]);
@@ -754,6 +758,7 @@ class TenantController extends Controller
                 'phone' => $user->phone,
                 'role' => $user->role,
                 'permissions' => $user->permissions ?? [],
+                'permissions_mode' => $user->permissions_mode ?? 'inherit',
                 'effective_permissions' => $user->getEffectivePermissions(),
                 'is_active' => (bool)$user->is_active,
             ],
@@ -775,6 +780,7 @@ class TenantController extends Controller
             'password' => 'nullable|string|min:6',
             'role' => 'sometimes|required|string|in:company_owner,production_manager,production_engineer,inventory_custodian,storekeeper,warehouse_manager,accountant,financial_accountant,quality_controller,qc,sales_rep,worker,operator',
             'permissions' => 'nullable|array',
+            'permissions.*' => ['string', Rule::in($request->input('role', $user->role) === 'company_owner' ? ['*'] : User::getAllPermissionKeys())],
             'is_active' => 'boolean',
         ]);
 
@@ -797,7 +803,10 @@ class TenantController extends Controller
         if (array_key_exists('phone', $validated)) $user->phone = $validated['phone'];
         if (!empty($validated['password'])) $user->password = Hash::make($validated['password']);
         if (isset($validated['role'])) $user->role = $validated['role'];
-        if (array_key_exists('permissions', $validated)) $user->permissions = $validated['permissions'];
+        if (array_key_exists('permissions', $validated)) {
+            $user->permissions = $validated['permissions'] ?? [];
+            $user->permissions_mode = 'custom';
+        }
         if (array_key_exists('is_active', $validated)) $user->is_active = $validated['is_active'];
 
         $user->save();
@@ -811,6 +820,7 @@ class TenantController extends Controller
                 'phone' => $user->phone,
                 'role' => $user->role,
                 'permissions' => $user->permissions ?? [],
+                'permissions_mode' => $user->permissions_mode ?? 'inherit',
                 'effective_permissions' => $user->getEffectivePermissions(),
                 'is_active' => (bool)$user->is_active,
             ],

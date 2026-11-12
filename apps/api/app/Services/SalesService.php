@@ -113,7 +113,6 @@ class SalesService
                 QuotationItem::create([
                     'tenant_id' => $tenantId,
                     'quotation_id' => $quotation->id,
-                'warehouse_id' => $warehouseId,
                     'variant_id' => $item['variant_id'] ?? null,
                     'description' => $item['description'] ?? 'Garment Item',
                     'quantity' => $qty,

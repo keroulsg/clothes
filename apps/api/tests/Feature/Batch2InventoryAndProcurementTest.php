@@ -585,7 +585,34 @@ class Batch2InventoryAndProcurementTest extends TestCase
         $this->assertEquals(100.0, (float)$adjTx->balance_before);
         $this->assertEquals(92.0, (float)$adjTx->balance_after);
 
-        // A repeated approval must be harmless: no second stock movement is created.
+        // The shortage must create one balanced GL entry: Dr shortage losses, Cr accessories inventory.
+        $journalEntry = DB::table('journal_entries')
+            ->where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'inventory_stock_count_adjustment')
+            ->where('reference_key', (string) $adjTx->id)
+            ->first();
+        $this->assertNotNull($journalEntry);
+        $this->assertEquals(40.0, (float) $journalEntry->total_debit);
+        $this->assertEquals(40.0, (float) $journalEntry->total_credit);
+
+        $lossAccountId = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '5040')->value('id');
+        $inventoryAccountId = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1213')->value('id');
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'tenant_id' => $this->tenantA->id,
+            'journal_entry_id' => $journalEntry->id,
+            'account_id' => $lossAccountId,
+            'debit' => 40.0,
+            'credit' => 0.0,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'tenant_id' => $this->tenantA->id,
+            'journal_entry_id' => $journalEntry->id,
+            'account_id' => $inventoryAccountId,
+            'debit' => 0.0,
+            'credit' => 40.0,
+        ]);
+
+        // A repeated approval must be harmless: no second stock movement or GL entry is created.
         $repeatApproval = $this->withHeader('Authorization', 'Bearer ' . $this->tokenAccountantA)
             ->postJson("/api/v1/inventory/counts/{$countId}/approve");
         $repeatApproval->assertStatus(200);
@@ -594,6 +621,11 @@ class Batch2InventoryAndProcurementTest extends TestCase
             ->where('tenant_id', $this->tenantA->id)
             ->where('reference_type', 'stock_count')
             ->where('reference_id', (string) $countItemId)
+            ->count());
+        $this->assertSame(1, DB::table('journal_entries')
+            ->where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'inventory_stock_count_adjustment')
+            ->where('reference_key', (string) $adjTx->id)
             ->count());
     }
 

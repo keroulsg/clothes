@@ -1974,15 +1974,22 @@ class AccountingService
     /**
      * ترحيل استلام الإنتاج التام من خط التشغيل إلى مخزن التام (من WIP إلى Finished Goods)
      */
-    public function postFinishedGoodsReceipt(string $tenantId, $order, float $totalCost, int $quantity, ?string $entryDate = null): ?JournalEntry
+    public function postFinishedGoodsReceipt(string $tenantId, $order, $receipt, float $totalCost, int $quantity, ?string $entryDate = null): ?JournalEntry
     {
-        if ($totalCost <= 0) return null;
+        if ($totalCost <= 0 || !is_object($receipt) || empty($receipt->id)) {
+            return null;
+        }
 
         $orderId = is_object($order) ? $order->id : $order;
         $orderNumber = is_object($order) ? ($order->order_number ?? $orderId) : $orderId;
+        $receiptId = (string) $receipt->id;
+        $receiptNumber = $receipt->inspection_number ?? $receiptId;
 
-        $existing = $this->findJournalEntryByReference($tenantId, 'production_receipt', $orderId);
-        if ($existing) return $existing;
+        // Idempotency is scoped to the individual accepted QC receipt, not the production order.
+        $existing = $this->findJournalEntryByReference($tenantId, 'production_receipt', $receiptId);
+        if ($existing) {
+            return $existing;
+        }
 
         $finishedAccount = $this->getMappedAccount($tenantId, 'finished_goods_inventory');
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
@@ -1992,22 +1999,22 @@ class AccountingService
                 'account_id' => $finishedAccount->id,
                 'debit' => $totalCost,
                 'credit' => 0,
-                'description' => "استلام إنتاج تام لأمر التشغيل {$orderNumber} بواقع {$quantity} قطعة",
+                'description' => "استلام إنتاج تام لمحضر الجودة {$receiptNumber} لأمر التشغيل {$orderNumber} بواقع {$quantity} قطعة",
             ],
             [
                 'account_id' => $wipAccount->id,
                 'debit' => 0,
                 'credit' => $totalCost,
-                'description' => "إقفال تكاليف التشغيل تحت التنفيذ لأمر الإنتاج {$orderNumber}",
+                'description' => "تحويل تكلفة الدفعة المقبولة من تحت التنفيذ لأمر الإنتاج {$orderNumber}",
             ]
         ];
 
         return $this->createJournalEntry([
-            'entry_number' => 'JE-FG-' . substr(md5($orderId), 0, 8),
+            'entry_number' => 'JE-FG-' . substr(md5($receiptId), 0, 12),
             'entry_date' => $entryDate ?? now()->toDateString(),
-            'description' => "استلام إنتاج تام أمر التشغيل {$orderNumber}",
+            'description' => "استلام إنتاج تام لمحضر الجودة {$receiptNumber} لأمر التشغيل {$orderNumber}",
             'reference_type' => 'production_receipt',
-            'reference_id' => $orderId,
+            'reference_id' => $receiptId,
             'lines' => $lines,
         ]);
     }

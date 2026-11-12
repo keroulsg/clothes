@@ -288,7 +288,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'show']);
         Route::put('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'update'])->middleware('role:production_manager,company_owner');
         Route::post('/production-orders/{id}/approve', [\App\Http\Controllers\Api\ProductionOrderController::class, 'approve'])->middleware('role:production_manager');
-        Route::post('/production-orders/{id}/complete', [\App\Http\Controllers\Api\ProductionOrderController::class, 'complete']);
+        Route::post('/production-orders/{id}/complete', [\App\Http\Controllers\Api\ProductionOrderController::class, 'complete'])->middleware('role:company_owner,production_manager');
         Route::post('/production-orders/{id}/cancel', [\App\Http\Controllers\Api\ProductionOrderController::class, 'cancel'])->middleware('role:production_manager,company_owner');
         Route::get('/production-orders/{id}/metrics', [\App\Http\Controllers\Api\ProductionOrderController::class, 'metrics']);
 
@@ -349,7 +349,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::get('/sales/invoices/{id}', [\App\Http\Controllers\Api\SalesController::class, 'showInvoice'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager');
         Route::post('/sales/invoices/{id}/cancel', [\App\Http\Controllers\Api\SalesController::class, 'cancelSalesInvoice'])->middleware('role:company_owner,accountant,financial_accountant');
-        Route::post('/pos/sale', [\App\Http\Controllers\Api\SalesController::class, 'posSale']);
+        Route::post('/pos/sale', [\App\Http\Controllers\Api\SalesController::class, 'posSale'])->middleware('role:company_owner,sales_rep,accountant');
         Route::get('/pos/sessions', [\App\Http\Controllers\Api\SalesController::class, 'posSessions']);
         Route::post('/pos/sessions/open', [\App\Http\Controllers\Api\SalesController::class, 'openPosSession']);
         Route::post('/pos/sessions/{id}/close', [\App\Http\Controllers\Api\SalesController::class, 'closePosSession']);
@@ -362,7 +362,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/returns', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep');
         Route::post('/sales/returns/{id}/refund', [\App\Http\Controllers\Api\SalesController::class, 'refundSalesReturn'])->middleware('role:company_owner,accountant,financial_accountant');
         Route::get('/sales/payments', [\App\Http\Controllers\Api\SalesController::class, 'payments']);
-        Route::post('/sales/payments', [\App\Http\Controllers\Api\SalesController::class, 'storePayment']);
+        Route::post('/sales/payments', [\App\Http\Controllers\Api\SalesController::class, 'storePayment'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep');
         Route::post('/sales/payments/{id}/reverse', [\App\Http\Controllers\Api\SalesController::class, 'reversePayment'])->middleware('role:company_owner,accountant,financial_accountant');
         Route::get('/sales/credit-notes', [\App\Http\Controllers\Api\SalesController::class, 'creditNotes']);
         Route::get('/sales/barcode/{barcode}', [\App\Http\Controllers\Api\SalesController::class, 'barcodeLookup']);

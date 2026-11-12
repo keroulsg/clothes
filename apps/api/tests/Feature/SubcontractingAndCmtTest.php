@@ -297,18 +297,20 @@ class SubcontractingAndCmtTest extends TestCase
         ]);
 
         $this->assertEquals('dispatched', $extOp->status);
-        $this->assertEquals(350.0, (float)$extOp->total_cost);
+        $this->assertEquals(0.0, (float)$extOp->total_cost); // Dispatch is a commitment, not incurred receipt cost.
 
         // استلام المخرجات من ورشة التطريز: 98 سليم، 2 تالف
         $receivedOp = $this->subService->receiveExternalOperation($extOp->id, [
             'received_accepted_quantity' => 98,
             'received_rejected_quantity' => 0,
             'scrap_quantity' => 2,
+            'idempotency_key' => 'EXT-RECEIPT-CMT-01',
         ]);
 
         $this->assertEquals('completed', $receivedOp->status);
         $this->assertEquals(98, $receivedOp->received_accepted_quantity);
         $this->assertEquals(2, $receivedOp->scrap_quantity);
+        $this->assertEquals(350.0, (float) $receivedOp->total_cost);
 
         // تسليم الـ 98 قطعة الجاهزة للعميل
         $delivery = $this->subService->createDeliveryNote([

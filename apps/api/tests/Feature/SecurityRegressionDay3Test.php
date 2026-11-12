@@ -603,7 +603,7 @@ class SecurityRegressionDay3Test extends TestCase
                 'period_end' => '2026-10-31',
             ]);
 
-        $response->assertStatus(500); // InvalidArgumentException thrown to block duplicate payouts
+        $response->assertStatus(422)->assertJsonPath('error', 'PayrollPeriodLocked');
     }
 
     /**

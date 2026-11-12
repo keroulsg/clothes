@@ -186,6 +186,6 @@ class RoleRoutingAndLogoutAcceptanceTest extends TestCase
         // Accountant can read accounting accounts
         $acctAccountsRes = $this->withHeader('Authorization', 'Bearer ' . $acctToken)
             ->getJson('/api/v1/accounting/accounts');
-        $acctAccountsRes->assertStatus(200);
+        $acctAccountsRes->assertStatus(200, $acctAccountsRes->getContent());
     }
 }

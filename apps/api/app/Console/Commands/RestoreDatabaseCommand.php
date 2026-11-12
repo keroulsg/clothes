@@ -138,10 +138,15 @@ class RestoreDatabaseCommand extends Command
     private function restoreSqlite(string $dumpPath, string $targetDb): void
     {
         $dir = dirname($targetDb);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0750, true);
+        if (file_exists($targetDb)) {
+            throw new \RuntimeException("Restore target already exists; refusing to overwrite existing data: {$targetDb}");
         }
-        copy($dumpPath, $targetDb);
+        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Unable to create isolated restore directory: {$dir}");
+        }
+        if (!copy($dumpPath, $targetDb)) {
+            throw new \RuntimeException("Unable to copy verified backup into isolated target: {$targetDb}");
+        }
     }
 
     private function restorePostgres(string $dumpPath, string $targetDb): void
@@ -154,8 +159,12 @@ class RestoreDatabaseCommand extends Command
 
         putenv("PGPASSWORD={$password}");
 
-        // Create target test database if not exists
-        exec(sprintf('createdb -h %s -p %s -U %s %s 2>&1', escapeshellarg($host), escapeshellarg((string)$port), escapeshellarg($username), escapeshellarg($targetDb)));
+        // Create a brand-new isolated database. Never continue against a pre-existing target.
+        exec(sprintf('createdb -h %s -p %s -U %s %s 2>&1', escapeshellarg($host), escapeshellarg((string)$port), escapeshellarg($username), escapeshellarg($targetDb)), $createOutput, $createCode);
+        if ($createCode !== 0) {
+            putenv("PGPASSWORD");
+            throw new \RuntimeException("Could not create a new isolated restore database [{$targetDb}]; the target may already exist or database creation failed: " . implode("\n", $createOutput));
+        }
 
         $cmd = sprintf(
             'pg_restore -h %s -p %s -U %s -d %s --clean --if-exists %s 2>&1',

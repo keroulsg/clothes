@@ -116,33 +116,44 @@ class StockTransferController extends Controller
     public function dispatch(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $transfer = StockTransfer::where('tenant_id', $tenantId)
-            ->with(['items.inventoryItem', 'sourceWarehouse'])
-            ->findOrFail($id);
 
-        if ($transfer->status !== 'draft') {
-            return response()->json([
-                'error' => 'InvalidTransferStatus',
-                'message' => "لا يمكن إرسال التحويل نظراً لحالته الحالية [{$transfer->status}].",
-            ], 422);
-        }
+        $transfer = DB::transaction(function () use ($id, $tenantId) {
+            $transfer = StockTransfer::where('tenant_id', $tenantId)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        DB::transaction(function () use ($transfer, $tenantId) {
+            if ($transfer->status === 'dispatched' || $transfer->status === 'received') {
+                return $transfer->fresh(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem']);
+            }
+
+            if ($transfer->status !== 'draft') {
+                abort(422, "لا يمكن إرسال التحويل بحالته الحالية [{$transfer->status}].");
+            }
+
+            $transfer->load(['items.inventoryItem', 'sourceWarehouse', 'destinationWarehouse']);
+            if ($transfer->items->isEmpty()) {
+                abort(422, 'لا يمكن إرسال تحويل مخزني بدون بنود.');
+            }
+
             foreach ($transfer->items as $transferItem) {
                 $item = $transferItem->inventoryItem;
-                $qty = (float) $transferItem->quantity;
+                if (!$item) {
+                    throw new \RuntimeException("بند التحويل [{$transferItem->id}] لا يرتبط بصنف مخزني صالح.");
+                }
 
-                // تسجيل حركة صرف نقل مخزني في المستودع المصدر
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $tenantId,
                     'inventory_item_id' => $item->id,
                     'warehouse_id' => $transfer->source_warehouse_id,
                     'transaction_type' => 'transfer_out',
                     'direction' => 'OUT',
-                    'quantity' => $qty,
-                    'unit_cost' => (float) $item->average_cost,
+                    'quantity' => (float) $transferItem->quantity,
+                    'unit_cost' => (float) $transferItem->unit_cost,
                     'reference_type' => 'stock_transfer',
+                    'reference_id' => (string) $transferItem->id,
                     'reference_number' => $transfer->transfer_number,
+                    'idempotency_key' => 'STOCK-TRANSFER-OUT-' . $transferItem->id,
                     'notes' => "تحويل مخزني صادر إلى مستودع [{$transfer->destinationWarehouse?->name}]",
                 ]);
             }
@@ -150,43 +161,58 @@ class StockTransferController extends Controller
             $transfer->status = 'dispatched';
             $transfer->dispatched_at = now();
             $transfer->save();
+
+            return $transfer->fresh(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem']);
         });
 
-        $transfer->load(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem']);
-
         return response()->json([
-            'message' => 'تم إرسال الشحنة وخصمها من المستودع المصدر (في طريقها للنقل).',
+            'message' => 'تم إرسال الشحنة وتسجيل حركات الصرف بصورة ذرية وآمنة من التكرار.',
             'transfer' => $transfer,
         ]);
     }
 
     /**
      * استلام بضاعة التحويل في المستودع الهدف (Receive -> In Destination)
-     * تضاف الكمية إلى المستودع الهدف عبر حركة transfer_in
      */
     public function receive(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $transfer = StockTransfer::where('tenant_id', $tenantId)
-            ->with(['items.inventoryItem', 'destinationWarehouse'])
-            ->findOrFail($id);
 
-        if ($transfer->status !== 'dispatched') {
-            return response()->json([
-                'error' => 'InvalidTransferStatus',
-                'message' => "لا يمكن استلام التحويل وهو ليس بحالة مشحون [dispatched].",
-            ], 422);
-        }
+        $transfer = DB::transaction(function () use ($id, $tenantId) {
+            $transfer = StockTransfer::where('tenant_id', $tenantId)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        DB::transaction(function () use ($transfer, $tenantId) {
+            if ($transfer->status === 'received') {
+                return $transfer->fresh(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem']);
+            }
+
+            if ($transfer->status !== 'dispatched') {
+                abort(422, "لا يمكن استلام التحويل بحالته الحالية [{$transfer->status}].");
+            }
+
+            $transfer->load(['items.inventoryItem', 'sourceWarehouse', 'destinationWarehouse']);
+            if ($transfer->items->isEmpty()) {
+                abort(422, 'لا يمكن استلام تحويل مخزني بدون بنود.');
+            }
+
+            // Serialize destination item creation across concurrent transfers to the same warehouse.
+            Warehouse::where('tenant_id', $tenantId)
+                ->whereKey($transfer->destination_warehouse_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             foreach ($transfer->items as $transferItem) {
                 $sourceItem = $transferItem->inventoryItem;
-                $qty = (float) $transferItem->quantity;
+                if (!$sourceItem) {
+                    throw new \RuntimeException("بند التحويل [{$transferItem->id}] لا يرتبط بصنف مصدر صالح.");
+                }
 
-                // البحث عن صنف مطابق في المستودع الهدف أو إنشاؤه
                 $destItem = InventoryItem::where('tenant_id', $tenantId)
                     ->where('warehouse_id', $transfer->destination_warehouse_id)
                     ->where('code', $sourceItem->code)
+                    ->lockForUpdate()
                     ->first();
 
                 if (!$destItem) {
@@ -201,26 +227,27 @@ class StockTransferController extends Controller
                         'unit_of_measure' => $sourceItem->unit_of_measure,
                         'reorder_level' => $sourceItem->reorder_level,
                         'current_balance' => 0.0,
-                        'average_cost' => $sourceItem->average_cost,
+                        'average_cost' => (float) $transferItem->unit_cost,
                         'technical_specs' => $sourceItem->technical_specs,
                     ]);
                 }
 
-                // تسجيل حركة استلام نقل مخزني في المستودع الهدف
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $tenantId,
                     'inventory_item_id' => $destItem->id,
                     'warehouse_id' => $transfer->destination_warehouse_id,
                     'transaction_type' => 'transfer_in',
                     'direction' => 'IN',
-                    'quantity' => $qty,
-                    'unit_cost' => (float) $sourceItem->average_cost,
+                    'quantity' => (float) $transferItem->quantity,
+                    'unit_cost' => (float) $transferItem->unit_cost,
                     'reference_type' => 'stock_transfer',
+                    'reference_id' => (string) $transferItem->id,
                     'reference_number' => $transfer->transfer_number,
+                    'idempotency_key' => 'STOCK-TRANSFER-IN-' . $transferItem->id,
                     'notes' => "تحويل مخزني وارد من مستودع [{$transfer->sourceWarehouse?->name}]",
                 ]);
 
-                $transferItem->received_quantity = $qty;
+                $transferItem->received_quantity = (float) $transferItem->quantity;
                 $transferItem->save();
             }
 
@@ -228,12 +255,12 @@ class StockTransferController extends Controller
             $transfer->received_at = now();
             $transfer->received_by = auth()->id();
             $transfer->save();
+
+            return $transfer->fresh(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem']);
         });
 
-        $transfer->load(['sourceWarehouse', 'destinationWarehouse', 'items.inventoryItem']);
-
         return response()->json([
-            'message' => 'تم استلام الشحنة وإضافتها لدفتر رصيد المستودع الهدف بنجاح.',
+            'message' => 'تم استلام الشحنة وتسجيل حركات الإضافة بصورة ذرية وآمنة من التكرار.',
             'transfer' => $transfer,
         ]);
     }

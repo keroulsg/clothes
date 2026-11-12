@@ -469,9 +469,18 @@ class SalesService
             $discount = isset($data['discount_amount']) ? (float) $data['discount_amount'] : 0.0;
             $total = max(0, round($subtotal + $taxTotal - $discount, 4));
 
-            $posWarehouseId = $data['warehouse_id']
-                ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
-                ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+            $posWarehouse = !empty($data['warehouse_id'])
+                ? Warehouse::where('tenant_id', $tenantId)->where('id', $data['warehouse_id'])->where('is_active', true)->firstOrFail()
+                : Warehouse::where('tenant_id', $tenantId)
+                    ->where('is_active', true)
+                    ->where('type', 'finished_goods')
+                    ->orderBy('id')
+                    ->first();
+
+            if (!$posWarehouse) {
+                throw new InvalidArgumentException('لا يوجد مستودع منتجات تامة نشط لنقطة البيع. اختر مستودعاً صالحاً قبل البيع.');
+            }
+            $posWarehouseId = $posWarehouse->id;
 
             $invoice = SalesInvoice::create([
                 'tenant_id' => $tenantId,
@@ -509,14 +518,6 @@ class SalesService
                     ->first();
 
                 if (!$inventoryItem) {
-                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
-                        ->where('variant_id', $item['variant_id'])
-                        ->where('is_customer_owned', false)
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                if (!$inventoryItem) {
                     throw new InvalidArgumentException(
                         "لا يوجد سجل مخزني للصنف المطلوب بيعه [{$item['variant_id']}]. سجّل الاستلام أو الإنتاج أولاً."
                     );
@@ -543,7 +544,7 @@ class SalesService
                     'unit_cost' => $inventoryItem->average_cost,
                     'reference_type' => 'sales_invoices',
                     'reference_id' => $invoice->id,
-                    'idempotency_key' => 'POS-' . $invoice->id . '-' . $inventoryItem->id . '-' . uniqid(),
+                    'idempotency_key' => 'POS-' . $invoice->id . '-' . $inventoryItem->id,
                 ]);
 
                 SalesInvoiceItem::create([

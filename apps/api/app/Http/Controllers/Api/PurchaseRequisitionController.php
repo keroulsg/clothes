@@ -22,7 +22,12 @@ class PurchaseRequisitionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $requisitions = $this->procurementService->getPurchaseRequisitions($request->all());
+        $filters = $request->all();
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $filters['branch_ids'] = $user->assignedBranchIds();
+        }
+        $requisitions = $this->procurementService->getPurchaseRequisitions($filters);
         return response()->json($requisitions);
     }
 
@@ -52,8 +57,7 @@ class PurchaseRequisitionController extends Controller
         $tenantId = app('current_tenant_id');
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
             return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 404);
@@ -85,6 +89,7 @@ class PurchaseRequisitionController extends Controller
      */
     public function show(string $id): JsonResponse
     {
+        $this->scopeRequisitionsToAssignedBranches(PurchaseRequisition::where('tenant_id', app('current_tenant_id')), request())->findOrFail($id);
         $requisition = $this->procurementService->getPurchaseRequisition($id);
         return response()->json(['data' => $requisition]);
     }
@@ -94,6 +99,8 @@ class PurchaseRequisitionController extends Controller
      */
     public function submit(string $id): JsonResponse
     {
+        $this->scopeRequisitionsToAssignedBranches(PurchaseRequisition::where('tenant_id', app('current_tenant_id')), request())->findOrFail($id);
+
         try {
             $requisition = $this->procurementService->submitPurchaseRequisition($id);
             return response()->json([
@@ -118,6 +125,8 @@ class PurchaseRequisitionController extends Controller
             'items.*.approved_quantity' => 'required|numeric|min:0',
         ]);
 
+        $this->scopeRequisitionsToAssignedBranches(PurchaseRequisition::where('tenant_id', app('current_tenant_id')), $request)->findOrFail($id);
+
         try {
             $requisition = $this->procurementService->approvePurchaseRequisition($id, $data);
             return response()->json([
@@ -138,6 +147,8 @@ class PurchaseRequisitionController extends Controller
         $request->validate([
             'reason' => 'required|string|min:3',
         ]);
+
+        $this->scopeRequisitionsToAssignedBranches(PurchaseRequisition::where('tenant_id', app('current_tenant_id')), $request)->findOrFail($id);
 
         try {
             $requisition = $this->procurementService->rejectPurchaseRequisition($id, $request->reason);
@@ -166,6 +177,28 @@ class PurchaseRequisitionController extends Controller
             'items' => 'nullable|array',
         ]);
 
+        $requisition = $this->scopeRequisitionsToAssignedBranches(
+            PurchaseRequisition::where('tenant_id', app('current_tenant_id')),
+            $request
+        )->findOrFail($id);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $warehouse = !empty($data['warehouse_id'])
+                ? Warehouse::where('tenant_id', app('current_tenant_id'))->find($data['warehouse_id'])
+                : Warehouse::where('tenant_id', app('current_tenant_id'))
+                    ->where('branch_id', $requisition->branch_id)
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->first();
+            if (!$warehouse || !$requisition->branch_id
+                || $warehouse->branch_id !== $requisition->branch_id
+                || !in_array($warehouse->branch_id, $branchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب تحويل طلب الشراء إلى مخزن تابع لنفس فرع الطلب والمعيّن لحسابك.'], 403);
+            }
+            $data['warehouse_id'] = $warehouse->id;
+        }
+
         try {
             $purchaseOrder = $this->procurementService->convertRequisitionToPurchaseOrder($id, $data);
             return response()->json([
@@ -187,6 +220,8 @@ class PurchaseRequisitionController extends Controller
             'reason' => 'required|string|min:3',
         ]);
 
+        $this->scopeRequisitionsToAssignedBranches(PurchaseRequisition::where('tenant_id', app('current_tenant_id')), $request)->findOrFail($id);
+
         try {
             $requisition = $this->procurementService->cancelPurchaseRequisition($id, $request->reason);
             return response()->json([
@@ -198,5 +233,16 @@ class PurchaseRequisitionController extends Controller
             return response()->json(['error' => $e->getMessage()], 422);
         }
     }
+    private function scopeRequisitionsToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        return $query->whereIn('branch_id', $user->assignedBranchIds());
+    }
+
+
 }
 

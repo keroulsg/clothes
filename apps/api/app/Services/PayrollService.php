@@ -142,7 +142,7 @@ class PayrollService
             }
 
             $log->status = 'rejected';
-            $log->approved_by = $userId;
+            $log->approved_by_user_id = $userId;
             $log->approved_at = now();
             $log->rejection_reason = $reason;
             $log->save();
@@ -244,7 +244,7 @@ class PayrollService
                 'early_departure_minutes' => (int)($data['early_departure_minutes'] ?? 0),
                 'is_payable' => $isPayable,
                 'notes' => $data['notes'] ?? null,
-                'created_by' => $userId,
+                'created_by_user_id' => $userId,
             ]);
         });
     }

@@ -30,14 +30,8 @@ class AssignedBranchScope implements Scope
             return;
         }
 
-        // Branch scoping becomes mandatory as soon as a user has explicit branch
-        // assignments or granular permission configuration. Legacy accounts with
-        // neither remain compatible until the owner reviews and assigns their branches.
-        $hasAssignments = DB::table('branch_user')->where('user_id', $user->id)->exists();
-        if (!$user->hasExplicitPermissionConfiguration() && !$hasAssignments) {
-            return;
-        }
-
+        // Fail closed: every non-owner must have explicit branch assignments.
+        // An empty assignment list intentionally returns no branch-bound records.
         $branchIds = $user->assignedBranchIds();
 
         if ($hasBranchId) {

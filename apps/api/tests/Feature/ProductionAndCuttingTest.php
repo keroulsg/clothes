@@ -322,7 +322,7 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertSame((string) $costSheet->id, (string) $wipJournal->reference_key);
         $expectedConversionCost = round((float) $costSheet->total_cost - (float) $costSheet->direct_materials_cost, 4);
         $this->assertEquals($expectedConversionCost, (float) $wipJournal->total_debit);
-        $this->assertEquals((float) $costSheet->total_cost, (float) $wipJournal->total_credit);
+        $this->assertEquals($expectedConversionCost, (float) $wipJournal->total_credit);
         $this->assertSame($wipJournal->id, app(AccountingService::class)->postProductionCostSheetToWip($costSheet)->id);
 
         // التحقق من خصم القماش من المخزن الفعلي عبر InventoryService

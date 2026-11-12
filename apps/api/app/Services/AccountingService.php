@@ -12,6 +12,7 @@ use App\Models\FinancialAccount;
 use App\Models\FinancialAccountTransfer;
 use App\Models\FiscalPeriod;
 use App\Models\FiscalYear;
+use App\Models\ExternalOperation;
 use App\Models\GarmentModel;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
@@ -1246,7 +1247,14 @@ class AccountingService
                     ->sum('total_amount');
             }
 
-            $subcontractCost = (float)($overrides['subcontracted_services_cost'] ?? 0);
+            // Include only subcontract work actually returned in receipt batches.
+            // Dispatch quantities are commitments, not incurred manufacturing cost.
+            $subcontractCost = isset($overrides['subcontracted_services_cost'])
+                ? (float) $overrides['subcontracted_services_cost']
+                : (float) ExternalOperation::where('tenant_id', $tenantId)
+                    ->where('production_order_id', $order->id)
+                    ->whereIn('status', ['partially_returned', 'completed'])
+                    ->sum('total_cost');
 
             // 3. احتساب التكاليف غير المباشرة وطريقة التحميل
             $allocationMethod = $overrides['overhead_allocation_method'] ?? 'direct_labor_cost_pct';

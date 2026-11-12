@@ -419,7 +419,7 @@ class ProductionAndCuttingTest extends TestCase
                 98
             );
             $this->fail('A duplicate QC receipt with a different cost must be rejected.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('تعارض Idempotency', $exception->getMessage());
         }
 

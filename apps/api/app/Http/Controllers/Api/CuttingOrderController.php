@@ -130,7 +130,9 @@ class CuttingOrderController extends Controller
         $enforceBranchScope = $user && $user->role !== 'company_owner'
             && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
         if ($enforceBranchScope && (
-            !in_array($prodOrder->branch_id, $assignedBranchIds, true)
+            !$prodOrder->branch_id
+            || $warehouse->branch_id !== $prodOrder->branch_id
+            || !in_array($prodOrder->branch_id, $assignedBranchIds, true)
             || !in_array($warehouse->branch_id, $assignedBranchIds, true)
         )) {
             return response()->json([

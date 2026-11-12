@@ -950,7 +950,7 @@ class ApiClient {
     createSupplierInvoice: async (payload: any, idempotencyKey?: string): Promise<{ message: string; is_duplicate: boolean; is_posted: boolean; supplier_invoice: any }> => {
       const headers: Record<string, string> = {};
       if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
-      return this.request<{ message: string; is_duplicate: boolean; supplier_invoice: any }>('/supplier-invoices', {
+      return this.request<{ message: string; is_duplicate: boolean; is_posted: boolean; supplier_invoice: any }>('/supplier-invoices', {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),

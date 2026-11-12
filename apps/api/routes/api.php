@@ -266,10 +266,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/procurement/requisitions', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'store']);
         Route::get('/procurement/requisitions/{id}', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'show']);
         Route::post('/procurement/requisitions/{id}/submit', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'submit']);
-        Route::post('/procurement/requisitions/{id}/approve', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'approve'])->middleware('role:company_owner,production_manager,accountant');
-        Route::post('/procurement/requisitions/{id}/reject', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'reject'])->middleware('role:company_owner,production_manager,accountant');
+        Route::post('/procurement/requisitions/{id}/approve', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'approve']);
+        Route::post('/procurement/requisitions/{id}/reject', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'reject']);
         Route::post('/procurement/requisitions/{id}/convert', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'convert'])->middleware(['role:company_owner,production_manager,accountant', 'quota:purchase_orders']);
-        Route::post('/procurement/requisitions/{id}/cancel', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'cancel'])->middleware('role:company_owner,production_manager,accountant');
+        Route::post('/procurement/requisitions/{id}/cancel', [\App\Http\Controllers\Api\PurchaseRequisitionController::class, 'cancel']);
 
         Route::get('/goods-receipts', [\App\Http\Controllers\Api\GoodsReceiptController::class, 'index']);
         Route::post('/goods-receipts', [\App\Http\Controllers\Api\GoodsReceiptController::class, 'store'])->middleware('role:inventory_custodian,production_manager,accountant');
@@ -286,48 +286,48 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-orders', [\App\Http\Controllers\Api\ProductionOrderController::class, 'index']);
         Route::post('/production-orders', [\App\Http\Controllers\Api\ProductionOrderController::class, 'store'])->middleware(['role:production_manager', 'quota:production_orders']);
         Route::get('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'show']);
-        Route::put('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'update'])->middleware('role:production_manager,company_owner');
+        Route::put('/production-orders/{id}', [\App\Http\Controllers\Api\ProductionOrderController::class, 'update']);
         Route::post('/production-orders/{id}/approve', [\App\Http\Controllers\Api\ProductionOrderController::class, 'approve'])->middleware('role:production_manager');
         Route::post('/production-orders/{id}/complete', [\App\Http\Controllers\Api\ProductionOrderController::class, 'complete'])->middleware('role:company_owner,production_manager');
-        Route::post('/production-orders/{id}/cancel', [\App\Http\Controllers\Api\ProductionOrderController::class, 'cancel'])->middleware('role:production_manager,company_owner');
+        Route::post('/production-orders/{id}/cancel', [\App\Http\Controllers\Api\ProductionOrderController::class, 'cancel']);
         Route::get('/production-orders/{id}/metrics', [\App\Http\Controllers\Api\ProductionOrderController::class, 'metrics']);
 
         Route::get('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'index']);
         Route::post('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'store'])->middleware('role:production_manager');
         Route::get('/cutting-orders/{id}', [\App\Http\Controllers\Api\CuttingOrderController::class, 'show']);
-        Route::post('/cutting-orders/{id}/cancel', [\App\Http\Controllers\Api\CuttingOrderController::class, 'cancel'])->middleware('role:production_manager,company_owner');
-        Route::post('/cutting-orders/{id}/archive', [\App\Http\Controllers\Api\CuttingOrderController::class, 'archive'])->middleware('role:production_manager,company_owner');
+        Route::post('/cutting-orders/{id}/cancel', [\App\Http\Controllers\Api\CuttingOrderController::class, 'cancel']);
+        Route::post('/cutting-orders/{id}/archive', [\App\Http\Controllers\Api\CuttingOrderController::class, 'archive']);
 
         Route::get('/bundles', [\App\Http\Controllers\Api\BundleController::class, 'index']);
         Route::get('/bundles/{id}', [\App\Http\Controllers\Api\BundleController::class, 'show']);
-        Route::post('/bundles/{id}/assign', [\App\Http\Controllers\Api\BundleController::class, 'assign'])->middleware('role:production_manager,company_owner');
+        Route::post('/bundles/{id}/assign', [\App\Http\Controllers\Api\BundleController::class, 'assign']);
         Route::get('/bundles/{id}/history', [\App\Http\Controllers\Api\BundleController::class, 'history']);
-        Route::post('/bundles/{id}/transfer', [\App\Http\Controllers\Api\BundleController::class, 'transfer'])->middleware('role:production_manager,company_owner');
+        Route::post('/bundles/{id}/transfer', [\App\Http\Controllers\Api\BundleController::class, 'transfer']);
 
         Route::get('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'index']);
         Route::post('/quality-inspections', [\App\Http\Controllers\Api\QualityInspectionController::class, 'store'])->middleware('role:quality_controller,production_manager');
 
         // خدمات القص والتصنيع للغير (Phase 6: Subcontracting & CMT Services)
         Route::get('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'customers']);
-        Route::post('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeCustomer'])->middleware('role:company_owner,production_manager,accountant');
+        Route::post('/subcontracting/customers', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeCustomer']);
         Route::get('/subcontracting/customers/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'showCustomer']);
-        Route::put('/subcontracting/customers/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'updateCustomer'])->middleware('role:company_owner,production_manager,accountant');
+        Route::put('/subcontracting/customers/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'updateCustomer']);
 
         Route::get('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'jobs']);
         Route::post('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeJob'])->middleware(['role:company_owner,production_manager,accountant', 'quota:subcontract_jobs']);
         Route::get('/subcontracting/jobs/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'showJob']);
-        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob'])->middleware('role:company_owner,production_manager,accountant');
+        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob']);
         Route::get('/subcontracting/jobs/{id}/profitability', [\App\Http\Controllers\Api\SubcontractingController::class, 'profitability']);
 
         Route::get('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'materialReceipts']);
-        Route::post('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeMaterialReceipt'])->middleware('role:inventory_custodian,production_manager');
+        Route::post('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeMaterialReceipt']);
 
         Route::get('/subcontracting/external-operations', [\App\Http\Controllers\Api\SubcontractingController::class, 'externalOperations']);
-        Route::post('/subcontracting/external-operations', [\App\Http\Controllers\Api\SubcontractingController::class, 'dispatchExternalOperation'])->middleware('role:production_manager,company_owner');
-        Route::post('/subcontracting/external-operations/{id}/receive', [\App\Http\Controllers\Api\SubcontractingController::class, 'receiveExternalOperation'])->middleware('role:inventory_custodian,production_manager');
+        Route::post('/subcontracting/external-operations', [\App\Http\Controllers\Api\SubcontractingController::class, 'dispatchExternalOperation']);
+        Route::post('/subcontracting/external-operations/{id}/receive', [\App\Http\Controllers\Api\SubcontractingController::class, 'receiveExternalOperation']);
 
         Route::get('/subcontracting/delivery-notes', [\App\Http\Controllers\Api\SubcontractingController::class, 'deliveryNotes']);
-        Route::post('/subcontracting/delivery-notes', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeDeliveryNote'])->middleware('role:production_manager,company_owner');
+        Route::post('/subcontracting/delivery-notes', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeDeliveryNote']);
 
         Route::get('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'invoices']);
         Route::post('/subcontracting/invoices', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeInvoice'])->middleware('role:company_owner,accountant');
@@ -343,7 +343,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/orders/{id}/cancel', [\App\Http\Controllers\Api\SalesController::class, 'cancelSalesOrder'])->middleware('role:company_owner,sales_rep,sales_officer,accountant,sales_manager,sales_officer');
         Route::post('/sales/orders/{id}/deliver', [\App\Http\Controllers\Api\SalesController::class, 'deliverOrder'])->middleware('role:company_owner,sales_rep,sales_officer,production_manager,sales_manager,sales_officer');
         Route::get('/sales-orders', [\App\Http\Controllers\Api\SalesController::class, 'salesOrders']);
-        Route::post('/sales-orders', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesOrder'])->middleware(['role:company_owner,sales_rep,sales_manager', 'quota:sales_orders']);
+        Route::post('/sales-orders', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesOrder']);
         Route::post('/sales/orders/{id}/reserve', [\App\Http\Controllers\Api\SalesController::class, 'reserveOrderStock'])->middleware('role:company_owner,sales_rep,sales_officer,inventory_custodian,sales_manager,sales_officer');
         Route::post('/sales/orders/{id}/fulfill', [\App\Http\Controllers\Api\SalesController::class, 'fulfillOrder'])->middleware('role:company_owner,sales_rep,sales_officer,inventory_custodian,sales_manager,sales_officer');
         Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager,sales_manager');
@@ -463,10 +463,10 @@ Route::prefix('v1')->group(function () {
             // تسويات عيوب الجودة والخصومات المعتمدة (Phase 09B)
             Route::get('/hr/defect-adjustments', [\App\Http\Controllers\Api\HrController::class, 'defectAdjustments']);
             Route::post('/hr/defect-adjustments', [\App\Http\Controllers\Api\HrController::class, 'storeDefectAdjustment'])->middleware('role:production_manager,quality_controller,accountant,company_owner');
-            Route::post('/hr/defect-adjustments/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approveDefectAdjustment'])->middleware('role:production_manager,company_owner');
-            Route::post('/hr/defect-adjustments/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectDefectAdjustment'])->middleware('role:production_manager,company_owner');
+            Route::post('/hr/defect-adjustments/{id}/approve', [\App\Http\Controllers\Api\HrController::class, 'approveDefectAdjustment']);
+            Route::post('/hr/defect-adjustments/{id}/reject', [\App\Http\Controllers\Api\HrController::class, 'rejectDefectAdjustment']);
             Route::post('/hr/defect-adjustments/{id}/object', [\App\Http\Controllers\Api\HrController::class, 'recordWorkerObjection']);
-            Route::post('/hr/defect-adjustments/{id}/reverse', [\App\Http\Controllers\Api\HrController::class, 'reverseDefectAdjustment'])->middleware('role:production_manager,company_owner');
+            Route::post('/hr/defect-adjustments/{id}/reverse', [\App\Http\Controllers\Api\HrController::class, 'reverseDefectAdjustment']);
 
             // مسيرات الرواتب ودورة الاعتماد والمدفوعات
             Route::get('/hr/payrolls', [\App\Http\Controllers\Api\HrController::class, 'payrolls']);
@@ -485,9 +485,9 @@ Route::prefix('v1')->group(function () {
         // إدارة المتجر الإلكتروني داخل الـ ERP (Phase 10: Storefront ERP & Themes - Protected by erp.storefront)
         Route::middleware(['feature:erp.storefront'])->group(function () {
             Route::get('/storefront/settings', [\App\Http\Controllers\Api\StorefrontController::class, 'settings']);
-            Route::put('/storefront/settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateSettings'])->middleware('role:company_owner,production_manager,accountant');
+            Route::put('/storefront/settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateSettings']);
             Route::get('/storefront/design', [\App\Http\Controllers\Api\StorefrontController::class, 'designStudio']);
-            Route::post('/storefront/design/draft', [\App\Http\Controllers\Api\StorefrontController::class, 'saveDraft'])->middleware('role:company_owner,production_manager,accountant');
+            Route::post('/storefront/design/draft', [\App\Http\Controllers\Api\StorefrontController::class, 'saveDraft']);
             Route::post('/storefront/design/publish', [\App\Http\Controllers\Api\StorefrontController::class, 'publishDraft'])->middleware('role:company_owner,production_manager');
             Route::post('/storefront/design/rollback', [\App\Http\Controllers\Api\StorefrontController::class, 'rollback'])->middleware('role:company_owner,production_manager');
             Route::post('/storefront/instapay-settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateInstaPaySettings'])->middleware('role:company_owner,accountant');

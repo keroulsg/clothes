@@ -144,7 +144,38 @@ class Batch7ProductionDeploymentAndHealthTest extends TestCase
     }
 
     /**
-     * 7. فحص أداة التحقق من متغيرات البيئة garmentos:env-check
+     * Restore must reject the active database even when --force is supplied.
+     */
+    public function test_restore_never_allows_active_database_target_even_with_force(): void
+    {
+        Tenant::create([
+            'name' => 'مصنع اختبار حماية الاستعادة',
+            'code' => 'T-RESTORE-GUARD-' . uniqid(),
+            'subdomain' => 'restore-guard-' . uniqid(),
+            'status' => 'active',
+        ]);
+
+        $backupExit = Artisan::call('garmentos:backup', ['--destination' => 'local']);
+        $this->assertSame(0, $backupExit);
+
+        $manifests = glob(storage_path('app/private/backups/database/*.manifest.json'));
+        $this->assertNotEmpty($manifests);
+        rsort($manifests);
+        $manifest = json_decode(file_get_contents($manifests[0]), true);
+
+        $activeDatabase = config('database.connections.' . config('database.default') . '.database');
+        $restoreExit = Artisan::call('garmentos:restore', [
+            $manifest['backup_id'],
+            '--target-db' => $activeDatabase,
+            '--force' => true,
+        ]);
+
+        $this->assertSame(1, $restoreExit);
+        $this->assertStringContainsString('CRITICAL SAFETY BLOCK', Artisan::output());
+    }
+
+    /**
+     * 8. فحص أداة التحقق من متغيرات البيئة garmentos:env-check
      */
     public function test_environment_validation_command_reports_security_settings(): void
     {

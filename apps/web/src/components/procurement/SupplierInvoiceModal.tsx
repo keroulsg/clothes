@@ -93,6 +93,7 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
           try {
             await api.suppliers.recordPayment(purchaseOrder.supplier_id, {
               amount: totalAmount,
+              supplier_invoice_id: res.supplier_invoice.id,
               payment_method: paymentMethod,
               reference_number: paymentRef || invoiceNumber,
               voucher_date: invoiceDate,

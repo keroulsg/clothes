@@ -140,7 +140,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
         break;
       case 'production_manager':
       case 'production_engineer':
-        defaultPerms = ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage'];
+        defaultPerms = ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage'];
         break;
       case 'inventory_custodian':
       case 'storekeeper':
@@ -149,14 +149,14 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
         break;
       case 'accountant':
       case 'financial_accountant':
-        defaultPerms = ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'inventory.view', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
+        defaultPerms = ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
         break;
       case 'quality_controller':
       case 'qc':
         defaultPerms = ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'branches.view', 'inventory.view'];
         break;
       case 'sales_rep':
-        defaultPerms = ['sales.view', 'sales.create', 'sales.discount', 'inventory.view', 'storefront.view'];
+        defaultPerms = ['sales.view', 'sales.create', 'sales.discount', 'branches.view', 'inventory.view', 'storefront.view'];
         break;
       case 'worker':
       case 'operator':

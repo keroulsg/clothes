@@ -30,8 +30,14 @@ class AssignedBranchScope implements Scope
             return;
         }
 
-        // Fail closed: every non-owner must have explicit branch assignments.
-        // An empty assignment list intentionally returns no branch-bound records.
+        // Apply branch isolation when an owner has explicitly configured granular
+        // permissions or assigned one or more branches. Legacy users without either
+        // remain compatible until the owner reviews and assigns their branches.
+        $hasAssignments = DB::table('branch_user')->where('user_id', $user->id)->exists();
+        if (!$user->hasExplicitPermissionConfiguration() && !$hasAssignments) {
+            return;
+        }
+
         $branchIds = $user->assignedBranchIds();
 
         if ($hasBranchId) {

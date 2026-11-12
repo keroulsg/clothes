@@ -503,7 +503,7 @@ class HrController extends Controller
                 $employee = Employee::where('tenant_id', app('current_tenant_id'))->findOrFail($row['employee_id']);
                 if ($user && $user->role !== 'company_owner') {
                     if (!$employee->branch_id || !in_array($employee->branch_id, $assignedBranchIds, true)) {
-                        throw new \\Illuminate\\Auth\\Access\\AuthorizationException('لا يمكنك تسجيل حضور موظف تابع لفرع غير معيّن لحسابك.');
+                        throw new \Illuminate\Auth\Access\AuthorizationException('لا يمكنك تسجيل حضور موظف تابع لفرع غير معيّن لحسابك.');
                     }
                     $row['branch_id'] = $employee->branch_id;
                 }

@@ -1035,6 +1035,7 @@ class AccountingService
             'tenant_id' => $tenantId,
             'reference_type' => $referenceType,
             'reference_id' => $transaction->id,
+            'branch_id' => $transaction->warehouse?->branch_id,
             'description' => 'تسوية جرد مخزني - ' . ($transaction->reference_number ?? $transaction->id),
             'entry_date' => now()->toDateString(),
             'lines' => $lines,

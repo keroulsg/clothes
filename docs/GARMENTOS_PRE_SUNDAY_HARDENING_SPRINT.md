@@ -86,3 +86,29 @@ The owner approved **Strict Stock**:
 | Regression tests | Not yet run; required before merge |
 | PostgreSQL runtime verification | Pending |
 | Production deployment | Not authorized |
+
+
+## Implementation notes — latest branch state
+
+The following source changes have been committed to this isolated branch. They are **implementation progress, not a release sign-off**:
+
+- Sales reservation/POS/delivery paths no longer fabricate positive stock. Reservation and fulfillment paths enforce on-hand/reserved quantities and use the inventory ledger.
+- Manual stock OUT remains strict even if a warehouse's negative-stock flag is enabled.
+- Storefront availability now reads the actual `current_balance` and `reserved_balance` fields from a deterministic finished-goods warehouse; the selected warehouse is captured by the catalog mapping closure.
+- POS stock deduction is restricted to the same tenant-owned warehouse recorded on the invoice; it no longer silently falls back to a different warehouse.
+- Customer receipts are created in the same database transaction as their balanced GL journal and invoice allocations.
+- Supplier invoice posting writes the GL journal before marking the invoice posted and updating the supplier subledger.
+- Chart-of-accounts re-seeding no longer resets existing account balances.
+- Journal entries persist non-UUID references in `reference_key`; duplicate checks use that safe string key and only query the legacy UUID column for UUID-shaped references.
+- The additive actor migration was rewritten to keep its up/down operations correctly separated and adds BIGINT user foreign keys for the affected journal, payroll, fiscal, transfer, and storefront reviewer fields. Payroll and storefront writes/models were updated to use the new fields.
+- Production completion is now checked server-side against recorded completed quantity and completed cutting orders. The frontend uses the server response instead of inventing a completed quantity/date.
+- Fake local-only bank-loan create/repayment is disabled; the screen now reports that the backend persistence contract is unavailable.
+- Pricing no longer falls back to hardcoded plans/dates; fabricated production size/color variants were removed; dashboard fake OEE/scrap metrics and demo storefront slug were removed; receipt/bundle printouts no longer pretend static artwork is a scannable barcode/QR; Waslat attachment download returns the uploaded filename.
+- Regression tests were added for preserving chart balances during re-seeding and storing numeric journal references.
+
+### Still not closed
+
+- No PHP test suite, PostgreSQL migration run, frontend typecheck/build, browser test, or concurrency test has been executed in this environment. All of the above changes still require CI/runtime validation.
+- The CI workflow currently runs on pushes to `main` and pull requests targeting `main`; no PR has been opened and no workflow result is claimed.
+- Manufacturing cost variance posting remains intentionally unimplemented pending verification of the actual variance accounting policy and configured ledger accounts. The current chart of accounts does not establish the reported 5200/5300 account pair as valid posting targets; inventing those accounts or posting a second expense could double-count costs.
+- The complete demo path and all remaining audit items still require targeted verification. Production remains unchanged and deployment is not authorized.

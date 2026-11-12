@@ -145,8 +145,11 @@ class EnsureRole
                     ? 'inventory.receive'
                     : 'inventory.dispatch';
             }
-            if (str_contains($path, 'items') || str_contains($path, 'units')) {
+            if (str_contains($path, 'items') || str_contains($path, 'units') || str_contains($path, 'convert-fabric')) {
                 return 'inventory.manage';
+            }
+            if (str_contains($path, 'customer-materials')) {
+                return str_contains($path, 'consume') ? 'inventory.dispatch' : 'inventory.receive';
             }
             return str_contains($path, 'receive') || str_contains($path, 'receipt')
                 ? 'inventory.receive'

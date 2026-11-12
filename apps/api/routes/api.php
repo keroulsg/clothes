@@ -117,7 +117,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenant/roles', [TenantController::class, 'getRolesWithPermissions']);
         Route::put('/tenant/roles/{roleKey}', [TenantController::class, 'updateRolePermissions'])->middleware('role:company_owner');
         Route::get('/tenant/users', [TenantController::class, 'getUsers'])->middleware('role:company_owner');
-        Route::post('/tenant/users', [TenantController::class, 'createUser'])->middleware('role:company_owner');
+        Route::post('/tenant/users', [TenantController::class, 'createUser'])->middleware(['role:company_owner', 'quota:active_users']);
         Route::put('/tenant/users/{id}', [TenantController::class, 'updateUser'])->middleware('role:company_owner');
         Route::post('/tenant/users/{id}/toggle-active', [TenantController::class, 'toggleUserActive'])->middleware('role:company_owner');
         Route::delete('/tenant/users/{id}', [TenantController::class, 'deleteUser'])->middleware('role:company_owner');
@@ -293,7 +293,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-orders/{id}/metrics', [\App\Http\Controllers\Api\ProductionOrderController::class, 'metrics']);
 
         Route::get('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'index']);
-        Route::post('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'store'])->middleware('role:production_manager');
+        Route::post('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'store'])->middleware(['role:production_manager', 'quota:cutting_lays']);
         Route::get('/cutting-orders/{id}', [\App\Http\Controllers\Api\CuttingOrderController::class, 'show']);
         Route::post('/cutting-orders/{id}/cancel', [\App\Http\Controllers\Api\CuttingOrderController::class, 'cancel']);
         Route::post('/cutting-orders/{id}/archive', [\App\Http\Controllers\Api\CuttingOrderController::class, 'archive']);
@@ -343,7 +343,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/sales/orders/{id}/cancel', [\App\Http\Controllers\Api\SalesController::class, 'cancelSalesOrder'])->middleware('role:company_owner,sales_rep,sales_officer,accountant,sales_manager,sales_officer');
         Route::post('/sales/orders/{id}/deliver', [\App\Http\Controllers\Api\SalesController::class, 'deliverOrder'])->middleware('role:company_owner,sales_rep,sales_officer,production_manager,sales_manager,sales_officer');
         Route::get('/sales-orders', [\App\Http\Controllers\Api\SalesController::class, 'salesOrders']);
-        Route::post('/sales-orders', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesOrder']);
+        Route::post('/sales-orders', [\App\Http\Controllers\Api\SalesController::class, 'storeSalesOrder'])->middleware(['role:company_owner,sales_rep,sales_officer,sales_manager', 'quota:sales_orders']);
         Route::post('/sales/orders/{id}/reserve', [\App\Http\Controllers\Api\SalesController::class, 'reserveOrderStock'])->middleware('role:company_owner,sales_rep,sales_officer,inventory_custodian,sales_manager,sales_officer');
         Route::post('/sales/orders/{id}/fulfill', [\App\Http\Controllers\Api\SalesController::class, 'fulfillOrder'])->middleware('role:company_owner,sales_rep,sales_officer,inventory_custodian,sales_manager,sales_officer');
         Route::get('/sales/invoices', [\App\Http\Controllers\Api\SalesController::class, 'invoices'])->middleware('role:company_owner,accountant,financial_accountant,sales_rep,production_manager,sales_manager');

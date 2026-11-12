@@ -598,7 +598,7 @@ class PayrollService
 
             // قاعدة الحصانة التاريخية: المسيرات المقفلة والمدفوعة نهائياً لا يعاد احتسابها
             if ($existing) {
-                if (in_array($existing->status, ['finalized', 'paid'], true) || (float)$existing->total_paid > 0) {
+                if (in_array($existing->status, ['approved', 'finalized', 'paid', 'partially_paid'], true) || (float)$existing->total_paid > 0) {
                     throw new InvalidArgumentException("مسير الرواتب للفترة {$period} مقفل مالياً بحالة ({$existing->status}) أو تم صرف دفعات منه ولا يمكن تعديله.");
                 }
 

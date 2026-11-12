@@ -135,291 +135,206 @@ class SupplierController extends Controller
      */
     public function recordDiscount(Request $request, string $id): JsonResponse
     {
-        $tenantId = app('current_tenant_id');
-        $supplier = Supplier::where('tenant_id', $tenantId)->findOrFail($id);
-
-        $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'discount_type' => 'required|string|in:early_payment,volume_rebate,commercial,damage_allowance,return_adjustment',
-            'discount_date' => 'nullable|date',
-            'notes' => 'nullable|string',
-        ]);
-
-        $amount = (float) $validated['amount'];
-
-        $voucher = DB::transaction(function () use ($tenantId, $supplier, $validated, $amount) {
-            $voucherNumber = 'DISC-SUP-' . date('Ymd') . '-' . rand(1000, 9999);
-
-            $typeLabels = [
-                'early_payment' => 'خصم تعجيل دفع نقدي',
-                'volume_rebate' => 'خصم كمية / حافز سحب',
-                'commercial' => 'خصم تجاري خاص',
-                'damage_allowance' => 'تسوية عيوب تصنيع / تلفيات خامات',
-                'return_adjustment' => 'تسوية مرتجعات مورد',
-            ];
-            $typeLabel = $typeLabels[$validated['discount_type']] ?? 'خصم تجاري';
-
-            $discountAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                ->where(function ($q) {
-                    $q->where('name', 'like', '%خصم%')
-                      ->orWhere('name', 'like', '%مورد%')
-                      ->orWhere('code', '2010');
-                })->first()
-                ?? ChartOfAccount::where('tenant_id', $tenantId)->first();
-            $accountId = $discountAccount?->id;
-
-            $pv = PaymentVoucher::create([
-                'tenant_id' => $tenantId,
-                'voucher_number' => $voucherNumber,
-                'voucher_type' => 'discount',
-                'party_type' => 'supplier',
-                'party_id' => $supplier->id,
-                'party_name' => $supplier->name,
-                'payment_method' => 'discount',
-                'account_id' => $accountId,
-                'amount' => $amount,
-                'voucher_date' => $validated['discount_date'] ?? date('Y-m-d'),
-                'notes' => ($validated['notes'] ? $validated['notes'] . ' ' : '') . "[{$typeLabel}]",
-            ]);
-
-            // خصم القيمة من رصيد التزامات المورد
-            $supplier->current_balance = max(0, (float)$supplier->current_balance - $amount);
-            $supplier->save();
-
-            return $pv;
-        });
+        Supplier::where('tenant_id', app('current_tenant_id'))->findOrFail($id);
 
         return response()->json([
-            'message' => 'تم تسجيل الخصم التجاري للمورد وتخفيض الالتزام المالي بنجاح.',
-            'voucher' => $voucher,
-            'new_balance' => $supplier->current_balance,
-        ], 201);
+            'error' => 'SupplierDiscountPostingUnavailable',
+            'message' => 'تسجيل خصم المورد متوقف مؤقتاً حتى ربطه بقيد خصم/إشعار دائن متوازن. لم يتم إنشاء سند أو تعديل رصيد المورد.',
+        ], 409);
     }
 
-    /**
-     * تسجيل سند صرف / سداد للمورد
-     */
     public function recordPayment(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $supplier = Supplier::where('tenant_id', $tenantId)->findOrFail($id);
-
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|string|in:cash,bank_transfer,check,cheque,card,visa,instapay',
             'voucher_date' => 'nullable|date',
-            'supplier_invoice_id' => 'nullable|string|exists:supplier_invoices,id',
-            'account_id' => 'nullable|string|exists:chart_of_accounts,id',
+            'supplier_invoice_id' => 'nullable|uuid',
+            'account_id' => 'nullable|uuid',
             'notes' => 'nullable|string',
         ]);
 
-        $amount = (float) $validated['amount'];
+        $amount = round((float) $validated['amount'], 4);
 
-        $voucher = DB::transaction(function () use ($tenantId, $supplier, $validated, $amount) {
-            // حل حساب النقدية أو البنك الافتراضي إذا لم يُحدد
-            $accountId = $validated['account_id'] ?? null;
-            if (!$accountId) {
-                $mappingKey = in_array($validated['payment_method'] ?? 'cash', ['bank_transfer', 'card', 'visa', 'check', 'cheque', 'instapay']) ? 'default_bank' : 'default_cash';
-                try {
-                    $defaultAccount = app(\App\Services\AccountingService::class)->getMappedAccount($tenantId, $mappingKey);
-                    $accountId = $defaultAccount ? $defaultAccount->id : null;
-                } catch (\Throwable $e) {
-                    $accountId = null;
+        $voucher = DB::transaction(function () use ($tenantId, $id, $validated, $amount) {
+            $supplier = Supplier::where('tenant_id', $tenantId)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($amount > (float) $supplier->current_balance + 0.0001) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => ['مبلغ السداد يتجاوز الرصيد المستحق المسجل على المورد. راجع كشف الحساب أولاً.'],
+                ]);
+            }
+
+            $invoice = null;
+            if (!empty($validated['supplier_invoice_id'])) {
+                $invoice = SupplierInvoice::where('tenant_id', $tenantId)
+                    ->where('supplier_id', $supplier->id)
+                    ->where('is_posted', true)
+                    ->lockForUpdate()
+                    ->findOrFail($validated['supplier_invoice_id']);
+
+                $invoiceOutstanding = max(0, (float) $invoice->total_amount - (float) $invoice->paid_amount);
+                if ($amount > $invoiceOutstanding + 0.0001) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'amount' => ['مبلغ السداد يتجاوز المتبقي على فاتورة المورد المحددة.'],
+                    ]);
                 }
             }
 
-            $voucherNumber = 'PV-SUP-' . date('Ymd') . '-' . rand(1000, 9999);
+            $paymentMethod = $validated['payment_method'];
+            if (!empty($validated['account_id'])) {
+                $account = ChartOfAccount::where('tenant_id', $tenantId)
+                    ->whereKey($validated['account_id'])
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+            } else {
+                $mapping = in_array($paymentMethod, ['bank_transfer', 'check', 'cheque', 'card', 'visa', 'instapay'], true)
+                    ? 'default_bank'
+                    : 'default_cash';
+                $account = app(AccountingService::class)->getMappedAccount($tenantId, $mapping);
+                if (!$account || !$account->is_active || !$account->is_postable) {
+                    throw new \RuntimeException('لا يوجد حساب نقدية/بنك نشط وقابل للترحيل لهذا النوع من السداد.');
+                }
+            }
 
-            $pv = PaymentVoucher::create([
-                'tenant_id' => $tenantId,
-                'voucher_number' => $voucherNumber,
+            $voucher = app(AccountingService::class)->createPaymentVoucher([
+                'voucher_number' => 'PV-SUP-' . now()->format('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(2))),
                 'voucher_type' => 'payment',
                 'party_type' => 'supplier',
                 'party_id' => $supplier->id,
                 'party_name' => $supplier->name,
-                'payment_method' => $validated['payment_method'],
-                'account_id' => $accountId,
+                'payment_method' => $paymentMethod,
+                'account_id' => $account->id,
                 'amount' => $amount,
-                'voucher_date' => $validated['voucher_date'] ?? date('Y-m-d'),
-                'notes' => $validated['notes'] ?? 'سداد مستحقات للمورد ' . $supplier->name,
+                'voucher_date' => $validated['voucher_date'] ?? now()->toDateString(),
+                'notes' => $validated['notes'] ?? ('سداد مستحقات المورد ' . $supplier->name),
             ]);
 
-            // إذا تم ربط السداد بفاتورة مورد محددة، تحديث رصيد الفاتورة
-            if (!empty($validated['supplier_invoice_id'])) {
-                $invoice = SupplierInvoice::where('tenant_id', $tenantId)
-                    ->where('supplier_id', $supplier->id)
-                    ->find($validated['supplier_invoice_id']);
-
-                if ($invoice) {
-                    $newPaid = (float)$invoice->paid_amount + $amount;
-                    $invoice->paid_amount = $newPaid;
-                    $invoice->payment_status = ($newPaid >= (float)$invoice->total_amount) ? 'paid' : 'partially_paid';
-                    $invoice->save();
-                }
-            }
-
-            // تحديث رصيد التزامات المورد
-            $supplier->current_balance = max(0, (float)$supplier->current_balance - $amount);
+            // Subledger updates occur only after the balanced GL voucher has been created.
+            $supplier->current_balance = round((float) $supplier->current_balance - $amount, 4);
             $supplier->save();
 
-            return $pv;
+            if ($invoice) {
+                $invoice->paid_amount = round((float) $invoice->paid_amount + $amount, 4);
+                $invoice->payment_status = $invoice->paid_amount >= (float) $invoice->total_amount - 0.0001
+                    ? 'paid'
+                    : 'partially_paid';
+                $invoice->save();
+            }
+
+            \App\Models\AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id(),
+                'action' => 'supplier_payment_posted',
+                'auditable_type' => PaymentVoucher::class,
+                'auditable_id' => $voucher->id,
+                'new_values' => [
+                    'supplier_id' => $supplier->id,
+                    'amount' => $amount,
+                    'supplier_invoice_id' => $invoice?->id,
+                ],
+                'ip_address' => request()->ip(),
+            ]);
+
+            return $voucher->load('account');
         });
 
         return response()->json([
-            'message' => 'تم تسجيل سند الصرف وتحديث رصيد المورد بنجاح.',
+            'message' => 'تم ترحيل سند سداد المورد محاسبياً وتحديث رصيد المورد بنجاح.',
             'voucher' => $voucher,
-            'supplier_current_balance' => (float) $supplier->current_balance,
+            'supplier_current_balance' => (float) Supplier::where('tenant_id', $tenantId)->whereKey($id)->value('current_balance'),
         ], 201);
     }
 
-    /**
-     * تعديل سند صرف سابق للمورد مع إعادة ضبط رصيد المورد
-     */
     public function updatePayment(Request $request, string $id, string $voucherId): JsonResponse
     {
-        $tenantId = app('current_tenant_id');
-        $supplier = Supplier::where('tenant_id', $tenantId)->findOrFail($id);
-        $pv = PaymentVoucher::where('tenant_id', $tenantId)
-            ->where('party_id', $supplier->id)
+        Supplier::where('tenant_id', app('current_tenant_id'))->findOrFail($id);
+        PaymentVoucher::where('tenant_id', app('current_tenant_id'))
             ->where('party_type', 'supplier')
+            ->where('party_id', $id)
             ->findOrFail($voucherId);
 
-        $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'payment_method' => 'required|string|in:cash,bank_transfer,check,cheque,card,visa,instapay',
-            'voucher_date' => 'nullable|date',
-            'notes' => 'nullable|string',
-        ]);
-
-        $newAmount = (float) $validated['amount'];
-        $oldAmount = (float) $pv->amount;
-        $diff = $newAmount - $oldAmount;
-
-        DB::transaction(function () use ($pv, $supplier, $validated, $newAmount, $diff) {
-            $pv->amount = $newAmount;
-            $pv->payment_method = $validated['payment_method'];
-            if (!empty($validated['voucher_date'])) {
-                $pv->voucher_date = $validated['voucher_date'];
-            }
-            if (isset($validated['notes'])) {
-                $pv->notes = $validated['notes'];
-            }
-            $pv->save();
-
-            // adjust supplier current_balance
-            $supplier->current_balance = max(0, (float) $supplier->current_balance - $diff);
-            $supplier->save();
-        });
-
         return response()->json([
-            'message' => 'تم تعديل سند الصرف وتحديث رصيد المورد بنجاح.',
-            'voucher' => $pv,
-            'supplier_current_balance' => (float) $supplier->current_balance,
-        ]);
+            'error' => 'PostedVoucherImmutable',
+            'message' => 'سندات السداد المرحّلة غير قابلة للتعديل المباشر؛ استخدم إجراء عكس محاسبي ثم أنشئ سنداً بديلاً.',
+        ], 409);
     }
 
-    /**
-     * حذف سند صرف مع استرجاع المديونية لرصيد المورد
-     */
     public function deletePayment(Request $request, string $id, string $voucherId): JsonResponse
     {
-        $tenantId = app('current_tenant_id');
-        $supplier = Supplier::where('tenant_id', $tenantId)->findOrFail($id);
-        $pv = PaymentVoucher::where('tenant_id', $tenantId)
-            ->where('party_id', $supplier->id)
+        Supplier::where('tenant_id', app('current_tenant_id'))->findOrFail($id);
+        PaymentVoucher::where('tenant_id', app('current_tenant_id'))
             ->where('party_type', 'supplier')
+            ->where('party_id', $id)
             ->findOrFail($voucherId);
 
-        DB::transaction(function () use ($pv, $supplier) {
-            $amount = (float) $pv->amount;
-            $supplier->current_balance = (float) $supplier->current_balance + $amount;
-            $supplier->save();
-
-            $pv->delete();
-        });
-
         return response()->json([
-            'message' => 'تم حذف سند الصرف واسترجاع رصيد المورد بنجاح.',
-            'supplier_current_balance' => (float) $supplier->current_balance,
-        ]);
+            'error' => 'PostedVoucherImmutable',
+            'message' => 'لا يمكن حذف سند سداد بعد ترحيله؛ يجب عكس القيد المحاسبي المرتبط به للحفاظ على سجل التدقيق.',
+        ], 409);
     }
 
-    /**
-     * تسجيل فاتورة مشتريات/توريد خامات مباشرة لهذا المورد
-     */
     public function recordInvoice(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
         $supplier = Supplier::where('tenant_id', $tenantId)->findOrFail($id);
 
         $validated = $request->validate([
+            'purchase_order_id' => 'required|uuid',
+            'goods_receipt_note_id' => 'required|uuid',
             'invoice_number' => 'required|string|max:100',
-            'total_amount' => 'required|numeric|min:0.01',
+            'subtotal' => 'required|numeric|min:0.01',
+            'tax_amount' => 'nullable|numeric|min:0',
+            'total_amount' => 'nullable|numeric|min:0.01',
             'invoice_date' => 'nullable|date',
             'due_date' => 'nullable|date',
             'internal_reference' => 'nullable|string|max:100',
+            'idempotency_key' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
         ]);
 
-        $invoice = DB::transaction(function () use ($tenantId, $supplier, $validated) {
-            $totalAmount = (float) $validated['total_amount'];
+        $purchaseOrder = PurchaseOrder::where('tenant_id', $tenantId)
+            ->where('supplier_id', $supplier->id)
+            ->findOrFail($validated['purchase_order_id']);
 
-            $inv = SupplierInvoice::create([
-                'tenant_id' => $tenantId,
-                'supplier_id' => $supplier->id,
-                'invoice_number' => $validated['invoice_number'],
-                'internal_reference' => $validated['internal_reference'] ?? ('INV-' . date('Ymd') . '-' . rand(100, 999)),
-                'invoice_date' => $validated['invoice_date'] ?? date('Y-m-d'),
-                'due_date' => $validated['due_date'] ?? date('Y-m-d', strtotime('+30 days')),
-                'subtotal' => $totalAmount,
-                'tax_amount' => 0,
-                'total_amount' => $totalAmount,
-                'paid_amount' => 0,
-                'matching_status' => 'matched',
-                'payment_status' => 'unpaid',
-            ]);
+        \App\Models\GoodsReceiptNote::where('tenant_id', $tenantId)
+            ->where('purchase_order_id', $purchaseOrder->id)
+            ->where('supplier_id', $supplier->id)
+            ->whereKey($validated['goods_receipt_note_id'])
+            ->firstOrFail();
 
-            $supplier->current_balance = (float) $supplier->current_balance + $totalAmount;
-            $supplier->save();
-
-            return $inv;
-        });
+        $invoice = app(\App\Services\ProcurementService::class)->matchAndCreateInvoice(
+            array_merge($validated, ['tenant_id' => $tenantId])
+        );
 
         return response()->json([
-            'message' => 'تم تسجيل فاتورة التوريد وتحديث مديونية المورد بنجاح.',
+            'message' => $invoice->is_posted
+                ? 'تم مطابقة فاتورة المورد وترحيلها محاسبياً.'
+                : 'تم حفظ الفاتورة للمراجعة؛ لم يتم ترحيلها أو زيادة رصيد المورد بسبب وجود فرق في المطابقة.',
             'invoice' => $invoice,
-            'supplier_current_balance' => (float) $supplier->current_balance,
-        ], 201);
+            'is_posted' => (bool) $invoice->is_posted,
+        ], $invoice->is_posted ? 201 : 202);
     }
 
-    /**
-     * حذف فاتورة توريد مع تخفيض مديونية المورد
-     */
     public function deleteInvoice(Request $request, string $id, string $invoiceId): JsonResponse
     {
-        $tenantId = app('current_tenant_id');
-        $supplier = Supplier::where('tenant_id', $tenantId)->findOrFail($id);
-        $invoice = SupplierInvoice::where('tenant_id', $tenantId)
-            ->where('supplier_id', $supplier->id)
+        Supplier::where('tenant_id', app('current_tenant_id'))->findOrFail($id);
+        SupplierInvoice::where('tenant_id', app('current_tenant_id'))
+            ->where('supplier_id', $id)
             ->findOrFail($invoiceId);
 
-        DB::transaction(function () use ($invoice, $supplier) {
-            $unpaidAmount = max(0, (float) $invoice->total_amount - (float) ($invoice->paid_amount ?? 0));
-            $supplier->current_balance = max(0, (float) $supplier->current_balance - $unpaidAmount);
-            $supplier->save();
-
-            $invoice->delete();
-        });
-
         return response()->json([
-            'message' => 'تم حذف فاتورة التوريد وتحديث رصيد المورد بنجاح.',
-            'supplier_current_balance' => (float) $supplier->current_balance,
-        ]);
+            'error' => 'SupplierInvoiceImmutable',
+            'message' => 'لا يمكن حذف فاتورة المورد من كشف الحساب مباشرة؛ استخدم مرتجع مشتريات أو إشعاراً دائناً مع قيد عكسي موثق.',
+        ], 409);
     }
 
-    /**
-     * كشف حساب المورد التحليلي وأوامر الشراء والفواتير وسندات السداد
-     */
     public function statement(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');

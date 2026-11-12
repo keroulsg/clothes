@@ -1043,15 +1043,15 @@ class SalesService
                     throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب نقدية أو بنك مسموح به (يجب أن يكون أصل متداول).");
                 }
             } else {
-                $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card']) ? '1020' : '1010';
+                $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? '1021' : '1011';
                 $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
                     ->where('code', $preferredCode)
                     ->lockForUpdate()
                     ->first();
 
-                if (!$cashAccount && $preferredCode === '1020') {
+                if (!$cashAccount && $preferredCode === '1021') {
                     $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                        ->where('code', '1010')
+                        ->where('code', '1011')
                         ->lockForUpdate()
                         ->first();
                 }

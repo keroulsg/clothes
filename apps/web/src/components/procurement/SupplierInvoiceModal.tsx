@@ -26,7 +26,8 @@ export const SupplierInvoiceModal: React.FC<SupplierInvoiceModalProps> = ({
   if (!purchaseOrder) return null;
 
   const expectedSubtotal = Number(purchaseOrder.subtotal || purchaseOrder.total_amount || 0);
-  const [invoiceNumber, setInvoiceNumber] = useState('INV-' + Math.floor(10000 + Math.random() * 90000));
+  // Supplier invoice numbers must come from the supplier's original document; never fabricate one.
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [subtotal, setSubtotal] = useState<number>(expectedSubtotal);

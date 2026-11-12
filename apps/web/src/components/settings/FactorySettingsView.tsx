@@ -702,7 +702,16 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
                         </td>
 
                         <td className="py-3 px-4">
-                          {getRoleBadge(u.role)}
+                          <div className="space-y-1">
+                            {getRoleBadge(u.role)}
+                            <div className={`text-[10px] ${isOwner ? 'text-rose-500' : (u.branch_ids?.length ? 'text-slate-500' : 'text-amber-600 dark:text-amber-400')}`}>
+                              {isOwner
+                                ? (isAr ? 'كل الفروع' : 'All branches')
+                                : (u.branch_ids?.length
+                                  ? (isAr ? `الفروع المعيّنة: ${u.branch_ids.length}` : `Assigned branches: ${u.branch_ids.length}`)
+                                  : (isAr ? 'تنبيه: لم يتم تعيين فرع لهذا المستخدم' : 'Warning: no branch assigned'))}
+                            </div>
+                          </div>
                         </td>
 
                         <td className="py-3 px-4 text-center">

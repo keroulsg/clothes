@@ -463,7 +463,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
                 'cancellation_reason' => 'خطأ في فرد القماش وتلف في البداية',
             ]);
 
-        $cancelCutRes->assertStatus(200)
+        $cancelCutRes->assertStatus(200, $cancelCutRes->getContent())
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'cancelled');
 

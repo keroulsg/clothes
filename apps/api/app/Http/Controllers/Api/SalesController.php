@@ -165,6 +165,10 @@ class SalesController extends Controller
 
     public function reserveOrderStock(string $id): JsonResponse
     {
+        if (!$this->canAccessSalesOrderBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
+
         try {
             $order = $this->salesService->reserveOrderStock($id);
 
@@ -182,6 +186,10 @@ class SalesController extends Controller
 
     public function fulfillOrder(string $id): JsonResponse
     {
+        if (!$this->canAccessSalesOrderBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
+
         try {
             $invoice = $this->salesService->fulfillOrder($id);
 
@@ -595,6 +603,10 @@ class SalesController extends Controller
             $validated['idempotency_key'] = $request->header('X-Idempotency-Key');
         }
 
+        if (!$this->canAccessSalesReturnBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
+
         try {
             $result = $this->salesService->processSalesReturnRefund($id, $validated);
 
@@ -647,6 +659,10 @@ class SalesController extends Controller
             'reason' => 'required|string|max:500',
         ]);
 
+        if (!$this->canAccessSalesOrderBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
+
         try {
             $order = $this->salesService->cancelSalesOrder($id, $validated['reason']);
 
@@ -670,6 +686,10 @@ class SalesController extends Controller
         $validated = $request->validate([
             'reason' => 'required|string|max:500',
         ]);
+
+        if (!$this->canAccessSalesInvoiceBranch($id)) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
 
         try {
             $invoice = $this->salesService->cancelSalesInvoice($id, $validated['reason']);
@@ -899,6 +919,31 @@ class SalesController extends Controller
         $branchIds = $user->assignedBranchIds();
 
         return $query->whereHas($relation, fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+    }
+
+
+    private function canAccessSalesOrderBranch(string $id): bool
+    {
+        return $this->scopeWarehouseBranchRecords(
+            SalesOrder::where('tenant_id', app('current_tenant_id')),
+            'warehouse'
+        )->where('id', $id)->exists();
+    }
+
+    private function canAccessSalesInvoiceBranch(string $id): bool
+    {
+        return $this->scopeWarehouseBranchRecords(
+            SalesInvoice::where('tenant_id', app('current_tenant_id')),
+            'warehouse'
+        )->where('id', $id)->exists();
+    }
+
+    private function canAccessSalesReturnBranch(string $id): bool
+    {
+        return $this->scopeWarehouseBranchRecords(
+            SalesReturn::where('tenant_id', app('current_tenant_id')),
+            'warehouse'
+        )->where('id', $id)->exists();
     }
 
 

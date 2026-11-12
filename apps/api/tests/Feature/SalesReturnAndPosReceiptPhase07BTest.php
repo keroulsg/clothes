@@ -1805,7 +1805,16 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
         $initialJournals = JournalEntry::count();
 
         // محاكاة فشل خدمة المحاسبة أثناء إنشاء قيد اليومية
-        $this->mock(AccountingService::class, function ($mock) {
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->firstOrFail();
+        $arAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1110')->firstOrFail();
+
+        $this->mock(AccountingService::class, function ($mock) use ($cashAccount, $arAccount) {
+            $mock->shouldReceive('getMappedAccount')
+                ->with($this->tenantA->id, 'default_cash')
+                ->andReturn($cashAccount);
+            $mock->shouldReceive('getMappedAccount')
+                ->with($this->tenantA->id, 'ar_control')
+                ->andReturn($arAccount);
             $mock->shouldReceive('createJournalEntry')
                 ->andThrow(new InvalidArgumentException('فشل محاكاة قيد اليومية غير المتوازن'));
         });

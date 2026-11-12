@@ -776,9 +776,9 @@ class SalesController extends Controller
             if (!$salesOrder) {
                 return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
             }
-            if (!empty($salesOrder->warehouse_id) && $salesOrder->warehouse_id !== $deliveryWarehouse->id) {
-                $orderWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($salesOrder->warehouse_id);
-                if ($orderWarehouse && $orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
+            if (!empty($salesOrder->warehouse_id)) {
+                $orderWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($salesOrder->warehouse_id);
+                if (!$orderWarehouse || $orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
                     return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب صرف أمر البيع من نفس فرع المخزن المحدد به.'], 422);
                 }
             }

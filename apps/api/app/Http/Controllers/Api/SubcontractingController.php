@@ -452,13 +452,27 @@ class SubcontractingController extends Controller
 
         // التحقق من ملكية أمر التشغيل إن مرر
         if (!empty($validated['job_order_id'])) {
-            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
+            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)
+                ->with(['productionOrder', 'assignedEmployee', 'cuttingOrders.warehouse'])
+                ->find($validated['job_order_id']);
             if (!$job || $job->tenant_id !== $tenantId) {
                 return response()->json([
                     'success' => false,
                     'error' => 'CrossTenantAccessDenied',
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
+            }
+            if ($enforceBranchScope) {
+                $jobBranchId = $job->productionOrder?->branch_id
+                    ?? $job->assignedEmployee?->branch_id
+                    ?? $job->cuttingOrders->first()?->warehouse?->branch_id;
+                if (!$jobBranchId || $warehouse->branch_id !== $jobBranchId) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'BranchMismatch',
+                        'message' => 'يجب تسجيل استلام الخامات في نفس فرع أمر التشغيل.',
+                    ], 422);
+                }
             }
         }
 

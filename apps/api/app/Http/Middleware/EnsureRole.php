@@ -68,7 +68,11 @@ class EnsureRole
 
         if ($isAuthorized) {
             $requiredPermission = $this->permissionForRequest($request);
-            if ($requiredPermission !== null && !$user->hasPermission($requiredPermission)) {
+            if (
+                $requiredPermission !== null
+                && $user->hasExplicitPermissionConfiguration()
+                && !$user->hasPermission($requiredPermission)
+            ) {
                 return response()->json([
                     'error' => 'InsufficientPermission',
                     'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة لتنفيذ هذا الإجراء.',

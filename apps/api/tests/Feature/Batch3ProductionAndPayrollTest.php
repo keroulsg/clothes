@@ -192,6 +192,52 @@ class Batch3ProductionAndPayrollTest extends TestCase
     /**
      * Stage 3A: Production Orders CRUD, Search, Filter, Lifecycle, and Cancellation with Audit Log
      */
+    public function test_hr_employee_records_are_restricted_to_assigned_branches(): void
+    {
+        $otherBranch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الموارد البشرية الآخر',
+            'code' => 'BR-HR-OTHER-' . uniqid(),
+            'type' => 'factory',
+            'is_active' => true,
+        ]);
+
+        $assignedEmployee = Employee::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
+            'employee_code' => 'EMP-A-' . uniqid(),
+            'name' => 'عامل الفرع الرئيسي',
+            'department' => 'sewing',
+            'job_title' => 'sewing_operator',
+            'pay_type' => 'piece_rate',
+            'hire_date' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+        $otherEmployee = Employee::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $otherBranch->id,
+            'employee_code' => 'EMP-B-' . uniqid(),
+            'name' => 'عامل الفرع الآخر',
+            'department' => 'sewing',
+            'job_title' => 'sewing_operator',
+            'pay_type' => 'piece_rate',
+            'hire_date' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $list = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
+            ->getJson('/api/v1/hr/employees');
+
+        $list->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $assignedEmployee->id);
+
+        $hidden = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
+            ->getJson("/api/v1/hr/employees/{$otherEmployee->id}");
+
+        $hidden->assertNotFound();
+    }
+
     public function test_production_orders_are_visible_only_in_assigned_branches(): void
     {
         $otherBranch = Branch::create([

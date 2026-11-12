@@ -168,7 +168,7 @@ class StorefrontThemesAndPaymentsTest extends TestCase
             'products',
         ]);
 
-        $this->assertEquals(StorefrontService::THEME_MODERN_FASHION, $response->json('store_settings.theme_id'));
+        $this->assertEquals(StorefrontService::THEME_FASHION_BOUTIQUE, $response->json('store_settings.theme_id'));
     }
 
     public function test_tenant_can_configure_theme_and_branding(): void

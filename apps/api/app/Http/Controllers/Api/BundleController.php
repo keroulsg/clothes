@@ -169,7 +169,7 @@ class BundleController extends Controller
         if (!empty($validated['employee_id'])) {
             $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
             $bundleBranchId = $this->resolveBundleBranchId($bundle);
-            if ($bundleBranchId && $employee->branch_id !== $bundleBranchId) {
+            if (!$bundleBranchId || !$employee->branch_id || $employee->branch_id !== $bundleBranchId) {
                 return response()->json([
                     'success' => false,
                     'error' => 'BranchMismatch',

@@ -28,9 +28,11 @@ class EmployeeAdjustment extends Model
         'notes',
         'status',
         'approved_by',
+        'approved_by_user_id',
         'approved_at',
         'settled_payroll_id',
         'created_by',
+        'created_by_user_id',
     ];
 
     protected $casts = [
@@ -55,11 +57,11 @@ class EmployeeAdjustment extends Model
 
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'approved_by_user_id');
     }
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 }

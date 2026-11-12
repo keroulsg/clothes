@@ -281,7 +281,7 @@ class BusinessModulesPhases7to10Test extends TestCase
         $accountingService = app(AccountingService::class);
         $accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenueAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // قيد متوازن سليم (مدين 5000 = دائن 5000)

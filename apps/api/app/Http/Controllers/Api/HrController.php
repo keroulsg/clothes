@@ -260,6 +260,13 @@ class HrController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        if ($enforceBranchScope && (!$employee->branch_id || !in_array($employee->branch_id, $assignedBranchIds, true))) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك تعديل موظف تابع لفرع غير معيّن لحسابك.'], 403);
+        }
+
         if (array_key_exists('branch_id', $validated)) {
             $newBranchId = $validated['branch_id'];
             if ($newBranchId !== null) {
@@ -268,9 +275,6 @@ class HrController extends Controller
                     return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
                 }
             }
-            $user = $request->user();
-            $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-            $enforceBranchScope = $user && $user->role !== 'company_owner';
             if ($enforceBranchScope && ($newBranchId === null || !in_array($newBranchId, $assignedBranchIds, true))) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك نقل الموظف إلى فرع غير معيّن لحسابك أو إزالة تعيين فرعه.'], 403);
             }
@@ -400,8 +404,7 @@ class HrController extends Controller
         $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         $attendanceBranchId = $validated['branch_id'] ?? $employee->branch_id;
         if ($enforceBranchScope && (
             !$attendanceBranchId
@@ -492,8 +495,18 @@ class HrController extends Controller
         $created = [];
         $errors = [];
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+
         foreach ($validated['records'] as $index => $row) {
             try {
+                $employee = Employee::where('tenant_id', app('current_tenant_id'))->findOrFail($row['employee_id']);
+                if ($user && $user->role !== 'company_owner') {
+                    if (!$employee->branch_id || !in_array($employee->branch_id, $assignedBranchIds, true)) {
+                        throw new \\Illuminate\\Auth\\Access\\AuthorizationException('لا يمكنك تسجيل حضور موظف تابع لفرع غير معيّن لحسابك.');
+                    }
+                    $row['branch_id'] = $employee->branch_id;
+                }
                 $created[] = $this->payrollService->recordAttendance($row, $userId);
             } catch (\Exception $e) {
                 $errors[] = [
@@ -678,6 +691,9 @@ class HrController extends Controller
         $user = $request->user();
         $branchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner';
+        if ($enforceBranchScope && (!$employee->branch_id || !in_array($employee->branch_id, $branchIds, true))) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'العامل المحدد لا يتبع فرعًا معيّنًا لحسابك.'], 403);
+        }
         if (!empty($validated['production_order_id'])) {
             $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
             if ($enforceBranchScope && $employee->branch_id !== $productionOrder->branch_id) {
@@ -779,8 +795,7 @@ class HrController extends Controller
         $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
         $user = $request->user();
         $branchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         if ($enforceBranchScope && (
             !$productionOrder->branch_id
             || !in_array($productionOrder->branch_id, $branchIds, true)

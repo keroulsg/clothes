@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmployeeAdjustment;
 use App\Models\Payroll;
 use App\Models\PayrollPayment;
+use App\Models\ProductionOrder;
 use App\Models\PieceRate;
 use App\Models\PieceWorkLog;
 use App\Models\QualityDefectAdjustment;

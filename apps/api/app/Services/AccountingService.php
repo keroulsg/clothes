@@ -1416,7 +1416,9 @@ class AccountingService
                 ->where('payment_status', '!=', 'paid')
                 ->sum(DB::raw('total_amount - paid_amount'));
             $currBal = (float)($s->current_balance ?? 0);
-            $totalSupplierDue = round(max($invoicesDue, $currBal), 2);
+            // The supplier subledger balance is authoritative. Using max(invoice due, balance)
+            // masks differences instead of reconciling them.
+            $totalSupplierDue = round($currBal, 2);
 
             if (abs($totalSupplierDue) > 0.001) {
                 $subledgerSum += $totalSupplierDue;

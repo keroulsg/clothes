@@ -1673,7 +1673,19 @@ class AccountingService
             }
         }
 
-        // WIP subledger = approved production cost sheets less all individually posted finished-goods receipts.
+        // Materials enter WIP at cutting-order issue. Cost-sheet postings therefore add
+        // conversion costs only; counting total_cost here would capitalize materials twice.
+        $materialIssueDebit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_issue')
+            ->where('status', 'posted')
+            ->sum('total_debit');
+        $materialReversalCredit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_reversal')
+            ->where('status', 'posted')
+            ->sum('total_credit');
+
         $postedCostSheetIds = JournalEntry::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('reference_type', 'production_cost_sheet')
@@ -1687,8 +1699,10 @@ class AccountingService
             ->where('tenant_id', $tenantId)
             ->where('status', 'approved')
             ->whereIn('id', $postedCostSheetIds)
-            ->get(['id', 'production_order_id', 'total_cost']);
-        $approvedWipCost = (float) $postedCostSheets->sum('total_cost');
+            ->get(['id', 'production_order_id', 'total_cost', 'direct_materials_cost']);
+        $approvedConversionCost = (float) $postedCostSheets->sum(
+            fn ($sheet) => max(0, (float) $sheet->total_cost - (float) $sheet->direct_materials_cost)
+        );
         $postedProductionOrderIds = $postedCostSheets->pluck('production_order_id')->unique()->values();
         $postedReceiptInspectionIds = DB::table('quality_inspections')
             ->where('tenant_id', $tenantId)
@@ -1700,7 +1714,11 @@ class AccountingService
             ->where('status', 'posted')
             ->whereIn('reference_key', $postedReceiptInspectionIds)
             ->sum('total_debit');
-        $wipSubledgerValuation = round($approvedWipCost - $capitalizedFinishedGoods, 2);
+
+        $wipSubledgerValuation = round(
+            $materialIssueDebit - $materialReversalCredit + $approvedConversionCost - $capitalizedFinishedGoods,
+            2
+        );
         $wipVariance = round($glWip - $wipSubledgerValuation, 2);
 
         $warehouseFabricsValuation = round($warehouseFabricsValuation, 2);
@@ -1744,7 +1762,9 @@ class AccountingService
                     'warehouse_valuation' => $wipSubledgerValuation,
                     'variance' => $wipVariance,
                     'status' => abs($wipVariance) < 0.01 ? 'matched' : 'variance_detected',
-                    'approved_cost_sheets_total' => round($approvedWipCost, 2),
+                    'cutting_material_issues_total' => round($materialIssueDebit, 2),
+                    'cutting_material_reversals_total' => round($materialReversalCredit, 2),
+                    'approved_conversion_cost_total' => round($approvedConversionCost, 2),
                     'finished_goods_receipts_total' => round($capitalizedFinishedGoods, 2),
                 ],
                 [

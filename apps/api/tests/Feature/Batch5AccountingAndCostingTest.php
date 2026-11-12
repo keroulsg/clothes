@@ -12,14 +12,17 @@ use App\Models\FiscalYear;
 use App\Models\GarmentModel;
 use App\Models\JournalEntry;
 use App\Models\PaymentVoucher;
+use App\Models\PurchaseOrder;
 use App\Models\PieceWorkLog;
 use App\Models\ProductionCostSheet;
 use App\Models\ProductionOrder;
 use App\Models\SalesInvoice;
 use App\Models\Supplier;
+use App\Models\SupplierInvoice;
 use App\Models\Tenant;
 use App\Models\TenantAccountMapping;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\AccountingService;
 use App\Services\FinancialReportService;
 use Carbon\Carbon;
@@ -422,6 +425,66 @@ class Batch5AccountingAndCostingTest extends TestCase
         $reconResp2->assertStatus(200);
         $this->assertTrue($reconResp2->json('is_matched'));
         $this->assertEquals(0, (float)$reconResp2->json('variance'));
+    }
+
+    /**
+     * Supplier subledger reconciliation must expose invoice/balance mismatches instead of masking them with max().
+     */
+    public function test_ap_reconciliation_uses_supplier_subledger_balance_and_exposes_invoice_variance(): void
+    {
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+
+        $supplier = Supplier::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'SUP-AP-RECON',
+            'name' => 'مورد اختبار مطابقة الموردين',
+            'current_balance' => 500,
+            'is_active' => true,
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مخزن اختبار المطابقة',
+            'code' => 'WH-AP-RECON',
+            'type' => 'raw_materials',
+            'is_active' => true,
+        ]);
+
+        $purchaseOrder = PurchaseOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'po_number' => 'PO-AP-RECON',
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'order_date' => now()->toDateString(),
+            'status' => 'received',
+            'subtotal' => 1000,
+            'total_amount' => 1000,
+        ]);
+
+        SupplierInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'SUP-INV-AP-RECON',
+            'internal_reference' => 'SINV-AP-RECON',
+            'supplier_id' => $supplier->id,
+            'purchase_order_id' => $purchaseOrder->id,
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => 1000,
+            'tax_amount' => 0,
+            'total_amount' => 1000,
+            'paid_amount' => 0,
+            'payment_status' => 'unpaid',
+            'matching_status' => 'matched',
+            'is_posted' => true,
+        ]);
+
+        $reconciliation = $this->accountingService->reconcileAccountsPayable($this->tenantA->id);
+
+        $this->assertSame(500.0, (float) $reconciliation['subledger_total']);
+        $this->assertSame(1000.0, (float) $reconciliation['breakdown'][0]['invoices_due']);
+        $this->assertSame(500.0, (float) $reconciliation['breakdown'][0]['current_balance']);
+        $this->assertSame(500.0, (float) $reconciliation['breakdown'][0]['total_balance']);
+        $this->assertFalse($reconciliation['is_matched']);
     }
 
     /**

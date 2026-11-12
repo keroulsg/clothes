@@ -637,6 +637,17 @@ class Batch5AccountingAndCostingTest extends TestCase
         ]);
         $this->assertEquals(500, (float) $cmtCostWithSubcontract->subcontracted_services_cost);
         $this->assertEquals(2700, (float) $cmtCostWithSubcontract->total_cost);
+
+        $cmtCostWithSubcontract->status = 'approved';
+        $cmtCostWithSubcontract->save();
+        $this->accountingService->postProductionCostSheetToWip($cmtCostWithSubcontract);
+
+        $inventoryReconciliation = $this->accountingService->reconcileInventory($this->tenantA->id);
+        $wipBreakdown = collect($inventoryReconciliation['breakdown'])->firstWhere('gl_code', '1220');
+        $this->assertEquals(2700.0, (float) $wipBreakdown['gl_balance']);
+        $this->assertEquals(2700.0, (float) $wipBreakdown['warehouse_valuation']);
+        $this->assertEquals(0.0, (float) $wipBreakdown['variance']);
+        $this->assertTrue($inventoryReconciliation['wip_valuation_available']);
     }
 
     /**

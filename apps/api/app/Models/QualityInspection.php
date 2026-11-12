@@ -15,6 +15,8 @@ class QualityInspection extends Model
     protected $fillable = [
         'tenant_id',
         'inspection_number',
+        'idempotency_key',
+        'idempotency_fingerprint',
         'production_order_id',
         'cutting_bundle_id',
         'production_stage_id',

@@ -879,8 +879,16 @@ class ProductionService
             throw new InvalidArgumentException('أمان: تعارض في سياق الشركة.');
         }
         $tenantId = $contextTenantId;
+        $idempotencyKey = trim((string) ($data['idempotency_key'] ?? ''));
+        $fingerprintPayload = $data;
+        unset($fingerprintPayload['tenant_id'], $fingerprintPayload['idempotency_key']);
+        ksort($fingerprintPayload);
+        $idempotencyFingerprint = hash('sha256', json_encode(
+            [$fingerprintPayload, $defects],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
 
-        return DB::transaction(function () use ($data, $defects, $tenantId) {
+        return DB::transaction(function () use ($data, $defects, $tenantId, $idempotencyKey, $idempotencyFingerprint) {
             $inspectedQty = (int) $data['inspected_quantity'];
             $passedQty = (int) $data['passed_quantity'];
             $rejectedQty = (int) ($data['rejected_quantity'] ?? 0);
@@ -894,6 +902,21 @@ class ProductionService
                 ->where('id', $data['production_order_id'])
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($idempotencyKey !== '') {
+                $existingInspection = QualityInspection::where('tenant_id', $tenantId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existingInspection) {
+                    if (!hash_equals((string) $existingInspection->idempotency_fingerprint, $idempotencyFingerprint)) {
+                        throw new InvalidArgumentException('تعارض Idempotency: مفتاح فحص الجودة مستخدم مسبقاً لبيانات فحص مختلفة.');
+                    }
+
+                    return $existingInspection->load('defects');
+                }
+            }
 
             // Final-audit receipts must never push accepted finished goods beyond the order's remaining planned quantity.
             // The production-order row is already locked above, so concurrent inspections serialize this check.
@@ -909,6 +932,8 @@ class ProductionService
             $inspection = QualityInspection::create([
                 'tenant_id' => $tenantId,
                 'inspection_number' => $data['inspection_number'] ?? ('QC-' . date('Ym') . '-' . rand(1000, 9999)),
+                'idempotency_key' => $idempotencyKey !== '' ? $idempotencyKey : null,
+                'idempotency_fingerprint' => $idempotencyKey !== '' ? $idempotencyFingerprint : null,
                 'production_order_id' => $prodOrder->id,
                 'cutting_bundle_id' => $data['cutting_bundle_id'] ?? null,
                 'production_stage_id' => $data['production_stage_id'] ?? null,

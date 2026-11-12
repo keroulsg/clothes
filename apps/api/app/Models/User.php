@@ -21,6 +21,7 @@ class User extends Authenticatable
         'phone',
         'role',
         'permissions',
+        'permissions_mode',
         'is_active',
         'password',
     ];
@@ -130,8 +131,8 @@ class User extends Authenticatable
         if ($tenantId) {
             $tenant = Tenant::find($tenantId);
             $customRoles = $tenant?->settings['custom_role_permissions'] ?? [];
-            if (!empty($customRoles[$role]) && is_array($customRoles[$role])) {
-                return $customRoles[$role];
+            if (array_key_exists($role, $customRoles) && is_array($customRoles[$role])) {
+                return array_values(array_unique($customRoles[$role]));
             }
         }
 
@@ -171,10 +172,28 @@ class User extends Authenticatable
             return ['*'];
         }
 
-        $defaults = self::getDefaultPermissionsForRole($this->role, $this->tenant_id);
-        $custom = is_array($this->permissions) ? $this->permissions : [];
+        if ($this->permissions_mode === 'custom') {
+            return array_values(array_unique(is_array($this->permissions) ? $this->permissions : []));
+        }
 
-        return array_values(array_unique(array_merge($defaults, $custom)));
+        return self::getDefaultPermissionsForRole($this->role, $this->tenant_id);
+    }
+
+    /**
+     * قائمة المفاتيح المعتمدة فقط؛ يمنع تخزين صلاحيات مجهولة أو نجمة عامة للأدوار غير المالكة.
+     */
+    public static function getAllPermissionKeys(): array
+    {
+        $keys = [];
+        foreach (self::getPermissionsCatalog() as $module) {
+            foreach ($module['permissions'] ?? [] as $permission) {
+                if (isset($permission['key'])) {
+                    $keys[] = $permission['key'];
+                }
+            }
+        }
+
+        return array_values(array_unique($keys));
     }
 
     /**
@@ -182,8 +201,12 @@ class User extends Authenticatable
      */
     public function hasPermission(string $permission): bool
     {
-        if ($this->role === 'company_owner' || $this->role === 'platform_admin') {
+        if ($this->role === 'company_owner') {
             return true;
+        }
+
+        if ($this->role === 'platform_admin') {
+            return false;
         }
 
         $effective = $this->getEffectivePermissions();

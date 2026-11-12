@@ -623,10 +623,10 @@ class HrController extends Controller
         ], 201);
     }
 
-    public function pieceWorkLogs(): JsonResponse
+    public function pieceWorkLogs(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $logs = $this->scopeToAssignedEmployeeBranches(PieceWorkLog::where('tenant_id', $tenantId), request())
+        $logs = $this->scopeToAssignedEmployeeBranches(PieceWorkLog::where('tenant_id', $tenantId), $request)
             ->with(['employee', 'productionOrder.garmentModel', 'cuttingOrder', 'pieceRate', 'cuttingBundle', 'jobOrder'])
             ->latest('created_at')
             ->paginate(25);

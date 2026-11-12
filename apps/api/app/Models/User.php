@@ -204,14 +204,14 @@ class User extends Authenticatable
                 return ['admin.settings'];
             case 'production_manager':
             case 'production_engineer':
-                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'hr.view', 'hr.manage', 'storefront.view', 'storefront.manage', 'waslat_worsh.view', 'waslat_worsh.manage', 'subcontracting.view', 'subcontracting.manage', 'production.work'];
+                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'hr.view', 'hr.manage', 'hr.objection', 'storefront.view', 'storefront.manage', 'waslat_worsh.view', 'waslat_worsh.manage', 'subcontracting.view', 'subcontracting.manage', 'production.work'];
             case 'inventory_custodian':
             case 'warehouse':
             case 'storekeeper':
             case 'warehouse_manager':
                 return ['inventory.view', 'inventory.manage', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'branches.view', 'procurement.view', 'procurement.create'];
             case 'accountant':
-                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.manage', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
+                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.manage', 'hr.payroll', 'hr.objection', 'subcontracting.view', 'subcontracting.payments'];
             case 'financial_accountant':
                 return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
             case 'quality_controller':

@@ -93,7 +93,7 @@ class StorefrontController extends Controller
             'customer_phone' => 'required|string|max:50',
             'shipping_address' => 'required|string',
             'city' => 'nullable|string|max:100',
-            'payment_method' => 'required|string|in:cod,card_mock,instapay',
+            'payment_method' => 'required|string|in:cod,instapay',
             'instapay_reference' => 'nullable|string|max:100',
             'instapay_receipt_url' => 'nullable|string',
             'shipping_fee' => 'nullable|numeric|min:0',

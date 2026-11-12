@@ -1188,12 +1188,12 @@ class AccountingService
                 ->where('production_order_id', $order->id)
                 ->first();
 
-            // الحفاظ على القيم التاريخية لبطاقات التكلفة المعتمدة
-            if ($existingCostSheet && $existingCostSheet->status === 'approved' && empty($overrides['force_recalculate'])) {
+            // Approved cost sheets are immutable; corrections require a separate audited revision workflow.
+            if ($existingCostSheet && $existingCostSheet->status === 'approved') {
                 return $existingCostSheet->load(['productionOrder', 'garmentModel']);
             }
 
-            if (in_array($order->status, ['closed', 'archived']) && empty($overrides['force_recalculate'])) {
+            if (in_array($order->status, ['closed', 'archived'], true)) {
                 throw ValidationException::withMessages([
                     'production_order' => ['أمر الإنتاج مغلق نهائياً، ولا يمكن إعادة احتساب التكلفة إلا بإذن استثنائي معتمد.'],
                 ]);

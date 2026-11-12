@@ -85,6 +85,9 @@ class GoodsReceiptController extends Controller
             if ($enforceBranchScope && !in_array($receiptWarehouse->branch_id, $assignedBranchIds, true)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك الاستلام في مخزن تابع لفرع غير معيّن لحسابك.'], 403);
             }
+            if ($receiptWarehouse->branch_id !== $poWarehouse->branch_id) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب استلام أمر الشراء في نفس فرع المخزن المحدد بأمر الشراء.'], 422);
+            }
         }
 
         $validated['tenant_id'] = $tenantId;

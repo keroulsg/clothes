@@ -9,8 +9,8 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsurePermission
 {
     /**
-     * Apply the effective role/user permission set to every mapped tenant API
-     * route, including routes that historically had no role middleware.
+     * Enforce saved granular permissions for tenant users. Existing role middleware
+     * remains the compatibility boundary for inherited legacy accounts.
      * Unknown routes fail closed until an explicit permission mapping is added.
      */
     public function handle(Request $request, Closure $next): Response

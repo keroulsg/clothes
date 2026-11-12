@@ -146,7 +146,7 @@ class AccountingService
                     'is_control_account' => $acc['is_control_account'] ?? false,
                     'is_cash_bank' => $acc['is_cash_bank'] ?? false,
                     'is_postable' => $acc['is_postable'] ?? true,
-                    'current_balance' => 0,
+                    // Preserve live ledger balances when account metadata is re-seeded.
                     'is_active' => true,
                 ]
             );

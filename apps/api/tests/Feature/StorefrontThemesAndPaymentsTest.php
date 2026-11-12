@@ -299,7 +299,7 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         $updatedOrder = $verifyRes->json('order');
 
         $this->assertEquals('verified_paid', $updatedOrder['payment_status']);
-        $this->assertEquals($this->managerA->id, $updatedOrder['payment_reviewed_by']);
+        $this->assertEquals($this->managerA->id, $updatedOrder['payment_reviewed_by_user_id']);
         $this->assertNotNull($updatedOrder['payment_reviewed_at']);
         $this->assertNull($updatedOrder['payment_rejection_reason']);
     }

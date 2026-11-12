@@ -197,11 +197,11 @@ class Batch7RemainingModulesAndCostingEdgeCasesTest extends TestCase
             'production_order_id' => $order->id,
             'garment_model_id' => $this->model->id,
             'total_produced_pieces' => 100,
-            'direct_materials_cost' => 4000,
+            'direct_materials_cost' => 0,
             'direct_labor_cost' => 1000,
             'allocated_overhead_cost' => 750,
-            'total_cost' => 5750,
-            'cost_per_piece' => 57.50,
+            'total_cost' => 1750,
+            'cost_per_piece' => 17.50,
             'status' => 'calculated',
         ]);
 

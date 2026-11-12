@@ -125,6 +125,21 @@ class CuttingOrderController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        if ($enforceBranchScope && (
+            !in_array($prodOrder->branch_id, $assignedBranchIds, true)
+            || !in_array($warehouse->branch_id, $assignedBranchIds, true)
+        )) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك إنشاء أمر قص باستخدام أمر إنتاج أو مخزن تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
+
         if (!empty($validated['fabric_inventory_item_id'])) {
             $fabricItem = InventoryItem::withoutGlobalScopes()->find($validated['fabric_inventory_item_id']);
             if (!$fabricItem || $fabricItem->tenant_id !== $tenantId) {

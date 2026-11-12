@@ -1036,11 +1036,18 @@ class AccountingService
                 }
             }
 
+            $partyType = $data['party_type'] ?? 'customer';
+            $voucherType = $data['voucher_type'];
+
+            if (!$account->is_active || !$account->is_postable) {
+                throw new InvalidArgumentException('حساب الصرف/القبض غير نشط أو غير قابل للترحيل.');
+            }
+
             $voucher = PaymentVoucher::create([
                 'tenant_id' => $tenantId,
                 'voucher_number' => $data['voucher_number'] ?? ('PV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
-                'voucher_type' => $data['voucher_type'], // receipt or payment
-                'party_type' => $data['party_type'] ?? 'customer',
+                'voucher_type' => $voucherType, // receipt or payment
+                'party_type' => $partyType,
                 'party_id' => $data['party_id'] ?? null,
                 'party_name' => $data['party_name'],
                 'payment_method' => $data['payment_method'] ?? 'cash',
@@ -1051,13 +1058,13 @@ class AccountingService
             ]);
 
             // The voucher and its GL journal are one atomic operation. Never mutate balances outside the ledger.
-            if ($voucher->party_type === 'customer') {
+            if ($partyType === 'customer') {
                 $contraAccountId = $this->getMappedAccount($tenantId, 'ar_control')->id;
-            } elseif ($voucher->party_type === 'supplier') {
+            } elseif ($partyType === 'supplier') {
                 $contraAccountId = $this->getMappedAccount($tenantId, 'ap_control')->id;
-            } elseif ($voucher->party_type === 'employee') {
+            } elseif ($partyType === 'employee') {
                 $contraAccountId = $this->getMappedAccount($tenantId, 'payroll_payable')->id;
-            } elseif ($voucher->party_type === 'other' && !empty($data['contra_account_id'])) {
+            } elseif ($partyType === 'other' && !empty($data['contra_account_id'])) {
                 $contraAccount = ChartOfAccount::where('tenant_id', $tenantId)
                     ->whereKey($data['contra_account_id'])
                     ->where('is_active', true)
@@ -1074,7 +1081,7 @@ class AccountingService
                 throw new InvalidArgumentException('يجب تحديد حساب مقابل فرعي قابل للترحيل لسند الطرف الآخر قبل الترحيل.');
             }
 
-            if ($voucher->voucher_type === 'receipt') {
+            if ($voucherType === 'receipt') {
                 $lines = [
                     [
                         'account_id' => $account->id,
@@ -1116,7 +1123,7 @@ class AccountingService
                 'entry_date' => $voucher->voucher_date,
                 'reference_type' => 'payment_voucher',
                 'reference_id' => $voucher->id,
-                'description' => "قيد سند " . ($voucher->voucher_type === 'receipt' ? 'قبض' : 'صرف') . " رقم {$voucher->voucher_number} - {$voucher->party_name}",
+                'description' => "قيد سند " . ($voucherType === 'receipt' ? 'قبض' : 'صرف') . " رقم {$voucher->voucher_number} - {$voucher->party_name}",
                 'lines' => $lines,
             ]);
 

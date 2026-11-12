@@ -205,11 +205,11 @@ Route::prefix('v1')->group(function () {
 
         // المخازن ودفتر الأستاذ المخزني والتحويلات والجرد وأمانات العملاء (Batch 2)
         Route::get('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'warehouses'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
-        Route::post('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouse'])->middleware(['role:company_owner,accountant,production_manager', 'quota:active_warehouses']);
-        Route::put('/warehouses/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'updateWarehouse'])->middleware('role:company_owner,accountant,production_manager');
-        Route::delete('/warehouses/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'destroyWarehouse'])->middleware('role:company_owner,accountant,production_manager');
+        Route::post('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouse'])->middleware(['role:company_owner', 'quota:active_warehouses']);
+        Route::put('/warehouses/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'updateWarehouse'])->middleware('role:company_owner');
+        Route::delete('/warehouses/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'destroyWarehouse'])->middleware('role:company_owner');
         Route::get('/warehouse-types', [\App\Http\Controllers\Api\InventoryController::class, 'warehouseTypes'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
-        Route::post('/warehouse-types', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouseType'])->middleware('role:company_owner,accountant,production_manager');
+        Route::post('/warehouse-types', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouseType'])->middleware('role:company_owner');
 
         // وحدات القياس (Units of Measure - Batch 2B)
         Route::get('/inventory/units', [\App\Http\Controllers\Api\InventoryController::class, 'units']);

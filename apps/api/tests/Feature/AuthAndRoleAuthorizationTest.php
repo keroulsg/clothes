@@ -1337,5 +1337,48 @@ class AuthAndRoleAuthorizationTest extends TestCase
         $this->assertNotEquals(403, $resSupplier->status());
         $resSupplier->assertStatus(422); // مر من الدور وفشل في التحقق من صحة المدخلات
     }
+    public function test_user_specific_empty_permission_override_blocks_role_allowed_accounting_route(): void
+    {
+        $this->accountantUser->forceFill([
+            'permissions' => [],
+            'permissions_mode' => 'custom',
+        ])->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->postJson('/api/v1/accounting/journal-entries', [])
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'InsufficientPermission')
+            ->assertJsonPath('required_permission', 'accounting.post');
+    }
+
+    public function test_user_specific_permission_override_allows_only_the_selected_accounting_action(): void
+    {
+        $this->accountantUser->forceFill([
+            'permissions' => ['accounting.view'],
+            'permissions_mode' => 'custom',
+        ])->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->postJson('/api/v1/accounting/journal-entries', [])
+            ->assertStatus(403)
+            ->assertJsonPath('required_permission', 'accounting.post');
+    }
+
+    public function test_empty_custom_role_permissions_are_enforced_instead_of_falling_back_to_defaults(): void
+    {
+        $settings = $this->tenant->settings ?? [];
+        $settings['custom_role_permissions']['accountant'] = [];
+        $this->tenant->settings = $settings;
+        $this->tenant->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->postJson('/api/v1/accounting/journal-entries', [])
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'InsufficientPermission');
+    }
+
 }
 

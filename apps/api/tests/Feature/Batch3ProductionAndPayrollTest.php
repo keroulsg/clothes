@@ -337,8 +337,8 @@ class Batch3ProductionAndPayrollTest extends TestCase
                 ],
             ]);
 
-        $cutRes->assertStatus(201)
-            ->assertJsonPath('success', true);
+        $this->assertSame(201, $cutRes->status(), $cutRes->getContent());
+        $cutRes->assertJsonPath('success', true);
 
         $cuttingOrder = CuttingOrder::where('tenant_id', $this->tenantA->id)->latest()->first();
         $this->assertNotNull($cuttingOrder);

@@ -462,6 +462,7 @@ class FinancialReportingPhase08BTest extends TestCase
             'code' => 'BR-01',
             'name' => 'Main Workshop',
         ]);
+        $this->accountantA->branches()->sync([$branch->id]);
 
         $order = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
@@ -687,6 +688,7 @@ class FinancialReportingPhase08BTest extends TestCase
             'code' => 'BR-CSV',
             'name' => 'Branch CSV',
         ]);
+        $this->accountantA->branches()->sync([$branch->id]);
 
         $order = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,

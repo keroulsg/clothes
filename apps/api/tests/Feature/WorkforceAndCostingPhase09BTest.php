@@ -143,6 +143,10 @@ class WorkforceAndCostingPhase09BTest extends TestCase
             'is_main' => true,
         ]);
 
+        $this->prodMgrA->branches()->sync([$this->branchA->id]);
+        $this->accountantA->branches()->sync([$this->branchA->id]);
+        $this->workerA->branches()->sync([$this->branchA->id]);
+
         $this->colorA = Color::create([
             'tenant_id' => $this->tenantA->id,
             'name' => 'Navy Blue',
@@ -178,6 +182,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
 
         $this->employeeA1 = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-001',
             'name' => 'Ahmed Sewing Worker',
             'department' => 'sewing',
@@ -189,6 +194,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
 
         $this->employeeA2 = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-002',
             'name' => 'Mahmoud Overlock Worker',
             'department' => 'sewing',

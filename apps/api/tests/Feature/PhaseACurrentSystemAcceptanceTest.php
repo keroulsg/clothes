@@ -155,6 +155,9 @@ class PhaseACurrentSystemAcceptanceTest extends TestCase
             'is_active' => true,
         ]);
 
+        $this->cashierUser->branches()->sync([$branch->id]);
+        $this->warehouse->update(['branch_id' => $branch->id]);
+
         // فتح جلسة كاشير
         $session = PosSession::create([
             'tenant_id' => $this->tenantA->id,

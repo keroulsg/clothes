@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -169,6 +170,8 @@ class RoleRoutingAndLogoutAcceptanceTest extends TestCase
                 'amount' => 500,
             ]);
         $workerVoucherRes->assertStatus(403);
+
+        $this->app['auth']->forgetGuards();
 
         // Login as Accountant
         $acctLogin = $this->postJson('/api/v1/auth/login', [

@@ -137,6 +137,22 @@ class Batch4SalesAndReceivablesTest extends TestCase
             'is_active' => true,
         ]);
 
+        $branchB = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الإسكندرية',
+            'code' => 'BR-B-' . uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->warehouseB = Warehouse::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branchB->id,
+            'name' => 'مستودع المنتج التام B',
+            'code' => 'WH-FG-B-' . uniqid(),
+            'type' => 'finished_goods',
+            'is_active' => true,
+        ]);
+
         // موديل ومتغير لـ Tenant A
         $modelA = GarmentModel::create([
             'tenant_id' => $this->tenantA->id,

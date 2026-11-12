@@ -1686,6 +1686,7 @@ class SalesService
                     'reference_type' => 'sales_delivery_notes',
                     'reference_id' => $deliveryNote->id,
                     'idempotency_key' => 'DN-' . $deliveryNote->id . '-' . $orderItem->id,
+                    'consume_reserved' => true,
                 ]);
 
                 $reservationToRelease = min($qtyToDeliver, $lineReserved);
@@ -1854,44 +1855,26 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($data, $tenantId) {
-            $customerId = $data['customer_id'];
-            $customer = Customer::where('tenant_id', $tenantId)->findOrFail($customerId);
-
-            $amount = (float) $data['amount'];
+            $customer = Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            $amount = round((float) $data['amount'], 4);
             if ($amount <= 0) {
-                throw new InvalidArgumentException("مبلغ سند القبض يجب أن يكون أكبر من الصفر");
+                throw new InvalidArgumentException('مبلغ سند القبض يجب أن يكون أكبر من الصفر.');
             }
 
+            $accounting = app(AccountingService::class);
             $paymentMethod = $data['payment_method'] ?? 'cash';
-            $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card']) ? '1020' : '1010';
-
-            $accountId = $data['account_id'] ?? null;
-            if ($accountId) {
-                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('id', $accountId)->first();
-            } else {
-                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', $preferredCode)->first();
-                if (!$cashAccount && $preferredCode === '1020') {
-                    $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1010')->first();
-                }
-            }
-
-            if (!$cashAccount) {
-                if (ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() === 0) {
-                    app(AccountingService::class)->initializeDefaultChartOfAccounts($tenantId);
-                }
-                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', $preferredCode)->first()
-                    ?? ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1010')->first()
-                    ?? ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('type', 'asset')->first();
-            }
-
-            $arAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1110')->first();
-            if (!$arAccount && ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() === 0) {
-                app(AccountingService::class)->initializeDefaultChartOfAccounts($tenantId);
-                $arAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1110')->first();
-            }
+            $cashMapping = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? 'default_bank' : 'default_cash';
+            $cashAccount = !empty($data['account_id'])
+                ? ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('id', $data['account_id'])
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->firstOrFail()
+                : $accounting->getMappedAccount($tenantId, $cashMapping);
+            $arAccount = $accounting->getMappedAccount($tenantId, 'ar_control');
 
             $voucherNumber = $data['voucher_number'] ?? ('RCV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
-
             $voucher = PaymentVoucher::create([
                 'tenant_id' => $tenantId,
                 'voucher_number' => $voucherNumber,
@@ -1900,14 +1883,13 @@ class SalesService
                 'party_id' => $customer->id,
                 'party_name' => $customer->name,
                 'payment_method' => $paymentMethod,
-                'account_id' => $cashAccount ? $cashAccount->id : ($arAccount ? $arAccount->id : null),
+                'account_id' => $cashAccount->id,
                 'amount' => $amount,
                 'voucher_date' => $data['voucher_date'] ?? now()->toDateString(),
                 'notes' => $data['notes'] ?? null,
                 'idempotency_key' => $data['idempotency_key'] ?? null,
             ]);
 
-            // تخصيص الدفعة على الفواتير
             $allocations = $data['allocations'] ?? [];
             if (empty($allocations) && !empty($data['sales_invoice_id'])) {
                 $allocations = [['sales_invoice_id' => $data['sales_invoice_id'], 'amount' => $amount]];
@@ -1915,86 +1897,92 @@ class SalesService
                 $allocations = [['sales_invoice_id' => $data['invoice_id'], 'amount' => $amount]];
             }
 
-            // تخصيص تلقائي FIFO على الفواتير المفتوحة إذا لم يتم تحديد فواتير بعينها
             if (empty($allocations)) {
                 $unpaidInvoices = SalesInvoice::where('tenant_id', $tenantId)
                     ->where('customer_id', $customer->id)
                     ->whereIn('status', ['issued', 'partially_paid'])
                     ->where('balance_due', '>', 0)
                     ->orderBy('invoice_date', 'asc')
+                    ->lockForUpdate()
                     ->get();
 
                 $remainingToAllocate = $amount;
-                foreach ($unpaidInvoices as $inv) {
-                    if ($remainingToAllocate <= 0) break;
-                    $allocAmount = min($remainingToAllocate, (float) $inv->balance_due);
-                    $allocations[] = ['sales_invoice_id' => $inv->id, 'amount' => $allocAmount];
-                    $remainingToAllocate -= $allocAmount;
+                foreach ($unpaidInvoices as $invoice) {
+                    if ($remainingToAllocate <= 0) {
+                        break;
+                    }
+                    $allocationAmount = min($remainingToAllocate, (float) $invoice->balance_due);
+                    $allocations[] = ['sales_invoice_id' => $invoice->id, 'amount' => $allocationAmount];
+                    $remainingToAllocate -= $allocationAmount;
                 }
             }
 
-            foreach ($allocations as $alloc) {
-                $invId = $alloc['sales_invoice_id'] ?? $alloc['invoice_id'] ?? null;
-                $allocAmt = (float) ($alloc['amount'] ?? 0);
-                if (!$invId || $allocAmt <= 0) continue;
+            $allocatedTotal = 0.0;
+            foreach ($allocations as $allocation) {
+                $invoiceId = $allocation['sales_invoice_id'] ?? $allocation['invoice_id'] ?? null;
+                $allocationAmount = round((float) ($allocation['amount'] ?? 0), 4);
+                if (!$invoiceId || $allocationAmount <= 0) {
+                    throw new InvalidArgumentException('كل تخصيص دفعة يجب أن يحتوي على فاتورة ومبلغ موجب.');
+                }
 
                 $invoice = SalesInvoice::where('tenant_id', $tenantId)
-                    ->where('id', $invId)
+                    ->where('id', $invoiceId)
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if ($allocAmt > (float)$invoice->balance_due + 0.0001) {
-                    throw new InvalidArgumentException("مبلغ التخصيص ({$allocAmt}) يتجاوز الرصيد المستحق على الفاتورة {$invoice->invoice_number} ({$invoice->balance_due})");
+                if ($invoice->customer_id !== $customer->id) {
+                    throw new InvalidArgumentException('لا يمكن تخصيص سند القبض على فاتورة تخص عميلاً آخر.');
+                }
+                if ($allocationAmount > (float) $invoice->balance_due + 0.0001) {
+                    throw new InvalidArgumentException("مبلغ التخصيص يتجاوز الرصيد المستحق على الفاتورة {$invoice->invoice_number}.");
                 }
 
-                $invoice->paid_amount += $allocAmt;
-                $invoice->balance_due = max(0, round($invoice->total_amount - $invoice->paid_amount, 4));
-                $invoice->status = ($invoice->balance_due <= 0.0001) ? 'paid' : 'partially_paid';
+                $invoice->paid_amount = round((float) $invoice->paid_amount + $allocationAmount, 4);
+                $invoice->balance_due = max(0, round((float) $invoice->total_amount - (float) $invoice->paid_amount, 4));
+                $invoice->status = $invoice->balance_due <= 0.0001 ? 'paid' : 'partially_paid';
                 $invoice->save();
 
                 PaymentVoucherAllocation::create([
                     'tenant_id' => $tenantId,
                     'payment_voucher_id' => $voucher->id,
                     'sales_invoice_id' => $invoice->id,
-                    'amount' => $allocAmt,
+                    'amount' => $allocationAmount,
                 ]);
+                $allocatedTotal += $allocationAmount;
             }
 
-            // إثبات القيد المحاسبي المتوازن إذا كانت شجرة الحسابات نشطة
-            if ($cashAccount && $arAccount) {
-                try {
-                    $lines = [
-                        [
-                            'account_id' => $cashAccount->id,
-                            'debit' => $amount,
-                            'credit' => 0,
-                            'description' => "سند قبض من العميل {$customer->name} برقم {$voucher->voucher_number}",
-                        ],
-                        [
-                            'account_id' => $arAccount->id,
-                            'debit' => 0,
-                            'credit' => $amount,
-                            'description' => "سداد مديونية العميل {$customer->name} بموجب سند قبض {$voucher->voucher_number}",
-                        ]
-                    ];
-
-                    app(AccountingService::class)->createJournalEntry([
-                        'entry_number' => 'JE-RCV-' . $voucher->voucher_number,
-                        'description' => "سند قبض عميل {$voucher->voucher_number} - {$customer->name}",
-                        'reference_type' => 'payment_vouchers',
-                        'reference_id' => $voucher->id,
-                        'entry_date' => $voucher->voucher_date ? $voucher->voucher_date->toDateString() : now()->toDateString(),
-                        'lines' => $lines,
-                    'consume_reserved' => true,
-                    ]);
-                } catch (\Throwable) {
-                    // فشل غير مانع إذا كانت الحسابات تجريبية
-                }
+            if ($allocatedTotal > $amount + 0.0001) {
+                throw new InvalidArgumentException('إجمالي تخصيصات سند القبض يتجاوز مبلغ السند.');
             }
+
+            // A receipt is not committed unless its balanced GL journal is committed too.
+            $accounting->createJournalEntry([
+                'entry_number' => 'JE-RCV-' . $voucher->voucher_number,
+                'description' => "سند قبض عميل {$voucher->voucher_number} - {$customer->name}",
+                'reference_type' => 'payment_vouchers',
+                'reference_id' => $voucher->id,
+                'entry_date' => $voucher->voucher_date ? $voucher->voucher_date->toDateString() : now()->toDateString(),
+                'lines' => [
+                    [
+                        'account_id' => $cashAccount->id,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "سند قبض من العميل {$customer->name} برقم {$voucher->voucher_number}",
+                    ],
+                    [
+                        'account_id' => $arAccount->id,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "سداد مديونية العميل {$customer->name} بموجب سند قبض {$voucher->voucher_number}",
+                        'party_type' => 'customer',
+                        'party_id' => $customer->id,
+                    ],
+                ],
+            ]);
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'customer_payment_recorded',
                 'auditable_type' => 'payment_vouchers',
                 'auditable_id' => $voucher->id,

@@ -1042,7 +1042,7 @@ class SalesService
                     || $cashAccount->type !== 'asset'
                     || $cashAccount->category !== 'current_asset'
                 ) {
-                    throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب خزينة/بنك فرعياً نشطاً وقابلاً للترحيل.");
+                    throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب خزينة/بنك فرعي نشطاً وقابلاً للترحيل ضمن الأصول المتداولة.");
                 }
             } else {
                 $mappingKey = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? 'default_bank' : 'default_cash';

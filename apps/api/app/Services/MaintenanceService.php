@@ -306,13 +306,20 @@ class MaintenanceService
     /**
      * Get asset downtime and maintenance cost summary.
      */
-    public function getDowntimeSummary(): array
+    public function getDowntimeSummary(?array $branchIds = null): array
     {
-        $totalMachines = Machine::count();
-        $operationalMachines = Machine::where('status', 'operational')->count();
-        $downMachines = Machine::whereIn('status', ['under_maintenance', 'breakdown'])->count();
-        $totalDowntimeHours = (float) MaintenanceWorkOrder::sum('downtime_hours');
-        $totalMaintenanceCost = (float) MaintenanceWorkOrder::sum('total_cost');
+        $machineQuery = Machine::query();
+        $workOrderQuery = MaintenanceWorkOrder::query();
+        if ($branchIds !== null) {
+            $machineQuery->whereIn('branch_id', $branchIds);
+            $workOrderQuery->whereHas('machine', fn ($query) => $query->whereIn('branch_id', $branchIds));
+        }
+
+        $totalMachines = (clone $machineQuery)->count();
+        $operationalMachines = (clone $machineQuery)->where('status', 'operational')->count();
+        $downMachines = (clone $machineQuery)->whereIn('status', ['under_maintenance', 'breakdown'])->count();
+        $totalDowntimeHours = (float) (clone $workOrderQuery)->sum('downtime_hours');
+        $totalMaintenanceCost = (float) (clone $workOrderQuery)->sum('total_cost');
 
         return [
             'total_machines' => $totalMachines,

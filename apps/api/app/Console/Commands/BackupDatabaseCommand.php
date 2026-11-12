@@ -229,13 +229,25 @@ class BackupDatabaseCommand extends Command
         $cipher = 'aes-256-cbc';
         $ivlen = openssl_cipher_iv_length($cipher);
         $iv = openssl_random_pseudo_bytes($ivlen);
+        if ($iv === false) {
+            throw new \RuntimeException('Unable to generate a secure encryption IV.');
+        }
+
         $key = hash('sha256', $passphrase, true);
-
         $plaintext = file_get_contents($filePath);
-        $ciphertext = openssl_encrypt($plaintext, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+        if ($plaintext === false) {
+            throw new \RuntimeException('Unable to read backup artifact for encryption.');
+        }
 
-        // Prepend IV to ciphertext
-        file_put_contents($filePath, $iv . $ciphertext);
+        $ciphertext = openssl_encrypt($plaintext, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+        if ($ciphertext === false) {
+            throw new \RuntimeException('Backup encryption failed.');
+        }
+
+        // Prepend IV to ciphertext; the manifest checksums the finalized encrypted artifact.
+        if (file_put_contents($filePath, $iv . $ciphertext, LOCK_EX) === false) {
+            throw new \RuntimeException('Unable to write encrypted backup artifact.');
+        }
     }
 
     private function syncToOffsiteStorage(string $dumpPath, string $dumpName, string $manifestPath, string $manifestName): void

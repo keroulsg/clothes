@@ -770,31 +770,44 @@ class AccountingService
     public function closeFiscalPeriod(string $periodId, ?string $userId = null): FiscalPeriod
     {
         $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
-        $period = FiscalPeriod::where('tenant_id', $tenantId)->findOrFail($periodId);
-
-        if ($period->status === 'closed') {
-            return $period;
+        if (empty($tenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
         }
 
-        $period->status = 'closed';
-        $period->closed_at = now();
-        $period->closed_by_user_id = $userId ?? auth()->id();
-        $period->save();
+        return DB::transaction(function () use ($periodId, $userId, $tenantId) {
+            $period = FiscalPeriod::where('tenant_id', $tenantId)
+                ->whereKey($periodId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        try {
-            AuditLog::create([
-                'tenant_id' => $tenantId,
-                'user_id' => $userId ?? auth()->id(),
-                'action' => 'fiscal_period.closed',
-                'auditable_type' => FiscalPeriod::class,
-                'auditable_id' => $period->id,
-                'old_values' => ['status' => 'open'],
-                'new_values' => ['status' => 'closed'],
-                'ip_address' => request()->ip(),
-            ]);
-        } catch (\Throwable $e) {}
+            if ($period->status === 'closed') {
+                return $period;
+            }
+            if ($period->status !== 'open') {
+                throw new InvalidArgumentException("لا يمكن إغلاق فترة بحالة [{$period->status}].");
+            }
 
-        return $period;
+            $actorId = $userId ?? auth()->id();
+            $period->status = 'closed';
+            $period->closed_at = now();
+            $period->closed_by_user_id = $actorId;
+            $period->save();
+
+            try {
+                AuditLog::create([
+                    'tenant_id' => $tenantId,
+                    'user_id' => $actorId,
+                    'action' => 'fiscal_period.closed',
+                    'auditable_type' => FiscalPeriod::class,
+                    'auditable_id' => $period->id,
+                    'old_values' => ['status' => 'open'],
+                    'new_values' => ['status' => 'closed'],
+                    'ip_address' => request()->ip(),
+                ]);
+            } catch (\Throwable $e) {}
+
+            return $period;
+        });
     }
 
     /**
@@ -803,32 +816,48 @@ class AccountingService
     public function reopenFiscalPeriod(string $periodId, string $reason, ?string $userId = null): FiscalPeriod
     {
         $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
-        $period = FiscalPeriod::where('tenant_id', $tenantId)->findOrFail($periodId);
-
+        if (empty($tenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
         if (empty(trim($reason))) {
             throw new InvalidArgumentException('يجب تقديم سبب معتمد لإعادة فتح الفترة المالية المقفلة.');
         }
 
-        $period->status = 'open';
-        $period->reopened_at = now();
-        $period->reopened_by_user_id = $userId ?? auth()->id();
-        $period->reopening_reason = $reason;
-        $period->save();
+        return DB::transaction(function () use ($periodId, $reason, $userId, $tenantId) {
+            $period = FiscalPeriod::where('tenant_id', $tenantId)
+                ->whereKey($periodId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        try {
-            AuditLog::create([
-                'tenant_id' => $tenantId,
-                'user_id' => $userId ?? auth()->id(),
-                'action' => 'fiscal_period.reopened',
-                'auditable_type' => FiscalPeriod::class,
-                'auditable_id' => $period->id,
-                'old_values' => ['status' => 'closed'],
-                'new_values' => ['status' => 'open', 'reopening_reason' => $reason],
-                'ip_address' => request()->ip(),
-            ]);
-        } catch (\Throwable $e) {}
+            if ($period->status === 'open') {
+                return $period;
+            }
+            if ($period->status !== 'closed') {
+                throw new InvalidArgumentException("لا يمكن إعادة فتح فترة بحالة [{$period->status}].");
+            }
 
-        return $period;
+            $actorId = $userId ?? auth()->id();
+            $period->status = 'open';
+            $period->reopened_at = now();
+            $period->reopened_by_user_id = $actorId;
+            $period->reopening_reason = trim($reason);
+            $period->save();
+
+            try {
+                AuditLog::create([
+                    'tenant_id' => $tenantId,
+                    'user_id' => $actorId,
+                    'action' => 'fiscal_period.reopened',
+                    'auditable_type' => FiscalPeriod::class,
+                    'auditable_id' => $period->id,
+                    'old_values' => ['status' => 'closed'],
+                    'new_values' => ['status' => 'open', 'reopening_reason' => trim($reason)],
+                    'ip_address' => request()->ip(),
+                ]);
+            } catch (\Throwable $e) {}
+
+            return $period;
+        });
     }
 
     /**

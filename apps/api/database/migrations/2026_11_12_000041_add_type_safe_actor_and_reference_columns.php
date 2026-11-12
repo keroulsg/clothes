@@ -59,6 +59,50 @@ return new class extends Migration
             });
         }
 
+        $actorColumns = [
+            'piece_work_logs' => ['approved_by_user_id'],
+            'payrolls' => ['approved_by_user_id', 'finalized_by_user_id'],
+            'attendances' => ['created_by_user_id', 'updated_by_user_id'],
+            'employee_adjustments' => ['approved_by_user_id', 'created_by_user_id'],
+            'payroll_payments' => ['paid_by_user_id'],
+        ];
+
+        foreach ($actorColumns as $tableName => $columns) {
+            if (!Schema::hasTable($tableName)) {
+                continue;
+            }
+
+            Schema::table($tableName, function (Blueprint $table) use ($tableName, $columns) {
+                foreach ($columns as $column) {
+                    if (!Schema::hasColumn($tableName, $column)) {
+                        $table->foreignId($column)->nullable()->constrained('users')->nullOnDelete();
+                    }
+                }
+            });
+        }
+
+        $actorColumns = [
+            'piece_work_logs' => ['approved_by_user_id'],
+            'payrolls' => ['approved_by_user_id', 'finalized_by_user_id'],
+            'attendances' => ['created_by_user_id', 'updated_by_user_id'],
+            'employee_adjustments' => ['approved_by_user_id', 'created_by_user_id'],
+            'payroll_payments' => ['paid_by_user_id'],
+        ];
+
+        foreach ($actorColumns as $tableName => $columns) {
+            if (!Schema::hasTable($tableName)) {
+                continue;
+            }
+
+            Schema::table($tableName, function (Blueprint $table) use ($tableName, $columns) {
+                foreach ($columns as $column) {
+                    if (Schema::hasColumn($tableName, $column)) {
+                        $table->dropConstrainedForeignId($column);
+                    }
+                }
+            });
+        }
+
         if (Schema::hasTable('journal_entries')) {
             Schema::table('journal_entries', function (Blueprint $table) {
                 if (!Schema::hasColumn('journal_entries', 'created_by_user_id')) {

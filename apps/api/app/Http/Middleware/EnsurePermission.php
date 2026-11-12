@@ -42,15 +42,16 @@ class EnsurePermission
             ], 403);
         }
 
-        // Enforce the effective permission set for every account, including
-        // legacy role defaults. Role middleware is an additional boundary, not a bypass.
-        // Keep legacy role-based accounts compatible until the owner explicitly
-        // configures their granular permission set. New/edited accounts and roles
-        // with a saved custom permission matrix are enforced against that exact set.
-        if (
-            $user->hasExplicitPermissionConfiguration()
-            && !$user->hasPermission($requiredPermission)
-        ) {
+        // Explicit user/custom-role permissions always apply. For inherited legacy
+        // accounts, an existing role middleware remains the authorization boundary.
+        // Routes without a role gate must pass the effective default permission check.
+        $routeMiddleware = $request->route()?->gatherMiddleware() ?? [];
+        $hasRoleGate = collect($routeMiddleware)->contains(
+            fn ($middleware) => is_string($middleware) && str_starts_with($middleware, 'role:')
+        );
+        $mustEnforcePermission = $user->hasExplicitPermissionConfiguration() || !$hasRoleGate;
+
+        if ($mustEnforcePermission && !$user->hasPermission($requiredPermission)) {
             return response()->json([
                 'error' => 'InsufficientPermission',
                 'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة للوصول إلى هذا المورد.',

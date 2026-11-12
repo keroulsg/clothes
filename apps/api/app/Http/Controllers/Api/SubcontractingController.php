@@ -964,12 +964,7 @@ class SubcontractingController extends Controller
             return $query;
         }
 
-        return $query->where(function ($branchQuery) use ($branchIds) {
-            $branchQuery
-                ->whereHas('productionOrder', fn ($q) => $q->whereIn('branch_id', $branchIds))
-                ->orWhereHas('assignedEmployee', fn ($q) => $q->whereIn('branch_id', $branchIds))
-                ->orWhereHas('cuttingOrders.warehouse', fn ($q) => $q->whereIn('branch_id', $branchIds));
-        });
+        return $query->whereIn('branch_id', $branchIds);
     }
 
     private function scopeRelatedJobRecords($query, Request $request)

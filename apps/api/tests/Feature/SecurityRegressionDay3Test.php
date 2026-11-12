@@ -138,6 +138,17 @@ class SecurityRegressionDay3Test extends TestCase
             'is_cash_bank' => true,
         ]);
 
+        $otherExpenseAccountA = ChartOfAccount::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => '6012',
+            'name' => 'مصروف صيانة الماكينات',
+            'type' => 'expense',
+            'category' => 'indirect_cost',
+            'current_balance' => 0,
+            'is_active' => true,
+            'is_postable' => true,
+        ]);
+
         $this->employeeA = Employee::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenantA->id,
             'employee_code' => 'EMP-NILE-01',
@@ -378,6 +389,7 @@ class SecurityRegressionDay3Test extends TestCase
                 'party_type' => 'other',
                 'party_name' => 'مصروفات صيانة',
                 'account_id' => $this->accountA->id,
+                'contra_account_id' => $otherExpenseAccountA->id,
                 'amount' => 200.0,
                 'payment_method' => 'cash',
             ]);

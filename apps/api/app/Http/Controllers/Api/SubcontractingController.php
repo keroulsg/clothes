@@ -307,7 +307,7 @@ class SubcontractingController extends Controller
     public function showJob(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $job = JobOrder::withoutGlobalScopes()->find($id);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
@@ -334,7 +334,7 @@ class SubcontractingController extends Controller
         }
 
         $tenantId = app('current_tenant_id');
-        $job = JobOrder::withoutGlobalScopes()->find($id);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
@@ -421,7 +421,7 @@ class SubcontractingController extends Controller
 
         // التحقق من ملكية أمر التشغيل إن مرر
         if (!empty($validated['job_order_id'])) {
-            $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
             if (!$job || $job->tenant_id !== $tenantId) {
                 return response()->json([
                     'success' => false,
@@ -517,7 +517,7 @@ class SubcontractingController extends Controller
         ]);
 
         if (!empty($validated['job_order_id'])) {
-            $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
             if (!$job || $job->tenant_id !== $tenantId) {
                 return response()->json([
                     'success' => false,
@@ -642,7 +642,7 @@ class SubcontractingController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
-        $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
@@ -726,7 +726,7 @@ class SubcontractingController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
-        $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
@@ -810,7 +810,7 @@ class SubcontractingController extends Controller
     public function profitability(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $job = JobOrder::withoutGlobalScopes()->find($id);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([

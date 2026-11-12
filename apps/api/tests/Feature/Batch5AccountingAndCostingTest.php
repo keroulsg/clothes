@@ -13,6 +13,7 @@ use App\Models\FiscalPeriod;
 use App\Models\FiscalYear;
 use App\Models\GarmentModel;
 use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
 use App\Models\PaymentVoucher;
 use App\Models\PurchaseOrder;
 use App\Models\PieceWorkLog;
@@ -646,7 +647,12 @@ class Batch5AccountingAndCostingTest extends TestCase
 
         $cmtCostWithSubcontract->status = 'approved';
         $cmtCostWithSubcontract->save();
-        $this->accountingService->postProductionCostSheetToWip($cmtCostWithSubcontract);
+        $wipJournal = $this->accountingService->postProductionCostSheetToWip($cmtCostWithSubcontract);
+        $subcontractExpense = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '5030')->firstOrFail();
+        $this->assertEquals(500.0, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+            ->where('account_id', $subcontractExpense->id)->sum('credit'));
+        $this->assertEquals(0.0, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+            ->where('account_id', $this->accountingService->getMappedAccount($this->tenantA->id, 'ap_control')->id)->sum('credit'));
 
         $inventoryReconciliation = $this->accountingService->reconcileInventory($this->tenantA->id);
         $wipBreakdown = collect($inventoryReconciliation['breakdown'])->firstWhere('gl_code', '1220');

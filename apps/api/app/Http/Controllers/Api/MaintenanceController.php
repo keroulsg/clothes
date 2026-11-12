@@ -95,12 +95,16 @@ class MaintenanceController extends Controller
         ]);
     }
 
-    public function indexWorkOrders(): JsonResponse
+    public function indexWorkOrders(Request $request): JsonResponse
     {
-        $orders = MaintenanceWorkOrder::with(['machine', 'spareParts'])->latest()->paginate(20);
-        $orders = MaintenanceWorkOrder::with(['machine', 'spareParts', 'journalEntry'])->latest()->paginate(20);
+        $query = MaintenanceWorkOrder::with(['machine', 'spareParts', 'journalEntry']);
+        $user = $request->user();
+        $branchIds = $user?->assignedBranchIds() ?? [];
+        if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
+            $query->whereHas('machine', fn ($machineQuery) => $machineQuery->whereIn('branch_id', $branchIds));
+        }
 
-        return response()->json($orders);
+        return response()->json($query->latest()->paginate(20));
     }
 
     public function storeWorkOrder(Request $request): JsonResponse
@@ -141,6 +145,15 @@ class MaintenanceController extends Controller
             'unit_cost' => 'required|numeric|min:0',
             'inventory_item_id' => 'nullable|uuid',
         ]);
+
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $branchIds = $user?->assignedBranchIds() ?? [];
+        $workOrderQuery = MaintenanceWorkOrder::where('tenant_id', $tenantId)->whereKey($id);
+        if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
+            $workOrderQuery->whereHas('machine', fn ($machineQuery) => $machineQuery->whereIn('branch_id', $branchIds));
+        }
+        $workOrderQuery->firstOrFail();
 
         $part = $this->maintenanceService->addSparePart($id, $validated);
 
@@ -211,6 +224,15 @@ class MaintenanceController extends Controller
             'labor_cost' => 'nullable|numeric|min:0',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $branchIds = $user?->assignedBranchIds() ?? [];
+        $workOrderQuery = MaintenanceWorkOrder::where('tenant_id', $tenantId)->whereKey($id);
+        if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
+            $workOrderQuery->whereHas('machine', fn ($machineQuery) => $machineQuery->whereIn('branch_id', $branchIds));
+        }
+        $workOrderQuery->firstOrFail();
+
         $workOrder = $this->maintenanceService->completeWorkOrder($id, $validated);
 
         return response()->json([
@@ -219,9 +241,13 @@ class MaintenanceController extends Controller
         ]);
     }
 
-    public function downtimeSummary(): JsonResponse
+    public function downtimeSummary(Request $request): JsonResponse
     {
-        $summary = $this->maintenanceService->getDowntimeSummary();
+        $user = $request->user();
+        $branchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds));
+        $summary = $this->maintenanceService->getDowntimeSummary($enforceBranchScope ? $branchIds : null);
 
         return response()->json($summary);
     }

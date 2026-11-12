@@ -171,11 +171,13 @@ class StorefrontService
 
         $stockWarehouse = Warehouse::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
             ->where('type', 'finished_goods')
             ->orderBy('id')
             ->first()
             ?? Warehouse::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
+                ->where('is_active', true)
                 ->orderBy('id')
                 ->first();
         $firstWarehouseId = $stockWarehouse?->id;
@@ -495,6 +497,7 @@ class StorefrontService
             $inventoryItemsMap = [];
             $warehouse = Warehouse::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
+                ->where('is_active', true)
                 ->where('type', 'finished_goods')
                 ->orderBy('id')
                 ->first()

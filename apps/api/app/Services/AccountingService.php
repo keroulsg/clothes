@@ -266,17 +266,45 @@ class AccountingService
             'accessories_inventory' => '1213',
         ];
 
-        if (isset($fallbackCodes[$mappingKey])) {
-            $account = ChartOfAccount::withoutGlobalScopes()
+        if (!$mapping && isset($fallbackCodes[$mappingKey])) {
+            $accountQuery = fn () => ChartOfAccount::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
                 ->where('code', $fallbackCodes[$mappingKey])
                 ->where('is_active', true)
                 ->where('is_postable', true)
                 ->first();
 
+            $account = $accountQuery();
+
+            if (!$account) {
+                // Repair a partially initialized standard chart without overwriting tenant-specific mappings.
+                $existingMappings = TenantAccountMapping::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->get(['mapping_key', 'account_id']);
+
+                $this->initializeDefaultChartOfAccounts($tenantId);
+
+                foreach ($existingMappings as $existingMapping) {
+                    $existingAccount = ChartOfAccount::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->whereKey($existingMapping->account_id)
+                        ->where('is_active', true)
+                        ->where('is_postable', true)
+                        ->first();
+
+                    if ($existingAccount) {
+                        TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
+                            ['tenant_id' => $tenantId, 'mapping_key' => $existingMapping->mapping_key],
+                            ['account_id' => $existingAccount->id]
+                        );
+                    }
+                }
+
+                $account = $accountQuery();
+            }
+
             if ($account) {
-                // Auto-persist the mapping to ensure deterministic behavior
-                TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
+                TenantAccountMapping::withoutGlobalScopes()->firstOrCreate(
                     ['tenant_id' => $tenantId, 'mapping_key' => $mappingKey],
                     ['account_id' => $account->id]
                 );

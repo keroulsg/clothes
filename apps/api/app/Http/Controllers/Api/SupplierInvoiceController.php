@@ -26,10 +26,8 @@ class SupplierInvoiceController extends Controller
         $user = $request->user();
         if ($user && $user->role !== 'company_owner') {
             $branchIds = $user->assignedBranchIds();
-            if ($user->hasExplicitPermissionConfiguration() || !empty($branchIds)) {
-                $query->whereHas('purchaseOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
-                    ->whereHas('goodsReceiptNote.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
-            }
+            $query->whereHas('purchaseOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                ->whereHas('goodsReceiptNote.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
         }
 
         if ($request->has('supplier_id')) {

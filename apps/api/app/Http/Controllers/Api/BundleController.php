@@ -148,7 +148,7 @@ class BundleController extends Controller
     public function transfer(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)->findOrFail($id);
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)->findOrFail($id);
 
         $validated = $request->validate([
             'to_stage_code' => 'required|string',

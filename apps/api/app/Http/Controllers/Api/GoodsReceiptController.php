@@ -22,7 +22,13 @@ class GoodsReceiptController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = GoodsReceiptNote::with(['supplier', 'warehouse', 'purchaseOrder', 'items.inventoryItem'])->withCount('items');
+        $query = GoodsReceiptNote::where('tenant_id', app('current_tenant_id'))
+            ->with(['supplier', 'warehouse', 'purchaseOrder', 'items.inventoryItem'])
+            ->withCount('items');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $user->assignedBranchIds()));
+        }
 
         if ($request->has('purchase_order_id')) {
             $query->where('purchase_order_id', $request->purchase_order_id);
@@ -121,7 +127,13 @@ class GoodsReceiptController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $grn = GoodsReceiptNote::with(['items.inventoryItem', 'supplier', 'warehouse', 'purchaseOrder'])->findOrFail($id);
+        $query = GoodsReceiptNote::where('tenant_id', app('current_tenant_id'))
+            ->with(['items.inventoryItem', 'supplier', 'warehouse', 'purchaseOrder']);
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $user->assignedBranchIds()));
+        }
+        $grn = $query->findOrFail($id);
 
         return response()->json([
             'goods_receipt_note' => $grn,

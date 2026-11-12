@@ -485,12 +485,18 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
-            $jobAnchorIds = [
-                $job->branch_id,
-                $job->productionOrder?->branch_id,
-                $job->assignedEmployee?->branch_id,
-                $job->cuttingOrders->first()?->warehouse?->branch_id,
-            ];
+            $jobAnchorIds = [$job->branch_id];
+            if ($job->productionOrder) {
+                $jobAnchorIds[] = $job->productionOrder->branch_id;
+            }
+            if ($job->assignedEmployee) {
+                $jobAnchorIds[] = $job->assignedEmployee->branch_id;
+            }
+            foreach ($job->cuttingOrders as $linkedCuttingOrder) {
+                if ($linkedCuttingOrder->warehouse) {
+                    $jobAnchorIds[] = $linkedCuttingOrder->warehouse->branch_id;
+                }
+            }
             $jobAnchorIds = array_values(array_unique(array_filter($jobAnchorIds)));
             if (count($jobAnchorIds) !== 1 || $jobAnchorIds[0] !== $warehouse->branch_id) {
                 return response()->json([

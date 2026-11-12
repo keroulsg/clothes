@@ -1647,14 +1647,12 @@ class AccountingService
             ->get()
             ->keyBy('code');
 
-        $glFabrics = $glAccounts->has('1210') ? (float)$glAccounts->get('1210')->current_balance : 0;
-        $glAccessories = $glAccounts->has('1213') ? (float)$glAccounts->get('1213')->current_balance : 0;
-        $glWip = $glAccounts->has('1220') ? (float)$glAccounts->get('1220')->current_balance : 0;
-        $glFinished = $glAccounts->has('1230') ? (float)$glAccounts->get('1230')->current_balance : 0;
+        $glFabrics = $glAccounts->has('1210') ? (float) $glAccounts->get('1210')->current_balance : 0;
+        $glAccessories = $glAccounts->has('1213') ? (float) $glAccounts->get('1213')->current_balance : 0;
+        $glWip = $glAccounts->has('1220') ? (float) $glAccounts->get('1220')->current_balance : 0;
+        $glFinished = $glAccounts->has('1230') ? (float) $glAccounts->get('1230')->current_balance : 0;
 
-        $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
-
-        $inventoryItems = \App\Models\InventoryItem::withoutGlobalScopes()
+        $inventoryItems = \\App\\Models\\InventoryItem::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->get(['item_type', 'average_cost', 'current_balance']);
 
@@ -1675,47 +1673,68 @@ class AccountingService
             }
         }
 
-        $totalWarehouseValuation = round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation, 2);
-        // WIP has no authoritative InventoryItem subledger valuation yet. Never compare the GL balance to itself.
-        $variance = null;
+        // WIP subledger = approved production cost sheets less all individually posted finished-goods receipts.
+        $approvedWipCost = (float) ProductionCostSheet::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'approved')
+            ->sum('total_cost');
+        $capitalizedFinishedGoods = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'production_receipt')
+            ->where('status', 'posted')
+            ->sum('total_debit');
+        $wipSubledgerValuation = round($approvedWipCost - $capitalizedFinishedGoods, 2);
+        $wipVariance = round($glWip - $wipSubledgerValuation, 2);
+
+        $warehouseFabricsValuation = round($warehouseFabricsValuation, 2);
+        $warehouseAccessoriesValuation = round($warehouseAccessoriesValuation, 2);
+        $warehouseFinishedValuation = round($warehouseFinishedValuation, 2);
+        $totalWarehouseValuation = round(
+            $warehouseFabricsValuation + $warehouseAccessoriesValuation + $wipSubledgerValuation + $warehouseFinishedValuation,
+            2
+        );
+        $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
+        $variance = round($totalGlInventory - $totalWarehouseValuation, 2);
 
         return [
             'tenant_id' => $tenantId,
             'gl_inventory_total' => $totalGlInventory,
-            'warehouse_valuation_total' => null,
-            'warehouse_known_categories_total' => $totalWarehouseValuation,
+            'warehouse_valuation_total' => $totalWarehouseValuation,
+            'warehouse_known_categories_total' => round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation, 2),
             'variance' => $variance,
-            'is_matched' => false,
-            'wip_valuation_available' => false,
-            'reconciliation_status' => 'incomplete_wip_valuation',
+            'is_matched' => abs($variance) < 0.01 && abs($wipVariance) < 0.01,
+            'wip_valuation_available' => true,
+            'reconciliation_status' => abs($variance) < 0.01 && abs($wipVariance) < 0.01 ? 'matched' : 'variance_detected',
             'breakdown' => [
                 [
                     'category' => 'الأقمشة والغزول والمنسوجات',
                     'gl_code' => '1210',
                     'gl_balance' => $glFabrics,
-                    'warehouse_valuation' => round($warehouseFabricsValuation, 2),
+                    'warehouse_valuation' => $warehouseFabricsValuation,
                     'variance' => round($glFabrics - $warehouseFabricsValuation, 2),
                 ],
                 [
                     'category' => 'مستلزمات الإنتاج (إكسسوار، خيوط، حشو)',
                     'gl_code' => '1213',
                     'gl_balance' => $glAccessories,
-                    'warehouse_valuation' => round($warehouseAccessoriesValuation, 2),
+                    'warehouse_valuation' => $warehouseAccessoriesValuation,
                     'variance' => round($glAccessories - $warehouseAccessoriesValuation, 2),
                 ],
                 [
                     'category' => 'الإنتاج تحت التشغيل (WIP)',
                     'gl_code' => '1220',
                     'gl_balance' => $glWip,
-                    'warehouse_valuation' => null,
-                    'variance' => null,
-                    'status' => 'not_valued_from_subledger',
+                    'warehouse_valuation' => $wipSubledgerValuation,
+                    'variance' => $wipVariance,
+                    'status' => abs($wipVariance) < 0.01 ? 'matched' : 'variance_detected',
+                    'approved_cost_sheets_total' => round($approvedWipCost, 2),
+                    'finished_goods_receipts_total' => round($capitalizedFinishedGoods, 2),
                 ],
                 [
                     'category' => 'المنتجات التامة الجاهزة للبيع',
                     'gl_code' => '1230',
                     'gl_balance' => $glFinished,
-                    'warehouse_valuation' => round($warehouseFinishedValuation, 2),
+                    'warehouse_valuation' => $warehouseFinishedValuation,
                     'variance' => round($glFinished - $warehouseFinishedValuation, 2),
                 ],
             ],
@@ -2023,6 +2042,84 @@ class AccountingService
             'description' => "استلام إنتاج تام لمحضر الجودة {$receiptNumber} لأمر التشغيل {$orderNumber}",
             'reference_type' => 'production_receipt',
             'reference_id' => $receiptId,
+            'lines' => $lines,
+        ]);
+    }
+
+    /**
+     * Capitalize an approved production cost sheet into WIP with a balanced,
+     * idempotent journal entry. The cost components are credited to their
+     * originating inventory/expense/liability control accounts.
+     */
+    public function postProductionCostSheetToWip(ProductionCostSheet $sheet): JournalEntry
+    {
+        $tenantId = (string) $sheet->tenant_id;
+        $existing = $this->findJournalEntryByReference($tenantId, 'production_cost_sheet', $sheet->id);
+        if ($existing) {
+            return $existing;
+        }
+
+        if ($sheet->status !== 'approved' || (float) $sheet->total_cost <= 0) {
+            throw new InvalidArgumentException('لا يمكن ترحيل تكلفة تحت التشغيل إلا من بطاقة تكلفة معتمدة وبقيمة موجبة.');
+        }
+
+        $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
+        $lines = [[
+            'account_id' => $wipAccount->id,
+            'debit' => (float) $sheet->total_cost,
+            'credit' => 0,
+            'description' => "رسملة تكلفة أمر الإنتاج {$sheet->production_order_id} إلى مخزون تحت التشغيل",
+        ]];
+
+        $components = [
+            ['amount' => (float) $sheet->direct_materials_cost, 'mapping' => 'raw_materials_inventory', 'description' => 'صرف خامات الإنتاج إلى تحت التشغيل'],
+            ['amount' => (float) $sheet->direct_labor_cost, 'mapping' => 'direct_labor_expense', 'description' => 'رسملة أجور الإنتاج المباشرة'],
+            ['amount' => (float) $sheet->subcontracted_services_cost, 'mapping' => 'ap_control', 'description' => 'استحقاق خدمات التشغيل الخارجي المقبولة'],
+        ];
+
+        $overhead = (float) $sheet->allocated_overhead_cost;
+        if ($overhead > 0) {
+            $overheadAccount = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('code', '6010')
+                ->where('is_active', true)
+                ->where('is_postable', true)
+                ->first();
+            $components[] = [
+                'amount' => $overhead,
+                'account' => $overheadAccount,
+                'mapping' => 'direct_labor_expense',
+                'description' => 'رسملة التحميل الصناعي غير المباشر',
+            ];
+        }
+
+        $creditedTotal = 0.0;
+        foreach ($components as $component) {
+            $amount = round((float) $component['amount'], 4);
+            if ($amount <= 0) {
+                continue;
+            }
+            $account = $component['account'] ?? $this->getMappedAccount($tenantId, $component['mapping']);
+            $lines[] = [
+                'account_id' => $account->id,
+                'debit' => 0,
+                'credit' => $amount,
+                'description' => $component['description'],
+            ];
+            $creditedTotal += $amount;
+        }
+
+        if (abs(round($creditedTotal, 4) - round((float) $sheet->total_cost, 4)) > 0.0001) {
+            throw new InvalidArgumentException('مكونات بطاقة التكلفة لا تتطابق مع إجمالي التكلفة؛ تم إيقاف ترحيل WIP لحماية الأستاذ العام.');
+        }
+
+        return $this->createJournalEntry([
+            'tenant_id' => $tenantId,
+            'entry_number' => 'JE-WIP-' . substr(md5((string) $sheet->id), 0, 12),
+            'entry_date' => now()->toDateString(),
+            'description' => "رسملة بطاقة التكلفة الصناعية لأمر الإنتاج {$sheet->production_order_id}",
+            'reference_type' => 'production_cost_sheet',
+            'reference_id' => $sheet->id,
             'lines' => $lines,
         ]);
     }

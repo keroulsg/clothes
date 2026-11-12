@@ -119,6 +119,44 @@ class User extends Authenticatable
                     ['key' => 'admin.backup', 'name_ar' => 'تصدير وتحميل النسخ الاحتياطية للمصنع', 'name_en' => 'Export & Download Backups'],
                 ],
             ],
+            [
+                'module' => 'hr',
+                'name_ar' => 'الموارد البشرية والرواتب',
+                'name_en' => 'HR & Payroll',
+                'permissions' => [
+                    ['key' => 'hr.view', 'name_ar' => 'عرض الموظفين والحضور', 'name_en' => 'View Employees & Attendance'],
+                    ['key' => 'hr.manage', 'name_ar' => 'إدارة الموظفين والحضور والإجازات', 'name_en' => 'Manage Employees & Attendance'],
+                    ['key' => 'hr.payroll', 'name_ar' => 'إعداد واعتماد الرواتب', 'name_en' => 'Manage Payroll'],
+                ],
+            ],
+            [
+                'module' => 'storefront',
+                'name_ar' => 'المتجر الإلكتروني',
+                'name_en' => 'Storefront',
+                'permissions' => [
+                    ['key' => 'storefront.view', 'name_ar' => 'عرض إعدادات المتجر والطلبات', 'name_en' => 'View Storefront'],
+                    ['key' => 'storefront.manage', 'name_ar' => 'إدارة تصميم وإعدادات المتجر', 'name_en' => 'Manage Storefront'],
+                ],
+            ],
+            [
+                'module' => 'maintenance',
+                'name_ar' => 'الصيانة والمعدات',
+                'name_en' => 'Maintenance',
+                'permissions' => [
+                    ['key' => 'maintenance.view', 'name_ar' => 'عرض المعدات وأوامر الصيانة', 'name_en' => 'View Maintenance'],
+                    ['key' => 'maintenance.manage', 'name_ar' => 'إدارة المعدات وأوامر الصيانة', 'name_en' => 'Manage Maintenance'],
+                ],
+            ],
+            [
+                'module' => 'subcontracting',
+                'name_ar' => 'التشغيل للغير والمقاولات',
+                'name_en' => 'Subcontracting',
+                'permissions' => [
+                    ['key' => 'subcontracting.view', 'name_ar' => 'عرض أوامر التشغيل للغير', 'name_en' => 'View Subcontracting'],
+                    ['key' => 'subcontracting.manage', 'name_ar' => 'إدارة أوامر التشغيل للغير', 'name_en' => 'Manage Subcontracting'],
+                    ['key' => 'subcontracting.payments', 'name_ar' => 'سداد واعتماد فواتير التشغيل للغير', 'name_en' => 'Pay Subcontracting Invoices'],
+                ],
+            ],
         ];
     }
 
@@ -141,20 +179,20 @@ class User extends Authenticatable
                 return ['*'];
             case 'production_manager':
             case 'production_engineer':
-                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'qc.inspect', 'costing.view'];
+                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage'];
             case 'inventory_custodian':
             case 'warehouse':
             case 'storekeeper':
             case 'warehouse_manager':
-                return ['inventory.view', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'procurement.view'];
+                return ['inventory.view', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'procurement.view', 'procurement.create'];
             case 'accountant':
             case 'financial_accountant':
-                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'sales.view'];
+                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'inventory.view', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
             case 'quality_controller':
             case 'qc':
                 return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'inventory.view'];
             case 'sales_rep':
-                return ['sales.view', 'sales.create', 'sales.discount', 'inventory.view'];
+                return ['sales.view', 'sales.create', 'sales.discount', 'inventory.view', 'storefront.view'];
             case 'worker':
             case 'operator':
                 return ['cutting.view', 'production.manage'];

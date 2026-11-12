@@ -135,7 +135,7 @@ class SalesController extends Controller
                 if (count($assignedBranchIds) !== 1) {
                     return response()->json(['error' => 'WarehouseRequired', 'message' => 'اختر مخزنًا من أحد الفروع المعيّنة لحسابك.'], 422);
                 }
-                $defaultWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                $defaultWarehouse = \App\Models\Warehouse::where('tenant_id', app('current_tenant_id'))
                     ->where('branch_id', $assignedBranchIds[0])
                     ->where('type', 'finished_goods')
                     ->where('is_active', true)
@@ -146,7 +146,7 @@ class SalesController extends Controller
                 }
                 $validated['warehouse_id'] = $defaultWarehouse->id;
             } else {
-                $selectedWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                $selectedWarehouse = \App\Models\Warehouse::where('tenant_id', app('current_tenant_id'))
                     ->find($validated['warehouse_id']);
                 if (!$selectedWarehouse || !in_array($selectedWarehouse->branch_id, $assignedBranchIds, true)) {
                     return response()->json(['error' => 'BranchAccessDenied', 'message' => 'المخزن المحدد لا يتبع فرعًا معيّنًا لحسابك.'], 403);
@@ -288,14 +288,14 @@ class SalesController extends Controller
                 if (count($assignedBranchIds) !== 1) {
                     return response()->json(['error' => 'WarehouseRequired', 'message' => 'اختر مخزن نقطة البيع التابع لأحد فروعك المعيّنة.'], 422);
                 }
-                $posWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                $posWarehouse = \App\Models\Warehouse::where('tenant_id', app('current_tenant_id'))
                     ->where('branch_id', $assignedBranchIds[0])
                     ->where('type', 'finished_goods')
                     ->where('is_active', true)
                     ->orderBy('id')
                     ->first();
             } else {
-                $posWarehouse = \\App\\Models\\Warehouse::where('tenant_id', app('current_tenant_id'))
+                $posWarehouse = \App\Models\Warehouse::where('tenant_id', app('current_tenant_id'))
                     ->where('id', $validated['warehouse_id'])
                     ->where('is_active', true)
                     ->first();
@@ -439,21 +439,21 @@ class SalesController extends Controller
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner';
 
-        $deliveryOrder = \\App\\Models\\SalesOrder::where('tenant_id', $tenantId)
+        $deliveryOrder = \App\Models\SalesOrder::where('tenant_id', $tenantId)
             ->find($validated['sales_order_id']);
         if (!$deliveryOrder) {
             return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
         }
 
         $orderWarehouse = !empty($deliveryOrder->warehouse_id)
-            ? \\App\\Models\\Warehouse::where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id)
+            ? \App\Models\Warehouse::where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id)
             : null;
         if (!$orderWarehouse) {
             return response()->json(['error' => 'SalesOrderWarehouseMissing', 'message' => 'أمر البيع غير مرتبط بمخزن صالح.'], 422);
         }
 
         $deliveryWarehouseId = $validated['warehouse_id'] ?? $orderWarehouse->id;
-        $deliveryWarehouse = \\App\\Models\\Warehouse::where('tenant_id', $tenantId)->find($deliveryWarehouseId);
+        $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($deliveryWarehouseId);
         if (!$deliveryWarehouse) {
             return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
         }

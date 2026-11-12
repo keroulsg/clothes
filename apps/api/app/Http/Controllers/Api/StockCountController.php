@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class StockCountController extends Controller
 {
-    protected InventoryService $inventoryService;
+    protected InventoryService $inventoryService;\n    protected AccountingService $accountingService;
 
     public function __construct(InventoryService $inventoryService)
     {
@@ -215,7 +215,7 @@ class StockCountController extends Controller
                         'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,
                         'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,
                     ]);
-                    $countItem->adjustment_status = 'adjusted';
+                    $transaction = $this->inventoryService->recordTransaction([\n                        'tenant_id' => $tenantId,\n                        'inventory_item_id' => $item->id,\n                        'warehouse_id' => $count->warehouse_id,\n                        'transaction_type' => $diff > 0 ? 'adjustment_positive' : 'adjustment_negative',\n                        'direction' => $direction,\n                        'quantity' => $quantity,\n                        'unit_cost' => (float) $countItem->unit_cost,\n                        'reference_type' => 'stock_count',\n                        'reference_id' => (string) $countItem->id,\n                        'reference_number' => $count->count_number,\n                        'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,\n                        'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,\n                    ]);\n                    $this->accountingService->postStockCountAdjustment($transaction);\n                    $countItem->adjustment_status = 'adjusted';
                 } else {
                     $countItem->adjustment_status = 'matched';
                 }

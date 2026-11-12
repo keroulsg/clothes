@@ -1102,12 +1102,15 @@ class ProductionService
                     'notes' => "استرجاع قماش لإلغاء أمر القص [{$cuttingOrder->cutting_order_number}]. سبب الإلغاء: {$reason}",
                 ]);
 
-                // عكس القيد المحاسبي لصرف الخامات
+                // Reverse the original WIP issue in the same transaction; never suppress ledger failures.
                 if ($fabricItem && (float)$fabricItem->average_cost > 0) {
-                    try {
-                        $reversalAmount = round((float)$cuttingOrder->actual_fabric_meters_used * (float)$fabricItem->average_cost, 4);
-                        app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal($contextTenantId, $cuttingOrder, $reversalAmount);
-                    } catch (\Throwable) {}
+                    $reversalAmount = round((float)$cuttingOrder->actual_fabric_meters_used * (float)$fabricItem->average_cost, 4);
+                    app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal(
+                        $contextTenantId,
+                        $cuttingOrder,
+                        $reversalAmount,
+                        $reason
+                    );
                 }
             } elseif ($cuttingOrder->fabric_source === 'customer_deposit' && $cuttingOrder->customer_material_id) {
                 // استرجاع رصيد أمانة العميل

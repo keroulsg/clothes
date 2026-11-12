@@ -1035,7 +1035,7 @@ class ProductionService
                         'notes' => "استلام منتج تام لمحضر الجودة [{$inspection->inspection_number}] لأمر الإنتاج [{$prodOrder->order_number}]",
                     ]);
 
-                    app(\\App\\Services\\AccountingService::class)->postFinishedGoodsReceipt(
+                    app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt(
                         $tenantId,
                         $prodOrder,
                         $inspection,

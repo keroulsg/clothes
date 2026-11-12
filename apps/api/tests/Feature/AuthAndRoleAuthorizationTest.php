@@ -1479,5 +1479,14 @@ class AuthAndRoleAuthorizationTest extends TestCase
         ])->assertStatus(403);
     }
 
+    public function test_platform_admin_is_denied_from_tenant_routes_without_role_middleware(): void
+    {
+        Sanctum::actingAs($this->platformAdminUser);
+
+        $this->getJson('/api/v1/inventory/items')
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'UnauthorizedRole');
+    }
+
 }
 

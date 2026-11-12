@@ -1261,7 +1261,7 @@ class AccountingService
             if (isset($overrides['allocated_overhead_cost'])) {
                 $overheadCost = (float)$overrides['allocated_overhead_cost'];
             } else {
-                if (!empty($overrides['overhead_allocation_method']) && $allocationMethod === 'direct_labor_cost_pct') {
+                if ($allocationMethod === 'direct_labor_cost_pct') {
                     $overheadCost = round($laborCost * $overheadRate, 4);
                 } elseif ($allocationMethod === 'per_unit') {
                     $unitRate = (float)($overrides['per_unit_overhead_rate'] ?? 2.5);

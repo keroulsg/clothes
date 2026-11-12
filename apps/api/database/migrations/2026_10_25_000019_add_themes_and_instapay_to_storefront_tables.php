@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tenant_store_settings', function (Blueprint $table) {
-            $table->string('theme_id', 50)->default('fashion_boutique')->after('store_name');
+            $table->string('theme_id', 50)->default('modern_fashion')->after('store_name');
             $table->json('theme_config')->nullable()->after('theme_id');
             $table->boolean('allow_instapay')->default(true)->after('allow_card_payment');
             $table->string('instapay_account_name', 255)->nullable()->after('allow_instapay');

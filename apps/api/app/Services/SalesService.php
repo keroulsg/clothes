@@ -1674,31 +1674,47 @@ class SalesService
                         ->first();
                 }
 
-                if ($invItem) {
-                    if ($invItem->current_balance < $qtyToDeliver) {
-                        throw new InvalidArgumentException("رصيد المخزن غير كافٍ لصرف الكمية المطلوبة للمنتج {$invItem->name}. المتاح: {$invItem->current_balance}، المطلوب: {$qtyToDeliver}");
+                if (!$invItem) {
+                    throw new InvalidArgumentException("لا يوجد سجل مخزني للصنف المطلوب تسليمه [{$orderItem->variant_id}].");
+                }
+
+                $onHand = (float) $invItem->current_balance;
+                $totalReserved = (float) ($invItem->reserved_balance ?? 0);
+                $lineReserved = (float) ($orderItem->reserved_quantity ?? 0);
+                $availableForThisOrder = max(0, $onHand - max(0, $totalReserved - $lineReserved));
+                if ($availableForThisOrder < $qtyToDeliver) {
+                    throw new InvalidArgumentException(
+                        "المخزون المتاح غير كافٍ لتسليم الصنف [{$invItem->name}]. المتاح بعد حماية حجوزات الطلبات الأخرى: [{$availableForThisOrder}]، المطلوب: [{$qtyToDeliver}]."
+                    );
+                }
+
+                $unitCost = (float)($invItem->average_cost ?? 0);
+                $totalCogs = round(($totalCogs ?? 0) + ($qtyToDeliver * $unitCost), 4);
+
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $tenantId,
+                    'inventory_item_id' => $invItem->id,
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => $qtyToDeliver,
+                    'direction' => 'OUT',
+                    'transaction_type' => 'sales_delivery',
+                    'unit_cost' => $invItem->average_cost,
+                    'reference_type' => 'sales_delivery_notes',
+                    'reference_id' => $deliveryNote->id,
+                    'idempotency_key' => 'DN-' . $deliveryNote->id . '-' . $orderItem->id,
+                ]);
+
+                $reservationToRelease = min($qtyToDeliver, $lineReserved);
+                if ($reservationToRelease > 0) {
+                    if ($totalReserved < $reservationToRelease) {
+                        throw new InvalidArgumentException(
+                            "رصيد الحجز غير متطابق للصنف [{$invItem->name}]. المحجوز: [{$totalReserved}]، المطلوب فكّه: [{$reservationToRelease}]."
+                        );
                     }
 
-                    $unitCost = (float)($invItem->average_cost ?? 0);
-                    $totalCogs = round(($totalCogs ?? 0) + ($qtyToDeliver * $unitCost), 4);
-
-                    $this->inventoryService->recordTransaction([
-                        'tenant_id' => $tenantId,
-                        'inventory_item_id' => $invItem->id,
-                        'warehouse_id' => $warehouseId,
-                        'quantity' => $qtyToDeliver,
-                        'direction' => 'OUT',
-                        'transaction_type' => 'sales_delivery',
-                        'unit_cost' => $invItem->average_cost,
-                        'reference_type' => 'sales_delivery_notes',
-                        'reference_id' => $deliveryNote->id,
-                        'idempotency_key' => 'DN-' . $deliveryNote->id . '-' . $orderItem->id,
-                    ]);
-
-                    if ((float)($invItem->reserved_balance ?? 0) > 0) {
-                        $invItem->reserved_balance = max(0, (float)$invItem->reserved_balance - $qtyToDeliver);
-                        $invItem->save();
-                    }
+                    $invItem->reserved_balance = $totalReserved - $reservationToRelease;
+                    $invItem->save();
+                    $orderItem->reserved_quantity = $lineReserved - $reservationToRelease;
                 }
 
                 SalesDeliveryItem::create([

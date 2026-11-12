@@ -113,6 +113,7 @@ class SalesService
                 QuotationItem::create([
                     'tenant_id' => $tenantId,
                     'quotation_id' => $quotation->id,
+                'warehouse_id' => $warehouseId,
                     'variant_id' => $item['variant_id'] ?? null,
                     'description' => $item['description'] ?? 'Garment Item',
                     'quantity' => $qty,
@@ -1364,11 +1365,11 @@ class SalesService
     /**
      * تحويل عرض سعر معتمد إلى أمر بيع رسمي دون تكرار
      */
-    public function convertQuotationToOrder(string $quotationId): SalesOrder
+    public function convertQuotationToOrder(string $quotationId, ?string $warehouseId = null): SalesOrder
     {
         $tenantId = app('current_tenant_id');
 
-        return DB::transaction(function () use ($quotationId, $tenantId) {
+        return DB::transaction(function () use ($quotationId, $tenantId, $warehouseId) {
             $quotation = Quotation::where('tenant_id', $tenantId)
                 ->where('id', $quotationId)
                 ->lockForUpdate()

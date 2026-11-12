@@ -319,7 +319,7 @@ class PayrollService
                 'reason' => $data['reason'],
                 'notes' => $data['notes'] ?? null,
                 'status' => 'pending_approval',
-                'created_by' => $userId,
+                'created_by_user_id' => $userId,
             ]);
         });
     }

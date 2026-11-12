@@ -139,7 +139,7 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   // Bank Loans & Credit Facilities States
   const [finSectionView, setFinSectionView] = useState<'all' | 'accounts' | 'transfers' | 'loans'>('all');
   // Loan records are not yet backed by a server API; never load fabricated/local-only contracts.
-  const [bankLoans, setBankLoans] = useState<BankLoan[]>([]);
+  const [bankLoans] = useState<BankLoan[]>([]);
   const [selectedLoanForSchedule, setSelectedLoanForSchedule] = useState<BankLoan | null>(null);
   const [selectedLoanForPrint, setSelectedLoanForPrint] = useState<BankLoan | null>(null);
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
@@ -155,14 +155,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [loanInstallmentsCount, setLoanInstallmentsCount] = useState<number>(12);
   const [loanFrequency, setLoanFrequency] = useState<'monthly' | 'quarterly'>('monthly');
   const [loanStartDate, setLoanStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [loanNotes, setLoanNotes] = useState('');
   const [loanFinancialAccId, setLoanFinancialAccId] = useState('');
 
   // Pay Installment Form State
   const [payInstDate, setPayInstDate] = useState(new Date().toISOString().split('T')[0]);
   const [payInstPaymentAccId, setPayInstPaymentAccId] = useState('');
   const [payInstRef, setPayInstRef] = useState('');
-  const [payInstNotes, setPayInstNotes] = useState('');
 
   const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);

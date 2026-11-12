@@ -476,11 +476,12 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setIsDiscountModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-sm transition-all cursor-pointer"
+                disabled
+                title={isAr ? 'متوقف حتى توفير قيد خصم/إشعار دائن متوازن' : 'Disabled until a balanced supplier credit-note workflow is available'}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-slate-400 shadow-sm transition-all cursor-not-allowed"
               >
                 <Tag className="w-4 h-4" />
-                <span>{isAr ? '+ خصم تجاري' : '+ Discount'}</span>
+                <span>{isAr ? 'الخصم التجاري غير متاح حالياً' : 'Discount unavailable'}</span>
               </button>
 
               {onOpenCreatePo && (
@@ -776,7 +777,7 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
                   <span>• <strong>{isAr ? 'المسددة بالكامل:' : 'Fully Paid:'}</strong> {isAr ? 'رصيدها 0 ج.م ولا تضاف للإجمالي نهائياً.' : '0 EGP due, excluded from balance.'}</span>
                   <span>• <strong>{isAr ? 'عليها دفعات:' : 'Installments:'}</strong> {isAr ? 'ينزل منها المتبقي الآجل فقط في إجمالي المديونية.' : 'Only remaining due is added.'}</span>
                   <span>• <strong>{isAr ? 'آجلة لم تسدد:' : 'Credit Due:'}</strong> {isAr ? 'تضاف قيمتها كاملة للمديونية.' : 'Full amount added.'}</span>
-                  <span>• <strong>{isAr ? 'الخصومات:' : 'Discounts:'}</strong> {isAr ? 'تُخصم مباشرة من الحساب.' : 'Deducted directly.'}</span>
+                  <span>• <strong>{isAr ? 'الخصومات:' : 'Discounts:'}</strong> {isAr ? 'تُحتسب فقط بعد اعتماد إشعار دائن وقيده محاسبياً.' : 'Counted only after an approved credit note is posted.'}</span>
                 </div>
               </div>
             </div>
@@ -1015,9 +1016,9 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
 
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteTransaction({ type: 'invoice', raw_id: inv.id, reference: inv.invoice_number })}
-                                  title={isAr ? 'حذف الفاتورة' : 'Delete Invoice'}
-                                  className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-900 transition-all cursor-pointer shadow-2xs"
+                                  disabled
+                                  title={isAr ? 'الفواتير المالية لا تُحذف؛ استخدم مرتجعاً أو إشعاراً دائناً' : 'Financial invoices cannot be deleted; use a return or credit note'}
+                                  className="p-1.5 rounded-lg text-slate-400 border border-slate-200 dark:border-slate-700 cursor-not-allowed shadow-2xs"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1100,6 +1101,7 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
 
                             <button
                               type="button"
+                              disabled
                               onClick={() => {
                                 setEditingTransaction({ raw_id: p.id, type: 'payment' });
                                 setEditAmount(String(p.amount));
@@ -1107,17 +1109,17 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
                                 setEditDate(p.voucher_date);
                                 setEditNotes(p.notes || '');
                               }}
-                              title={isAr ? 'تعديل السند' : 'Edit Voucher'}
-                              className="p-1.5 rounded-lg text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer shadow-2xs"
+                              title={isAr ? 'السند المرحّل غير قابل للتعديل المباشر' : 'Posted vouchers cannot be edited directly'}
+                              className="p-1.5 rounded-lg text-slate-400 border border-slate-200 dark:border-slate-700 cursor-not-allowed shadow-2xs"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => handleDeleteTransaction({ type: 'payment', raw_id: p.id, reference: p.voucher_number })}
-                              title={isAr ? 'حذف السند' : 'Delete Voucher'}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-900 transition-all cursor-pointer shadow-2xs"
+                              disabled
+                              title={isAr ? 'لا يمكن حذف سند مرحّل؛ يجب عكس قيده المحاسبي' : 'Posted vouchers must be reversed, not deleted'}
+                              className="p-1.5 rounded-lg text-slate-400 border border-slate-200 dark:border-slate-700 cursor-not-allowed shadow-2xs"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1171,9 +1173,9 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
                         <td className="py-3 px-4 text-center">
                           <button
                             type="button"
-                            onClick={() => handleDeleteTransaction({ type: 'discount', raw_id: d.id, reference: d.voucher_number })}
-                            title={isAr ? 'حذف الخصم' : 'Delete Discount'}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-900 transition-all cursor-pointer shadow-2xs"
+                            disabled
+                            title={isAr ? 'لا يمكن حذف أو تعديل إشعار خصم دون قيد عكسي' : 'Discount notices require an accounting reversal'}
+                            className="p-1.5 rounded-lg text-slate-400 border border-slate-200 dark:border-slate-700 cursor-not-allowed shadow-2xs"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1344,9 +1346,9 @@ export const SupplierProfileView: React.FC<SupplierProfileViewProps> = ({
 
                               <button
                                 type="button"
-                                onClick={() => handleDeleteTransaction(line)}
-                                title={isAr ? 'حذف الحركة' : 'Delete'}
-                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-900 transition-all cursor-pointer shadow-2xs"
+                                disabled
+                                title={isAr ? 'الحركات المالية المرحّلة لا تُحذف مباشرة' : 'Posted financial entries cannot be deleted directly'}
+                                className="p-1.5 rounded-lg text-slate-400 border border-slate-200 dark:border-slate-700 cursor-not-allowed shadow-2xs"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>

@@ -712,7 +712,9 @@ class SubcontractingController extends Controller
     public function receiveExternalOperation(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $op = $this->scopeExternalOperationsToAssignedBranches(ExternalOperation::where('tenant_id', $tenantId), $request)->find($id);
+        $op = $this->scopeExternalOperationsToAssignedBranches(ExternalOperation::where('tenant_id', $tenantId), $request)
+            ->with(['jobOrder.productionOrder', 'jobOrder.assignedEmployee', 'jobOrder.cuttingOrders.warehouse', 'productionOrder', 'bundle.productionOrder', 'bundle.cuttingOrder.warehouse', 'assignedEmployee'])
+            ->find($id);
 
         if (!$op || $op->tenant_id !== $tenantId) {
             return response()->json([
@@ -733,6 +735,52 @@ class SubcontractingController extends Controller
         ]);
 
         $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
+
+        if (!empty($validated['assigned_employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->find($validated['assigned_employee_id']);
+            if (!$employee) {
+                return response()->json(['error' => 'EmployeeNotFound'], 404);
+            }
+
+            $anchorIds = [];
+            if ($op->jobOrder) {
+                $anchorIds[] = $op->jobOrder->branch_id;
+                if ($op->jobOrder->productionOrder) {
+                    $anchorIds[] = $op->jobOrder->productionOrder->branch_id;
+                }
+                if ($op->jobOrder->assignedEmployee) {
+                    $anchorIds[] = $op->jobOrder->assignedEmployee->branch_id;
+                }
+                foreach ($op->jobOrder->cuttingOrders as $cuttingOrder) {
+                    if ($cuttingOrder->warehouse) {
+                        $anchorIds[] = $cuttingOrder->warehouse->branch_id;
+                    }
+                }
+            }
+            if ($op->productionOrder) {
+                $anchorIds[] = $op->productionOrder->branch_id;
+            }
+            if ($op->bundle?->productionOrder) {
+                $anchorIds[] = $op->bundle->productionOrder->branch_id;
+            }
+            if ($op->bundle?->cuttingOrder?->warehouse) {
+                $anchorIds[] = $op->bundle->cuttingOrder->warehouse->branch_id;
+            }
+            if ($op->assignedEmployee) {
+                $anchorIds[] = $op->assignedEmployee->branch_id;
+            }
+
+            $hasUnanchoredBranch = in_array(null, $anchorIds, true);
+            $anchorIds = array_values(array_unique(array_filter($anchorIds)));
+            if (count($anchorIds) !== 1 || $hasUnanchoredBranch || !$employee->branch_id || $employee->branch_id !== $anchorIds[0]) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب أن يتبع العامل المستلم نفس فرع جميع روابط التشغيل الخارجي.'], 422);
+            }
+
+            $user = $request->user();
+            if ($user && $user->role !== 'company_owner' && !in_array($anchorIds[0], $user->assignedBranchIds(), true)) {
+                return response()->json(['error' => 'BranchAccessDenied'], 403);
+            }
+        }
 
         try {
             $received = $this->subcontractingService->receiveExternalOperation($id, $validated);

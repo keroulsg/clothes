@@ -742,7 +742,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
 
         // 3. المحاسب المالي المعتمد ينفذ الصرف النقدي الفعلي بنجاح (200)
         Sanctum::actingAs($this->accountantA);
-        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $initialCash = (float) $cashAccount->current_balance;
 
         $refundRes = $this->postJson("/api/v1/sales/returns/{$returnId}/refund", [

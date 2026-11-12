@@ -157,6 +157,16 @@ class User extends Authenticatable
                 ],
             ],
             [
+                'module' => 'waslat_worsh',
+                'name_ar' => 'وصلة ورش',
+                'name_en' => 'Waslat Worsh Marketplace',
+                'permissions' => [
+                    ['key' => 'waslat_worsh.view', 'name_ar' => 'عرض طلبات وعروض وصلة ورش', 'name_en' => 'View Marketplace Requests'],
+                    ['key' => 'waslat_worsh.manage', 'name_ar' => 'إنشاء وإدارة طلبات وعروض وصلة ورش', 'name_en' => 'Manage Marketplace Requests'],
+                    ['key' => 'waslat_worsh.payments', 'name_ar' => 'إدارة مدفوعات وعمولات وصلة ورش', 'name_en' => 'Manage Marketplace Payments'],
+                ],
+            ],
+            [
                 'module' => 'subcontracting',
                 'name_ar' => 'التشغيل للغير والمقاولات',
                 'name_en' => 'Subcontracting',

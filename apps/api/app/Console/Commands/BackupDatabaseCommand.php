@@ -235,8 +235,16 @@ class BackupDatabaseCommand extends Command
             $s3Disk->put("backups/database/{$manifestName}", file_get_contents($manifestPath));
             $this->info("✓ Offsite S3 upload completed.");
         } catch (\Throwable $e) {
-            $this->warn("Offsite upload failed or S3 credentials unconfigured: " . $e->getMessage());
-            Log::warning("Offsite backup upload skipped or failed: " . $e->getMessage());
+            // An explicitly requested offsite backup is a required destination, not a best-effort hint.
+            // Fail the command so operators cannot mistake a local-only artifact for a verified offsite copy.
+            Log::error("Required offsite backup upload failed: " . $e->getMessage(), [
+                'backup_id' => basename($manifestName, '.manifest.json'),
+                'exception' => $e,
+            ]);
+            throw new \RuntimeException(
+                "Offsite backup upload failed; the requested S3/all backup is incomplete: " . $e->getMessage(),
+                previous: $e
+            );
         }
     }
 

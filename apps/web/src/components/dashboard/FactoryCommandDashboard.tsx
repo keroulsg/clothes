@@ -112,55 +112,20 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Manual Live Refresh Simulation
+  // Reload the dashboard so its parent data loaders fetch fresh server state.
   const handleLiveRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setLastRefreshedAt(new Date());
-      setIsRefreshing(false);
-      showToast(isAr ? 'تم تحديث مؤشرات المصنع والخطوط اللحظية بنجاح' : 'Factory indicators refreshed successfully');
-    }, 600);
+    window.location.reload();
   };
 
-  // Quick Advance Stage Handler
+  // Stage transitions are owned by the production workflow, not simulated in the dashboard.
   const handleAdvanceStage = (orderId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setLocalOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        let nextStatus: ProductionOrder['status'] = ord.status;
-        let nextSewn = ord.sewn_quantity || 0;
-        const target = Number(ord.target_quantity || 0);
-
-        if (ord.status === 'cutting') {
-          nextStatus = 'sewing';
-          nextSewn = Math.round(target * 0.35);
-          showToast(isAr ? `تم تحويل الأمر ${ord.order_number} إلى مرحلة الخياطة والتجميع` : `Order ${ord.order_number} moved to Sewing stage`);
-        } else if (ord.status === 'sewing') {
-          nextStatus = 'qc' as any;
-          nextSewn = Math.round(target * 0.85);
-          showToast(isAr ? `تم تحويل الأمر ${ord.order_number} إلى مرحلة فحص الجودة QC` : `Order ${ord.order_number} moved to QC stage`);
-        } else if ((ord.status as string) === 'qc' || ord.status === 'in_progress') {
-          nextStatus = 'completed';
-          nextSewn = target;
-          showToast(isAr ? `تم اعتماد اكتمال تصنيع الأمر ${ord.order_number} بالكامل` : `Order ${ord.order_number} marked as Completed`);
-        } else {
-          showToast(isAr ? `الأمر ${ord.order_number} مكتمل بالفعل` : `Order is already completed`);
-        }
-
-        const updated = {
-          ...ord,
-          status: nextStatus,
-          sewn_quantity: nextSewn,
-        };
-
-        if (selectedOrderForDetails?.id === orderId) {
-          setSelectedOrderForDetails(updated);
-        }
-
-        return updated;
-      })
-    );
+    const order = localOrders.find((item) => item.id === orderId);
+    if (order) setSelectedOrderForDetails(order);
+    onTabChange('production');
+    showToast(isAr
+      ? 'تم فتح وحدة الإنتاج لإجراء التحديث الفعلي للمراحل.'
+      : 'Opening Production to perform the real workflow transition.');
   };
 
   // KPI Calculations
@@ -858,10 +823,10 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
                                   onClick={(e) => handleAdvanceStage(order.id, e)}
                                   title={
                                     order.status === 'cutting'
-                                      ? (isAr ? 'نقل الأمر لمرحلة الخياطة' : 'Advance to Sewing')
+                                      ? (isAr ? 'فتح أمر الإنتاج' : 'Open Production Order')
                                       : order.status === 'sewing'
-                                      ? (isAr ? 'نقل الأمر لفحص الجودة QC' : 'Advance to QC')
-                                      : (isAr ? 'اعتماد اكتمال الأمر' : 'Mark as Completed')
+                                      ? (isAr ? 'فتح أمر الإنتاج' : 'Open Production Order')
+                                      : (isAr ? 'فتح أمر الإنتاج' : 'Open Production Order')
                                   }
                                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer border border-[#ff8ba0]/20"
                                 >
@@ -1439,7 +1404,7 @@ export const FactoryCommandDashboard: React.FC<FactoryCommandDashboardProps> = (
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#7F1625] hover:bg-[#961b2c] text-white text-xs font-bold shadow-md cursor-pointer transition-all border border-[#ff8ba0]/20"
                   >
                     <Zap className="w-4 h-4 text-amber-300" />
-                    <span>{isAr ? 'ترقية الأمر للمرحلة التالية' : 'Advance to Next Stage'}</span>
+                    <span>{isAr ? 'إدارة أمر الإنتاج' : 'Manage Production Order'}</span>
                   </button>
                 )}
 

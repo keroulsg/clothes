@@ -198,6 +198,8 @@ class User extends Authenticatable
         switch ($role) {
             case 'company_owner':
                 return ['*'];
+            case 'tenant_admin':
+                return ['admin.settings'];
             case 'production_manager':
             case 'production_engineer':
                 return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage', 'production.work'];

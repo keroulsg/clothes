@@ -83,10 +83,13 @@ class RunConcurrentWorker extends Command
                     $service = app(ProcurementService::class);
                     $inv = $service->matchAndCreateInvoice($payload);
                     $result = [
-                        'status' => $inv->wasRecentlyCreated ? 201 : 200,
+                        'status' => !$inv->is_posted ? 202 : ($inv->wasRecentlyCreated ? 201 : 200),
                         'is_duplicate' => !$inv->wasRecentlyCreated,
                         'id' => $inv->id,
                         'total_amount' => (float)$inv->total_amount,
+                        'is_posted' => (bool) $inv->is_posted,
+                        'matching_status' => $inv->matching_status,
+                        'variance_notes' => $inv->variance_notes,
                     ];
                     break;
 

@@ -1674,9 +1674,19 @@ class AccountingService
         }
 
         // WIP subledger = approved production cost sheets less all individually posted finished-goods receipts.
+        $postedCostSheetIds = JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'production_cost_sheet')
+            ->where('status', 'posted')
+            ->pluck('reference_key')
+            ->filter()
+            ->unique()
+            ->values();
+
         $approvedWipCost = (float) ProductionCostSheet::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('status', 'approved')
+            ->whereIn('id', $postedCostSheetIds)
             ->sum('total_cost');
         $capitalizedFinishedGoods = (float) JournalEntry::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
@@ -2064,6 +2074,10 @@ class AccountingService
         $tenantId = (string) $sheet->tenant_id;
         $existing = $this->findJournalEntryByReference($tenantId, 'production_cost_sheet', $sheet->id);
         if ($existing) {
+            if (abs((float) $existing->total_debit - round((float) $sheet->total_cost, 4)) > 0.0001) {
+                throw new InvalidArgumentException('تعارض Idempotency: بطاقة التكلفة مرتبطة مسبقاً بقيد WIP بقيمة مختلفة.');
+            }
+
             return $existing;
         }
 

@@ -23,6 +23,14 @@ class SupplierInvoiceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = SupplierInvoice::with(['supplier', 'purchaseOrder', 'goodsReceiptNote']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            if ($user->hasExplicitPermissionConfiguration() || !empty($branchIds)) {
+                $query->whereHas('purchaseOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                    ->whereHas('goodsReceiptNote.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            }
+        }
 
         if ($request->has('supplier_id')) {
             $query->where('supplier_id', $request->supplier_id);
@@ -54,6 +62,26 @@ class SupplierInvoiceController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $purchaseOrder = \App\Models\PurchaseOrder::where('tenant_id', $tenantId)->find($validated['purchase_order_id']);
+        $goodsReceipt = \App\Models\GoodsReceiptNote::where('tenant_id', $tenantId)->find($validated['goods_receipt_note_id']);
+        if (!$purchaseOrder || !$goodsReceipt) {
+            return response()->json(['error' => 'ProcurementDocumentNotFound', 'message' => 'أمر الشراء أو إذن الاستلام غير متاح لهذا الحساب.'], 404);
+        }
+        if ($enforceBranchScope) {
+            $poWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($purchaseOrder->warehouse_id);
+            $grnWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($goodsReceipt->warehouse_id);
+            if (
+                !$poWarehouse || !$grnWarehouse
+                || !in_array($poWarehouse->branch_id, $assignedBranchIds, true)
+                || !in_array($grnWarehouse->branch_id, $assignedBranchIds, true)
+            ) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك مطابقة فاتورة شراء من فرع غير معيّن لحسابك.'], 403);
+            }
+        }
         $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
         $validated['tenant_id'] = $tenantId;
 

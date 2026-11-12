@@ -96,9 +96,20 @@ class InventoryService
                 $balanceBefore = (float) $item->current_balance;
 
                 if ($direction === 'OUT') {
-                    // Strict Stock is invariant: warehouse settings cannot authorize negative inventory.
-                    if ($balanceBefore < $quantity) {
-                        throw new InvalidArgumentException("رصيد الصنف [{$item->name}] غير كافٍ. الرصيد الفعلي: [{$balanceBefore}] {$item->unit_of_measure}، المطلوب صرفه: [{$quantity}].");
+                    // Manual/ordinary OUT movements cannot consume quantities reserved for sales orders.
+                    $reservedBalance = (float) ($item->reserved_balance ?? 0);
+                    $consumeReserved = !empty($data['consume_reserved']);
+
+                    if ($consumeReserved && $reservedBalance < $quantity) {
+                        throw new InvalidArgumentException("لا يوجد حجز كافٍ لصرف الصنف [{$item->name}]. المحجوز: [{$reservedBalance}]، المطلوب: [{$quantity}].");
+                    }
+
+                    $availableForMovement = $consumeReserved
+                        ? $balanceBefore
+                        : max(0, $balanceBefore - $reservedBalance);
+
+                    if ($availableForMovement < $quantity) {
+                        throw new InvalidArgumentException("رصيد الصنف [{$item->name}] غير كافٍ بعد حماية الكميات المحجوزة. المتاح: [{$availableForMovement}] {$item->unit_of_measure}، المطلوب صرفه: [{$quantity}].");
                     }
                     $balanceAfter = $balanceBefore - $quantity;
                 } else {

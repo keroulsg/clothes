@@ -547,6 +547,14 @@ class Batch5AccountingAndCostingTest extends TestCase
         $approveResp->assertStatus(200);
         $this->assertEquals('approved', $approveResp->json('cost_sheet.status'));
 
+        // Bulk costing must not force-recalculate or mutate an approved historical cost sheet.
+        $bulkResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson('/api/v1/accounting/cost-sheets/auto-calculate-all');
+        $bulkResp->assertStatus(200)
+            ->assertJsonPath('skipped_approved_count', 1);
+        $this->assertEquals(4800.0, (float) ProductionCostSheet::findOrFail($sheet['id'])->total_cost);
+        $this->assertSame('approved', ProductionCostSheet::findOrFail($sheet['id'])->status);
+
         // فحص تشغيل الغير (CMT): أمر إنتاج CMT يستبعد تكلفة الخامات الموردة من العميل
         $cmtOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,

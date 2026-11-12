@@ -2015,6 +2015,14 @@ class AccountingService
         // Idempotency is scoped to the individual accepted QC receipt, not the production order.
         $existing = $this->findJournalEntryByReference($tenantId, 'production_receipt', $receiptId);
         if ($existing) {
+            $expectedQuantity = isset($receipt->passed_quantity) ? (int) $receipt->passed_quantity : $quantity;
+            if (
+                abs((float) $existing->total_debit - round($totalCost, 4)) > 0.0001
+                || $expectedQuantity !== $quantity
+            ) {
+                throw new InvalidArgumentException('تعارض Idempotency: محضر الجودة نفسه مرتبط مسبقاً بقيد استلام بتكلفة أو كمية مختلفة.');
+            }
+
             return $existing;
         }
 

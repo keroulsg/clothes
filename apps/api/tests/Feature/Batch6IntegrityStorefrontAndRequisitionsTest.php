@@ -162,7 +162,9 @@ class Batch6IntegrityStorefrontAndRequisitionsTest extends TestCase
             'is_store_enabled' => true,
             'allow_cod' => true,
             'allow_card_payment' => false,
-            'allow_instapay' => false,
+            'allow_instapay' => true,
+            'instapay_account_verified' => true,
+            'instapay_identifier' => 'factory-a@instapay',
         ]);
     }
 

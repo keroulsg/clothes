@@ -701,7 +701,7 @@ class TenantController extends Controller
                 'is_active' => (bool)$u->is_active,
                 'permissions' => $u->permissions ?? [],
                 'permissions_mode' => $u->permissions_mode ?? 'inherit',
-                'branch_ids' => $u->branches->pluck('id')->values()->all(),
+                'branch_ids' => $u->assignedBranchIds(),
                 'effective_permissions' => $u->getEffectivePermissions(),
                 'created_at' => $u->created_at?->format('Y-m-d H:i:s'),
             ];

@@ -95,7 +95,7 @@ class EnsureRole
      * Role middleware remains the upper boundary; this check applies the user's
      * effective permission set as a second, server-side authorization gate.
      */
-    private function permissionForRequest(Request $request): ?string
+    public function permissionForRequest(Request $request): ?string
     {
         $uri = $request->route()?->uri() ?? $request->path();
         $uri = preg_replace('#^api/v[0-9]+/#', '', ltrim($uri, '/'));

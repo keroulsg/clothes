@@ -1534,5 +1534,42 @@ class AuthAndRoleAuthorizationTest extends TestCase
             ->assertJsonPath('error', 'UnauthorizedRole');
     }
 
+    public function test_owner_cannot_create_staff_user_without_a_branch_assignment(): void
+    {
+        Sanctum::actingAs($this->ownerUser);
+
+        $this->postJson('/api/v1/tenant/users', [
+            'name' => 'موظف بدون فرع',
+            'email' => 'no-branch@nile.com',
+            'password' => 'StrongPass123!',
+            'role' => 'sales_rep',
+        ])->assertStatus(422)
+            ->assertJsonPath('error', 'BranchAssignmentRequired');
+    }
+
+    public function test_owner_can_create_staff_user_with_an_explicit_branch_assignment(): void
+    {
+        Sanctum::actingAs($this->ownerUser);
+
+        $this->postJson('/api/v1/tenant/users', [
+            'name' => 'موظف الفرع',
+            'email' => 'assigned-branch@nile.com',
+            'password' => 'StrongPass123!',
+            'role' => 'sales_rep',
+            'branch_ids' => [$this->mainBranch->id],
+        ])->assertCreated()
+            ->assertJsonPath('user.branch_ids.0', $this->mainBranch->id);
+    }
+
+    public function test_owner_cannot_remove_all_branch_assignments_from_existing_staff_user(): void
+    {
+        Sanctum::actingAs($this->ownerUser);
+
+        $this->putJson('/api/v1/tenant/users/'.$this->workerUser->id, [
+            'branch_ids' => [],
+        ])->assertStatus(422)
+            ->assertJsonPath('error', 'BranchAssignmentRequired');
+    }
+
 }
 

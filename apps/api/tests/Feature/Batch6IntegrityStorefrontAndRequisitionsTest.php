@@ -309,6 +309,15 @@ class Batch6IntegrityStorefrontAndRequisitionsTest extends TestCase
         $response->assertJsonPath('store_settings.instapay_identifier', 'ahram_factory@instapay');
         $response->assertJsonPath('store_settings.instapay_display_name', 'شركة مصنع الأهرام للملابس');
 
+        // Tenant B must have its own enabled public store before testing cross-tenant isolation.
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenantB->id,
+            'store_name' => 'متجر المصنع B',
+            'is_store_enabled' => true,
+            'allow_cod' => true,
+            'allow_instapay' => false,
+        ]);
+
         // التأكد من عدم تسرب إعدادات A إلى B
         $responseB = $this->withHeader('X-Tenant-ID', $this->tenantB->id)
             ->getJson("/api/v1/storefront/public/{$this->tenantB->id}");
@@ -350,6 +359,12 @@ class Batch6IntegrityStorefrontAndRequisitionsTest extends TestCase
      */
     public function test_instapay_payment_approval_creates_voucher_marks_paid_and_posts_gl_journal(): void
     {
+        TenantStoreSetting::where('tenant_id', $this->tenantA->id)->update([
+            'allow_instapay' => true,
+            'instapay_account_verified' => true,
+            'instapay_identifier' => 'factory-a@instapay',
+        ]);
+
         $payload = [
             'tenant_id' => $this->tenantA->id,
             'customer_name' => 'محمود سلامة',
@@ -408,6 +423,12 @@ class Batch6IntegrityStorefrontAndRequisitionsTest extends TestCase
      */
     public function test_instapay_payment_rejection_requires_mandatory_reason(): void
     {
+        TenantStoreSetting::where('tenant_id', $this->tenantA->id)->update([
+            'allow_instapay' => true,
+            'instapay_account_verified' => true,
+            'instapay_identifier' => 'factory-a@instapay',
+        ]);
+
         $payload = [
             'tenant_id' => $this->tenantA->id,
             'customer_name' => 'طارق عفيفي',

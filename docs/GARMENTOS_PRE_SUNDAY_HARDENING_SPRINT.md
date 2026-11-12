@@ -133,3 +133,15 @@ The next workflow run (43243446906) was started before those follow-up commits w
 - Frontend TypeScript and Vite build: PASS
 - This is CI evidence for the branch only. It does not authorize merge, production migration, deployment, or production data changes.
 - Remaining audit disposition must be completed separately; a green CI run does not by itself prove every static-audit finding is closed. In particular, WIP inventory valuation remains explicitly incomplete in the reconciliation response and must not be represented as reconciled.
+
+
+## Follow-up Verification — 2026-11-12 16:12 UTC
+
+- Verified commit: `2004b78f0b0c0d28de8fc950271eea1410f4ed7d`
+- GitHub Actions run: `43255867010`
+- PostgreSQL migrations: PASS
+- PostgreSQL concurrency integration tests: PASS
+- Complete backend suite: PASS — 527 tests, 3,246 assertions
+- Frontend TypeScript and Vite build: PASS
+- Added a regression test proving AP reconciliation reports the supplier's actual subledger balance and exposes a mismatch with open invoices instead of masking it.
+- Fixed employee-adjustment creator attribution to use the type-safe actor column.

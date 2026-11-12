@@ -1238,17 +1238,12 @@ class AccountingService
             if (isset($overrides['direct_labor_cost'])) {
                 $laborCost = (float)$overrides['direct_labor_cost'];
             } else {
-                $approvedLabor = (float)PieceWorkLog::where('tenant_id', $tenantId)
+                // Only approved/settled piece-work is an actual manufacturing cost.
+                // Pending, submitted, or rejected logs must never be capitalized into WIP.
+                $laborCost = (float) PieceWorkLog::where('tenant_id', $tenantId)
                     ->where('production_order_id', $order->id)
                     ->whereIn('status', ['approved', 'settled'])
                     ->sum('total_amount');
-
-                $laborCost = $approvedLabor > 0
-                    ? $approvedLabor
-                    : (float)PieceWorkLog::where('tenant_id', $tenantId)
-                        ->where('production_order_id', $order->id)
-                        ->where('status', '!=', 'rejected')
-                        ->sum('total_amount');
             }
 
             $subcontractCost = (float)($overrides['subcontracted_services_cost'] ?? 0);

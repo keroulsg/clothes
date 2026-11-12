@@ -95,8 +95,8 @@ class PayrollService
                 'unit_rate' => $rate,
                 'total_amount' => $totalAmount,
                 'status' => $status,
-                'approved_by' => $data['approved_by'] ?? null,
-                'approved_at' => !empty($data['approved_by']) ? now() : null,
+                'approved_by_user_id' => $status === 'approved' ? auth()->id() : null,
+                'approved_at' => $status === 'approved' ? now() : null,
             ]);
 
             return $log->load('employee');
@@ -118,7 +118,7 @@ class PayrollService
             }
 
             $log->status = 'approved';
-            $log->approved_by = $userId;
+            $log->approved_by_user_id = $userId;
             $log->approved_at = now();
             $log->rejection_reason = null;
             $log->save();
@@ -224,7 +224,7 @@ class PayrollService
                     'early_departure_minutes' => isset($data['early_departure_minutes']) ? (int)$data['early_departure_minutes'] : $existing->early_departure_minutes,
                     'is_payable' => $isPayable,
                     'notes' => $data['notes'] ?? $existing->notes,
-                    'created_by' => $userId,
+                    'created_by_user_id' => $userId,
                 ]);
 
                 return $existing->fresh();
@@ -293,7 +293,7 @@ class PayrollService
             if (isset($data['late_minutes'])) $attendance->late_minutes = (int)$data['late_minutes'];
             if (isset($data['is_payable'])) $attendance->is_payable = (bool)$data['is_payable'];
             $attendance->notes = $newNotes;
-            $attendance->updated_by = $userId;
+            $attendance->updated_by_user_id = $userId;
             $attendance->save();
 
             return $attendance->load('employee');
@@ -353,7 +353,7 @@ class PayrollService
             }
 
             $adj->status = 'approved';
-            $adj->approved_by = $userId;
+            $adj->approved_by_user_id = $userId;
             $adj->approved_at = now();
             $adj->save();
 
@@ -446,7 +446,7 @@ class PayrollService
             }
 
             $adjustment->status = 'approved';
-            $adjustment->approved_by = $approvedBy;
+            $adjustment->approved_by_user_id = $approvedBy;
             $adjustment->approved_at = now();
             $adjustment->save();
 
@@ -960,7 +960,7 @@ class PayrollService
             }
 
             $payroll->status = 'approved';
-            $payroll->approved_by = $userId;
+            $payroll->approved_by_user_id = $userId;
             $payroll->approved_at = now();
             $payroll->rejection_reason = null;
             $payroll->save();
@@ -1007,7 +1007,7 @@ class PayrollService
             }
 
             $payroll->status = 'finalized';
-            $payroll->finalized_by = $userId;
+            $payroll->finalized_by_user_id = $userId;
             $payroll->finalized_at = now();
             $payroll->save();
 
@@ -1051,7 +1051,7 @@ class PayrollService
                 'payment_method' => $data['payment_method'] ?? 'cash',
                 'reference_number' => $data['reference_number'] ?? ('PAY-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
                 'notes' => $data['notes'] ?? 'صرف مستحقات أجور عمال',
-                'paid_by' => $userId,
+                'paid_by_user_id' => $userId,
             ]);
 
             $payroll->total_paid = round((float)$payroll->total_paid + $amount, 4);

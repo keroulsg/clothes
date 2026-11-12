@@ -44,6 +44,8 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
   const [users, setUsers] = useState<any[]>([]);
   const [permissionsCatalog, setPermissionsCatalog] = useState<any[]>([]);
   const [rolesData, setRolesData] = useState<any[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<any[]>([]);
+  const [userBranchIds, setUserBranchIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -92,17 +94,19 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [usersRes, catalogRes, rolesRes, backupRes, profileRes] = await Promise.all([
+      const [usersRes, catalogRes, rolesRes, backupRes, profileRes, branchesRes] = await Promise.all([
         api.tenant.getUsers().catch(() => ({ users: [], total: 0, active_count: 0 })),
         api.tenant.getPermissionsCatalog().catch(() => ({ catalog: [], roles: [] })),
         api.tenant.getRolesWithPermissions().catch(() => ({ roles: [], catalog: [] })),
         api.tenant.getBackupStatus().catch(() => null),
         api.tenant.getProfile().catch(() => null),
+        api.branches.getBranches().catch(() => ({ branches: [] })),
       ]);
 
       setUsers(usersRes.users || []);
       setPermissionsCatalog(catalogRes.catalog && catalogRes.catalog.length > 0 ? catalogRes.catalog : (rolesRes.catalog || []));
       setRolesData(rolesRes.roles || []);
+      setAvailableBranches(branchesRes.branches || []);
       if (backupRes) setBackupStatus(backupRes);
 
       if (profileRes?.tenant) {
@@ -136,23 +140,23 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
         break;
       case 'production_manager':
       case 'production_engineer':
-        defaultPerms = ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'qc.inspect', 'costing.view'];
+        defaultPerms = ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage'];
         break;
       case 'inventory_custodian':
       case 'storekeeper':
       case 'warehouse_manager':
-        defaultPerms = ['inventory.view', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'procurement.view'];
+        defaultPerms = ['inventory.view', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'procurement.view', 'procurement.create'];
         break;
       case 'accountant':
       case 'financial_accountant':
-        defaultPerms = ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'sales.view'];
+        defaultPerms = ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'inventory.view', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
         break;
       case 'quality_controller':
       case 'qc':
         defaultPerms = ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'inventory.view'];
         break;
       case 'sales_rep':
-        defaultPerms = ['sales.view', 'sales.create', 'sales.discount', 'inventory.view'];
+        defaultPerms = ['sales.view', 'sales.create', 'sales.discount', 'inventory.view', 'storefront.view'];
         break;
       case 'worker':
       case 'operator':
@@ -173,6 +177,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
     setUserRole('production_manager');
     handleRoleChange('production_manager');
     setUserIsActive(true);
+    setUserBranchIds([]);
     setIsUserModalOpen(true);
   };
 
@@ -184,6 +189,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
     setUserPassword('');
     setUserRole(user.role);
     setUserPermissions(user.permissions_mode === 'custom' ? (user.permissions || []) : (user.effective_permissions || []));
+    setUserBranchIds(Array.isArray(user.branch_ids) ? user.branch_ids : []);
     setUserIsActive(Boolean(user.is_active));
     setIsUserModalOpen(true);
   };
@@ -274,6 +280,13 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (userRole !== 'company_owner' && availableBranches.length > 0 && userBranchIds.length === 0) {
+      setStatusMsg({
+        type: 'error',
+        text: isAr ? 'يجب تعيين المستخدم إلى فرع واحد على الأقل قبل حفظ الحساب.' : 'Assign this user to at least one branch before saving.',
+      });
+      return;
+    }
     setIsSubmittingUser(true);
     setStatusMsg(null);
     try {
@@ -285,6 +298,7 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
           phone: userPhone,
           role: userRole,
           permissions: userRole === 'company_owner' ? ['*'] : userPermissions,
+          branch_ids: userRole === 'company_owner' ? [] : userBranchIds,
           is_active: userIsActive,
         };
         if (userPassword.trim()) {
@@ -1209,6 +1223,42 @@ export const FactorySettingsView: React.FC<FactorySettingsViewProps> = ({
               {isAr ? 'اختيار الدور يحدد الصلاحيات القياسية تلقائياً، ويمكنك تخصيصها بدقة بالأسفل.' : 'Selecting a role auto-fills recommended permissions.'}
             </p>
           </div>
+
+          {userRole !== 'company_owner' && (
+            <div className="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs">
+                  {isAr ? 'الفروع المسموح لهذا المستخدم بالوصول إليها *' : 'Authorized Branches *'}
+                </label>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {isAr ? 'لن يتمكن المستخدم من رؤية مخازن أو بيانات فرع غير معيّن له.' : 'The user cannot access warehouses or data from unassigned branches.'}
+                </p>
+              </div>
+              {availableBranches.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {isAr ? 'لا توجد فروع متاحة للتعيين. أنشئ الفروع أولاً.' : 'No branches available. Create a branch first.'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availableBranches.map((branch) => (
+                    <label key={branch.id} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={userBranchIds.includes(branch.id)}
+                        onChange={(event) => setUserBranchIds((current) =>
+                          event.target.checked
+                            ? [...current, branch.id]
+                            : current.filter((id) => id !== branch.id)
+                        )}
+                        className="h-4 w-4 rounded text-primary"
+                      />
+                      <span className="text-slate-800 dark:text-slate-200">{branch.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* User Active Status Checkbox */}
           <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">

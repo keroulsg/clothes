@@ -311,8 +311,14 @@ class MaintenanceService
         $machineQuery = Machine::query();
         $workOrderQuery = MaintenanceWorkOrder::query();
         if ($branchIds !== null) {
-            $machineQuery->whereIn('branch_id', $branchIds);
-            $workOrderQuery->whereHas('machine', fn ($query) => $query->whereIn('branch_id', $branchIds));
+            $machineQuery->where(function ($q) use ($branchIds) {
+                $q->whereIn('branch_id', $branchIds)
+                    ->orWhereNull('branch_id');
+            });
+            $workOrderQuery->whereHas('machine', fn ($query) => $query->where(function ($q) use ($branchIds) {
+                $q->whereIn('branch_id', $branchIds)
+                    ->orWhereNull('branch_id');
+            }));
         }
 
         $totalMachines = (clone $machineQuery)->count();

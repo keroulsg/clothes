@@ -126,7 +126,7 @@ class SalesController extends Controller
         ]);
 
         $user = $request->user();
-        if ($user && $user->role !== 'company_owner') {
+        if ($user && $user->shouldEnforceBranchScope()) {
             $assignedBranchIds = $user->assignedBranchIds();
             if (empty($assignedBranchIds)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب تعيين حسابك إلى فرع قبل إنشاء أوامر البيع.'], 403);
@@ -279,7 +279,7 @@ class SalesController extends Controller
         ]);
 
         $user = $request->user();
-        if ($user && $user->role !== 'company_owner') {
+        if ($user && $user->shouldEnforceBranchScope()) {
             $assignedBranchIds = $user->assignedBranchIds();
             if (empty($assignedBranchIds)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب تعيين حسابك إلى فرع قبل تنفيذ مبيعات نقطة البيع.'], 403);
@@ -349,8 +349,7 @@ class SalesController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            ;
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
             return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 404);
@@ -392,7 +391,7 @@ class SalesController extends Controller
         $tenantId = app('current_tenant_id');
         $sessionQuery = PosSession::where('tenant_id', $tenantId)->where('id', $id);
         $user = $request->user();
-        if ($user && $user->role !== 'company_owner') {
+        if ($user && $user->shouldEnforceBranchScope()) {
             $sessionQuery->whereIn('branch_id', $user->assignedBranchIds());
         }
         $session = $sessionQuery->firstOrFail();
@@ -443,7 +442,7 @@ class SalesController extends Controller
         $tenantId = app('current_tenant_id');
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
 
         $deliveryOrder = \App\Models\SalesOrder::where('tenant_id', $tenantId)
             ->find($validated['sales_order_id']);
@@ -451,22 +450,24 @@ class SalesController extends Controller
             return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
         }
 
-        $orderWarehouse = !empty($deliveryOrder->warehouse_id)
-            ? \App\Models\Warehouse::where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id)
-            : null;
-        if (!$orderWarehouse) {
+        $deliveryWarehouseId = $validated['warehouse_id'] ?? $deliveryOrder->warehouse_id;
+        if (!$deliveryWarehouseId) {
             return response()->json(['error' => 'SalesOrderWarehouseMissing', 'message' => 'أمر البيع غير مرتبط بمخزن صالح.'], 422);
         }
 
-        $deliveryWarehouseId = $validated['warehouse_id'] ?? $orderWarehouse->id;
         $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($deliveryWarehouseId);
         if (!$deliveryWarehouse) {
             return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
         }
+
+        $orderWarehouse = !empty($deliveryOrder->warehouse_id)
+            ? \App\Models\Warehouse::where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id)
+            : null;
+
         if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
             return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إصدار إذن تسليم من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
         }
-        if ($orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
+        if ($orderWarehouse && $orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
             return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب إصدار إذن التسليم من نفس فرع أمر البيع.'], 422);
         }
         $validated['warehouse_id'] = $deliveryWarehouse->id;
@@ -536,8 +537,7 @@ class SalesController extends Controller
         $tenantId = app('current_tenant_id');
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            ;
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         $returnWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
         if (!$returnWarehouse) {
             return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
@@ -645,7 +645,7 @@ class SalesController extends Controller
         ]);
         $warehouseId = $validated['warehouse_id'] ?? null;
         $user = $request->user();
-        if ($user && $user->role !== 'company_owner') {
+        if ($user && $user->shouldEnforceBranchScope()) {
             $branchIds = $user->assignedBranchIds();
             if (empty($branchIds)) {
                 return response()->json(['error' => 'BranchAccessDenied'], 403);
@@ -763,7 +763,7 @@ class SalesController extends Controller
         }
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         if (!empty($validated['warehouse_id'])) {
             $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$deliveryWarehouse) {
@@ -929,7 +929,7 @@ class SalesController extends Controller
         $notesQuery = CreditNote::where('tenant_id', $tenantId)
             ->with(['customer', 'salesInvoice', 'salesReturn']);
 
-        if ($user && $user->role !== 'company_owner') {
+        if ($user && $user->shouldEnforceBranchScope()) {
             $branchIds = $user->assignedBranchIds();
             $notesQuery
                 ->where(function ($query) use ($branchIds) {
@@ -955,7 +955,7 @@ class SalesController extends Controller
     public function barcodeLookup(string $barcode): JsonResponse
     {
         $user = request()->user();
-        $branchIds = $user && $user->role !== 'company_owner' ? $user->assignedBranchIds() : null;
+        $branchIds = $user && $user->shouldEnforceBranchScope() ? $user->assignedBranchIds() : null;
         $item = $this->salesService->barcodeLookup($barcode, $branchIds);
 
         if (!$item) {
@@ -974,7 +974,7 @@ class SalesController extends Controller
     private function scopeWarehouseBranchRecords($query, string $relation)
     {
         $user = request()->user();
-        if (!$user || $user->role === 'company_owner') {
+        if (!$user || !$user->shouldEnforceBranchScope()) {
             return $query;
         }
 

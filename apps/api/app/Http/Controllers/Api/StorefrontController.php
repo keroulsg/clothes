@@ -646,13 +646,16 @@ class StorefrontController extends Controller
     private function scopeStoreOrdersToAssignedBranches($query, ?Request $request = null)
     {
         $user = ($request ?? request())->user();
-        if (!$user || $user->role === 'company_owner') {
+        if (!$user || !$user->shouldEnforceBranchScope()) {
             return $query;
         }
 
         $branchIds = $user->assignedBranchIds();
 
-        return $query->whereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        return $query->where(function ($q) use ($branchIds) {
+            $q->whereNull('sales_order_id')
+                ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        });
     }
 
 

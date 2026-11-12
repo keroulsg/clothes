@@ -1220,9 +1220,9 @@ class InventoryController extends Controller
         $warehouse = Warehouse::where('tenant_id', app('current_tenant_id'))->find($validated['warehouse_id']);
         $user = $request->user();
         if (!$warehouse) {
-            return response()->json(['error' => 'WarehouseNotFound'], 404);
+            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير متاح أو تابع لشركة أخرى.'], 422);
         }
-        if ($user && $user->role !== 'company_owner' && !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
+        if ($user && $user->shouldEnforceBranchScope() && !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
             return response()->json(['error' => 'BranchAccessDenied'], 403);
         }
 

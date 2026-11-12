@@ -151,7 +151,9 @@ class MaintenanceController extends Controller
         $branchIds = $user?->assignedBranchIds() ?? [];
         $workOrderQuery = MaintenanceWorkOrder::where('tenant_id', $tenantId)->whereKey($id);
         if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
-            $workOrderQuery->whereHas('machine', fn ($machineQuery) => $machineQuery->whereIn('branch_id', $branchIds));
+            $workOrderQuery->whereHas('machine', fn ($machineQuery) => $machineQuery->where(function ($q) use ($branchIds) {
+                $q->whereIn('branch_id', $branchIds)->orWhereNull('branch_id');
+            }));
         }
         $workOrderQuery->firstOrFail();
 
@@ -229,7 +231,9 @@ class MaintenanceController extends Controller
         $branchIds = $user?->assignedBranchIds() ?? [];
         $workOrderQuery = MaintenanceWorkOrder::where('tenant_id', $tenantId)->whereKey($id);
         if ($user && $user->role !== 'company_owner' && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds))) {
-            $workOrderQuery->whereHas('machine', fn ($machineQuery) => $machineQuery->whereIn('branch_id', $branchIds));
+            $workOrderQuery->whereHas('machine', fn ($machineQuery) => $machineQuery->where(function ($q) use ($branchIds) {
+                $q->whereIn('branch_id', $branchIds)->orWhereNull('branch_id');
+            }));
         }
         $workOrderQuery->firstOrFail();
 

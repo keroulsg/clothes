@@ -218,6 +218,8 @@ class User extends Authenticatable
             case 'qc':
                 return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'branches.view', 'inventory.view'];
             case 'sales_rep':
+            case 'sales_manager':
+            case 'sales_officer':
                 return ['sales.view', 'sales.create', 'sales.discount', 'branches.view', 'inventory.view', 'storefront.view'];
             case 'worker':
             case 'operator':
@@ -307,6 +309,15 @@ class User extends Authenticatable
             ->where('branches.tenant_id', $this->tenant_id)
             ->pluck('branches.id')
             ->all();
+    }
+
+    public function shouldEnforceBranchScope(): bool
+    {
+        if ($this->role === 'company_owner' || !$this->tenant_id) {
+            return false;
+        }
+
+        return Branch::where('tenant_id', $this->tenant_id)->exists();
     }
 
     protected static function boot(): void

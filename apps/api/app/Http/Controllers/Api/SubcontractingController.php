@@ -266,7 +266,7 @@ class SubcontractingController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         $productionOrder = null;
         $assignedEmployee = null;
         if (!empty($validated['production_order_id'])) {
@@ -463,7 +463,7 @@ class SubcontractingController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         if ($enforceBranchScope && !in_array($warehouse->branch_id, $assignedBranchIds, true)) {
             return response()->json([
                 'success' => false,
@@ -596,7 +596,7 @@ class SubcontractingController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         $operationBranchIds = [];
 
         if (!empty($validated['job_order_id'])) {
@@ -777,7 +777,7 @@ class SubcontractingController extends Controller
             }
 
             $user = $request->user();
-            if ($user && $user->role !== 'company_owner' && !in_array($anchorIds[0], $user->assignedBranchIds(), true)) {
+            if ($user && $user->shouldEnforceBranchScope() && !in_array($anchorIds[0], $user->assignedBranchIds(), true)) {
                 return response()->json(['error' => 'BranchAccessDenied'], 403);
             }
         }
@@ -1033,7 +1033,7 @@ class SubcontractingController extends Controller
     private function scopeJobsToAssignedBranches($query, Request $request)
     {
         $user = $request->user();
-        if (!$user || $user->role === 'company_owner') {
+        if (!$user || !$user->shouldEnforceBranchScope()) {
             return $query;
         }
 
@@ -1044,7 +1044,7 @@ class SubcontractingController extends Controller
     private function scopeRelatedJobRecords($query, Request $request)
     {
         $user = $request->user();
-        if (!$user || $user->role === 'company_owner') {
+        if (!$user || !$user->shouldEnforceBranchScope()) {
             return $query;
         }
 
@@ -1055,7 +1055,7 @@ class SubcontractingController extends Controller
     private function scopeExternalOperationsToAssignedBranches($query, Request $request)
     {
         $user = $request->user();
-        if (!$user || $user->role === 'company_owner') {
+        if (!$user || !$user->shouldEnforceBranchScope()) {
             return $query;
         }
 

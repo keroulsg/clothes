@@ -41,14 +41,20 @@ class AssignedBranchScope implements Scope
         $branchIds = $user->assignedBranchIds();
 
         if ($hasBranchId) {
-            $builder->whereIn($model->qualifyColumn('branch_id'), $branchIds);
+            $builder->where(function ($query) use ($model, $branchIds) {
+                $query->whereIn($model->qualifyColumn('branch_id'), $branchIds)
+                    ->orWhereNull($model->qualifyColumn('branch_id'));
+            });
             return;
         }
 
         if ($hasWarehouseId) {
             $warehouseIds = DB::table('warehouses')
                 ->where('tenant_id', $user->tenant_id)
-                ->whereIn('branch_id', $branchIds)
+                ->where(function ($query) use ($branchIds) {
+                    $query->whereIn('branch_id', $branchIds)
+                        ->orWhereNull('branch_id');
+                })
                 ->select('id');
 
             $builder->whereIn($model->qualifyColumn('warehouse_id'), $warehouseIds);

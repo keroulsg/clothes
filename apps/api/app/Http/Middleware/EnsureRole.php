@@ -52,6 +52,9 @@ class EnsureRole
             'warehouse_manager' => ['inventory_custodian', 'warehouse', 'storekeeper', 'warehouse_manager'],
             'worker' => ['worker', 'operator'],
             'operator' => ['worker', 'operator'],
+            'sales_manager' => ['sales_manager', 'sales_rep', 'sales_officer'],
+            'sales_officer' => ['sales_officer', 'sales_rep'],
+            'sales_rep' => ['sales_rep', 'sales_officer'],
         ];
 
         // مشرف المنصة لا يدخل إلى مسارات ERP الخاصة بالمستأجرين مطلقاً.

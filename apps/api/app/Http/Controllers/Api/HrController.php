@@ -834,10 +834,10 @@ class HrController extends Controller
             'approved_amount' => 'nullable|numeric|min:0',
         ]);
 
-        $adjustment = $tenantId = app('current_tenant_id');
+        $tenantId = app('current_tenant_id');
         $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
 
-        $this->payrollService->approveQualityDefectAdjustment(
+        $adjustment = $this->payrollService->approveQualityDefectAdjustment(
             $id,
             $request->user()->id,
             isset($validated['approved_amount']) ? (float)$validated['approved_amount'] : null
@@ -855,10 +855,10 @@ class HrController extends Controller
             'rejection_reason' => 'required|string|max:255',
         ]);
 
-        $adjustment = $tenantId = app('current_tenant_id');
+        $tenantId = app('current_tenant_id');
         $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
 
-        $this->payrollService->rejectQualityDefectAdjustment(
+        $adjustment = $this->payrollService->rejectQualityDefectAdjustment(
             $id,
             $request->user()->id,
             $validated['rejection_reason']
@@ -876,10 +876,10 @@ class HrController extends Controller
             'objection_notes' => 'required|string|max:1000',
         ]);
 
-        $adjustment = $tenantId = app('current_tenant_id');
+        $tenantId = app('current_tenant_id');
         $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
 
-        $this->payrollService->recordWorkerObjection(
+        $adjustment = $this->payrollService->recordWorkerObjection(
             $id,
             $validated['objection_notes']
         );
@@ -896,10 +896,10 @@ class HrController extends Controller
             'reversal_reason' => 'required|string|max:255',
         ]);
 
-        $adjustment = $tenantId = app('current_tenant_id');
+        $tenantId = app('current_tenant_id');
         $this->scopeToAssignedEmployeeBranches(QualityDefectAdjustment::where('tenant_id', $tenantId), $request, true)->findOrFail($id);
 
-        $this->payrollService->reverseQualityDefectAdjustment(
+        $adjustment = $this->payrollService->reverseQualityDefectAdjustment(
             $id,
             $request->user()->id,
             $validated['reversal_reason']
@@ -1167,14 +1167,21 @@ class HrController extends Controller
     private function scopeToAssignedEmployeeBranches($query, Request $request, bool $alsoProductionOrder = false)
     {
         $user = $request->user();
-        if (!$user || $user->role === 'company_owner') {
+        if (!$user || !$user->shouldEnforceBranchScope()) {
             return $query;
         }
 
         $branchIds = $user->assignedBranchIds();
-        $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+        $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->where(function ($eq) use ($branchIds) {
+            $eq->whereIn('branch_id', $branchIds)->orWhereNull('branch_id');
+        }));
         if ($alsoProductionOrder) {
-            $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            $query->where(function ($q) use ($branchIds) {
+                $q->whereNull('production_order_id')
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->where(function ($pq) use ($branchIds) {
+                        $pq->whereIn('branch_id', $branchIds)->orWhereNull('branch_id');
+                    }));
+            });
         }
 
         return $query;

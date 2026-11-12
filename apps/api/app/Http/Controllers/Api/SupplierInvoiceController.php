@@ -24,7 +24,7 @@ class SupplierInvoiceController extends Controller
     {
         $query = SupplierInvoice::with(['supplier', 'purchaseOrder', 'goodsReceiptNote']);
         $user = $request->user();
-        if ($user && $user->role !== 'company_owner') {
+        if ($user && $user->shouldEnforceBranchScope()) {
             $branchIds = $user->assignedBranchIds();
             $query->whereHas('purchaseOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
                 ->whereHas('goodsReceiptNote.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
@@ -62,8 +62,7 @@ class SupplierInvoiceController extends Controller
         $tenantId = app('current_tenant_id');
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            ;
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
         $purchaseOrder = \App\Models\PurchaseOrder::where('tenant_id', $tenantId)->find($validated['purchase_order_id']);
         $goodsReceipt = \App\Models\GoodsReceiptNote::where('tenant_id', $tenantId)->find($validated['goods_receipt_note_id']);
         if (!$purchaseOrder || !$goodsReceipt) {

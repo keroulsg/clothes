@@ -432,8 +432,8 @@ export const TenantSubscriptionView: React.FC<TenantSubscriptionViewProps> = ({
               </div>
 
               <div className="text-xs text-slate-400 flex flex-wrap items-center gap-4 font-mono">
-                <span>{isAr ? 'بداية الدورة:' : 'Period Start:'} {report.subscription.current_period_start || '2026-11-04'}</span>
-                <span>{isAr ? 'تاريخ التجديد:' : 'Renews on:'} {report.subscription.current_period_end || '2026-12-04'}</span>
+                <span>{isAr ? 'بداية الدورة:' : 'Period Start:'} {report.subscription.current_period_start || '—'}</span>
+                <span>{isAr ? 'تاريخ التجديد:' : 'Renews on:'} {report.subscription.current_period_end || '—'}</span>
               </div>
             </div>
 

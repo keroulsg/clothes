@@ -14,6 +14,51 @@ return new class extends Migration
             });
         }
 
+        if (Schema::hasTable('financial_account_transfers') && !Schema::hasColumn('financial_account_transfers', 'created_by_user_id')) {
+            Schema::table('financial_account_transfers', function (Blueprint $table) {
+                $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            });
+        }
+
+        if (Schema::hasTable('fiscal_years') && !Schema::hasColumn('fiscal_years', 'closed_by_user_id')) {
+            Schema::table('fiscal_years', function (Blueprint $table) {
+                $table->foreignId('closed_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            });
+        }
+
+        if (Schema::hasTable('fiscal_periods')) {
+            Schema::table('fiscal_periods', function (Blueprint $table) {
+                if (!Schema::hasColumn('fiscal_periods', 'closed_by_user_id')) {
+                    $table->foreignId('closed_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+                }
+                if (!Schema::hasColumn('fiscal_periods', 'reopened_by_user_id')) {
+                    $table->foreignId('reopened_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+                }
+            });
+        }
+
+        if (Schema::hasTable('fiscal_periods')) {
+            Schema::table('fiscal_periods', function (Blueprint $table) {
+                foreach (['closed_by_user_id', 'reopened_by_user_id'] as $column) {
+                    if (Schema::hasColumn('fiscal_periods', $column)) {
+                        $table->dropConstrainedForeignId($column);
+                    }
+                }
+            });
+        }
+
+        if (Schema::hasTable('fiscal_years') && Schema::hasColumn('fiscal_years', 'closed_by_user_id')) {
+            Schema::table('fiscal_years', function (Blueprint $table) {
+                $table->dropConstrainedForeignId('closed_by_user_id');
+            });
+        }
+
+        if (Schema::hasTable('financial_account_transfers') && Schema::hasColumn('financial_account_transfers', 'created_by_user_id')) {
+            Schema::table('financial_account_transfers', function (Blueprint $table) {
+                $table->dropConstrainedForeignId('created_by_user_id');
+            });
+        }
+
         if (Schema::hasTable('journal_entries')) {
             Schema::table('journal_entries', function (Blueprint $table) {
                 if (!Schema::hasColumn('journal_entries', 'created_by_user_id')) {

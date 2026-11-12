@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\PosSession;
 use App\Models\Quotation;
 use App\Models\SalesInvoice;
+use App\Models\SalesDeliveryNote;
+use App\Models\SalesReturn;
 use App\Models\SalesOrder;
 use App\Services\SalesService;
 use Illuminate\Http\JsonResponse;
@@ -357,27 +359,33 @@ class SalesController extends Controller
         $tenantId = app('current_tenant_id');
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            ;
-        if (!empty($validated['warehouse_id'])) {
-            $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
-            if (!$deliveryWarehouse) {
-                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
-            }
-            if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
-                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إصدار إذن تسليم من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
-            }
-            $deliveryOrder = \App\Models\SalesOrder::where('tenant_id', $tenantId)->find($validated['sales_order_id']);
-            if (!$deliveryOrder) {
-                return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
-            }
-            if (!empty($deliveryOrder->warehouse_id) && $deliveryOrder->warehouse_id !== $deliveryWarehouse->id) {
-                $orderWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id);
-                if ($orderWarehouse && $orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
-                    return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب إصدار إذن التسليم من نفس فرع أمر البيع.'], 422);
-                }
-            }
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
+
+        $deliveryOrder = \\App\\Models\\SalesOrder::where('tenant_id', $tenantId)
+            ->find($validated['sales_order_id']);
+        if (!$deliveryOrder) {
+            return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
         }
+
+        $orderWarehouse = !empty($deliveryOrder->warehouse_id)
+            ? \\App\\Models\\Warehouse::where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id)
+            : null;
+        if (!$orderWarehouse) {
+            return response()->json(['error' => 'SalesOrderWarehouseMissing', 'message' => 'أمر البيع غير مرتبط بمخزن صالح.'], 422);
+        }
+
+        $deliveryWarehouseId = $validated['warehouse_id'] ?? $orderWarehouse->id;
+        $deliveryWarehouse = \\App\\Models\\Warehouse::where('tenant_id', $tenantId)->find($deliveryWarehouseId);
+        if (!$deliveryWarehouse) {
+            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
+        }
+        if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إصدار إذن تسليم من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+        }
+        if ($orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
+            return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب إصدار إذن التسليم من نفس فرع أمر البيع.'], 422);
+        }
+        $validated['warehouse_id'] = $deliveryWarehouse->id;
 
         $deliveryNote = $this->salesService->createDeliveryNote($validated);
 

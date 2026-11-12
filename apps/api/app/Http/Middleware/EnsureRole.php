@@ -54,8 +54,12 @@ class EnsureRole
             'operator' => ['worker', 'operator'],
         ];
 
-        // فصل صريح: مشرف المنصة العام (platform_admin) محظور من تنفيذ العمليات التشغيلية والمالية داخل الشركات المستأجرة
-        if ($userRole === 'platform_admin') {
+        // مشرف المنصة محظور من العمليات التشغيلية داخل المصانع، ويُستثنى فقط
+        // من مسارات إدارة الاشتراكات المركزية المصرّح بها صراحةً.
+        $routeUri = $request->route()?->uri() ?? $request->path();
+        $isPlatformSubscriptionAdminRoute = str_starts_with(ltrim($routeUri, '/'), 'api/v1/admin/subscriptions')
+            || str_starts_with(ltrim($routeUri, '/'), 'admin/subscriptions');
+        if ($userRole === 'platform_admin' && !$isPlatformSubscriptionAdminRoute) {
             return response()->json([
                 'error' => 'UnauthorizedRole',
                 'message' => 'أمان: مشرف المنصة العام محظور من تنفيذ العمليات التشغيلية والمالية داخل الشركات المستأجرة.',
@@ -64,12 +68,15 @@ class EnsureRole
 
         // مالك الشركة (company_owner) يمتلك صلاحيات تشغيلية كاملة داخل شركته فقط
         $effectiveUserRoles = $roleAliases[$userRole] ?? [$userRole];
-        $isAuthorized = $userRole === 'company_owner' || !empty(array_intersect($effectiveUserRoles, $allowedRoles));
+        $isAuthorized = $userRole === 'company_owner'
+            || ($userRole === 'platform_admin' && $isPlatformSubscriptionAdminRoute && in_array('platform_admin', $allowedRoles, true))
+            || !empty(array_intersect($effectiveUserRoles, $allowedRoles));
 
         if ($isAuthorized) {
             $requiredPermission = $this->permissionForRequest($request);
             if (
                 $requiredPermission !== null
+                && $userRole !== 'platform_admin'
                 && $user->hasExplicitPermissionConfiguration()
                 && !$user->hasPermission($requiredPermission)
             ) {

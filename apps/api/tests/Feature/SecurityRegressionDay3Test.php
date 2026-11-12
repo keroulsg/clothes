@@ -68,7 +68,7 @@ class SecurityRegressionDay3Test extends TestCase
             'name' => 'مدير النيل',
             'email' => 'admin@nile-sec-a.com',
             'password' => bcrypt('SecPass123!'),
-            'role' => 'accountant',
+            'role' => 'company_owner',
             'is_active' => true,
         ]);
 
@@ -169,7 +169,7 @@ class SecurityRegressionDay3Test extends TestCase
             'name' => 'مدير الأهرام',
             'email' => 'admin@ahram-sec-b.com',
             'password' => bcrypt('SecPass123!'),
-            'role' => 'accountant',
+            'role' => 'company_owner',
             'is_active' => true,
         ]);
 
@@ -649,6 +649,6 @@ class SecurityRegressionDay3Test extends TestCase
         $response = $this->actingAs($this->userA, 'sanctum')
             ->postJson("/api/v1/sales/orders/{$salesOrder->id}/reserve");
 
-        $response->assertStatus(500); // Throws InvalidArgumentException: customer materials are never reserved for sales
+        $response->assertStatus(422)->assertJsonPath('error', 'InvalidSalesOrder');
     }
 }

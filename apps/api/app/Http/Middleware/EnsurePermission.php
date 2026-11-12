@@ -59,7 +59,11 @@ class EnsurePermission
         // Routes without a role gate must pass the effective default permission check.
         $routeMiddleware = $request->route()?->gatherMiddleware() ?? [];
         $hasRoleGate = collect($routeMiddleware)->contains(
-            fn ($middleware) => is_string($middleware) && str_starts_with($middleware, 'role:')
+            fn ($middleware) => is_string($middleware)
+                && (
+                    str_starts_with($middleware, 'role:')
+                    || str_contains(strtolower($middleware), 'ensurerole')
+                )
         );
         $mustEnforcePermission = $user->hasExplicitPermissionConfiguration() || !$hasRoleGate;
 

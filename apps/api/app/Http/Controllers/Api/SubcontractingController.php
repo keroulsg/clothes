@@ -266,8 +266,7 @@ class SubcontractingController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         $productionOrder = null;
         $assignedEmployee = null;
         if (!empty($validated['production_order_id'])) {
@@ -464,8 +463,7 @@ class SubcontractingController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         if ($enforceBranchScope && !in_array($warehouse->branch_id, $assignedBranchIds, true)) {
             return response()->json([
                 'success' => false,
@@ -473,6 +471,7 @@ class SubcontractingController extends Controller
                 'message' => 'لا يمكنك استلام خامات في مخزن تابع لفرع غير معيّن لحسابك.',
             ], 403);
         }
+        $jobBranchId = $warehouse->branch_id;
 
         // التحقق من ملكية أمر التشغيل إن مرر
         if (!empty($validated['job_order_id'])) {
@@ -486,19 +485,21 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
-            if ($enforceBranchScope) {
-                $jobBranchId = $job->branch_id
-                    ?? $job->productionOrder?->branch_id
-                    ?? $job->assignedEmployee?->branch_id
-                    ?? $job->cuttingOrders->first()?->warehouse?->branch_id;
-                if (!$jobBranchId || $warehouse->branch_id !== $jobBranchId) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'BranchMismatch',
-                        'message' => 'يجب تسجيل استلام الخامات في نفس فرع أمر التشغيل.',
-                    ], 422);
-                }
+            $jobAnchorIds = [
+                $job->branch_id,
+                $job->productionOrder?->branch_id,
+                $job->assignedEmployee?->branch_id,
+                $job->cuttingOrders->first()?->warehouse?->branch_id,
+            ];
+            $jobAnchorIds = array_values(array_unique(array_filter($jobAnchorIds)));
+            if (count($jobAnchorIds) !== 1 || $jobAnchorIds[0] !== $warehouse->branch_id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب أن تتفق فروع أمر التشغيل وروابطه ومخزن استلام الخامات.',
+                ], 422);
             }
+            $jobBranchId = $jobAnchorIds[0];
         }
 
         try {
@@ -589,8 +590,7 @@ class SubcontractingController extends Controller
 
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         $operationBranchIds = [];
 
         if (!empty($validated['job_order_id'])) {
@@ -633,9 +633,18 @@ class SubcontractingController extends Controller
             }
             $operationBranchIds[] = $employee->branch_id;
         }
+        $hasUnanchoredBranch = in_array(null, $operationBranchIds, true);
         $operationBranchIds = array_values(array_unique(array_filter($operationBranchIds)));
+        if (count($operationBranchIds) > 1 || ($hasUnanchoredBranch && !empty($operationBranchIds))) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchMismatch',
+                'message' => 'يجب أن تتفق جميع روابط التشغيل الخارجي على فرع واحد.',
+            ], 422);
+        }
         if ($enforceBranchScope && (
-            count($operationBranchIds) !== 1
+            $hasUnanchoredBranch
+            || count($operationBranchIds) !== 1
             || !in_array($operationBranchIds[0] ?? null, $assignedBranchIds, true)
         )) {
             return response()->json([

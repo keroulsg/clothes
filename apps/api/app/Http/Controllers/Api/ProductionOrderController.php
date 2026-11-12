@@ -366,7 +366,10 @@ class ProductionOrderController extends Controller
         $tenantId = app('current_tenant_id');
 
         // التحقق من ملكية أمر الإنتاج للشركة الحالية
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         try {
             $approvedOrder = $this->productionService->approveProductionOrder($order->id);
@@ -387,7 +390,10 @@ class ProductionOrderController extends Controller
     public function metrics(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            request()
+        )->findOrFail($id);
 
         try {
             $metrics = $this->productionService->getProductionMetrics($order->id);

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PurchaseRequisition;
+use App\Models\Warehouse;
 use App\Services\ProcurementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

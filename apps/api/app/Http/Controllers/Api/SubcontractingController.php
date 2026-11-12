@@ -254,17 +254,38 @@ class SubcontractingController extends Controller
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
             && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
-        if ($enforceBranchScope && !empty($validated['production_order_id'])) {
+        $productionOrder = null;
+        $assignedEmployee = null;
+        if (!empty($validated['production_order_id'])) {
             $productionOrder = \App\Models\ProductionOrder::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
                 ->find($validated['production_order_id']);
-            if (!$productionOrder || !in_array($productionOrder->branch_id, $assignedBranchIds, true)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'BranchAccessDenied',
-                    'message' => 'لا يمكنك إنشاء أمر تشغيل مرتبط بأمر إنتاج من فرع غير معيّن لحسابك.',
-                ], 403);
+            if (!$productionOrder) {
+                return response()->json(['success' => false, 'error' => 'ProductionOrderNotFound'], 404);
             }
+        }
+        if (!empty($validated['assigned_employee_id'])) {
+            $assignedEmployee = \App\Models\Employee::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->find($validated['assigned_employee_id']);
+            if (!$assignedEmployee) {
+                return response()->json(['success' => false, 'error' => 'EmployeeNotFound'], 404);
+            }
+        }
+        $jobBranchId = $productionOrder?->branch_id ?? $assignedEmployee?->branch_id;
+        if ($productionOrder && $assignedEmployee && $productionOrder->branch_id !== $assignedEmployee->branch_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchMismatch',
+                'message' => 'يجب أن يتبع العامل وأمر الإنتاج نفس الفرع.',
+            ], 422);
+        }
+        if ($enforceBranchScope && (!$jobBranchId || !in_array($jobBranchId, $assignedBranchIds, true))) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'يجب ربط أمر التشغيل بأمر إنتاج أو عامل تابع لفرع معيّن لحسابك.',
+            ], 403);
         }
 
         try {

@@ -1600,5 +1600,31 @@ class AuthAndRoleAuthorizationTest extends TestCase
             ->assertJsonPath('error', 'BranchAssignmentRequired');
     }
 
+    public function test_unassigned_legacy_staff_user_sees_no_branch_bound_data(): void
+    {
+        $unassigned = User::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'موظف غير معيّن',
+            'email' => 'unassigned@nile.com',
+            'password' => bcrypt('StrongPass123!'),
+            'role' => 'production_manager',
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($unassigned);
+
+        $this->getJson('/api/v1/branches')
+            ->assertOk()
+            ->assertJsonCount(0, 'branches');
+
+        $this->getJson('/api/v1/warehouses')
+            ->assertOk()
+            ->assertJsonCount(0, 'warehouses');
+
+        $this->getJson('/api/v1/inventory/items')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
 }
 

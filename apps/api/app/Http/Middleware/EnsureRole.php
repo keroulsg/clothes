@@ -201,6 +201,12 @@ class EnsureRole
             if (str_contains($path, 'payroll') || str_contains($path, 'salary')) {
                 return 'hr.payroll';
             }
+            if (str_contains($path, 'defect-adjustments') && str_ends_with($path, '/object')) {
+                return 'hr.objection';
+            }
+            if (str_contains($path, 'piece-work-logs') && !$isRead) {
+                return 'production.work';
+            }
             return $isRead ? 'hr.view' : 'hr.manage';
         }
         if ($root === 'storefront') {

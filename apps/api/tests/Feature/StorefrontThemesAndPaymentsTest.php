@@ -564,4 +564,32 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         $crossAttempt = $this->postJson("/api/v1/storefront/orders/{$orderId}/verify-payment", ['approved' => true]);
         $crossAttempt->assertStatus(404);
     }
+
+    public function test_duplicate_cart_lines_cannot_reserve_more_than_available_stock(): void
+    {
+        $this->inventoryA->update([
+            'current_balance' => 5,
+            'reserved_balance' => 0,
+        ]);
+
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل اختبار تكرار الصنف',
+            'customer_phone' => '01055555555',
+            'shipping_address' => 'القاهرة',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 3],
+                ['variant_id' => $this->variantA->id, 'quantity' => 3],
+            ],
+        ]);
+
+        $orderRes->assertStatus(422);
+        $this->assertEquals(5.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float) $this->inventoryA->fresh()->reserved_balance);
+        $this->assertDatabaseMissing('store_orders', [
+            'tenant_id' => $this->tenantA->id,
+        ]);
+    }
+
 }

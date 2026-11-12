@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BillOfMaterial;
+use App\Models\ChartOfAccount;
 use App\Models\Branch;
 use App\Models\Color;
 use App\Models\CustomerMaterial;
@@ -11,6 +12,7 @@ use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
 use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
 use App\Models\InventoryTransaction;
 use App\Models\ProductionOrder;
 use App\Models\ProductionStage;
@@ -312,7 +314,12 @@ class ProductionAndCuttingTest extends TestCase
         // Finished-goods receipts may only capitalize a reviewed, approved unit cost.
         $costSheet->status = 'approved';
         $costSheet->save();
-        app(AccountingService::class)->postProductionCostSheetToWip($costSheet);
+        $wipJournal = app(AccountingService::class)->postProductionCostSheetToWip($costSheet);
+        $this->assertSame('production_cost_sheet', $wipJournal->reference_type);
+        $this->assertSame((string) $costSheet->id, (string) $wipJournal->reference_key);
+        $this->assertEquals((float) $costSheet->total_cost, (float) $wipJournal->total_debit);
+        $this->assertEquals((float) $costSheet->total_cost, (float) $wipJournal->total_credit);
+        $this->assertSame($wipJournal->id, app(AccountingService::class)->postProductionCostSheetToWip($costSheet)->id);
 
         // التحقق من خصم القماش من المخزن الفعلي عبر InventoryService
         $this->fabricItemA->refresh();
@@ -427,6 +434,13 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals((float) $receiptJournal->total_debit + (float) $secondReceiptJournal->total_debit,
             (float) JournalEntry::where('tenant_id', $this->tenantA->id)->where('reference_type', 'production_receipt')->whereIn('reference_key', [$inspectionId, $secondInspectionId])->sum('total_debit'));
         $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+
+        $wipAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1220')->firstOrFail();
+        $this->assertEquals(0.0, (float) $wipAccount->fresh()->current_balance, 'Fully received approved production cost must leave no WIP balance.');
+        $wipReconciliation = app(AccountingService::class)->reconcileInventory($this->tenantA->id);
+        $this->assertTrue($wipReconciliation['wip_valuation_available']);
+        $this->assertEquals(0.0, (float) $wipReconciliation['breakdown'][2]['variance']);
+        $this->assertEquals('matched', $wipReconciliation['breakdown'][2]['status']);
 
         // A further final-audit receipt cannot overproduce the completed order.
         $overReceipt = $this->actingAs($this->userA)

@@ -8,17 +8,20 @@ use App\Models\StockCount;
 use App\Models\StockCountItem;
 use App\Models\Warehouse;
 use App\Services\InventoryService;
+use App\Services\AccountingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class StockCountController extends Controller
 {
-    protected InventoryService $inventoryService;\n    protected AccountingService $accountingService;
+    protected InventoryService $inventoryService;
+    protected AccountingService $accountingService;
 
-    public function __construct(InventoryService $inventoryService)
+    public function __construct(InventoryService $inventoryService, AccountingService $accountingService)
     {
         $this->inventoryService = $inventoryService;
+        $this->accountingService = $accountingService;
     }
 
     /**
@@ -215,7 +218,22 @@ class StockCountController extends Controller
                         'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,
                         'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,
                     ]);
-                    $transaction = $this->inventoryService->recordTransaction([\n                        'tenant_id' => $tenantId,\n                        'inventory_item_id' => $item->id,\n                        'warehouse_id' => $count->warehouse_id,\n                        'transaction_type' => $diff > 0 ? 'adjustment_positive' : 'adjustment_negative',\n                        'direction' => $direction,\n                        'quantity' => $quantity,\n                        'unit_cost' => (float) $countItem->unit_cost,\n                        'reference_type' => 'stock_count',\n                        'reference_id' => (string) $countItem->id,\n                        'reference_number' => $count->count_number,\n                        'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,\n                        'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,\n                    ]);\n                    $this->accountingService->postStockCountAdjustment($transaction);\n                    $countItem->adjustment_status = 'adjusted';
+                    $transaction = $this->inventoryService->recordTransaction([
+                        'tenant_id' => $tenantId,
+                        'inventory_item_id' => $item->id,
+                        'warehouse_id' => $count->warehouse_id,
+                        'transaction_type' => $diff > 0 ? 'adjustment_positive' : 'adjustment_negative',
+                        'direction' => $direction,
+                        'quantity' => $quantity,
+                        'unit_cost' => (float) $countItem->unit_cost,
+                        'reference_type' => 'stock_count',
+                        'reference_id' => (string) $countItem->id,
+                        'reference_number' => $count->count_number,
+                        'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,
+                        'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,
+                    ]);
+                    $this->accountingService->postStockCountAdjustment($transaction);
+                    $countItem->adjustment_status = 'adjusted';
                 } else {
                     $countItem->adjustment_status = 'matched';
                 }

@@ -138,6 +138,7 @@ class User extends Authenticatable
                     ['key' => 'hr.view', 'name_ar' => 'عرض الموظفين والحضور', 'name_en' => 'View Employees & Attendance'],
                     ['key' => 'hr.manage', 'name_ar' => 'إدارة الموظفين والحضور والإجازات', 'name_en' => 'Manage Employees & Attendance'],
                     ['key' => 'hr.payroll', 'name_ar' => 'إعداد واعتماد الرواتب', 'name_en' => 'Manage Payroll'],
+                    ['key' => 'hr.objection', 'name_ar' => 'تقديم تظلم على تسوية عيب جودة', 'name_en' => 'Submit Defect Adjustment Objection'],
                 ],
             ],
             [
@@ -219,7 +220,7 @@ class User extends Authenticatable
                 return ['sales.view', 'sales.create', 'sales.discount', 'branches.view', 'inventory.view', 'storefront.view'];
             case 'worker':
             case 'operator':
-                return ['cutting.view', 'production.manage'];
+                return ['cutting.view', 'production.manage', 'production.work', 'hr.objection'];
             default:
                 return [];
         }

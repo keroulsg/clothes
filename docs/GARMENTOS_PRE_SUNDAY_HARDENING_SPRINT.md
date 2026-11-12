@@ -109,6 +109,6 @@ The following source changes have been committed to this isolated branch. They a
 ### Still not closed
 
 - No PHP test suite, PostgreSQL migration run, frontend typecheck/build, browser test, or concurrency test has been executed in this environment. All of the above changes still require CI/runtime validation.
-- The CI workflow currently runs on pushes to `main` and pull requests targeting `main`; no PR has been opened and no workflow result is claimed.
+- The CI workflow currently runs on pushes to `main` and pull requests targeting `main`; Draft PR #1 is open to trigger CI; no workflow result is currently visible or claimed.
 - Manufacturing cost variance posting remains intentionally unimplemented pending verification of the actual variance accounting policy and configured ledger accounts. The current chart of accounts does not establish the reported 5200/5300 account pair as valid posting targets; inventing those accounts or posting a second expense could double-count costs.
 - The complete demo path and all remaining audit items still require targeted verification. Production remains unchanged and deployment is not authorized.

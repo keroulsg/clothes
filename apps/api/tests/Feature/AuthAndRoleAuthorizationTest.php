@@ -1538,6 +1538,11 @@ class AuthAndRoleAuthorizationTest extends TestCase
 
     public function test_staff_cannot_access_subscription_administration_routes_without_permission(): void
     {
+        $this->accountantUser->forceFill([
+            'permissions_mode' => 'custom',
+            'permissions' => [],
+        ])->save();
+
         Sanctum::actingAs($this->accountantUser);
 
         $this->getJson('/api/v1/subscriptions/my-status')

@@ -1057,8 +1057,21 @@ class AccountingService
                 $contraAccountId = $this->getMappedAccount($tenantId, 'ap_control')->id;
             } elseif ($voucher->party_type === 'employee') {
                 $contraAccountId = $this->getMappedAccount($tenantId, 'payroll_payable')->id;
+            } elseif ($voucher->party_type === 'other' && !empty($data['contra_account_id'])) {
+                $contraAccount = ChartOfAccount::where('tenant_id', $tenantId)
+                    ->whereKey($data['contra_account_id'])
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$contraAccount) {
+                    throw new InvalidArgumentException('الحساب المقابل لسند الطرف الآخر غير موجود أو غير نشط أو غير قابل للترحيل.');
+                }
+
+                $contraAccountId = $contraAccount->id;
             } else {
-                throw new InvalidArgumentException('يجب تحديد حساب مقابل صحيح لسند الطرف الآخر قبل الترحيل.');
+                throw new InvalidArgumentException('يجب تحديد حساب مقابل فرعي قابل للترحيل لسند الطرف الآخر قبل الترحيل.');
             }
 
             if ($voucher->voucher_type === 'receipt') {

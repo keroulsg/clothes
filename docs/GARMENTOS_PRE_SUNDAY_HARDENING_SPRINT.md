@@ -199,3 +199,12 @@ This section records additional source changes made after the preceding CI evide
 - FIFO is not implemented; weighted-average cost remains the current method.
 - Branch-level user access policy, external live payment credentials/settlement, and production backup/restore drill remain open dependencies.
 - The above CI evidence applies to the exact commits listed, not to later commits until their own workflows complete.
+
+
+### Latest Verification Addendum — 2026-11-12
+
+- Cutting cancellation now also requires the original posted WIP journal to exist and match the original inventory issue value before it will restore stock or post the reversal. This prevents creating a GL reversal for an issue that was never journaled.
+- Approved production cost sheets are immutable even when a direct API request sends force_recalculate=true. The bulk and direct recalculation protections have regression coverage.
+- CI run 43264279894 on commit 204a6e9476ee97e73fbddf0098ee7b5c391ffe9f: PostgreSQL migrations and concurrency integration passed; full backend suite **533 passed, 3,305 assertions**; frontend TypeScript and Vite build passed. This run includes the regression test for reversing the original cutting issue cost after the item's average cost changes.
+- CI run 43264617247 on commit 964408b81ba60b65039998feb8cd3d460d3e36a0: PostgreSQL migrations and concurrency integration passed; full backend suite **533 passed, 3,308 assertions**; frontend TypeScript and Vite build passed.
+- CI evidence above is isolated-branch verification only. No merge, production migration, deployment, or production data modification was performed.

@@ -31,6 +31,10 @@ class HrController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $query = Employee::where('tenant_id', $tenantId)->with('branch')->withCount('pieceWorkLogs');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereIn('branch_id', $user->assignedBranchIds());
+        }
 
         if ($request->has('search')) {
             $s = trim($request->query('search'));
@@ -62,8 +66,12 @@ class HrController extends Controller
     public function showEmployee(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $employee = Employee::where('tenant_id', $tenantId)
-            ->with([
+        $employeeQuery = Employee::where('tenant_id', $tenantId);
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $employeeQuery->whereIn('branch_id', $user->assignedBranchIds());
+        }
+        $employee = $employeeQuery->with([
                 'branch',
                 'assignedBundles.cuttingOrder',
                 'assignedBundles.productionOrder',
@@ -170,8 +178,7 @@ class HrController extends Controller
         $tenantId = app('current_tenant_id');
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null) {
             $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($branchId);
@@ -263,8 +270,7 @@ class HrController extends Controller
             }
             $user = $request->user();
             $assignedBranchIds = $user?->assignedBranchIds() ?? [];
-            $enforceBranchScope = $user && $user->role !== 'company_owner'
-                && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            $enforceBranchScope = $user && $user->role !== 'company_owner';
             if ($enforceBranchScope && ($newBranchId === null || !in_array($newBranchId, $assignedBranchIds, true))) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك نقل الموظف إلى فرع غير معيّن لحسابك أو إزالة تعيين فرعه.'], 403);
             }
@@ -295,6 +301,10 @@ class HrController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $employee = Employee::where('tenant_id', $tenantId)->findOrFail($id);
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner' && (!$employee->branch_id || !in_array($employee->branch_id, $user->assignedBranchIds(), true))) {
+            return response()->json(['error' => 'BranchAccessDenied'], 403);
+        }
 
         // فحص ما إذا كان للموظف مسيرات رواتب أو بنود مالية معتمدة سابقة
         $hasPayrollHistory = \App\Models\PayrollItem::where('employee_id', $employee->id)->exists();
@@ -331,6 +341,10 @@ class HrController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $query = Attendance::where('tenant_id', $tenantId)->with(['employee', 'branch']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereIn('branch_id', $user->assignedBranchIds());
+        }
 
         if ($request->has('employee_id') && !empty($request->query('employee_id')) && $request->query('employee_id') !== 'all') {
             $query->where('employee_id', $request->query('employee_id'));
@@ -441,6 +455,14 @@ class HrController extends Controller
             $validated['status'] = 'excused_leave';
         }
 
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $attendanceQuery = Attendance::where('tenant_id', $tenantId)->whereKey($id);
+        if ($user && $user->role !== 'company_owner') {
+            $attendanceQuery->whereIn('branch_id', $user->assignedBranchIds());
+        }
+        $attendanceQuery->firstOrFail();
+
         $userId = $request->user()?->id ?? 'system';
         $attendance = $this->payrollService->updateAttendance($id, $validated, $userId);
 
@@ -542,7 +564,11 @@ class HrController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
-        Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner' && (!$employee->branch_id || !in_array($employee->branch_id, $user->assignedBranchIds(), true))) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك تسجيل تسوية لموظف تابع لفرع غير معيّن لحسابك.'], 403);
+        }
 
         $userId = $request->user()?->id ?? 'system';
         $adj = $this->payrollService->createEmployeeAdjustment($validated, $userId);
@@ -651,8 +677,7 @@ class HrController extends Controller
         $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
         $user = $request->user();
         $branchIds = $user?->assignedBranchIds() ?? [];
-        $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds));
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
         if (!empty($validated['production_order_id'])) {
             $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($validated['production_order_id']);
             if ($enforceBranchScope && $employee->branch_id !== $productionOrder->branch_id) {
@@ -756,7 +781,11 @@ class HrController extends Controller
         $branchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
             && ($user->hasExplicitPermissionConfiguration() || !empty($branchIds));
-        if ($enforceBranchScope && (!$productionOrder->branch_id || $employee->branch_id !== $productionOrder->branch_id)) {
+        if ($enforceBranchScope && (
+            !$productionOrder->branch_id
+            || !in_array($productionOrder->branch_id, $branchIds, true)
+            || $employee->branch_id !== $productionOrder->branch_id
+        )) {
             return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب أن يتبع العامل وأمر الإنتاج نفس الفرع.'], 422);
         }
         $adjustment = $this->payrollService->createQualityDefectAdjustment($validated, $request->user()->id);
@@ -1118,10 +1147,6 @@ class HrController extends Controller
         }
 
         $branchIds = $user->assignedBranchIds();
-        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
-            return $query;
-        }
-
         $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
         if ($alsoProductionOrder) {
             $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));

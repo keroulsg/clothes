@@ -95,12 +95,24 @@ class QualityInspectionController extends Controller
                     'message' => 'أمان: بطاقة الحزمة غير تابعة لشركتك.',
                 ], 403);
             }
+            if ($bundle->production_order_id !== $prodOrder->id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'ProductionOrderMismatch',
+                    'message' => 'حزمة القص لا تتبع أمر الإنتاج المحدد للفحص.',
+                ], 422);
+            }
             if ($enforceBranchScope) {
                 $bundle->loadMissing('cuttingOrder');
                 $bundleWarehouse = $bundle->cuttingOrder
                     ? \App\Models\Warehouse::withoutGlobalScopes()->find($bundle->cuttingOrder->warehouse_id)
                     : null;
-                if (!$bundleWarehouse || !in_array($bundleWarehouse->branch_id, $assignedBranchIds, true)) {
+                if (
+                    !$bundleWarehouse
+                    || !$prodOrder->branch_id
+                    || $bundleWarehouse->branch_id !== $prodOrder->branch_id
+                    || !in_array($bundleWarehouse->branch_id, $assignedBranchIds, true)
+                ) {
                     return response()->json([
                         'success' => false,
                         'error' => 'BranchAccessDenied',
@@ -121,7 +133,7 @@ class QualityInspectionController extends Controller
             }
             if ($enforceBranchScope) {
                 $fgWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->find($fgItem->warehouse_id);
-                if (!$fgWarehouse || !in_array($fgWarehouse->branch_id, $assignedBranchIds, true)) {
+                if (!$fgWarehouse || $fgWarehouse->branch_id !== $prodOrder->branch_id || !in_array($fgWarehouse->branch_id, $assignedBranchIds, true)) {
                     return response()->json([
                         'success' => false,
                         'error' => 'BranchAccessDenied',
@@ -142,7 +154,7 @@ class QualityInspectionController extends Controller
             }
             if ($enforceBranchScope) {
                 $scrapWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->find($scrapItem->warehouse_id);
-                if (!$scrapWarehouse || !in_array($scrapWarehouse->branch_id, $assignedBranchIds, true)) {
+                if (!$scrapWarehouse || $scrapWarehouse->branch_id !== $prodOrder->branch_id || !in_array($scrapWarehouse->branch_id, $assignedBranchIds, true)) {
                     return response()->json([
                         'success' => false,
                         'error' => 'BranchAccessDenied',

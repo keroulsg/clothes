@@ -503,6 +503,7 @@ class StorefrontService
                 ->first()
                 ?? Warehouse::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
+                    ->where('is_active', true)
                     ->orderBy('id')
                     ->first();
             $firstWarehouseId = $warehouse?->id;

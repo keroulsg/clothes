@@ -992,7 +992,7 @@ class AccountingService
             default => '1210',
         };
 
-        $amount = round((float) $transaction->total_cost, 2);
+        $amount = round((float) $transaction->total_cost, 4);
         if ($amount <= 0) {
             throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد بتكلفة صفرية أو سالبة.');
         }

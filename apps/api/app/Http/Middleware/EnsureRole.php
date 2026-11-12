@@ -159,8 +159,11 @@ class EnsureRole
         if ($root === 'boms') {
             return $isRead ? 'costing.view' : 'costing.manage';
         }
-        if ($root === 'production-orders' || $root === 'bundles') {
+        if ($root === 'production-orders') {
             return 'production.manage';
+        }
+        if ($root === 'bundles') {
+            return 'production.work';
         }
         if ($root === 'cutting-orders') {
             if (str_contains($path, 'issue')) {

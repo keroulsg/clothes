@@ -984,6 +984,17 @@ class AccountingService
             throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد دون الصنف المخزني المرتبط.');
         }
 
+        // A tenant may perform its first stock count before opening the accounting screen.
+        // Initialize the standard chart only when the tenant has no accounts at all;
+        // never re-seed over a partially configured or customized live chart.
+        if (!ChartOfAccount::where('tenant_id', $tenantId)->exists()) {
+            $this->initializeDefaultChartOfAccounts($tenantId);
+        }
+
+        if (!in_array($transaction->direction, ['IN', 'OUT'], true)) {
+            throw new InvalidArgumentException('اتجاه حركة تسوية الجرد غير صالح للترحيل المحاسبي.');
+        }
+
         $type = strtolower((string) $item->item_type);
         $inventoryCode = match (true) {
             in_array($type, ['finished_good', 'finished_product'], true) => '1230',
@@ -997,10 +1008,18 @@ class AccountingService
             throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد بتكلفة صفرية أو سالبة.');
         }
 
-        $inventory = ChartOfAccount::where('tenant_id', $tenantId)->where('code', $inventoryCode)->firstOrFail();
+        $inventory = ChartOfAccount::where('tenant_id', $tenantId)
+            ->where('code', $inventoryCode)
+            ->first();
         $offset = ChartOfAccount::where('tenant_id', $tenantId)
             ->where('code', $transaction->direction === 'IN' ? '4040' : '5040')
-            ->firstOrFail();
+            ->first();
+
+        if (!$inventory || !$offset || !$inventory->is_active || !$inventory->is_postable || !$offset->is_active || !$offset->is_postable) {
+            throw ValidationException::withMessages([
+                'accounting' => ['تعذر ترحيل تسوية الجرد: حساب المخزون أو حساب فرق الجرد غير موجود أو غير نشط أو غير قابل للترحيل. راجع شجرة الحسابات.'],
+            ]);
+        }
 
         $lines = $transaction->direction === 'IN'
             ? [

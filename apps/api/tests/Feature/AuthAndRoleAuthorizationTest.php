@@ -28,6 +28,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
     use RefreshDatabase;
 
     private Tenant $tenant;
+    private Branch $mainBranch;
     private User $ownerUser;
     private User $accountantUser;
     private User $productionManagerUser;
@@ -45,6 +46,15 @@ class AuthAndRoleAuthorizationTest extends TestCase
             'name' => 'مصنع النيل للملابس',
             'subdomain' => 'nile-auth',
             'status' => 'active',
+        ]);
+
+        $this->mainBranch = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'الفرع الرئيسي',
+            'code' => 'BR-AUTH-MAIN',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
         ]);
 
         $this->ownerUser = User::create([
@@ -91,8 +101,13 @@ class AuthAndRoleAuthorizationTest extends TestCase
             'is_active' => true,
         ]);
 
+        foreach ([$this->ownerUser, $this->accountantUser, $this->productionManagerUser, $this->workerUser] as $tenantUser) {
+            $tenantUser->branches()->sync([$this->mainBranch->id]);
+        }
+
         $this->warehouse = Warehouse::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->mainBranch->id,
             'name' => 'المخزن الرئيسي',
             'code' => 'WH-AUTH-01',
             'type' => 'fabric',
@@ -1401,6 +1416,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
         ]);
 
         $this->productionManagerUser->branches()->sync([$branchA->id]);
+        $this->warehouse->update(['branch_id' => $branchB->id]);
 
         $warehouseA = Warehouse::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,

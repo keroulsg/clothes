@@ -109,7 +109,7 @@ class InventoryService
                         : max(0, $balanceBefore - $reservedBalance);
 
                     if ($availableForMovement < $quantity) {
-                        throw new InvalidArgumentException("رصيد الصنف [{$item->name}] غير كافٍ بعد حماية الكميات المحجوزة. المتاح: [{$availableForMovement}] {$item->unit_of_measure}، المطلوب صرفه: [{$quantity}].");
+                        throw new InvalidArgumentException("رصيد الصنف [{$item->name}] في المخزن غير كافٍ بعد حماية الكميات المحجوزة. المتاح: [{$availableForMovement}] {$item->unit_of_measure}، المطلوب صرفه: [{$quantity}].");
                     }
                     $balanceAfter = $balanceBefore - $quantity;
                 } else {

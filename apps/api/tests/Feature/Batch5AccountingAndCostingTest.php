@@ -582,4 +582,43 @@ class Batch5AccountingAndCostingTest extends TestCase
         $bTbResp->assertStatus(200);
         $this->assertEquals(0, (float)$bTbResp->json('summary.total_period_debit'));
     }
+
+    public function test_reseeding_chart_metadata_preserves_existing_account_balances(): void
+    {
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+        $cash = ChartOfAccount::withoutGlobalScopes()
+            ->where('tenant_id', $this->tenantA->id)
+            ->where('code', '1011')
+            ->firstOrFail();
+
+        $cash->current_balance = 4321.50;
+        $cash->save();
+
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+
+        $this->assertSame(4321.5, (float) $cash->fresh()->current_balance);
+    }
+
+    public function test_numeric_journal_reference_is_stored_without_uuid_column_cast(): void
+    {
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->firstOrFail();
+        $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->firstOrFail();
+
+        $entry = $this->accountingService->createJournalEntry([
+            'tenant_id' => $this->tenantA->id,
+            'entry_number' => 'JE-NUMERIC-REF-TEST',
+            'reference_type' => 'legacy_numeric_reference',
+            'reference_id' => '12345',
+            'description' => 'Numeric reference compatibility test',
+            'lines' => [
+                ['account_id' => $cash->id, 'debit' => 125, 'credit' => 0],
+                ['account_id' => $revenue->id, 'debit' => 0, 'credit' => 125],
+            ],
+        ]);
+
+        $this->assertNull($entry->reference_id);
+        $this->assertSame('12345', $entry->reference_key);
+    }
+
 }

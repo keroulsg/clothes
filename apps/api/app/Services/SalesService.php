@@ -1727,7 +1727,6 @@ class SalesService
                 ]);
 
                 $orderItem->fulfilled_quantity += $qtyToDeliver;
-                $orderItem->reserved_quantity = max(0, $orderItem->reserved_quantity - $qtyToDeliver);
                 $orderItem->save();
 
                 $totalPieces += $qtyToDeliver;

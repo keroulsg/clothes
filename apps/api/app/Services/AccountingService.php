@@ -108,6 +108,7 @@ class AccountingService
             ['code' => '4010', 'name' => 'إيراد مبيعات الملابس والإنتاج التام', 'name_en' => 'Finished Goods Sales Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
             ['code' => '4012', 'name' => 'إيراد مبيعات استوكات وتصفيات', 'name_en' => 'Stock Clearance Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
             ['code' => '4020', 'name' => 'إيراد خدمات التشغيل والقص للغير (CMT)', 'name_en' => 'CMT Service Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
+            ['code' => '4040', 'name' => 'أرباح فروق الجرد والتسويات المخزنية', 'name_en' => 'Inventory Count Gains', 'type' => 'revenue', 'category' => 'other_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
 
             // 5: تكاليف الإنتاج المباشرة
             ['code' => '5', 'name' => 'تكاليف الإنتاج المباشرة', 'name_en' => 'Direct Production Costs', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
@@ -116,6 +117,7 @@ class AccountingService
             ['code' => '5012', 'name' => 'تكلفة مستلزمات الإنتاج والإكسسوار المستهلك', 'name_en' => 'Direct Accessories & Trims Cost', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
             ['code' => '5020', 'name' => 'أجور عمال الإنتاج المباشرة (أجر القطعة)', 'name_en' => 'Direct Labor Expense (Piece-Rate)', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
             ['code' => '5030', 'name' => 'مصاريف تشغيل صناعي خارجي (تطريز/طباعة)', 'name_en' => 'Outwork & Subcontracting Services', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
+            ['code' => '5040', 'name' => 'خسائر وعجز فروق الجرد المخزني', 'name_en' => 'Inventory Count Shortage Losses', 'type' => 'expense', 'category' => 'operating_expense', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
 
             // 6: المصروفات غير المباشرة والتشغيلية
             ['code' => '6', 'name' => 'المصروفات الصناعية والتشغيلية', 'name_en' => 'Operating & Overhead Expenses', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
@@ -960,6 +962,63 @@ class AccountingService
 
             return $year->load('periods');
         });
+    }
+
+    /**
+     * Post an approved stock-count adjustment to the general ledger exactly once.
+     * Positive differences debit the relevant inventory account and credit gains;
+     * shortages debit losses and credit the relevant inventory account.
+     */
+    public function postStockCountAdjustment(InventoryTransaction $transaction): ?JournalEntry
+    {
+        $tenantId = $transaction->tenant_id;
+        $referenceType = 'inventory_stock_count_adjustment';
+        $existing = $this->findJournalEntryByReference($tenantId, $referenceType, $transaction->id);
+        if ($existing) {
+            return $existing;
+        }
+
+        $item = $transaction->item;
+        if (!$item) {
+            throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد دون الصنف المخزني المرتبط.');
+        }
+
+        $type = strtolower((string) $item->item_type);
+        $inventoryCode = match (true) {
+            in_array($type, ['finished_good', 'finished_product'], true) => '1230',
+            in_array($type, ['accessory_raw', 'accessory', 'packaging', 'thread', 'trims'], true) => '1213',
+            in_array($type, ['spare_part', 'machine_spare_part', 'maintenance_spare'], true) => '1240',
+            default => '1210',
+        };
+
+        $amount = round((float) $transaction->total_cost, 2);
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد بتكلفة صفرية أو سالبة.');
+        }
+
+        $inventory = ChartOfAccount::where('tenant_id', $tenantId)->where('code', $inventoryCode)->firstOrFail();
+        $offset = ChartOfAccount::where('tenant_id', $tenantId)
+            ->where('code', $transaction->direction === 'IN' ? '4040' : '5040')
+            ->firstOrFail();
+
+        $lines = $transaction->direction === 'IN'
+            ? [
+                ['account_id' => $inventory->id, 'debit' => $amount, 'credit' => 0, 'description' => 'زيادة مخزون حسب محضر الجرد'],
+                ['account_id' => $offset->id, 'debit' => 0, 'credit' => $amount, 'description' => 'أرباح فروق الجرد'],
+            ]
+            : [
+                ['account_id' => $offset->id, 'debit' => $amount, 'credit' => 0, 'description' => 'خسائر وعجز فروق الجرد'],
+                ['account_id' => $inventory->id, 'debit' => 0, 'credit' => $amount, 'description' => 'تخفيض قيمة المخزون حسب محضر الجرد'],
+            ];
+
+        return $this->createJournalEntry([
+            'tenant_id' => $tenantId,
+            'reference_type' => $referenceType,
+            'reference_id' => $transaction->id,
+            'description' => 'تسوية جرد مخزني - ' . ($transaction->reference_number ?? $transaction->id),
+            'entry_date' => now()->toDateString(),
+            'lines' => $lines,
+        ]);
     }
 
     /**

@@ -316,7 +316,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'jobs']);
         Route::post('/subcontracting/jobs', [\App\Http\Controllers\Api\SubcontractingController::class, 'storeJob'])->middleware(['role:company_owner,production_manager,accountant', 'quota:subcontract_jobs']);
         Route::get('/subcontracting/jobs/{id}', [\App\Http\Controllers\Api\SubcontractingController::class, 'showJob']);
-        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob']);
+        Route::post('/subcontracting/jobs/{id}/confirm', [\App\Http\Controllers\Api\SubcontractingController::class, 'confirmJob'])->middleware('role:company_owner,production_manager,accountant');
         Route::get('/subcontracting/jobs/{id}/profitability', [\App\Http\Controllers\Api\SubcontractingController::class, 'profitability']);
 
         Route::get('/subcontracting/material-receipts', [\App\Http\Controllers\Api\SubcontractingController::class, 'materialReceipts']);

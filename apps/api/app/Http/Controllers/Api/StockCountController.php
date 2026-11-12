@@ -204,20 +204,6 @@ class StockCountController extends Controller
                 if ($diff > 0.0001 || $diff < -0.0001) {
                     $direction = $diff > 0 ? 'IN' : 'OUT';
                     $quantity = abs($diff);
-                    $this->inventoryService->recordTransaction([
-                        'tenant_id' => $tenantId,
-                        'inventory_item_id' => $item->id,
-                        'warehouse_id' => $count->warehouse_id,
-                        'transaction_type' => $diff > 0 ? 'adjustment_positive' : 'adjustment_negative',
-                        'direction' => $direction,
-                        'quantity' => $quantity,
-                        'unit_cost' => (float) $countItem->unit_cost,
-                        'reference_type' => 'stock_count',
-                        'reference_id' => (string) $countItem->id,
-                        'reference_number' => $count->count_number,
-                        'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,
-                        'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,
-                    ]);
                     $transaction = $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $item->id,

@@ -261,13 +261,26 @@ class SalesController extends Controller
 
         $tenantId = app('current_tenant_id');
 
-        if (!empty($validated['branch_id'])) {
-            \App\Models\Branch::where('tenant_id', $tenantId)->findOrFail($validated['branch_id']);
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $branchId = $validated['branch_id'] ?? null;
+        if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
+            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+        }
+        if ($enforceBranchScope) {
+            if (!$branchId && count($assignedBranchIds) === 1) {
+                $branchId = $assignedBranchIds[0];
+            }
+            if (!$branchId || !in_array($branchId, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب اختيار فرع معيّن لحسابك لفتح جلسة الكاشير.'], 403);
+            }
         }
 
         $session = PosSession::create([
             'tenant_id' => $tenantId,
-            'branch_id' => $validated['branch_id'] ?? null,
+            'branch_id' => $branchId,
             'user_id' => auth()->id(),
             'session_code' => 'POS-SES-' . date('Ymd-His'),
             'opening_cash' => $validated['opening_cash'],
@@ -333,6 +346,21 @@ class SalesController extends Controller
             'cartons.*.packing_details' => 'nullable|string',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        if (!empty($validated['warehouse_id'])) {
+            $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+            if (!$deliveryWarehouse) {
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+            }
+            if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إصدار إذن تسليم من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+            }
+        }
+
         $deliveryNote = $this->salesService->createDeliveryNote($validated);
 
         return response()->json([
@@ -391,6 +419,19 @@ class SalesController extends Controller
             'items.*.condition' => 'nullable|string|in:good,defective,scrap',
             'items.*.action_taken' => 'nullable|string|in:restock,repair,discard',
         ]);
+
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $returnWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+        if (!$returnWarehouse) {
+            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+        }
+        if ($enforceBranchScope && !in_array($returnWarehouse->branch_id, $assignedBranchIds, true)) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك تسجيل مرتجع في مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+        }
 
         if ($request->header('X-Idempotency-Key') && empty($validated['idempotency_key'])) {
             $validated['idempotency_key'] = $request->header('X-Idempotency-Key');
@@ -538,6 +579,21 @@ class SalesController extends Controller
             'items.*.variant_id' => 'nullable|uuid',
             'items.*.quantity' => 'required_with:items|numeric|min:0.0001',
         ]);
+
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        if (!empty($validated['warehouse_id'])) {
+            $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+            if (!$deliveryWarehouse) {
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+            }
+            if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك صرف أمر بيع من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+            }
+        }
 
         try {
             $deliveryNote = $this->salesService->deliverOrder($id, $validated);

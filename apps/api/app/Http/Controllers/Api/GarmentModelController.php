@@ -80,7 +80,7 @@ class GarmentModelController extends Controller
                 'code' => strtoupper($validated['code']),
                 'name' => $validated['name'],
                 'category' => $validated['category'],
-                'season' => $validated['season'] ?? 'صيف 2026',
+                'season' => $validated['season'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'target_cost' => $validated['target_cost'] ?? 0,
                 'wholesale_price' => $validated['wholesale_price'] ?? 0,

@@ -386,10 +386,15 @@ class SalesService
                 }
 
                 $reservedForThisLine = (float) $item->reserved_quantity;
+                $inventoryReserved = (float) ($inventoryItem->reserved_balance ?? 0);
                 $onHand = (float) $inventoryItem->current_balance;
-                if ($reservedForThisLine < $qtyToFulfill || $onHand < $qtyToFulfill) {
+                if (
+                    $reservedForThisLine < $qtyToFulfill
+                    || $inventoryReserved < $qtyToFulfill
+                    || $onHand < $qtyToFulfill
+                ) {
                     throw new InvalidArgumentException(
-                        "لا يوجد مخزون محجوز/فعلي كافٍ لتسليم الصنف [{$inventoryItem->name}]. المحجوز: [{$reservedForThisLine}]، الرصيد: [{$onHand}]، المطلوب: [{$qtyToFulfill}]."
+                        "لا يوجد مخزون محجوز/فعلي كافٍ لتسليم الصنف [{$inventoryItem->name}]. حجز السطر: [{$reservedForThisLine}]، إجمالي المحجوز: [{$inventoryReserved}]، الرصيد: [{$onHand}]، المطلوب: [{$qtyToFulfill}]."
                     );
                 }
 
@@ -408,10 +413,7 @@ class SalesService
                     ]);
                 }
 
-                $inventoryItem->reserved_balance = max(
-                    0,
-                    (float) ($inventoryItem->reserved_balance ?? 0) - $qtyToFulfill
-                );
+                $inventoryItem->reserved_balance = $inventoryReserved - $qtyToFulfill;
                 $inventoryItem->save();
 
                 $item->fulfilled_quantity += $qtyToFulfill;
@@ -1501,13 +1503,19 @@ class SalesService
                         ->lockForUpdate()
                         ->first();
 
-                    if ($inventoryItem) {
-                        $inventoryItem->reserved_balance = max(
-                            0,
-                            (float) ($inventoryItem->reserved_balance ?? 0) - $reservedToRelease
-                        );
-                        $inventoryItem->save();
+                    if (!$inventoryItem) {
+                        throw new InvalidArgumentException("تعذر العثور على سجل المخزون لفك حجز الصنف [{$item->variant_id}].");
                     }
+
+                    $inventoryReserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                    if ($inventoryReserved < $reservedToRelease) {
+                        throw new InvalidArgumentException(
+                            "رصيد الحجز غير متطابق للصنف [{$inventoryItem->name}]. المحجوز في المخزن: [{$inventoryReserved}]، المطلوب فكّه: [{$reservedToRelease}]."
+                        );
+                    }
+
+                    $inventoryItem->reserved_balance = $inventoryReserved - $reservedToRelease;
+                    $inventoryItem->save();
                 }
 
                 $item->reserved_quantity = 0;

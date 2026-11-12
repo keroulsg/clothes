@@ -477,6 +477,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
     {
         $employee = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-SEW-01',
             'name' => 'خالد عبد الرحمن - خياط ماهر',
             'department' => 'production',
@@ -698,6 +699,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
     {
         $employee = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-Q-01',
             'name' => 'عصام عبد الله - خياط',
             'department' => 'production',
@@ -791,6 +793,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // 1. عامل أسبوعي (1000 جنيه للأسبوع)
         $empWeekly = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-P-WK',
             'name' => 'ياسر ممدوح',
             'department' => 'cutting',
@@ -803,6 +806,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // 2. عامل وردية (150 جنيه للوردية، حضر يومين = 300 جنيه)
         $empShift = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-P-SH',
             'name' => 'أنس إبراهيم',
             'department' => 'packing',
@@ -814,6 +818,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         Attendance::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_id' => $empShift->id,
             'attendance_date' => '2026-11-01',
             'status' => 'present',

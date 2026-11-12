@@ -138,49 +138,8 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
   // Bank Loans & Credit Facilities States
   const [finSectionView, setFinSectionView] = useState<'all' | 'accounts' | 'transfers' | 'loans'>('all');
-  const [bankLoans, setBankLoans] = useState<BankLoan[]>(() => {
-    try {
-      const saved = localStorage.getItem('garmentos_bank_loans');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return [
-      {
-        id: 'loan-nbe-01',
-        loan_number: 'LOAN-NBE-2026-001',
-        name: 'قرض تمويل ماكينات خياطة وقص وتحديث خطوط الإنتاج (مبادرة دعم الصناعة)',
-        bank_name: 'البنك الأهلي المصري - فرع المصانع',
-        contract_number: 'CTR-NBE-88921',
-        financial_account_id: 'BNK-01',
-        principal_amount: 360000,
-        interest_rate: 8,
-        interest_amount: 28800,
-        total_loan_amount: 388800,
-        paid_amount: 97200,
-        remaining_amount: 291600,
-        installments_count: 12,
-        frequency: 'monthly',
-        start_date: '2026-08-01',
-        maturity_date: '2027-07-01',
-        status: 'active',
-        notes: 'تمويل شراء 10 ماكينات سنجر ياباني كمبيوتر ومقص قماش رأسي 10 بوصة بضمان خطوط الإنتاج',
-        installments: [
-          { id: 'inst-1', installment_number: 1, due_date: '2026-09-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-09-01', payment_reference: 'TRF-NBE-0901' },
-          { id: 'inst-2', installment_number: 2, due_date: '2026-10-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-10-01', payment_reference: 'TRF-NBE-1001' },
-          { id: 'inst-3', installment_number: 3, due_date: '2026-11-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-11-01', payment_reference: 'TRF-NBE-1101' },
-          { id: 'inst-4', installment_number: 4, due_date: '2026-12-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-5', installment_number: 5, due_date: '2027-01-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-6', installment_number: 6, due_date: '2027-02-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-7', installment_number: 7, due_date: '2027-03-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-8', installment_number: 8, due_date: '2027-04-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-9', installment_number: 9, due_date: '2027-05-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-10', installment_number: 10, due_date: '2027-06-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-11', installment_number: 11, due_date: '2027-07-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-12', installment_number: 12, due_date: '2027-08-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-        ],
-      },
-    ];
-  });
-
+  // Loan records are not yet backed by a server API; never load fabricated/local-only contracts.
+  const [bankLoans, setBankLoans] = useState<BankLoan[]>([]);
   const [selectedLoanForSchedule, setSelectedLoanForSchedule] = useState<BankLoan | null>(null);
   const [selectedLoanForPrint, setSelectedLoanForPrint] = useState<BankLoan | null>(null);
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);

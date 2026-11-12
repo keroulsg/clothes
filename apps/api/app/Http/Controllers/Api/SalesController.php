@@ -359,6 +359,16 @@ class SalesController extends Controller
             if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إصدار إذن تسليم من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
             }
+            $deliveryOrder = \App\Models\SalesOrder::where('tenant_id', $tenantId)->find($validated['sales_order_id']);
+            if (!$deliveryOrder) {
+                return response()->json(['error' => 'SalesOrderNotFound', 'message' => 'أمر البيع غير متاح لهذا الحساب.'], 404);
+            }
+            if (!empty($deliveryOrder->warehouse_id) && $deliveryOrder->warehouse_id !== $deliveryWarehouse->id) {
+                $orderWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($deliveryOrder->warehouse_id);
+                if ($orderWarehouse && $orderWarehouse->branch_id !== $deliveryWarehouse->branch_id) {
+                    return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب إصدار إذن التسليم من نفس فرع أمر البيع.'], 422);
+                }
+            }
         }
 
         $deliveryNote = $this->salesService->createDeliveryNote($validated);
@@ -431,6 +441,16 @@ class SalesController extends Controller
         }
         if ($enforceBranchScope && !in_array($returnWarehouse->branch_id, $assignedBranchIds, true)) {
             return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك تسجيل مرتجع في مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+        }
+        $returnInvoice = \App\Models\SalesInvoice::where('tenant_id', $tenantId)->find($validated['sales_invoice_id']);
+        if (!$returnInvoice) {
+            return response()->json(['error' => 'InvoiceNotFound', 'message' => 'فاتورة البيع غير متاحة لهذا الحساب.'], 404);
+        }
+        if (!empty($returnInvoice->warehouse_id)) {
+            $invoiceWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($returnInvoice->warehouse_id);
+            if ($invoiceWarehouse && $invoiceWarehouse->branch_id !== $returnWarehouse->branch_id) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب تسجيل المرتجع في نفس فرع فاتورة البيع.'], 422);
+            }
         }
 
         if ($request->header('X-Idempotency-Key') && empty($validated['idempotency_key'])) {

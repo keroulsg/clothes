@@ -204,16 +204,18 @@ class RestoreDatabaseCommand extends Command
 
     private function verifyRestoredDatabase(string $driver, string $targetDb, array $manifest): array
     {
-        // Dynamically configure a temporary connection to inspect the restored database
-        config([
-            'database.connections.restore_verification' => [
-                'driver' => $driver,
-                'database' => $targetDb,
-                'prefix' => '',
-                'foreign_key_constraints' => true,
-            ]
-        ]);
+        // Reuse the configured driver's connection details, but point every verification
+        // query at the isolated restore target (never at the active database).
+        $verificationConfig = config("database.connections.{$driver}", []);
+        if (empty($verificationConfig) || ($verificationConfig['driver'] ?? null) !== $driver) {
+            throw new \RuntimeException("Unsupported or unconfigured restore verification driver: {$driver}");
+        }
+        $verificationConfig['database'] = $targetDb;
+        $verificationConfig['prefix'] = '';
+        unset($verificationConfig['read'], $verificationConfig['write']);
 
+        config(['database.connections.restore_verification' => $verificationConfig]);
+        DB::purge('restore_verification');
         $conn = DB::connection('restore_verification');
 
         $migrationCount = $conn->table('migrations')->count();

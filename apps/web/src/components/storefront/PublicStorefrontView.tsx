@@ -89,9 +89,13 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
 
   const fetchStoreData = async () => {
     if (!tenantIdentifier) {
-      const storedTenant = api.auth.getStoredTenant();
-      const fallbackSlug = (storedTenant as any)?.subdomain || storedTenant?.code || 'msnaa-aldlta-llmlabs-algahz-429';
-      window.location.hash = `#/store/${fallbackSlug}`;
+      setStoreSettings(null);
+      setTenantInfo(null);
+      setVariants([]);
+      setErrorMsg(isAr
+        ? 'رابط المتجر غير مكتمل. افتح رابط المتجر المخصص من لوحة المصنع.'
+        : 'Store URL is incomplete. Open the tenant-specific storefront link from the factory dashboard.');
+      setIsLoading(false);
       return;
     }
     setIsLoading(true);

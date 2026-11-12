@@ -2482,6 +2482,22 @@ class ApiClient {
         body: JSON.stringify({ status, notes }),
       });
     },
+    downloadRfqAttachment: async (rfqId: string, attachmentId: string): Promise<Blob> => {
+      const headers: HeadersInit = { Accept: 'application/octet-stream' };
+      if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+      const response = await fetch(
+        `${this.baseUrl}/waslat-worsh/rfqs/${rfqId}/attachments/${attachmentId}`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل تحميل الملف');
+      }
+
+      return response.blob();
+    },
   };
 
   // --- Stage C.4 & P2: لوحة المشرف العام لمراجعة واعتماد طلبات السداد وإدارة الباقات ---

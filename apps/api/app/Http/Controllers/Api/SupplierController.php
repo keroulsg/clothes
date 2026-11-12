@@ -342,7 +342,9 @@ class SupplierController extends Controller
 
         // 1. فواتير المورد (Supplier Invoices = Credit / التزام على المصنع)
         $invoicesQuery = SupplierInvoice::where('tenant_id', $tenantId)
-            ->where('supplier_id', $supplier->id);
+            ->where('supplier_id', $supplier->id)
+            ->where('is_posted', true)
+            ->where('matching_status', 'matched');
 
         $fromDate = $request->input('from_date');
         $toDate = $request->input('to_date');
@@ -362,7 +364,18 @@ class SupplierController extends Controller
         $paymentsQuery = PaymentVoucher::where('tenant_id', $tenantId)
             ->where('party_type', 'supplier')
             ->where('party_id', $supplier->id)
-            ->whereIn('voucher_type', ['payment', 'discount']);
+            ->whereIn('voucher_type', ['payment', 'discount'])
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('journal_entries as supplier_voucher_journals')
+                    ->whereColumn('supplier_voucher_journals.tenant_id', 'payment_vouchers.tenant_id')
+                    ->where('supplier_voucher_journals.reference_type', 'payment_voucher')
+                    ->where('supplier_voucher_journals.status', 'posted')
+                    ->where(function ($reference) {
+                        $reference->whereColumn('supplier_voucher_journals.reference_key', 'payment_vouchers.id')
+                            ->orWhereColumn('supplier_voucher_journals.reference_id', 'payment_vouchers.id');
+                    });
+            });
 
         if ($hasFrom) {
             $paymentsQuery->where('voucher_date', '>=', $fromDate);

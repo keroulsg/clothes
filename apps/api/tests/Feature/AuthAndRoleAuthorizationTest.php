@@ -271,6 +271,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
         $prodOrder = ProductionOrder::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
             'garment_model_id' => $model->id,
+            'branch_id' => $this->mainBranch->id,
             'order_number' => 'PRD-AUTH-001',
             'planned_start_date' => now()->toDateString(),
             'target_delivery_date' => now()->addDays(10)->toDateString(),
@@ -1531,7 +1532,8 @@ class AuthAndRoleAuthorizationTest extends TestCase
     {
         Sanctum::actingAs($this->platformAdminUser);
 
-        $this->getJson('/api/v1/inventory/items')
+        $this->withHeader('X-Tenant-ID', $this->tenant->id)
+            ->getJson('/api/v1/inventory/items')
             ->assertStatus(403)
             ->assertJsonPath('error', 'UnauthorizedRole');
     }
@@ -1555,10 +1557,11 @@ class AuthAndRoleAuthorizationTest extends TestCase
     {
         Sanctum::actingAs($this->platformAdminUser);
 
-        $this->getJson('/api/v1/admin/subscriptions')
+        $this->getJson('/api/v1/platform-admin/overview')
             ->assertOk();
 
-        $this->getJson('/api/v1/inventory/items')
+        $this->withHeader('X-Tenant-ID', $this->tenant->id)
+            ->getJson('/api/v1/inventory/items')
             ->assertStatus(403)
             ->assertJsonPath('error', 'UnauthorizedRole');
     }

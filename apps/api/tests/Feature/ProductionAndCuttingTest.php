@@ -389,6 +389,19 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_debit);
         $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_credit);
 
+        // Reposting the exact same QC receipt must return the existing journal entry without changing GL balances.
+        $finishedGoodsAccount = app(AccountingService::class)->getMappedAccount($this->tenantA->id, 'finished_goods_inventory');
+        $balanceBeforeDuplicate = (float) $finishedGoodsAccount->fresh()->current_balance;
+        $duplicateJournal = app(AccountingService::class)->postFinishedGoodsReceipt(
+            $this->tenantA->id,
+            ProductionOrder::findOrFail($orderId),
+            QualityInspection::findOrFail($inspectionId),
+            $expectedReceiptCost,
+            98
+        );
+        $this->assertSame($receiptJournal->id, $duplicateJournal->id);
+        $this->assertEquals($balanceBeforeDuplicate, (float) $finishedGoodsAccount->fresh()->current_balance);
+
         // The remaining two accepted pieces are a distinct partial QC receipt for the same order.
         $secondQcRes = $this->actingAs($this->userA)
             ->postJson('/api/v1/quality-inspections', [

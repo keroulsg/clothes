@@ -369,6 +369,22 @@ class ProductionAndCuttingTest extends TestCase
         $this->finishedGoodItemA->refresh();
         $this->assertEquals(98.0, (float) $this->finishedGoodItemA->current_balance);
 
+        // A second final-audit receipt cannot overproduce the remaining two planned pieces.
+        $overReceipt = $this->actingAs($this->userA)
+            ->postJson('/api/v1/quality-inspections', [
+                'production_order_id' => $orderId,
+                'inspector_name' => 'م. نادية سمير',
+                'inspection_type' => 'final_audit',
+                'inspected_quantity' => 3,
+                'passed_quantity' => 3,
+                'rework_quantity' => 0,
+                'rejected_quantity' => 0,
+                'finished_goods_inventory_item_id' => $this->finishedGoodItemA->id,
+            ]);
+        $overReceipt->assertStatus(422);
+        $this->assertEquals(98.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+        $this->assertEquals(98, (int) ProductionOrder::findOrFail($orderId)->total_completed_quantity);
+
         // التحقق من إحصائيات أمر الإنتاج (Metrics)
         $metricsRes = $this->actingAs($this->userA)
             ->getJson("/api/v1/production-orders/{$orderId}/metrics");

@@ -255,8 +255,10 @@ class StorefrontController extends Controller
     public function orders(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $orders = StoreOrder::where('tenant_id', $tenantId)
-            ->with(['items', 'paymentReviewer'])
+        $orders = $this->scopeStoreOrdersToAssignedBranches(
+            StoreOrder::where('tenant_id', $tenantId),
+            request()
+        )->with(['items', 'paymentReviewer', 'salesOrder.warehouse'])
             ->latest()
             ->paginate(20);
 
@@ -275,10 +277,11 @@ class StorefrontController extends Controller
         $nextStatus = $validated['status'];
 
         try {
-            return DB::transaction(function () use ($id, $tenantId, $nextStatus) {
-                $order = StoreOrder::where('tenant_id', $tenantId)
-                    ->lockForUpdate()
-                    ->findOrFail($id);
+            return DB::transaction(function () use ($id, $tenantId, $nextStatus, $request) {
+                $order = $this->scopeStoreOrdersToAssignedBranches(
+                    StoreOrder::where('tenant_id', $tenantId),
+                    $request
+                )->lockForUpdate()->findOrFail($id);
 
                 $currentStatus = (string) $order->status;
                 if ($currentStatus === $nextStatus) {
@@ -383,6 +386,10 @@ class StorefrontController extends Controller
         // Check if $id belongs to a PaymentSubmission or a StoreOrder
         $submission = PaymentSubmission::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($id);
         $orderId = $submission ? $submission->store_order_id : $id;
+        $this->scopeStoreOrdersToAssignedBranches(
+            StoreOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($orderId);
 
         try {
             $order = $this->storefrontService->verifyInstaPayPayment(
@@ -413,7 +420,9 @@ class StorefrontController extends Controller
     public function pendingPayments(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId);
+        $user = request()->user();
+        $branchIds = $user && $user->role !== 'company_owner' ? $user->assignedBranchIds() : null;
+        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId, $branchIds);
 
         return response()->json([
             'submissions' => $submissions,
@@ -490,6 +499,10 @@ class StorefrontController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $submission = \App\Models\PaymentSubmission::where('tenant_id', $tenantId)->findOrFail($submissionId);
+        $this->scopeStoreOrdersToAssignedBranches(
+            StoreOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($submission->store_order_id);
 
         if (!$submission->receipt_file_path || !\Illuminate\Support\Facades\Storage::exists($submission->receipt_file_path)) {
             return response()->json([
@@ -614,5 +627,18 @@ class StorefrontController extends Controller
             ], 422);
         }
     }
+    private function scopeStoreOrdersToAssignedBranches($query, ?Request $request = null)
+    {
+        $user = ($request ?? request())->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+
+        return $query->whereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+    }
+
+
 }
 

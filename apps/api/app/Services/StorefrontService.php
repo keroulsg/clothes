@@ -737,7 +737,9 @@ class StorefrontService
 
             if ($approved) {
                 // 1. Resolve or Create Sales Invoice for the linked ERP Sales Order
-                $salesOrder = $order->sales_order_id ? SalesOrder::withoutGlobalScopes()->where('id', $order->sales_order_id)->first() : null;
+                $salesOrder = $order->sales_order_id
+                    ? SalesOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('id', $order->sales_order_id)->first()
+                    : null;
                 $invoice = null;
 
                 if ($salesOrder) {
@@ -751,6 +753,7 @@ class StorefrontService
                             'tenant_id' => $tenantId,
                             'invoice_number' => 'INV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
                             'sales_order_id' => $salesOrder->id,
+                            'warehouse_id' => $salesOrder->warehouse_id,
                             'customer_id' => $salesOrder->customer_id,
                             'customer_name' => $salesOrder->customer_name,
                             'invoice_type' => 'standard',

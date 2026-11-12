@@ -487,7 +487,8 @@ class SubcontractingController extends Controller
                 ], 403);
             }
             if ($enforceBranchScope) {
-                $jobBranchId = $job->productionOrder?->branch_id
+                $jobBranchId = $job->branch_id
+                    ?? $job->productionOrder?->branch_id
                     ?? $job->assignedEmployee?->branch_id
                     ?? $job->cuttingOrders->first()?->warehouse?->branch_id;
                 if (!$jobBranchId || $warehouse->branch_id !== $jobBranchId) {
@@ -602,7 +603,8 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
-            $operationBranchIds[] = $job->productionOrder?->branch_id
+            $operationBranchIds[] = $job->branch_id
+                ?? $job->productionOrder?->branch_id
                 ?? $job->assignedEmployee?->branch_id
                 ?? $job->cuttingOrders->first()?->warehouse?->branch_id;
         }

@@ -246,7 +246,10 @@ class CuttingOrderController extends Controller
     public function archive(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = CuttingOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeCuttingOrdersToAssignedBranches(
+            CuttingOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         $order->status = 'cut_completed';
         $order->save();

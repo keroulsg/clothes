@@ -220,6 +220,7 @@ class SubcontractingController extends Controller
             'garment_model_id' => 'nullable|uuid',
             'assigned_employee_id' => 'nullable|uuid',
             'production_order_id' => 'nullable|uuid',
+            'branch_id' => 'nullable|uuid',
             'fabric_source' => 'nullable|string|in:customer_supplied,factory_supplied,mixed',
             'trims_responsibility' => 'nullable|string|in:customer_supplied,factory_supplied,mixed',
             'pricing_basis' => 'nullable|string|in:per_piece,per_meter,per_operation,per_bundle',
@@ -285,7 +286,7 @@ class SubcontractingController extends Controller
                 return response()->json(['success' => false, 'error' => 'EmployeeNotFound'], 404);
             }
         }
-        $jobBranchId = $productionOrder?->branch_id ?? $assignedEmployee?->branch_id;
+        $jobBranchId = $validated['branch_id'] ?? $productionOrder?->branch_id ?? $assignedEmployee?->branch_id;
         if ($productionOrder && $assignedEmployee && $productionOrder->branch_id !== $assignedEmployee->branch_id) {
             return response()->json([
                 'success' => false,
@@ -293,17 +294,37 @@ class SubcontractingController extends Controller
                 'message' => 'يجب أن يتبع العامل وأمر الإنتاج نفس الفرع.',
             ], 422);
         }
-        if ($enforceBranchScope && (!$jobBranchId || !in_array($jobBranchId, $assignedBranchIds, true))) {
-            return response()->json([
-                'success' => false,
-                'error' => 'BranchAccessDenied',
-                'message' => 'يجب ربط أمر التشغيل بأمر إنتاج أو عامل تابع لفرع معيّن لحسابك.',
-            ], 403);
+        if ($enforceBranchScope) {
+            if (!$jobBranchId && count($assignedBranchIds) === 1) {
+                $jobBranchId = $assignedBranchIds[0];
+            }
+            if (!$jobBranchId || !in_array($jobBranchId, $assignedBranchIds, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAccessDenied',
+                    'message' => 'يجب تحديد فرع معيّن لأمر التشغيل قبل إنشائه.',
+                ], 403);
+            }
+        }
+        if ($jobBranchId) {
+            $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($jobBranchId);
+            if (!$branch) {
+                return response()->json(['success' => false, 'error' => 'BranchNotFound'], 404);
+            }
+            if (($productionOrder && $productionOrder->branch_id !== $jobBranchId)
+                || ($assignedEmployee && $assignedEmployee->branch_id !== $jobBranchId)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب أن يتبع أمر التشغيل والعامل وأمر الإنتاج نفس الفرع.',
+                ], 422);
+            }
         }
 
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['branch_id'] = $jobBranchId;
             $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
             $order = $this->subcontractingService->createJobOrder($data, $validated['items'] ?? []);

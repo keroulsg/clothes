@@ -16,6 +16,7 @@ use App\Models\InventoryTransaction;
 use App\Models\JournalEntry;
 use App\Models\Pattern;
 use App\Models\ProductionOrder;
+use App\Models\ProductionCostSheet;
 use App\Models\ProductionOrderItem;
 use App\Models\ProductionStage;
 use App\Models\QualityDefect;
@@ -1006,25 +1007,41 @@ class ProductionService
                         throw new InvalidArgumentException('أمان: صنف المنتج التام غير تابع للشركة الحالية.');
                     }
 
+                    // Finished goods must use an approved production cost, not the moving average of the stock item.
+                    $costSheet = ProductionCostSheet::where('tenant_id', $tenantId)
+                        ->where('production_order_id', $prodOrder->id)
+                        ->where('status', 'approved')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$costSheet || (int) $costSheet->total_produced_pieces <= 0 || (float) $costSheet->cost_per_piece <= 0) {
+                        throw new InvalidArgumentException('يجب اعتماد بطاقة التكلفة الصناعية الفعلية لأمر الإنتاج قبل استلام المنتج التام محاسبياً.');
+                    }
+
+                    $unitCost = round((float) $costSheet->cost_per_piece, 4);
+                    $receiptCost = round($passedQty * $unitCost, 4);
+
                     $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $data['finished_goods_inventory_item_id'],
                         'quantity' => $passedQty,
+                        'unit_cost' => $unitCost,
                         'direction' => 'IN',
                         'transaction_type' => 'production_receipt',
-                        'reference_type' => 'production_order',
-                        'notes' => "إضافة منتج تام جاهز للتوزيع بعد الفحص النهائي لأمر الإنتاج [{$prodOrder->order_number}]",
+                        'reference_type' => 'quality_inspection',
+                        'reference_id' => $inspection->id,
+                        'reference_number' => $inspection->inspection_number,
+                        'idempotency_key' => 'QC-FG-RECEIPT-' . $inspection->id,
+                        'notes' => "استلام منتج تام لمحضر الجودة [{$inspection->inspection_number}] لأمر الإنتاج [{$prodOrder->order_number}]",
                     ]);
 
-                    // Capitalize finished goods in the same transaction as the stock receipt.
-                    if ((float)$fgItem->average_cost > 0) {
-                        $fgAmount = round($passedQty * (float)$fgItem->average_cost, 4);
-                        app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt(
-                            $tenantId,
-                            $prodOrder,
-                            $fgAmount,
-                            $passedQty
-                        );
+                    app(\\App\\Services\\AccountingService::class)->postFinishedGoodsReceipt(
+                        $tenantId,
+                        $prodOrder,
+                        $inspection,
+                        $receiptCost,
+                        $passedQty
+                    );
                     }
                 }
             }

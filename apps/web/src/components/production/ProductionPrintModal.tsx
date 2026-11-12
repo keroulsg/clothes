@@ -519,7 +519,7 @@ export const ProductionPrintModal: React.FC<ProductionPrintModalProps> = ({
       case 'cutting':
         return isAr ? 'معاينة وطباعة إذن طاولة القص' : 'Print Cutting Ticket';
       case 'bundle':
-        return isAr ? 'معاينة وطباعة بطاقة الحزمة بالباركود' : 'Print Bundle QR Card';
+        return isAr ? 'معاينة وطباعة بطاقة تعريف الحزمة' : 'Print Bundle ID Card';
       case 'qc':
         return isAr ? 'معاينة وطباعة شهادة فحص الجودة' : 'Print QC Certificate';
     }

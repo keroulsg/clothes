@@ -123,6 +123,7 @@ class Batch9StorefrontTemplatesAndCustomizerTest extends TestCase
         TenantStoreSetting::create([
             'tenant_id' => $this->tenantA->id,
             'store_name' => 'Delta Factory Store',
+            'theme_id' => StorefrontService::THEME_FASHION_BOUTIQUE,
             'is_store_enabled' => true,
             'allow_cod' => true,
             'allow_card_payment' => false,

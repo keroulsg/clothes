@@ -827,6 +827,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         Attendance::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_id' => $empShift->id,
             'attendance_date' => '2026-11-02',
             'status' => 'present',

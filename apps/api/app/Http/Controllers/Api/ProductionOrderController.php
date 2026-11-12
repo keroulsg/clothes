@@ -356,30 +356,69 @@ class ProductionOrderController extends Controller
     public function complete(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
 
-        $order->status = 'completed';
-        $order->actual_completion_date = now()->toDateString();
-        if ($order->total_cut_quantity > 0 && $order->total_completed_quantity < $order->total_cut_quantity) {
-            $order->total_completed_quantity = $order->total_cut_quantity;
-        }
-        $order->save();
+        return DB::transaction(function () use ($request, $id, $tenantId) {
+            $order = ProductionOrder::where('tenant_id', $tenantId)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        \App\Models\AuditLog::create([
-            'tenant_id' => $tenantId,
-            'user_id' => $request->user()?->id,
-            'action' => 'production_order_completed',
-            'auditable_type' => ProductionOrder::class,
-            'auditable_id' => $order->id,
-            'old_values' => ['status' => $order->getOriginal('status')],
-            'new_values' => ['status' => 'completed'],
-            'ip_address' => $request->ip(),
-        ]);
+            $cutQuantity = (float) $order->total_cut_quantity;
+            $completedQuantity = (float) $order->total_completed_quantity;
 
-        return response()->json([
-            'success' => true,
-            'message' => 'تم إنهاء واعتماد اكتمال أمر الإنتاج بنجاح.',
-            'data' => $order->fresh(['garmentModel']),
-        ]);
+            if ($cutQuantity <= 0 || $completedQuantity < $cutQuantity) {
+                throw ValidationException::withMessages([
+                    'production_order' => ['لا يمكن إغلاق أمر الإنتاج قبل تسجيل كمية إنتاج فعلية مقبولة لا تقل عن إجمالي الكمية المقصوصة.'],
+                ]);
+            }
+
+            $cuttingOrders = DB::table('cutting_orders')
+                ->where('tenant_id', $tenantId)
+                ->where('production_order_id', $order->id)
+                ->lockForUpdate()
+                ->get(['status']);
+
+            if ($cuttingOrders->isEmpty() || $cuttingOrders->contains(function ($cuttingOrder) {
+                return !in_array($cuttingOrder->status, ['cut_completed', 'completed', 'archived'], true);
+            })) {
+                throw ValidationException::withMessages([
+                    'production_order' => ['لا يمكن إغلاق أمر الإنتاج قبل إتمام وأرشفة جميع أوامر القص المرتبطة.'],
+                ]);
+            }
+
+            if ($order->status === 'completed') {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'أمر الإنتاج مكتمل بالفعل.',
+                    'data' => $order->fresh(['garmentModel']),
+                ]);
+            }
+
+            $order->status = 'completed';
+            $order->actual_completion_date = now()->toDateString();
+            // Never synthesize completed quantity from cut quantity.
+            $order->save();
+
+            \App\Models\AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => $request->user()?->id,
+                'action' => 'production_order_completed',
+                'auditable_type' => ProductionOrder::class,
+                'auditable_id' => $order->id,
+                'old_values' => ['status' => $order->getOriginal('status')],
+                'new_values' => [
+                    'status' => 'completed',
+                    'total_cut_quantity' => $cutQuantity,
+                    'total_completed_quantity' => $completedQuantity,
+                ],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إنهاء واعتماد اكتمال أمر الإنتاج بنجاح.',
+                'data' => $order->fresh(['garmentModel']),
+            ]);
+        });
     }
 }

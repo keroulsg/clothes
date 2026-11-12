@@ -23,14 +23,6 @@ class EnsurePermission
             ], 401);
         }
 
-        $routeUri = $request->route()?->uri() ?? $request->path();
-        $isPlatformSubscriptionAdminRoute = str_starts_with(ltrim($routeUri, '/'), 'api/v1/admin/subscriptions')
-            || str_starts_with(ltrim($routeUri, '/'), 'admin/subscriptions');
-
-        if ($user->role === 'platform_admin' && $isPlatformSubscriptionAdminRoute) {
-            return $next($request);
-        }
-
         if ($user->role === 'platform_admin') {
             return response()->json([
                 'error' => 'UnauthorizedRole',
@@ -50,13 +42,9 @@ class EnsurePermission
             ], 403);
         }
 
-        // Legacy accounts retain their existing role gates until an owner saves
-        // an explicit permission set. New and edited users, plus customized roles,
-        // are checked against the exact granular permission set.
-        if (
-            $user->hasExplicitPermissionConfiguration()
-            && !$user->hasPermission($requiredPermission)
-        ) {
+        // Enforce the effective permission set for every account, including
+        // legacy role defaults. Role middleware is an additional boundary, not a bypass.
+        if (!$user->hasPermission($requiredPermission)) {
             return response()->json([
                 'error' => 'InsufficientPermission',
                 'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة للوصول إلى هذا المورد.',

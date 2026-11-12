@@ -91,6 +91,17 @@ class StorefrontThemesAndPaymentsTest extends TestCase
             'type' => 'finished_goods',
         ]);
 
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenantA->id,
+            'store_name' => 'Alpha Factory Store',
+            'is_store_enabled' => true,
+            'allow_cod' => true,
+            'allow_card_payment' => false,
+            'allow_instapay' => true,
+            'instapay_account_verified' => true,
+            'instapay_handle' => 'alpha@instapay',
+        ]);
+
         $this->modelA = GarmentModel::create([
             'tenant_id' => $this->tenantA->id,
             'code' => 'MOD-101',

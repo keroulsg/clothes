@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\CustomerMaterial;
 use App\Models\CustomerMaterialReceipt;
 use App\Models\ExternalOperation;
+use App\Models\ExternalOperationReceipt;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
@@ -593,16 +594,17 @@ class SubcontractingService
     public function receiveExternalOperation(string $operationId, array $data): ExternalOperation
     {
         $tenantId = $this->getTenantId();
+        $idempotencyKey = trim((string) ($data['idempotency_key'] ?? ''));
 
-        return DB::transaction(function () use ($tenantId, $operationId, $data) {
+        if ($idempotencyKey === '') {
+            throw new InvalidArgumentException('يجب إرسال مفتاح Idempotency مستقل لكل دفعة استلام من التشغيل الخارجي.');
+        }
+
+        return DB::transaction(function () use ($tenantId, $operationId, $data, $idempotencyKey) {
             $operation = ExternalOperation::where('tenant_id', $tenantId)
                 ->where('id', $operationId)
                 ->lockForUpdate()
                 ->firstOrFail();
-
-            if ($operation->status === 'completed' || $operation->status === 'cancelled') {
-                throw new Exception("أمر التشغيل الخارجي في حالة [{$operation->status}] ولا يمكن استلامه مجدداً.");
-            }
 
             $accepted = (int) $data['received_accepted_quantity'];
             $rejected = (int) ($data['received_rejected_quantity'] ?? 0);
@@ -612,38 +614,90 @@ class SubcontractingService
                 throw new InvalidArgumentException('الكميات المستلمة لا يمكن أن تكون سالبة.');
             }
 
-            $totalReturned = $accepted + $rejected + $scrap;
-            if ($totalReturned > $operation->sent_quantity) {
-                throw new InvalidArgumentException("إجمالي الكمية الراجعة [{$totalReturned}] يتجاوز الكمية المرسلة أصلاً [{$operation->sent_quantity}].");
+            $receipt = ExternalOperationReceipt::where('tenant_id', $tenantId)
+                ->where('idempotency_key', $idempotencyKey)
+                ->lockForUpdate()
+                ->first();
+
+            if ($receipt) {
+                if (
+                    (string) $receipt->external_operation_id !== (string) $operation->id
+                    || (int) $receipt->accepted_quantity !== $accepted
+                    || (int) $receipt->rejected_quantity !== $rejected
+                    || (int) $receipt->scrap_quantity !== $scrap
+                ) {
+                    throw new InvalidArgumentException('تعارض Idempotency: مفتاح دفعة الاستلام مستخدم مسبقاً لبيانات مختلفة.');
+                }
+
+                return $operation;
             }
 
+            if (in_array($operation->status, ['completed', 'cancelled'], true)) {
+                throw new Exception("أمر التشغيل الخارجي في حالة [{$operation->status}] ولا يمكن استلامه مجدداً.");
+            }
+
+            $receiptQuantity = $accepted + $rejected + $scrap;
+            if ($receiptQuantity <= 0) {
+                throw new InvalidArgumentException('يجب أن تحتوي دفعة الاستلام على قطعة واحدة على الأقل.');
+            }
+
+            $alreadyReturned = (int) $operation->received_accepted_quantity
+                + (int) $operation->received_rejected_quantity
+                + (int) $operation->scrap_quantity;
+            $remainingQuantity = max(0, (int) $operation->sent_quantity - $alreadyReturned);
+
+            if ($receiptQuantity > $remainingQuantity) {
+                throw new InvalidArgumentException("إجمالي دفعة الاستلام [{$receiptQuantity}] يتجاوز الكمية المتبقية [{$remainingQuantity}] من أصل [{$operation->sent_quantity}].");
+            }
+
+            $unitRate = (float) $operation->unit_rate;
+            $receiptCost = round($receiptQuantity * $unitRate, 4);
+
+            ExternalOperationReceipt::create([
+                'tenant_id' => $tenantId,
+                'external_operation_id' => $operation->id,
+                'accepted_quantity' => $accepted,
+                'rejected_quantity' => $rejected,
+                'scrap_quantity' => $scrap,
+                'unit_rate' => $unitRate,
+                'total_cost' => $receiptCost,
+                'idempotency_key' => $idempotencyKey,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            $operation->received_accepted_quantity = (int) $operation->received_accepted_quantity + $accepted;
+            $operation->received_rejected_quantity = (int) $operation->received_rejected_quantity + $rejected;
+            $operation->scrap_quantity = (int) $operation->scrap_quantity + $scrap;
+            $operation->total_cost = round((float) $operation->total_cost + $receiptCost, 4);
+            $operation->returned_at = now();
+
+            $cumulativeReturned = (int) $operation->received_accepted_quantity
+                + (int) $operation->received_rejected_quantity
+                + (int) $operation->scrap_quantity;
+            $operation->status = $cumulativeReturned >= (int) $operation->sent_quantity
+                ? 'completed'
+                : 'partially_returned';
             if (!empty($data['assigned_employee_id'])) {
                 $operation->assigned_employee_id = $data['assigned_employee_id'];
             }
-
-            $operation->received_accepted_quantity = $accepted;
-            $operation->received_rejected_quantity = $rejected;
-            $operation->scrap_quantity = $scrap;
-            $operation->returned_at = now();
-            $operation->status = $totalReturned >= $operation->sent_quantity ? 'completed' : 'partially_returned';
             $operation->save();
 
-            // احتساب أجر القطعة آلياً للفني/المشرف المسؤول عن استلام العملية وفحصها
+            // Record only the accepted quantity from this receipt, never cumulative quantities.
             $workerId = $operation->assigned_employee_id;
             if (!empty($workerId) && $accepted > 0) {
-                try {
-                    $pieceRate = \App\Models\PieceRate::where('tenant_id', $tenantId)
-                        ->where(function ($q) use ($operation) {
-                            $q->where('stage_name', 'subcontracting')
-                              ->orWhere('operation_name', 'like', "%{$operation->operation_type}%");
-                        })
-                        ->where('is_active', true)
-                        ->first();
+                $pieceRate = \App\Models\PieceRate::where('tenant_id', $tenantId)
+                    ->where(function ($q) use ($operation) {
+                        $q->where('stage_name', 'subcontracting')
+                            ->orWhere('operation_name', 'like', "%{$operation->operation_type}%");
+                    })
+                    ->where('is_active', true)
+                    ->first();
 
-                    $workerRate = !empty($data['worker_unit_rate']) && (float)$data['worker_unit_rate'] > 0
-                        ? (float)$data['worker_unit_rate']
-                        : ($pieceRate ? (float)$pieceRate->rate_per_piece : 1.00);
+                $workerRate = !empty($data['worker_unit_rate']) && (float) $data['worker_unit_rate'] > 0
+                    ? (float) $data['worker_unit_rate']
+                    : (float) ($pieceRate?->rate_per_piece ?? 0);
 
+                if ($workerRate > 0) {
                     \App\Models\PieceWorkLog::create([
                         'tenant_id' => $tenantId,
                         'employee_id' => $workerId,
@@ -653,7 +707,7 @@ class SubcontractingService
                         'piece_rate_id' => $pieceRate?->id,
                         'stage_code' => $operation->operation_type,
                         'operation_name' => 'تشغيل خارجي: ' . $operation->operation_type,
-                        'cut_name' => 'أمر تشغيل خارجي: ' . ($operation->operation_number),
+                        'cut_name' => 'دفعة استلام: ' . $idempotencyKey,
                         'work_date' => now()->toDateString(),
                         'started_at' => $operation->dispatched_at ?? now(),
                         'completed_at' => now(),
@@ -661,14 +715,12 @@ class SubcontractingService
                         'unit_rate' => $workerRate,
                         'total_amount' => round($accepted * $workerRate, 4),
                         'status' => 'approved',
-                        'notes' => "استلام عملية معالجة خارجية {$operation->operation_number} من {$operation->subcontractor_name}",
+                        'notes' => "دفعة استلام {$idempotencyKey} لأمر التشغيل الخارجي {$operation->operation_number}",
                     ]);
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('Subcontracting piece-rate logging failed: ' . $e->getMessage());
                 }
             }
 
-            return $operation;
+            return $operation->fresh();
         });
     }
 

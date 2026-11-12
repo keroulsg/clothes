@@ -528,11 +528,19 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('invoice', $invPayload1, $invPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses, 'Supplier invoice concurrent worker responses: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
+        $this->assertContains(202, $statuses, 'The price-variance invoice must be saved for review, not posted: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->count());
-        $this->assertEquals(11400.0, (float)$supplier->fresh()->current_balance);
+        $invoice = SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->firstOrFail();
+        $this->assertFalse((bool) $invoice->is_posted);
+        $this->assertSame('price_variance', $invoice->matching_status);
+        $this->assertEquals(0.0, (float) $supplier->fresh()->current_balance);
+        $this->assertSame(0, DB::table('journal_entries')
+            ->where('tenant_id', $this->tenant->id)
+            ->where('reference_type', 'supplier_invoice')
+            ->where('reference_id', $invoice->id)
+            ->count());
     }
 
     /**

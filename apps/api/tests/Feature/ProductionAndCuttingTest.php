@@ -389,7 +389,32 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_debit);
         $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_credit);
 
-        // A second final-audit receipt cannot overproduce the remaining two planned pieces.
+        // The remaining two accepted pieces are a distinct partial QC receipt for the same order.
+        $secondQcRes = $this->actingAs($this->userA)
+            ->postJson('/api/v1/quality-inspections', [
+                'production_order_id' => $orderId,
+                'inspector_name' => 'م. نادية سمير',
+                'inspection_type' => 'final_audit',
+                'inspected_quantity' => 2,
+                'passed_quantity' => 2,
+                'rework_quantity' => 0,
+                'rejected_quantity' => 0,
+                'finished_goods_inventory_item_id' => $this->finishedGoodItemA->id,
+            ]);
+        $secondQcRes->assertStatus(201);
+        $secondInspectionId = $secondQcRes->json('data.id');
+        $this->assertNotSame($inspectionId, $secondInspectionId);
+
+        $secondReceiptJournal = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'production_receipt')
+            ->where('reference_key', $secondInspectionId)
+            ->firstOrFail();
+        $this->assertEquals(round(2 * (float) $costSheet->cost_per_piece, 4), (float) $secondReceiptJournal->total_debit);
+        $this->assertEquals((float) $receiptJournal->total_debit + (float) $secondReceiptJournal->total_debit,
+            (float) JournalEntry::where('tenant_id', $this->tenantA->id)->where('reference_type', 'production_receipt')->whereIn('reference_key', [$inspectionId, $secondInspectionId])->sum('total_debit'));
+        $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+
+        // A further final-audit receipt cannot overproduce the completed order.
         $overReceipt = $this->actingAs($this->userA)
             ->postJson('/api/v1/quality-inspections', [
                 'production_order_id' => $orderId,
@@ -402,15 +427,15 @@ class ProductionAndCuttingTest extends TestCase
                 'finished_goods_inventory_item_id' => $this->finishedGoodItemA->id,
             ]);
         $overReceipt->assertStatus(422);
-        $this->assertEquals(98.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
-        $this->assertEquals(98, (int) ProductionOrder::findOrFail($orderId)->total_completed_quantity);
+        $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+        $this->assertEquals(100, (int) ProductionOrder::findOrFail($orderId)->total_completed_quantity);
 
         // التحقق من إحصائيات أمر الإنتاج (Metrics)
         $metricsRes = $this->actingAs($this->userA)
             ->getJson("/api/v1/production-orders/{$orderId}/metrics");
 
         $metricsRes->assertStatus(200);
-        $this->assertEquals(98, $metricsRes->json('data.total_completed_quantity'));
+        $this->assertEquals(100, $metricsRes->json('data.total_completed_quantity'));
         $this->assertEquals(2, $metricsRes->json('data.total_rework_quantity'));
         $this->assertArrayHasKey('skip_stitch', $metricsRes->json('data.defects_breakdown'));
     }

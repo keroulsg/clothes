@@ -142,7 +142,7 @@ class PayrollService
             }
 
             $log->status = 'rejected';
-            $log->approved_by_user_id = $userId;
+            $log->approved_by = $userId;
             $log->approved_at = now();
             $log->rejection_reason = $reason;
             $log->save();

@@ -118,6 +118,7 @@ class SubcontractingService
 
         $canonical = [
             'customer_name' => trim((string) ($data['customer_name'] ?? '')),
+            'branch_id' => (string) ($data['branch_id'] ?? ''),
             'service_type' => (string) ($data['service_type'] ?? 'contract_cutting'),
             'garment_model_id' => (string) ($data['garment_model_id'] ?? ''),
             'fabric_source' => (string) ($data['fabric_source'] ?? 'customer_supplied'),
@@ -148,6 +149,7 @@ class SubcontractingService
 
         $data = [
             'customer_name' => (string) $order->customer_name,
+            'branch_id' => (string) ($order->branch_id ?? ''),
             'service_type' => (string) $order->service_type,
             'garment_model_id' => (string) ($order->garment_model_id ?? ''),
             'fabric_source' => (string) $order->fabric_source,
@@ -231,6 +233,7 @@ class SubcontractingService
                         'order_number' => $data['order_number'] ?? ('JOB-' . date('Ym') . '-' . rand(1000, 9999)),
                         'customer_id' => $customerId,
                         'customer_name' => $data['customer_name'],
+                        'branch_id' => $data['branch_id'] ?? null,
                         'service_type' => $serviceType,
                         'garment_model_id' => $modelId,
                         'assigned_employee_id' => $data['assigned_employee_id'] ?? null,

@@ -137,9 +137,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenant/backup/download', [TenantController::class, 'downloadBackup'])->middleware('role:company_owner');
 
         // الفروع ومواقع العمل (Branches - Batch 2A)
-        Route::get('/branches', [BranchController::class, 'index']);
+        Route::get('/branches', [BranchController::class, 'index'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::post('/branches', [BranchController::class, 'store'])->middleware(['role:company_owner', 'quota:active_branches']);
-        Route::get('/branches/{id}', [BranchController::class, 'show']);
+        Route::get('/branches/{id}', [BranchController::class, 'show'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::put('/branches/{id}', [BranchController::class, 'update'])->middleware('role:company_owner');
         Route::delete('/branches/{id}', [BranchController::class, 'destroy'])->middleware('role:company_owner');
 
@@ -204,11 +204,11 @@ Route::prefix('v1')->group(function () {
         Route::delete('/products/{id}', [\App\Http\Controllers\Api\ProductController::class, 'destroy'])->middleware('role:company_owner,production_manager');
 
         // المخازن ودفتر الأستاذ المخزني والتحويلات والجرد وأمانات العملاء (Batch 2)
-        Route::get('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'warehouses']);
+        Route::get('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'warehouses'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::post('/warehouses', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouse'])->middleware(['role:company_owner,accountant,production_manager', 'quota:active_warehouses']);
         Route::put('/warehouses/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'updateWarehouse'])->middleware('role:company_owner,accountant,production_manager');
         Route::delete('/warehouses/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'destroyWarehouse'])->middleware('role:company_owner,accountant,production_manager');
-        Route::get('/warehouse-types', [\App\Http\Controllers\Api\InventoryController::class, 'warehouseTypes']);
+        Route::get('/warehouse-types', [\App\Http\Controllers\Api\InventoryController::class, 'warehouseTypes'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::post('/warehouse-types', [\App\Http\Controllers\Api\InventoryController::class, 'storeWarehouseType'])->middleware('role:company_owner,accountant,production_manager');
 
         // وحدات القياس (Units of Measure - Batch 2B)
@@ -216,14 +216,14 @@ Route::prefix('v1')->group(function () {
         Route::post('/inventory/units', [\App\Http\Controllers\Api\InventoryController::class, 'storeUnit'])->middleware('role:company_owner,accountant,production_manager');
 
         // كروت الأصناف المخزنية ودفتر الأستاذ (Inventory Items & Ledger - Batch 2B, 2C)
-        Route::get('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'items']);
+        Route::get('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'items'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::post('/inventory/items', [\App\Http\Controllers\Api\InventoryController::class, 'storeItem'])->middleware('role:company_owner,accountant,production_manager,warehouse_manager,inventory_custodian');
         Route::put('/inventory/items/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'updateItem'])->middleware('role:company_owner,accountant,production_manager,warehouse_manager,inventory_custodian');
         Route::delete('/inventory/items/{id}', [\App\Http\Controllers\Api\InventoryController::class, 'destroyItem'])->middleware('role:company_owner,accountant,production_manager,warehouse_manager');
-        Route::get('/inventory/items/{id}/label', [\App\Http\Controllers\Api\InventoryController::class, 'itemLabel']);
-        Route::get('/inventory/items/{id}/stock-card', [\App\Http\Controllers\Api\InventoryController::class, 'stockCard']);
+        Route::get('/inventory/items/{id}/label', [\App\Http\Controllers\Api\InventoryController::class, 'itemLabel'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
+        Route::get('/inventory/items/{id}/stock-card', [\App\Http\Controllers\Api\InventoryController::class, 'stockCard'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::post('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'recordTransaction'])->middleware('role:accountant,production_manager,inventory_custodian,worker');
-        Route::get('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'transactions']);
+        Route::get('/inventory/transactions', [\App\Http\Controllers\Api\InventoryController::class, 'transactions'])->middleware('role:company_owner,production_manager,inventory_custodian,warehouse_manager,accountant,quality_controller,sales_rep');
         Route::post('/inventory/convert-fabric', [\App\Http\Controllers\Api\InventoryController::class, 'convertFabric'])->middleware('role:accountant,production_manager,inventory_custodian');
         Route::get('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'customerMaterials']);
         Route::post('/inventory/customer-materials', [\App\Http\Controllers\Api\InventoryController::class, 'receiveCustomerMaterial'])->middleware('role:accountant,production_manager,inventory_custodian');

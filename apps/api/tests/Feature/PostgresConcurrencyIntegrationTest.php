@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\GoodsReceiptNote;
+use App\Models\GoodsReceiptNoteItem;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\ProcessedWebhookEvent;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
 use App\Models\PurchaseOrderItem;
 use App\Models\SubscriptionPaymentOrder;
 use App\Models\Supplier;
@@ -107,6 +109,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         ]);
 
         app()->instance('current_tenant_id', $this->tenant->id);
+        app(AccountingService::class)->initializeDefaultChartOfAccounts($this->tenant->id);
     }
 
     protected function tearDown(): void
@@ -470,12 +473,46 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             'status' => 'approved',
         ]);
 
+        $poItem = PurchaseOrderItem::create([
+            'tenant_id' => $this->tenant->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $this->item->id,
+            'ordered_quantity' => 100.0,
+            'unit_price' => 100.0,
+            'total_price' => 10000.0,
+            'received_quantity' => 100.0,
+            'remaining_quantity' => 0.0,
+        ]);
+
+        $grn = GoodsReceiptNote::create([
+            'tenant_id' => $this->tenant->id,
+            'grn_number' => 'GRN-INV-CONC-' . uniqid(),
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouse->id,
+            'receipt_date' => date('Y-m-d'),
+            'status' => 'posted',
+            'inspection_status' => 'passed',
+        ]);
+
+        GoodsReceiptNoteItem::create([
+            'tenant_id' => $this->tenant->id,
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'inventory_item_id' => $this->item->id,
+            'delivered_quantity' => 100.0,
+            'accepted_quantity' => 100.0,
+            'rejected_quantity' => 0.0,
+            'unit_cost' => 100.0,
+        ]);
+
         $invKey = 'INV-CONC-KEY-' . uniqid();
         $invoiceNum = 'INV-CONC-NUM-' . uniqid();
 
         $invPayload1 = [
             'tenant_id' => $this->tenant->id,
             'purchase_order_id' => $po->id,
+            'goods_receipt_note_id' => $grn->id,
             'invoice_number' => $invoiceNum,
             'subtotal' => 10000.0,
             'tax_amount' => 1400.0,

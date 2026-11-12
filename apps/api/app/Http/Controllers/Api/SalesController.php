@@ -267,7 +267,7 @@ class SalesController extends Controller
             && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
-            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 404);
         }
         if ($enforceBranchScope) {
             if (!$branchId && count($assignedBranchIds) === 1) {
@@ -354,7 +354,7 @@ class SalesController extends Controller
         if (!empty($validated['warehouse_id'])) {
             $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$deliveryWarehouse) {
-                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
             }
             if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إصدار إذن تسليم من مخزن تابع لفرع غير معيّن لحسابك.'], 403);
@@ -427,7 +427,7 @@ class SalesController extends Controller
             && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
         $returnWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
         if (!$returnWarehouse) {
-            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
         }
         if ($enforceBranchScope && !in_array($returnWarehouse->branch_id, $assignedBranchIds, true)) {
             return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك تسجيل مرتجع في مخزن تابع لفرع غير معيّن لحسابك.'], 403);
@@ -588,7 +588,7 @@ class SalesController extends Controller
         if (!empty($validated['warehouse_id'])) {
             $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$deliveryWarehouse) {
-                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
             }
             if ($enforceBranchScope && !in_array($deliveryWarehouse->branch_id, $assignedBranchIds, true)) {
                 return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك صرف أمر بيع من مخزن تابع لفرع غير معيّن لحسابك.'], 403);

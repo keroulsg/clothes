@@ -277,30 +277,37 @@ class AccountingService
             $account = $accountQuery();
 
             if (!$account) {
-                // Repair a partially initialized standard chart without overwriting tenant-specific mappings.
-                $existingMappings = TenantAccountMapping::withoutGlobalScopes()
+                // Only auto-complete a genuinely partial legacy chart. A missing account in an
+                // otherwise initialized chart is a configuration/integrity failure and must fail closed.
+                $chartAccountCount = ChartOfAccount::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
-                    ->get(['mapping_key', 'account_id']);
+                    ->count();
 
-                $this->initializeDefaultChartOfAccounts($tenantId);
-
-                foreach ($existingMappings as $existingMapping) {
-                    $existingAccount = ChartOfAccount::withoutGlobalScopes()
+                if ($chartAccountCount <= 5) {
+                    $existingMappings = TenantAccountMapping::withoutGlobalScopes()
                         ->where('tenant_id', $tenantId)
-                        ->whereKey($existingMapping->account_id)
-                        ->where('is_active', true)
-                        ->where('is_postable', true)
-                        ->first();
+                        ->get(['mapping_key', 'account_id']);
 
-                    if ($existingAccount) {
-                        TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
-                            ['tenant_id' => $tenantId, 'mapping_key' => $existingMapping->mapping_key],
-                            ['account_id' => $existingAccount->id]
-                        );
+                    $this->initializeDefaultChartOfAccounts($tenantId);
+
+                    foreach ($existingMappings as $existingMapping) {
+                        $existingAccount = ChartOfAccount::withoutGlobalScopes()
+                            ->where('tenant_id', $tenantId)
+                            ->whereKey($existingMapping->account_id)
+                            ->where('is_active', true)
+                            ->where('is_postable', true)
+                            ->first();
+
+                        if ($existingAccount) {
+                            TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
+                                ['tenant_id' => $tenantId, 'mapping_key' => $existingMapping->mapping_key],
+                                ['account_id' => $existingAccount->id]
+                            );
+                        }
                     }
-                }
 
-                $account = $accountQuery();
+                    $account = $accountQuery();
+                }
             }
 
             if ($account) {

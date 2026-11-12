@@ -1683,15 +1683,22 @@ class AccountingService
             ->unique()
             ->values();
 
-        $approvedWipCost = (float) ProductionCostSheet::withoutGlobalScopes()
+        $postedCostSheets = ProductionCostSheet::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('status', 'approved')
             ->whereIn('id', $postedCostSheetIds)
-            ->sum('total_cost');
+            ->get(['id', 'production_order_id', 'total_cost']);
+        $approvedWipCost = (float) $postedCostSheets->sum('total_cost');
+        $postedProductionOrderIds = $postedCostSheets->pluck('production_order_id')->unique()->values();
+        $postedReceiptInspectionIds = DB::table('quality_inspections')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('production_order_id', $postedProductionOrderIds)
+            ->pluck('id');
         $capitalizedFinishedGoods = (float) JournalEntry::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('reference_type', 'production_receipt')
             ->where('status', 'posted')
+            ->whereIn('reference_key', $postedReceiptInspectionIds)
             ->sum('total_debit');
         $wipSubledgerValuation = round($approvedWipCost - $capitalizedFinishedGoods, 2);
         $wipVariance = round($glWip - $wipSubledgerValuation, 2);

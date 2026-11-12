@@ -57,6 +57,7 @@ class User extends Authenticatable
                     ['key' => 'cutting.create', 'name_ar' => 'إنشاء أوامر وفرش جديد', 'name_en' => 'Create Cutting Lays'],
                     ['key' => 'cutting.issue', 'name_ar' => 'إذن صرف أقمشة ومستلزمات للقص', 'name_en' => 'Issue Fabric to Cutting'],
                     ['key' => 'production.manage', 'name_ar' => 'إدارة خطوط الإنتاج والتشغيل', 'name_en' => 'Manage Production Runs'],
+                    ['key' => 'production.work', 'name_ar' => 'تسجيل تنفيذ التشغيل والإنتاج', 'name_en' => 'Record Production Work'],
                 ],
             ],
             [
@@ -199,7 +200,7 @@ class User extends Authenticatable
                 return ['*'];
             case 'production_manager':
             case 'production_engineer':
-                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage'];
+                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'subcontracting.view', 'subcontracting.manage', 'production.work'];
             case 'inventory_custodian':
             case 'warehouse':
             case 'storekeeper':

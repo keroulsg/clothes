@@ -533,6 +533,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
             'direct_materials_cost' => 1000.0,
             'direct_labor_cost' => 500.0,
             'subcontracted_services_cost' => 0.0,
+            'overhead_allocation_method' => 'materials_and_labor_pct',
         ]);
 
         $this->assertEquals(0.18, (float)$costSheet->applied_overhead_rate);

@@ -1416,6 +1416,10 @@ class AuthAndRoleAuthorizationTest extends TestCase
         ]);
 
         $this->productionManagerUser->branches()->sync([$branchA->id]);
+        $this->productionManagerUser->forceFill([
+            'permissions_mode' => 'custom',
+            'permissions' => ['branches.view', 'inventory.view', 'production.manage', 'procurement.view'],
+        ])->save();
         $this->warehouse->update(['branch_id' => $branchB->id]);
 
         $warehouseA = Warehouse::withoutGlobalScopes()->create([
@@ -1456,6 +1460,24 @@ class AuthAndRoleAuthorizationTest extends TestCase
             'average_cost' => 1,
         ]);
 
+        $supplier = Supplier::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'مورد الفروع',
+            'code' => 'SUP-BR-01',
+        ]);
+        foreach ([[$warehouseA, 'PO-BR-A'], [$warehouseB, 'PO-BR-B']] as [$warehouse, $number]) {
+            PurchaseOrder::withoutGlobalScopes()->create([
+                'tenant_id' => $this->tenant->id,
+                'supplier_id' => $supplier->id,
+                'warehouse_id' => $warehouse->id,
+                'po_number' => $number,
+                'order_date' => now()->toDateString(),
+                'status' => 'draft',
+                'subtotal' => 100,
+                'total_amount' => 100,
+            ]);
+        }
+
         Sanctum::actingAs($this->productionManagerUser);
 
         $this->getJson('/api/v1/branches')
@@ -1471,6 +1493,8 @@ class AuthAndRoleAuthorizationTest extends TestCase
         $this->getJson('/api/v1/inventory/items')
             ->assertOk()
             ->assertJsonCount(1, 'data');
+
+        $this->assertSame(1, PurchaseOrder::where('tenant_id', $this->tenant->id)->count());
 
         $this->postJson('/api/v1/branches', [
             'name' => 'فرع ممنوع',

@@ -203,7 +203,7 @@ class Batch4SalesAndReceivablesTest extends TestCase
     public function test_sales_order_listing_and_creation_are_restricted_to_assigned_branches(): void
     {
         app()->instance('current_tenant_id', $this->tenantA->id);
-        $order = app(\\App\\Services\\SalesService::class)->createSalesOrder([
+        $order = app(\App\Services\SalesService::class)->createSalesOrder([
             'customer_name' => 'عميل اختبار الفرع',
             'warehouse_id' => $this->warehouseA->id,
             'items' => [[

@@ -2488,11 +2488,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  onClick={() => setIsNewLoanModalOpen(true)}
-                  className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs"
+                  disabled
+                  title={isAr ? 'غير متاح حتى ربط القروض بقاعدة البيانات' : 'Unavailable until backend loan persistence is implemented'}
+                  className="bg-slate-400 text-white font-bold text-xs cursor-not-allowed"
                   icon={<CreditCard className="w-3.5 h-3.5" />}
                 >
-                  {isAr ? '+ تسجيل قرض بنكي جديد' : '+ New Loan'}
+                  {isAr ? 'تسجيل القروض غير متاح حالياً' : 'Loan registration unavailable'}
                 </Button>
               </div>
             </div>
@@ -3045,11 +3046,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
-                      onClick={() => setIsNewLoanModalOpen(true)}
-                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
+                      disabled
+                      title={isAr ? 'غير متاح حتى ربط القروض بقاعدة البيانات' : 'Unavailable until backend loan persistence is implemented'}
+                      className="bg-slate-400 text-white font-bold text-xs cursor-not-allowed"
                       icon={<Plus className="w-3.5 h-3.5" />}
                     >
-                      {isAr ? '+ تسجيل قرض أو تسهيل جديد' : '+ New Bank Loan'}
+                      {isAr ? 'القروض غير متاحة حالياً' : 'Loans unavailable'}
                     </Button>
                   </div>
                 </div>

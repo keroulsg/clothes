@@ -235,6 +235,19 @@ class User extends Authenticatable
         return array_values(array_unique($keys));
     }
 
+    public function hasExplicitPermissionConfiguration(): bool
+    {
+        if ($this->permissions_mode === 'custom') {
+            return true;
+        }
+
+        $customRoles = $this->tenant?->settings['custom_role_permissions'] ?? [];
+
+        return is_array($customRoles)
+            && array_key_exists($this->role, $customRoles)
+            && is_array($customRoles[$this->role]);
+    }
+
     /**
      * فحص امتلاك صلاحية محددة
      */

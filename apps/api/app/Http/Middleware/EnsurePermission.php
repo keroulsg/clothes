@@ -24,6 +24,14 @@ class EnsurePermission
             ], 401);
         }
 
+        $routeUri = $request->route()?->uri() ?? $request->path();
+        $isPlatformSubscriptionAdminRoute = str_starts_with(ltrim($routeUri, '/'), 'api/v1/admin/subscriptions')
+            || str_starts_with(ltrim($routeUri, '/'), 'admin/subscriptions');
+
+        if ($user->role === 'platform_admin' && $isPlatformSubscriptionAdminRoute) {
+            return $next($request);
+        }
+
         if ($user->role === 'platform_admin') {
             return response()->json([
                 'error' => 'UnauthorizedRole',

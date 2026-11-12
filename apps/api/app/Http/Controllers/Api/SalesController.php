@@ -264,7 +264,7 @@ class SalesController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         $branchId = $validated['branch_id'] ?? null;
         if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
             return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 404);
@@ -350,7 +350,7 @@ class SalesController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         if (!empty($validated['warehouse_id'])) {
             $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$deliveryWarehouse) {
@@ -434,7 +434,7 @@ class SalesController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         $returnWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
         if (!$returnWarehouse) {
             return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 404);
@@ -619,7 +619,7 @@ class SalesController extends Controller
         $user = $request->user();
         $assignedBranchIds = $user?->assignedBranchIds() ?? [];
         $enforceBranchScope = $user && $user->role !== 'company_owner'
-            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+            ;
         if (!empty($validated['warehouse_id'])) {
             $deliveryWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
             if (!$deliveryWarehouse) {

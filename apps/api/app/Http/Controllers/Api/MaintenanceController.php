@@ -41,6 +41,25 @@ class MaintenanceController extends Controller
             'branch_id' => 'nullable|uuid',
         ]);
 
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        $branchId = $validated['branch_id'] ?? null;
+        if ($branchId !== null && !\App\Models\Branch::where('tenant_id', $tenantId)->whereKey($branchId)->exists()) {
+            return response()->json(['error' => 'BranchNotFound', 'message' => 'الفرع المحدد غير تابع لشركتك.'], 422);
+        }
+        if ($enforceBranchScope) {
+            if (!$branchId && count($assignedBranchIds) === 1) {
+                $branchId = $assignedBranchIds[0];
+            }
+            if (!$branchId || !in_array($branchId, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'يجب اختيار فرع معيّن لحسابك لتسجيل الماكينة.'], 403);
+            }
+        }
+        $validated['branch_id'] = $branchId;
+
         $machine = $this->maintenanceService->registerMachine($validated);
 
         return response()->json([
@@ -152,6 +171,29 @@ class MaintenanceController extends Controller
             'reorder_level' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
         ]);
+
+        $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            && ($user->hasExplicitPermissionConfiguration() || !empty($assignedBranchIds));
+        if (!empty($validated['warehouse_id'])) {
+            $warehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+            if (!$warehouse) {
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'المخزن المحدد غير تابع لشركتك أو غير متاح.'], 422);
+            }
+            if ($enforceBranchScope && !in_array($warehouse->branch_id, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك إضافة قطع غيار إلى مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+            }
+        } elseif ($enforceBranchScope) {
+            $warehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)
+                ->whereIn('branch_id', $assignedBranchIds)
+                ->first();
+            if (!$warehouse) {
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'لا يوجد مخزن متاح ضمن الفروع المعيّنة لحسابك.'], 422);
+            }
+            $validated['warehouse_id'] = $warehouse->id;
+        }
 
         $item = $this->maintenanceService->addSparePartToStock($validated);
 

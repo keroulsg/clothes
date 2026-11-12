@@ -114,7 +114,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenant/profile', [TenantController::class, 'current']);
         Route::put('/tenant/profile', [TenantController::class, 'updateProfile'])->middleware('role:company_owner');
         Route::get('/tenant/permissions-catalog', [TenantController::class, 'getPermissionsCatalog']);
-        Route::get('/tenant/roles', [TenantController::class, 'getRolesWithPermissions']);
+        Route::get('/tenant/roles', [TenantController::class, 'getRolesWithPermissions'])->middleware('role:company_owner');
         Route::put('/tenant/roles/{roleKey}', [TenantController::class, 'updateRolePermissions'])->middleware('role:company_owner');
         Route::get('/tenant/users', [TenantController::class, 'getUsers'])->middleware('role:company_owner');
         Route::post('/tenant/users', [TenantController::class, 'createUser'])->middleware(['role:company_owner', 'quota:active_users']);
@@ -133,15 +133,15 @@ Route::prefix('v1')->group(function () {
         Route::put('/tenant/settings/tax', [TenantController::class, 'updateTaxSettings'])->middleware('role:company_owner,accountant');
 
         // إدارة النسخ الاحتياطي وأمان البيانات (Database Backup & Disaster Recovery)
-        Route::get('/tenant/backup/status', [TenantController::class, 'backupStatus']);
-        Route::get('/tenant/backup/download', [TenantController::class, 'downloadBackup']);
+        Route::get('/tenant/backup/status', [TenantController::class, 'backupStatus'])->middleware('role:company_owner');
+        Route::get('/tenant/backup/download', [TenantController::class, 'downloadBackup'])->middleware('role:company_owner');
 
         // الفروع ومواقع العمل (Branches - Batch 2A)
         Route::get('/branches', [BranchController::class, 'index']);
-        Route::post('/branches', [BranchController::class, 'store'])->middleware('quota:active_branches');
+        Route::post('/branches', [BranchController::class, 'store'])->middleware(['role:company_owner', 'quota:active_branches']);
         Route::get('/branches/{id}', [BranchController::class, 'show']);
-        Route::put('/branches/{id}', [BranchController::class, 'update']);
-        Route::delete('/branches/{id}', [BranchController::class, 'destroy']);
+        Route::put('/branches/{id}', [BranchController::class, 'update'])->middleware('role:company_owner');
+        Route::delete('/branches/{id}', [BranchController::class, 'destroy'])->middleware('role:company_owner');
 
         // تصنيفات الملابس المستقلة لكل مصنع (Clothing Categories - Batch 1)
         Route::get('/categories', [\App\Http\Controllers\Api\ClothingCategoryController::class, 'index']);

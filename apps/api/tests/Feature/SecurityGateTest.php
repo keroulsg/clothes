@@ -365,9 +365,22 @@ class SecurityGateTest extends TestCase
             'total_amount' => 1140.0,
         ]);
 
+        $poItem = PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $this->itemA->id,
+            'ordered_quantity' => 10.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 10.0,
+            'unit_price' => 100.0,
+            'total_price' => 1000.0,
+        ]);
+        $grn = $this->createPostedGrnForInvoice($po, $poItem, 10.0, 100.0);
+
         $invoicePayload = [
             'invoice_number' => 'INV-2026-X100',
             'purchase_order_id' => $po->id,
+            'goods_receipt_note_id' => $grn->id,
             'subtotal' => 1000.0,
             'tax_amount' => 140.0,
             'idempotency_key' => 'IDEMP-INV-X100',
@@ -774,12 +787,25 @@ class SecurityGateTest extends TestCase
             'total_amount' => 2280.0,
         ]);
 
+        $poItem = PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $this->itemA->id,
+            'ordered_quantity' => 20.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 20.0,
+            'unit_price' => 100.0,
+            'total_price' => 2000.0,
+        ]);
+        $grn = $this->createPostedGrnForInvoice($po, $poItem, 20.0, 100.0);
+
         $procurementService = app(\App\Services\ProcurementService::class);
         app()->instance('current_tenant_id', $this->tenantA->id);
 
         $invoiceData = [
             'invoice_number' => 'INV-UNIQUE-SERIES-999',
             'purchase_order_id' => $po->id,
+            'goods_receipt_note_id' => $grn->id,
             'subtotal' => 2000.0,
             'tax_amount' => 280.0,
         ];
@@ -1289,11 +1315,35 @@ class SecurityGateTest extends TestCase
             'status' => 'approved',
         ]);
 
+        $poItem1 = PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'purchase_order_id' => $po1->id,
+            'inventory_item_id' => $this->itemA->id,
+            'ordered_quantity' => 50.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 50.0,
+            'unit_price' => 100.0,
+            'total_price' => 5000.0,
+        ]);
+        $poItem2 = PurchaseOrderItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'purchase_order_id' => $po2->id,
+            'inventory_item_id' => $this->itemA->id,
+            'ordered_quantity' => 80.0,
+            'received_quantity' => 0.0,
+            'remaining_quantity' => 80.0,
+            'unit_price' => 100.0,
+            'total_price' => 8000.0,
+        ]);
+        $grn1 = $this->createPostedGrnForInvoice($po1, $poItem1, 50.0, 100.0);
+        $grn2 = $this->createPostedGrnForInvoice($po2, $poItem2, 80.0, 100.0);
+
         $invoiceNumber = 'INV-SERIES-CONFLICT-' . uniqid();
 
         // 1. تسجيل الفاتورة الأولى بنجاح
         $res1 = $this->actingAs($this->userA)->postJson('/api/v1/supplier-invoices', [
             'purchase_order_id' => $po1->id,
+            'goods_receipt_note_id' => $grn1->id,
             'invoice_number' => $invoiceNumber,
             'invoice_date' => date('Y-m-d'),
             'subtotal' => 5000.0,
@@ -1304,6 +1354,7 @@ class SecurityGateTest extends TestCase
         // 2. إعادة إرسال نفس رقم الفاتورة لنفس المورد لكن بأمر شراء مختلف (PO2) -> يجب الرفض برمز 409
         $resConflictPo = $this->actingAs($this->userA)->postJson('/api/v1/supplier-invoices', [
             'purchase_order_id' => $po2->id,
+            'goods_receipt_note_id' => $grn2->id,
             'invoice_number' => $invoiceNumber,
             'invoice_date' => date('Y-m-d'),
             'subtotal' => 5000.0,
@@ -1315,6 +1366,7 @@ class SecurityGateTest extends TestCase
         // 3. إعادة إرسال نفس رقم الفاتورة لنفس أمر الشراء لكن بمبلغ مختلف -> يجب الرفض برمز 409
         $resConflictAmt = $this->actingAs($this->userA)->postJson('/api/v1/supplier-invoices', [
             'purchase_order_id' => $po1->id,
+            'goods_receipt_note_id' => $grn1->id,
             'invoice_number' => $invoiceNumber,
             'invoice_date' => date('Y-m-d'),
             'subtotal' => 7500.0, // مبلغ متضارب
@@ -2887,5 +2939,38 @@ class SecurityGateTest extends TestCase
         $resFuture->assertStatus(401)
             ->assertJsonPath('error', 'FutureTimestampToleranceExceeded');
     }
+
+    private function createPostedGrnForInvoice(PurchaseOrder $po, PurchaseOrderItem $poItem, float $quantity, float $unitCost): GoodsReceiptNote
+    {
+        $poItem->received_quantity = $quantity;
+        $poItem->remaining_quantity = max(0, (float) $poItem->ordered_quantity - $quantity);
+        $poItem->save();
+
+        $grn = GoodsReceiptNote::withoutGlobalScopes()->create([
+            'tenant_id' => $po->tenant_id,
+            'grn_number' => 'GRN-INV-' . strtoupper(bin2hex(random_bytes(4))),
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $po->supplier_id,
+            'warehouse_id' => $po->warehouse_id,
+            'receipt_date' => date('Y-m-d'),
+            'status' => 'posted',
+            'inspection_status' => 'passed',
+        ]);
+
+        GoodsReceiptNoteItem::withoutGlobalScopes()->create([
+            'tenant_id' => $po->tenant_id,
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'inventory_item_id' => $poItem->inventory_item_id,
+            'delivered_quantity' => $quantity,
+            'accepted_quantity' => $quantity,
+            'rejected_quantity' => 0,
+            'unit_cost' => $unitCost,
+        ]);
+
+        return $grn;
+    }
+
+
 }
 

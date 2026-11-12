@@ -44,11 +44,14 @@ class EnsurePermission
         }
 
         $requiredPermission = (new EnsureRole())->permissionForRequest($request);
-        if (
-            $requiredPermission !== null
-            && $user->hasExplicitPermissionConfiguration()
-            && !$user->hasPermission($requiredPermission)
-        ) {
+        if ($requiredPermission === null) {
+            return response()->json([
+                'error' => 'PermissionNotConfigured',
+                'message' => 'تم حظر هذا المسار افتراضياً لعدم وجود صلاحية محددة له.',
+            ], 403);
+        }
+
+        if (!$user->hasPermission($requiredPermission)) {
             return response()->json([
                 'error' => 'InsufficientPermission',
                 'message' => 'ليس لديك الصلاحية التفصيلية المطلوبة للوصول إلى هذا المورد.',

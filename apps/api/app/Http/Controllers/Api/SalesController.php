@@ -638,10 +638,37 @@ class SalesController extends Controller
     /**
      * تحويل عرض سعر إلى أمر بيع رسمي
      */
-    public function convertQuotation(string $id): JsonResponse
+    public function convertQuotation(Request $request, string $id): JsonResponse
     {
+        $validated = $request->validate([
+            'warehouse_id' => 'nullable|uuid',
+        ]);
+        $warehouseId = $validated['warehouse_id'] ?? null;
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            if (empty($branchIds)) {
+                return response()->json(['error' => 'BranchAccessDenied'], 403);
+            }
+            if (!$warehouseId && count($branchIds) === 1) {
+                $warehouseId = \App\Models\Warehouse::where('tenant_id', app('current_tenant_id'))
+                    ->where('branch_id', $branchIds[0])
+                    ->where('type', 'finished_goods')
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->value('id');
+            }
+            $warehouse = $warehouseId
+                ? \App\Models\Warehouse::where('tenant_id', app('current_tenant_id'))->find($warehouseId)
+                : null;
+            if (!$warehouse || !in_array($warehouse->branch_id, $branchIds, true)) {
+                return response()->json(['error' => 'WarehouseRequired', 'message' => 'اختر مخزن منتجات تامة من أحد فروعك المعيّنة لتحويل عرض السعر.'], 422);
+            }
+            $warehouseId = $warehouse->id;
+        }
+
         try {
-            $order = $this->salesService->convertQuotationToOrder($id);
+            $order = $this->salesService->convertQuotationToOrder($id, $warehouseId);
 
             return response()->json([
                 'message' => 'تم تحويل عرض السعر إلى أمر بيع بنجاح',

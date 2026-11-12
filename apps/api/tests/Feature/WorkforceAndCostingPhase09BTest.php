@@ -455,7 +455,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
 
         // Attempt to regenerate or recalculate paid payroll must fail
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('مدفوع مسبقاً ولا يمكن تعديله');
+        $this->expectExceptionMessage('مقفل مالياً بحالة');
 
         $this->payrollService->generatePayroll(
             $this->tenantA->id,

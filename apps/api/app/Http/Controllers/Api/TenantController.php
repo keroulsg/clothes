@@ -734,6 +734,13 @@ class TenantController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        if ($validated['role'] !== 'company_owner' && empty($validated['branch_ids'])) {
+            return response()->json([
+                'error' => 'BranchAssignmentRequired',
+                'message' => 'يجب تعيين المستخدم إلى فرع واحد على الأقل قبل إنشاء الحساب.',
+            ], 422);
+        }
+
         if ($validated['role'] === 'platform_admin') {
             return response()->json([
                 'error' => 'ForbiddenRole',
@@ -794,6 +801,15 @@ class TenantController extends Controller
             'branch_ids.*' => ['uuid', Rule::exists('branches', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
             'is_active' => 'boolean',
         ]);
+
+        $targetRole = $validated['role'] ?? $user->role;
+        $targetBranchIds = $validated['branch_ids'] ?? $user->assignedBranchIds();
+        if ($targetRole !== 'company_owner' && empty($targetBranchIds)) {
+            return response()->json([
+                'error' => 'BranchAssignmentRequired',
+                'message' => 'يجب تعيين المستخدم إلى فرع واحد على الأقل قبل حفظ الحساب.',
+            ], 422);
+        }
 
         if (isset($validated['role']) && $validated['role'] === 'platform_admin') {
             return response()->json([

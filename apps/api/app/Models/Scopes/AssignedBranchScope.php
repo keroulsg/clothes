@@ -23,7 +23,7 @@ class AssignedBranchScope implements Scope
         // Branch scoping becomes mandatory whenever the owner explicitly configures
         // a user's permissions. Legacy inherit-mode accounts keep their current data
         // visibility until the owner reviews and assigns their branches.
-        if (!$user->hasExplicitPermissionConfiguration()) {
+        if (!$user->hasExplicitPermissionConfiguration() && !$user->branches()->exists()) {
             return;
         }
 

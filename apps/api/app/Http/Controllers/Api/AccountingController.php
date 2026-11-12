@@ -1015,6 +1015,7 @@ class AccountingController extends Controller
             'party_type' => 'required|string|in:customer,supplier,employee,other',
             'party_name' => 'required|string|max:255',
             'account_id' => 'required|uuid',
+            'contra_account_id' => 'required_if:party_type,other|nullable|uuid',
             'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|string|in:cash,bank_transfer,card,check',
             'voucher_date' => 'nullable|date',

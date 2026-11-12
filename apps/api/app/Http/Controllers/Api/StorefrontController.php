@@ -7,6 +7,8 @@ use App\Models\PaymentSubmission;
 use App\Models\StoreOrder;
 use App\Services\DomainResolutionService;
 use App\Services\StorefrontService;
+use App\Services\SalesService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -15,7 +17,8 @@ class StorefrontController extends Controller
 {
     public function __construct(
         protected StorefrontService $storefrontService,
-        protected DomainResolutionService $domainResolver
+        protected DomainResolutionService $domainResolver,
+        protected SalesService $salesService
     ) {}
 
     /**
@@ -266,40 +269,82 @@ class StorefrontController extends Controller
     public function updateStatus(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = StoreOrder::where('tenant_id', $tenantId)->findOrFail($id);
-
         $validated = $request->validate([
             'status' => 'required|string|in:new,confirmed,preparing,shipped,delivered,cancelled',
         ]);
-
         $nextStatus = $validated['status'];
 
-        // Integrity check: If order was already delivered, it cannot be cancelled
-        if ($order->status === 'delivered' && $nextStatus === 'cancelled') {
+        try {
+            return DB::transaction(function () use ($id, $tenantId, $nextStatus) {
+                $order = StoreOrder::where('tenant_id', $tenantId)
+                    ->lockForUpdate()
+                    ->findOrFail($id);
+
+                $currentStatus = (string) $order->status;
+                if ($currentStatus === $nextStatus) {
+                    return response()->json([
+                        'message' => 'حالة الطلب محدثة بالفعل.',
+                        'order' => $order->load(['items', 'paymentReviewer']),
+                    ]);
+                }
+
+                $statusRank = [
+                    'new' => 0,
+                    'confirmed' => 1,
+                    'preparing' => 2,
+                    'shipped' => 3,
+                    'delivered' => 4,
+                ];
+
+                if ($currentStatus === 'cancelled' || !array_key_exists($currentStatus, $statusRank)) {
+                    return response()->json([
+                        'error' => 'InvalidStatusTransition',
+                        'message' => 'لا يمكن تغيير حالة هذا الطلب بعد إلغائه أو بسبب حالة تشغيلية غير معروفة.',
+                    ], 422);
+                }
+
+                if ($nextStatus === 'cancelled') {
+                    if ($statusRank[$currentStatus] >= $statusRank['shipped']) {
+                        return response()->json([
+                            'error' => 'InvalidStatusTransition',
+                            'message' => 'لا يمكن إلغاء طلب تم شحنه أو تسليمه. يجب تسجيل مرتجع مبيعات وإشعار دائن.',
+                        ], 422);
+                    }
+
+                    $this->storefrontService->restoreOrderInventory($order);
+                } else {
+                    if ($statusRank[$nextStatus] < $statusRank[$currentStatus]) {
+                        return response()->json([
+                            'error' => 'InvalidStatusTransition',
+                            'message' => 'لا يمكن إرجاع حالة الطلب إلى مرحلة تشغيلية سابقة.',
+                        ], 422);
+                    }
+
+                    if ($statusRank[$nextStatus] >= $statusRank['shipped']
+                        && $statusRank[$currentStatus] < $statusRank['shipped']) {
+                        if (!$order->sales_order_id) {
+                            throw new InvalidArgumentException('طلب المتجر غير مرتبط بأمر بيع ERP؛ لا يمكن شحنه قبل إصلاح الربط.');
+                        }
+
+                        // Shipment is the stock-issue boundary: consume the reservation through the
+                        // canonical sales workflow, create the invoice, and write the immutable stock ledger.
+                        $this->salesService->fulfillOrder((string) $order->sales_order_id);
+                    }
+                }
+
+                $order->update(['status' => $nextStatus]);
+
+                return response()->json([
+                    'message' => 'تم تحديث حالة طلب الشراء بنجاح',
+                    'order' => $order->fresh(['items', 'paymentReviewer']),
+                ]);
+            });
+        } catch (InvalidArgumentException $e) {
             return response()->json([
-                'error' => 'InvalidStatusTransition',
-                'message' => 'لا يمكن إلغاء طلب تم تسليمه للعميل بالفعل.',
+                'error' => 'StorefrontOrderTransitionFailed',
+                'message' => $e->getMessage(),
             ], 422);
         }
-
-        // Integrity check: InstaPay order cannot be dispatched or delivered without verified payment
-        if ($order->payment_method === 'instapay' && in_array($nextStatus, ['shipped', 'delivered'], true) && $order->payment_status !== 'verified_paid') {
-            return response()->json([
-                'error' => 'UnverifiedPayment',
-                'message' => 'لا يمكن شحن أو تسليم طلب InstaPay قبل اعتماد وتأكيد التحويل البنكي من الإدارة.',
-            ], 422);
-        }
-
-        if ($nextStatus === 'cancelled' && $order->status !== 'cancelled') {
-            $this->storefrontService->restoreOrderInventory($order);
-        }
-
-        $order->update(['status' => $nextStatus]);
-
-        return response()->json([
-            'message' => 'تم تحديث حالة طلب الشراء بنجاح',
-            'order' => $order->load(['items', 'paymentReviewer']),
-        ]);
     }
 
     /**

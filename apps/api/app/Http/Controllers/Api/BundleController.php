@@ -18,8 +18,10 @@ class BundleController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = CuttingBundle::where('tenant_id', $tenantId)
-            ->with(['productionOrder.garmentModel', 'color', 'size', 'assignedEmployee', 'stageLogs.productionStage']);
+        $query = $this->scopeToAssignedBranches(
+            CuttingBundle::where('tenant_id', $tenantId),
+            $request
+        )->with(['productionOrder.garmentModel', 'color', 'size', 'assignedEmployee', 'stageLogs.productionStage']);
 
         if ($request->filled('search')) {
             $s = trim($request->query('search'));
@@ -70,7 +72,7 @@ class BundleController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)
             ->with(['productionOrder.garmentModel', 'color', 'size', 'assignedEmployee', 'stageLogs.productionStage', 'stageLogs.employee'])
             ->findOrFail($id);
 
@@ -83,7 +85,7 @@ class BundleController extends Controller
     public function assign(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)->findOrFail($id);
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)->findOrFail($id);
 
         $validated = $request->validate([
             'employee_id' => 'nullable|uuid',
@@ -111,7 +113,7 @@ class BundleController extends Controller
     public function history(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)
             ->with([
                 'productionOrder.garmentModel',
                 'color',
@@ -170,4 +172,27 @@ class BundleController extends Controller
             ], 422);
         }
     }
+    /**
+     * Bundles have no direct branch_id; scope them through their production order
+     * or the warehouse attached to their cutting order.
+     */
+    private function scopeToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        if (!$user->hasExplicitPermissionConfiguration() && empty($branchIds)) {
+            return $query;
+        }
+
+        return $query->where(function ($branchQuery) use ($branchIds) {
+            $branchQuery
+                ->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        });
+    }
+
 }

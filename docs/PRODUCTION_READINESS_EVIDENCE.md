@@ -3,35 +3,36 @@
 **Repository:** `keroulsg/clothes`  
 **Work branch:** `garmentos/pre-sunday-hardening`  
 **Pull request:** [#1 — Draft pre-Sunday production hardening](https://github.com/keroulsg/clothes/pull/1)  
-**Evidence commit:** `604206e44bbdceb63e0424f52968acd431ad72ff`  
-**Last evidence review:** 2026-11-13  
-**Policy:** This document records executed evidence only. Draft PR remains unmerged; no production deployment or production database operation is authorized. Paymob is excluded from this readiness scope.
+**Code evidence commit:** `a48ec0bfdae9b841f6a84b70f2de8f91cdd4c816`  
+**Evidence review:** 2026-11-13  
+**Policy:** This document records executed evidence only. The PR remains unmerged. No production deployment, production database access, reset, or destructive production operation has been performed or authorized. Paymob is excluded from this readiness scope.
 
 ## Verified evidence
 
 | Area | Executed evidence | Result | Boundary |
 |---|---|---|---|
-| Backend regression suite | GitHub Actions run [43334483596](https://github.com/keroulsg/clothes/actions/runs/43334483596) | 550 passed, 3,418 assertions, 0 failed | Full suite runs on SQLite in-memory |
-| PostgreSQL migrations | Same backend CI job | Complete migration run succeeded on PostgreSQL 16 | CI database is disposable |
-| PostgreSQL concurrency | `PostgresConcurrencyIntegrationTest` in the same run | Passed | Covers idempotent inventory transactions, GRN, supplier invoices and webhook concurrency; does not yet prove concurrent sales-order reservations |
-| Frontend | Same CI run | TypeScript and Vite production build succeeded | Build is not visual/browser QA |
-| MySQL 8.4 migrations | [MySQL compatibility workflow](https://github.com/keroulsg/clothes/actions/runs/43334490423) | Complete migration run and migration-status verification succeeded on MySQL 8.4.13 | Does not yet run the full backend suite on MySQL |
-| Backup/restore command tests | `Batch7ProductionDeploymentAndHealthTest` in backend suite | Backup artifact + manifest + SHA-256, verify, isolated restore, and active-DB safety guard tests passed | These are SQLite in-memory test-environment checks, not a real external database disaster-recovery drill |
-| Stock regression tests | `BusinessModulesPhases7to10Test`, `Batch4SalesAndReceivablesTest`, and related tests | Oversell rejection, reservation cancellation, partial delivery, reversal and inventory ledger checks passed | Concurrent sales-order reservation still needs a dedicated PostgreSQL test |
-| Authorization and tenancy | RBAC, tenant-isolation and branch-scope feature suites | Automated regression tests passed in the full backend suite | Does not replace targeted adversarial review of every mutation route |
-| Business journeys | `EndToEndBusinessJourneysTest` and module acceptance suites | Separate sales, procurement, CMT, storefront and payroll journeys passed | No single executed journey yet proves purchase → GRN → raw material issue → production completion → finished stock → sale → accounting reconciliation end-to-end |
+| Backend regression suite | [CI run 43340535426](https://github.com/keroulsg/clothes/actions/runs/43340535426) | 551 passed, 3,440 assertions, 0 failed | Main full suite uses SQLite in-memory; PostgreSQL-specific integration checks run separately in the same job |
+| PostgreSQL migrations | Same CI run | Complete migrations succeeded on PostgreSQL 16 | Disposable CI database |
+| PostgreSQL concurrency | `PostgresConcurrencyIntegrationTest` in the same run | 6 passed, 31 assertions | Includes two separate sales orders competing for the same 100-piece stock balance; exactly one 70-piece reservation succeeds and the other is rejected |
+| Integrated factory journey | `ProductionAndCuttingTest::test_full_production_cycle_from_order_to_cutting_bundles_and_qc` in the same run | Passed | Executes PO → approval → GRN → raw material stock → production order → cutting → costing/WIP → QC finished-goods receipt → sales reservation → fulfillment/invoice. It does not simulate a live factory shift or payment settlement |
+| Frontend build | Same CI run | TypeScript and Vite production build succeeded | Build success is not browser/visual QA |
+| MySQL 8.4 migrations and backend suite | [MySQL workflow run 43340535439](https://github.com/keroulsg/clothes/actions/runs/43340535439) | Migrations succeeded; 541 passed, 10 skipped, 3,391 assertions, 0 failed | The 10 skips are PostgreSQL-only concurrency tests and PHPUnit backup tests; their respective real-database checks run in dedicated CI steps |
+| MySQL backup/restore | Same MySQL workflow | Real `mysqldump` backup created (250.05 KB), SHA-256 verified, restored into a new isolated MySQL database; 54 migrations and tenant count verified | Requires `mysqldump` and `mysql` client binaries at runtime; restore account needs permission to create an isolated database |
+| PostgreSQL backup/restore | Same CI run 43340535426 | Real PostgreSQL custom-format backup created (511.76 KB), SHA-256 verified, restored into a new isolated PostgreSQL 16 database; 54 migrations and tenant count verified | Disposable CI database; does not prove a restore against the eventual production host |
+| Active-database restore protection | MySQL and PostgreSQL backup/restore CI steps | Restore into the active database was rejected even with `--force` | Verified in disposable CI environments |
+| Authorization and tenancy | RBAC, tenant-isolation and branch-scope feature suites in backend CI | Automated regression tests passed | Does not replace a full adversarial review of every mutation route and real user/branch assignment |
+| Stock rules | Backend suite plus PostgreSQL concurrency test | Oversell rejection, reservation cancellation, partial delivery, reversals, ledger checks, and competing sales reservations passed | Production operator acceptance still required |
 
-## Open gates — not yet proven
+## Remaining production gates
 
-1. **MySQL application behavior:** run the relevant backend regression suite against MySQL, not migrations only.
-2. **Strict Stock concurrency:** add and execute a genuine multi-process PostgreSQL test for two sales orders competing for the final available quantity, plus reservation cancellation/fulfillment race cases.
-3. **Integrated factory journey:** add and execute one connected workflow using application services/API operations from purchase order through GRN, production/cutting, finished goods receipt, sale, payment and accounting reconciliation. Avoid directly inserting pre-completed production or posted procurement records as substitutes for those operations.
-4. **Disaster recovery:** run a real backup and restore against a disposable PostgreSQL database, verify record counts and checksums, and document the exact restore output. The current backup/restore commands support SQLite and PostgreSQL; MySQL backup/restore support is not implemented.
-5. **Frontend QA:** run browser-based checks for critical flows, Arabic/English RTL/LTR, dark/light mode, responsive layouts and key button actions, with screenshots and console/network error capture.
-6. **Environment readiness:** verify the intended staging runtime configuration, storage, queue, cache, scheduler and logs without touching production.
+1. **Frontend browser QA:** verify Arabic/English RTL/LTR, dark/light mode, responsive layouts, critical navigation, forms and buttons in a real browser; retain screenshots and console/network evidence.
+2. **Staging acceptance:** run the integrated workflow against the intended staging runtime with realistic factory roles, branches, warehouses and operational data; reconcile inventory, WIP, finished goods, invoices and accounting reports with the factory owner.
+3. **Operational configuration:** verify the intended deployment's storage, queues, cache, scheduler, logs, monitoring and restore credentials without touching production.
+4. **Final security review:** review the complete mutation surface for tenant/branch scope, role/permission enforcement, and sensitive data exposure. Existing automated tests are evidence, not proof that every route is secure.
+5. **Production-host recovery drill:** repeat backup and restore on the actual intended hosting/database environment after its runtime client tools, privileges and storage are confirmed.
 
 ## Current decision
 
-**Not signed off as production-ready yet.** Automated CI is green for the recorded commit, including PostgreSQL migrations/concurrency, the 550-test SQLite suite, frontend build, and MySQL 8.4 migrations. The open gates above are real evidence gaps, not a claim that all are existing code defects.
+**Automated code and database gates are substantially stronger and green for the recorded code commit, but production sign-off is still withheld.** The remaining items are browser QA, staging/owner acceptance, deployment configuration and final security review; they are not being represented as completed code fixes.
 
-No merge to `main`, deployment, production database access, reset, or destructive operation has been performed or authorized.
+No merge to `main`, production deployment, production database access, reset, or destructive operation has been performed or authorized.

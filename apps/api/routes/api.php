@@ -290,6 +290,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/production-orders/{id}/approve', [\App\Http\Controllers\Api\ProductionOrderController::class, 'approve'])->middleware('role:production_manager');
         Route::post('/production-orders/{id}/complete', [\App\Http\Controllers\Api\ProductionOrderController::class, 'complete'])->middleware('role:company_owner,production_manager');
         Route::post('/production-orders/{id}/cancel', [\App\Http\Controllers\Api\ProductionOrderController::class, 'cancel']);
+        Route::post('/production-orders/{id}/issue-bom-materials', [\App\Http\Controllers\Api\ProductionOrderController::class, 'issueBomMaterials'])->middleware('role:production_manager,company_owner');
+        Route::post('/production-orders/{id}/receive-finished-goods', [\App\Http\Controllers\Api\ProductionOrderController::class, 'receiveFinishedGoods'])->middleware('role:production_manager,company_owner');
         Route::get('/production-orders/{id}/metrics', [\App\Http\Controllers\Api\ProductionOrderController::class, 'metrics']);
 
         Route::get('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'index']);

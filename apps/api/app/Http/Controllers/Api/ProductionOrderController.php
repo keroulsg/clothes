@@ -308,12 +308,8 @@ class ProductionOrderController extends Controller
             'cancellation_reason' => 'required|string|max:255',
         ]);
 
-        return DB::transaction(function () use ($order, $validated, $tenantId, $request) {
-            $prevStatus = $order->status;
-            $order->status = 'cancelled';
-            $order->cancelled_at = now();
-            $order->cancellation_reason = $validated['cancellation_reason'];
-            $order->save();
+        try {
+            $cancelledOrder = $this->productionService->cancelProductionOrder($order->id, $validated['cancellation_reason']);
 
             // توثيق سجل التدقيق
             AuditLog::create([
@@ -322,21 +318,26 @@ class ProductionOrderController extends Controller
                 'action' => 'production_order_cancelled',
                 'auditable_type' => ProductionOrder::class,
                 'auditable_id' => $order->id,
-                'old_values' => ['status' => $prevStatus],
+                'old_values' => ['status' => $order->status],
                 'new_values' => [
                     'status' => 'cancelled',
-                    'cancelled_at' => $order->cancelled_at,
-                    'cancellation_reason' => $order->cancellation_reason,
+                    'cancelled_at' => $cancelledOrder->cancelled_at,
+                    'cancellation_reason' => $cancelledOrder->cancellation_reason,
                 ],
                 'ip_address' => $request->ip(),
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم إلغاء أمر الإنتاج وتوثيق سبب الإلغاء في سجل التدقيق بنجاح.',
-                'data' => $order,
+                'message' => 'تم إلغاء أمر الإنتاج وفك حجز المستلزمات وعكس الصرف بنجاح.',
+                'data' => $cancelledOrder,
             ]);
-        });
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function show(Request $request, string $id): JsonResponse
@@ -480,6 +481,67 @@ class ProductionOrderController extends Controller
             ]);
         });
     }
+
+    public function issueBomMaterials(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
+
+        $validated = $request->validate([
+            'idempotency_key' => 'nullable|string|max:100',
+            'partial_ratio' => 'nullable|numeric|min:0.01|max:1',
+            'warehouse_id' => 'nullable|uuid',
+        ]);
+
+        try {
+            $result = $this->productionService->issueBomMaterials($order->id, $validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم صرف مستلزمات الـ BOM بنجاح وتحديث أرصدة المخزون.',
+                'data' => $result,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function receiveFinishedGoods(Request $request, string $id): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
+
+        $validated = $request->validate([
+            'warehouse_id' => 'nullable|uuid',
+            'items' => 'nullable|array',
+            'items.*' => 'integer|min:1',
+        ]);
+
+        try {
+            $result = $this->productionService->receiveFinishedGoodsFromProduction($order->id, $validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم استلام المنتجات التامة بالمخزن بنجاح وتغذية المخزون الجاهز للبيع.',
+                'data' => $result,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
     private function scopeProductionOrdersToAssignedBranches($query, ?Request $request = null)
     {
         $user = ($request ?? request())->user();

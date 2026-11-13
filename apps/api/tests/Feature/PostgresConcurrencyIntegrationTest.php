@@ -34,9 +34,10 @@ use Tests\TestCase;
  * It proves that under real concurrent requests:
  * 1. Only ONE stock mutation is committed and the concurrent duplicate replays cleanly.
  * 2. Conflicting payloads under concurrency return a deterministic 409 IdempotencyConflict.
- * 3. Concurrent GRN creations do not double-decrement PO quantities.
- * 4. Concurrent supplier invoices do not duplicate financial postings.
- * 5. Concurrent duplicate webhooks do not duplicate subscription activations.
+ * 3. Two different sales orders cannot reserve the same available stock twice.
+ * 4. Concurrent GRN creations do not double-decrement PO quantities.
+ * 5. Concurrent supplier invoices do not duplicate financial postings.
+ * 6. Concurrent duplicate webhooks do not duplicate subscription activations.
  */
 class PostgresConcurrencyIntegrationTest extends TestCase
 {
@@ -575,7 +576,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
     }
 
     /**
-     * 4. فحص التزامن الحقيقي: فواتير الموردين المتزامنة تمنع مضاعفة الالتزام المالي
+     * 5. فحص التزامن الحقيقي: فواتير الموردين المتزامنة تمنع مضاعفة الالتزام المالي
      */
     public function test_concurrent_supplier_invoices_prevent_duplicate_financial_postings(): void
     {
@@ -681,7 +682,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
     }
 
     /**
-     * 5. فحص التزامن الحقيقي: إشعارين Webhook متزامنين بنفس event_id -> تفعيل واحد فقط و 200 Replay
+     * 6. فحص التزامن الحقيقي: إشعارين Webhook متزامنين بنفس event_id -> تفعيل واحد فقط و 200 Replay
      */
     public function test_concurrent_payment_webhooks_prevent_duplicate_subscription_activation(): void
     {

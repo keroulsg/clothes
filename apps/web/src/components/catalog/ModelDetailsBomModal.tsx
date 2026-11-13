@@ -357,7 +357,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? {
                                 ...it,
                                 inventory_item_id: selectedItem?.id || '',
-                                unit_cost: Number(selectedItem?.average_cost ?? selectedItem?.unit_cost ?? it.unit_cost),
+                                unit_cost: Number(selectedItem?.average_cost ?? (selectedItem as any)?.unit_cost ?? it.unit_cost),
                               } : it)));
                             }}
                             className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"

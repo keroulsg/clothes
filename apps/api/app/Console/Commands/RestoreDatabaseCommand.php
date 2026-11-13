@@ -222,7 +222,7 @@ class RestoreDatabaseCommand extends Command
     private function restoreMysql(string $dumpPath, string $targetDb): void
     {
         if (!preg_match('/\\A[a-zA-Z0-9_]+\\z/', $targetDb)) {
-            throw new \\RuntimeException('Unsafe MySQL restore database name.');
+            throw new \RuntimeException('Unsafe MySQL restore database name.');
         }
 
         $config = config('database.connections.mysql', []);
@@ -232,7 +232,7 @@ class RestoreDatabaseCommand extends Command
         $password = $config['password'] ?? '';
 
         if ($username === '') {
-            throw new \\RuntimeException('MySQL restore requires a configured database username.');
+            throw new \RuntimeException('MySQL restore requires a configured database username.');
         }
 
         // MySQL restore requires CREATE DATABASE privilege. The target must be a new,
@@ -257,7 +257,7 @@ class RestoreDatabaseCommand extends Command
                 @unlink($stderrPath);
             }
             if ($createCode !== 0) {
-                throw new \\RuntimeException("Could not create isolated MySQL restore database [{$targetDb}]: {$createError}");
+                throw new \RuntimeException("Could not create isolated MySQL restore database [{$targetDb}]: {$createError}");
             }
 
             $importCmd = sprintf(
@@ -276,7 +276,7 @@ class RestoreDatabaseCommand extends Command
                 @unlink($stderrPath);
             }
             if ($importCode !== 0) {
-                throw new \\RuntimeException("MySQL backup import failed with exit code {$importCode}: {$importError}");
+                throw new \RuntimeException("MySQL backup import failed with exit code {$importCode}: {$importError}");
             }
         } finally {
             putenv('MYSQL_PWD');

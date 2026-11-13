@@ -3,20 +3,21 @@
 @custom-variant dark (.dark &);
 
 @theme {
-  --color-primary: #7F1625;
-  --color-primary-hover: #6a121e;
-  --color-primary-light: #941b2d;
+  /* Utilities resolve through semantic tokens so the palette changes with the active theme. */
+  --color-primary: var(--brand-primary);
+  --color-primary-hover: var(--brand-primary-hover);
+  --color-primary-light: var(--brand-primary-light);
   --color-primary-foreground: #ffffff;
-  --color-background: #F8FAFC;
-  --color-surface: #ffffff;
-  --color-card: #ffffff;
-  --color-card-foreground: #0F172A;
-  --color-foreground: #0F172A;
-  --color-muted: #F1F5F9;
-  --color-muted-foreground: #64748B;
-  --color-border: #E2E8F0;
-  --color-input: #E2E8F0;
-  --color-ring: #7F1625;
+  --color-background: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-card: var(--bg-card);
+  --color-card-foreground: var(--text-primary);
+  --color-foreground: var(--text-primary);
+  --color-muted: var(--bg-muted);
+  --color-muted-foreground: var(--text-muted);
+  --color-border: var(--border-subtle);
+  --color-input: var(--border-strong);
+  --color-ring: var(--brand-primary);
 
   --font-sans: 'Cairo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
@@ -78,38 +79,36 @@
   color-scheme: light;
 }
 
-/* ───── Dark Theme Tokens: Pure Obsidian #000000 & Royal Burgundy #7F1625 ───── */
+/* ───── Dark Theme Tokens: Graphite Slate + Royal Burgundy ───── */
 .dark, [data-theme="dark"], [data-coreui-theme="dark"] {
   color-scheme: dark;
   --brand-primary: #7F1625;
-  --brand-primary-hover: #961b2c;
-  --brand-primary-light: #b3263b;
-  --brand-gradient: linear-gradient(135deg, #7F1625 0%, #180508 100%);
-  --brand-subtle: rgba(127, 22, 37, 0.20);
-  --brand-border: rgba(127, 22, 37, 0.40);
+  --brand-primary-hover: #941B2D;
+  --brand-primary-light: #B3263B;
+  --brand-gradient: linear-gradient(135deg, #7F1625 0%, #A52A3A 100%);
+  --brand-subtle: rgba(127, 22, 37, 0.18);
+  --brand-border: rgba(179, 38, 59, 0.42);
 
-  /* Obsidian #000000 App Canvas & Header/Sidebar */
-  --bg-app: #000000;
-  --bg-sidebar: #050102;
-  --bg-header: #050102;
+  /* Layered graphite surfaces: no pure-black canvas or burgundy-tinted body surfaces. */
+  --bg-app: #0B0F14;
+  --bg-sidebar: #10151D;
+  --bg-header: #141A23;
+  --bg-surface: #171D27;
+  --bg-card: #171D27;
+  --bg-elevated: #1E2632;
+  --bg-muted: #222B38;
+  --bg-hover: #293444;
 
-  /* Restrained Dark Burgundy Card Surfaces on Obsidian */
-  --bg-surface: #0a0204;
-  --bg-card: #0a0204;
-  --bg-elevated: #120406;
-  --bg-muted: #160508;
-  --bg-hover: #1e070c;
+  /* Neutral slate borders keep cards and controls distinct without red noise. */
+  --border-subtle: #303B49;
+  --border-strong: #435064;
+  --border-color: #303B49;
 
-  /* Burgundy-Obsidian Borders */
-  --border-subtle: #2d080e;
-  --border-strong: #4a0d16;
-  --border-color: #380a11;
-
-  /* Typography - Crisp White & Light Gray (WCAG AAA compliant) */
-  --text-primary: #F8FAFC;
-  --text-secondary: #E2E8F0;
+  /* Readable text hierarchy. */
+  --text-primary: #F1F5F9;
+  --text-secondary: #CBD5E1;
   --text-muted: #94A3B8;
-  --text-inverse: #000000;
+  --text-inverse: #0B0F14;
 
   --color-success: #34D399;
   --color-warning: #FBBF24;
@@ -150,6 +149,7 @@
 
   body {
     font-family: var(--font-sans);
+    transition: background-color 180ms ease, color 180ms ease;
     margin: 0;
     padding: 0;
     background-color: var(--bg-app);
@@ -200,9 +200,9 @@
 ::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #94A3B8; border-radius: 9999px; }
-.dark ::-webkit-scrollbar-thumb { background: #452430; border-radius: 9999px; }
+.dark ::-webkit-scrollbar-thumb { background: #465365; border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: #64748B; }
-.dark ::-webkit-scrollbar-thumb:hover { background: #7F1625; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #A52A3A; }
 
 /* ───── Form Controls, Labels & Inputs ───── */
 input:not([type="checkbox"]):not([type="radio"]),
@@ -216,9 +216,9 @@ select, textarea {
 .dark input:not([type="checkbox"]):not([type="radio"]),
 .dark select,
 .dark textarea {
-  background-color: #1A1D24;
-  border-color: #333B4A;
-  color: #F8FAFC;
+  background-color: var(--bg-surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 
 option {
@@ -229,8 +229,8 @@ option {
 .dark option,
 [data-theme="dark"] option,
 [data-coreui-theme="dark"] option {
-  background-color: #1A1D24 !important;
-  color: #F8FAFC !important;
+  background-color: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
 }
 
 /* Ensure all form labels have high WCAG AAA contrast in both themes */
@@ -279,7 +279,7 @@ input:focus, select:focus, textarea:focus {
   background-size: 24px 24px;
 }
 .dark .industrial-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(203, 213, 225, 0.055) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -293,11 +293,11 @@ input:focus, select:focus, textarea:focus {
 }
 
 .dark .glass-panel {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(23, 29, 39, 0.92);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.32), inset 0 1px 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .gem-pod {
@@ -317,6 +317,10 @@ input:focus, select:focus, textarea:focus {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 100%);
   border-radius: inherit;
   pointer-events: none;
+}
+
+.dark .gem-pod::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0) 100%);
 }
 
 /* ───── Isolated Document Printing Engine (Universal Across ERP) ───── */

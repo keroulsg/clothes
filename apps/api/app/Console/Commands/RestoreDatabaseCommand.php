@@ -34,7 +34,7 @@ class RestoreDatabaseCommand extends Command
         } elseif (file_exists($target) && str_ends_with($target, '.manifest.json')) {
             $manifestPath = $target;
         } elseif (file_exists($target)) {
-            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
+            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sql|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
         } else {
             $manifestPath = "{$backupDir}/{$target}.manifest.json";
         }

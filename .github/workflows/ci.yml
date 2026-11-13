@@ -108,7 +108,7 @@ jobs:
         env:
           DB_CONNECTION: pgsql
         run: |
-          php artisan tinker --execute='App\\Models\\Tenant::create(["name" => "PostgreSQL Backup Verification Tenant", "code" => "BACKUP-VERIFY-PG", "subdomain" => "backup-verify-pg", "status" => "active"]);'
+          php artisan tinker --execute='app("db")->table("tenants")->insert(["id" => "00000000-0000-4000-8000-000000000001", "name" => "PostgreSQL Backup Verification Tenant", "code" => "BACKUP-VERIFY-PG", "subdomain" => "backup-verify-pg", "status" => "active", "created_at" => now(), "updated_at" => now()]);'
 
       - name: Create and verify a real PostgreSQL backup
         env:

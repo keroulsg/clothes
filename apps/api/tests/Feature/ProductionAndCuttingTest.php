@@ -292,6 +292,7 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals(110.0, (float) $this->fabricItemA->fresh()->current_balance);
         $this->assertEquals(120.0, (float) $this->fabricItemA->fresh()->average_cost);
         $this->assertSame('posted', $goodsReceipt->status);
+        $this->fabricItemA->refresh();
 
         // 1. إنشاء أمر الإنتاج
         $orderPayload = [

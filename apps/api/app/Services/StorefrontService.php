@@ -184,11 +184,19 @@ class StorefrontService
             ->with(['garmentModel', 'size', 'color', 'product'])
             ->get()
             ->filter(function ($variant) {
-                // استبعاد مسودات والمنتجات المؤرشفة من الظهور في المتجر العام
-                if ($variant->product) {
-                    return $variant->product->status === 'active';
+                // استبعاد مسودات والمنتجات المؤرشفة من الظهور في المتجر العام.
+                if ($variant->product && $variant->product->status !== 'active') {
+                    return false;
                 }
-                return true;
+
+                // لا نعرض منتجاً بسعر صفر عند غياب سعر القطاعي؛ سعر الجملة ليس بديلاً عاماً.
+                $retailPrice = (float) (
+                    $variant->product && (float) $variant->product->selling_price > 0
+                        ? $variant->product->selling_price
+                        : ($variant->retail_price ?? 0)
+                );
+
+                return $retailPrice > 0;
             })
             ->map(function ($variant) use ($tenantId, $firstWarehouseId) {
                 $availableStock = $firstWarehouseId

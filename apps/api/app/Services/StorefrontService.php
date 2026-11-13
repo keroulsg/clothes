@@ -14,12 +14,19 @@ use App\Models\StoreOrder;
 use App\Models\StoreOrderItem;
 use App\Models\TenantStoreSetting;
 use App\Models\Warehouse;
+use App\Services\WholesaleService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class StorefrontService
 {
+    public function __construct(
+        protected ?WholesaleService $wholesaleService = null
+    ) {
+        $this->wholesaleService = $this->wholesaleService ?: app(WholesaleService::class);
+    }
+
     public const THEME_FASHION_BOUTIQUE = 'fashion_boutique';
     public const THEME_MODERN_CATALOG = 'modern_catalog';
     public const THEME_KIDS_FAMILY = 'kids_family';
@@ -133,9 +140,9 @@ class StorefrontService
     ];
 
     /**
-     * جلب إعدادات وكتالوج المتجر العام للمصنع بما فيها ثيمات العرض وبوابات الدفع
+     * جلب إعدادات وكتالوج المتجر العام للمصنع بما فيها ثيمات العرض وبوابات الدفع مع حماية أسعار الجملة
      */
-    public function getStoreDetails(string $tenantId, bool $preview = false): array
+    public function getStoreDetails(string $tenantId, bool $preview = false, ?string $wholesaleToken = null): array
     {
         $settings = TenantStoreSetting::withoutGlobalScopes()->firstOrCreate(
             ['tenant_id' => $tenantId],
@@ -169,6 +176,10 @@ class StorefrontService
             }
         }
 
+        // عزل أسعار الجملة: يتم التحقق الصارم من توثيق حساب عميل الجملة واعتماده
+        $wholesaleCustomer = $this->wholesaleService->resolveCustomerFromToken($wholesaleToken, $tenantId);
+        $isApprovedWholesale = $wholesaleCustomer && $wholesaleCustomer->isApproved();
+
         // Storefront availability is sourced only from an active finished-goods warehouse.
         // Never expose raw-material or arbitrary warehouse stock as sellable finished products.
         $stockWarehouse = Warehouse::withoutGlobalScopes()
@@ -181,24 +192,28 @@ class StorefrontService
 
         $variants = ProductVariant::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->with(['garmentModel', 'size', 'color', 'product'])
+            ->with(['garmentModel', 'size', 'color', 'product', 'wholesaleTiers'])
             ->get()
-            ->filter(function ($variant) {
+            ->filter(function ($variant) use ($isApprovedWholesale) {
                 // استبعاد مسودات والمنتجات المؤرشفة من الظهور في المتجر العام.
                 if ($variant->product && $variant->product->status !== 'active') {
                     return false;
                 }
 
-                // لا نعرض منتجاً بسعر صفر عند غياب سعر القطاعي؛ سعر الجملة ليس بديلاً عاماً.
                 $retailPrice = (float) (
                     $variant->product && (float) $variant->product->selling_price > 0
                         ? $variant->product->selling_price
                         : ($variant->retail_price ?? 0)
                 );
 
+                if ($isApprovedWholesale) {
+                    $wholesalePrice = (float) $variant->wholesale_price;
+                    return $retailPrice > 0 || $wholesalePrice > 0;
+                }
+
                 return $retailPrice > 0;
             })
-            ->map(function ($variant) use ($tenantId, $firstWarehouseId) {
+            ->map(function ($variant) use ($tenantId, $firstWarehouseId, $isApprovedWholesale) {
                 $availableStock = $firstWarehouseId
                     ? InventoryItem::withoutGlobalScopes()
                         ->where('tenant_id', $tenantId)
@@ -210,14 +225,13 @@ class StorefrontService
                     : 0.0;
 
                 // سعر البيع المعتمد للمتجر الإلكتروني (Website Price)
-                // Public catalog is retail-only. Wholesale pricing must never leak to anonymous visitors.
-                $websitePrice = (float) (
+                $retailPrice = (float) (
                     $variant->product && (float) $variant->product->selling_price > 0
                         ? $variant->product->selling_price
                         : ($variant->retail_price ?? 0)
                 );
 
-                return [
+                $productPayload = [
                     'id' => $variant->id,
                     'sku' => $variant->sku,
                     'barcode' => $variant->barcode,
@@ -228,9 +242,24 @@ class StorefrontService
                     'gallery' => $variant->product?->gallery ?? [],
                     'size' => $variant->size?->name ?? '',
                     'color' => $variant->color?->name ?? '',
-                    'price' => $websitePrice,
+                    'price' => $retailPrice,
                     'in_stock' => $availableStock,
                 ];
+
+                // حماية أمنية صارمة: لا تخرج أسعار أو شرائح الجملة إلا لعميل جملة موثق ومعتمد
+                if ($isApprovedWholesale) {
+                    $productPayload['is_wholesale_eligible'] = true;
+                    $productPayload['wholesale_price'] = (float) $variant->wholesale_price;
+                    $productPayload['moq'] = (int) ($variant->moq ?: 1);
+                    $productPayload['wholesale_tiers'] = $variant->wholesaleTiers->map(fn ($tier) => [
+                        'id' => $tier->id,
+                        'min_quantity' => (int) $tier->min_quantity,
+                        'max_quantity' => $tier->max_quantity !== null ? (int) $tier->max_quantity : null,
+                        'unit_price' => (float) $tier->unit_price,
+                    ])->values();
+                }
+
+                return $productPayload;
             })
             ->values();
 
@@ -240,6 +269,12 @@ class StorefrontService
             'has_draft_changes' => !empty($settings->draft_theme_id) || !empty($settings->draft_theme_config),
             'available_themes' => self::AVAILABLE_THEMES,
             'products' => $variants,
+            'wholesale_user' => $isApprovedWholesale ? [
+                'id' => $wholesaleCustomer->id,
+                'company_name' => $wholesaleCustomer->company_name,
+                'contact_person' => $wholesaleCustomer->contact_person,
+                'is_approved' => true,
+            ] : null,
         ];
     }
 
@@ -516,6 +551,22 @@ class StorefrontService
                 throw new InvalidArgumentException('لا يوجد مخزن نشط مرتبط بهذا المتجر لاستلام الطلبات.');
             }
 
+            // التحقق من قناة الطلب وهوية عميل الجملة
+            $isWholesaleRequested = ($data['channel'] ?? '') === 'wholesale' || !empty($data['wholesale_token']);
+            $wholesaleCustomer = null;
+
+            if ($isWholesaleRequested) {
+                $token = $data['wholesale_token'] ?? null;
+                $wholesaleCustomer = $this->wholesaleService->resolveCustomerFromToken($token, $tenantId);
+
+                if (!$wholesaleCustomer || !$wholesaleCustomer->isApproved()) {
+                    $status = $wholesaleCustomer ? $wholesaleCustomer->status : 'unauthenticated';
+                    throw new InvalidArgumentException("طلب الجملة متاح فقط لحسابات عملاء الجملة المعتمدة لدى المصنع (الحالة الحالية: {$status}).");
+                }
+            }
+
+            $orderChannel = $wholesaleCustomer ? 'wholesale' : 'retail';
+
             foreach ($items as $item) {
                 $variantId = $item['variant_id'] ?? null;
                 $variant = $variants->get($variantId);
@@ -561,16 +612,9 @@ class StorefrontService
                     throw new InvalidArgumentException("المنتج {$variant->sku} غير متاح للبيع في المتجر حالياً (مسودة أو مؤرشف).");
                 }
 
-                // Public checkout is retail-only until an authenticated, approved wholesale account is resolved.
-                // Never fall back to wholesale_price or a client-supplied price for an anonymous retail order.
-                $authoritativeUnitPrice = (float) (
-                    $variant->product && (float) $variant->product->selling_price > 0
-                        ? $variant->product->selling_price
-                        : ($variant->retail_price ?? 0)
-                );
-                if ($authoritativeUnitPrice <= 0) {
-                    throw new InvalidArgumentException("سعر المنتج {$variant->sku} غير مهيأ بالمتجر.");
-                }
+                // احتساب السعر المعتمد حتمياً من الخادم مع مراعاة الجملة والقطاعي والـ MOQ
+                $priceResolution = $this->wholesaleService->resolveAuthoritativePrice($variant, $qty, $wholesaleCustomer);
+                $authoritativeUnitPrice = $priceResolution['unit_price'];
 
                 $authoritativeName = $variant->product?->name ?? ($variant->garmentModel?->name ?? 'منتج ملابس');
                 $authoritativeSku = $variant->sku;
@@ -625,22 +669,26 @@ class StorefrontService
             }
 
             // 2. Resolve / Create Customer in ERP Master
-            $customerPhone = $data['customer_phone'] ?? '01000000000';
-            $customer = Customer::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->where('phone', $customerPhone)
-                ->first();
+            if ($wholesaleCustomer && $wholesaleCustomer->customer_id) {
+                $customer = Customer::withoutGlobalScopes()->find($wholesaleCustomer->customer_id);
+            } else {
+                $customerPhone = $data['customer_phone'] ?? '01000000000';
+                $customer = Customer::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('phone', $customerPhone)
+                    ->first();
 
-            if (!$customer) {
-                $customer = Customer::withoutGlobalScopes()->create([
-                    'tenant_id' => $tenantId,
-                    'code' => 'CUST-SO-' . strtoupper(substr(md5($customerPhone . $tenantId), 0, 6)),
-                    'name' => $data['customer_name'] ?? 'عميل المتجر',
-                    'phone' => $customerPhone,
-                    'classification' => 'individual',
-                    'address' => ($data['shipping_address'] ?? '') . ', ' . ($data['city'] ?? ''),
-                    'is_active' => true,
-                ]);
+                if (!$customer) {
+                    $customer = Customer::withoutGlobalScopes()->create([
+                        'tenant_id' => $tenantId,
+                        'code' => 'CUST-SO-' . strtoupper(substr(md5($customerPhone . $tenantId), 0, 6)),
+                        'name' => $data['customer_name'] ?? 'عميل المتجر',
+                        'phone' => $customerPhone,
+                        'classification' => 'individual',
+                        'address' => ($data['shipping_address'] ?? '') . ', ' . ($data['city'] ?? ''),
+                        'is_active' => true,
+                    ]);
+                }
             }
 
             // 3. Bridge to ERP Sales Order (Primary Business Transaction)
@@ -650,7 +698,7 @@ class StorefrontService
                 'customer_id' => $customer->id,
                 'customer_name' => $customer->name,
                 'warehouse_id' => $firstWarehouseId,
-                'order_type' => 'retail',
+                'order_type' => $orderChannel,
                 'channel' => 'storefront',
                 'store_order_id' => $order->id,
                 'status' => 'confirmed', // Confirmed with stock reserved
@@ -661,7 +709,7 @@ class StorefrontService
                 'total_amount' => $total,
                 'expected_delivery_date' => now()->addDays(3)->toDateString(),
                 'delivery_address' => ($data['shipping_address'] ?? '') . ', ' . ($data['city'] ?? ''),
-                'notes' => "طلب متجر إلكتروني برقم {$order->order_number}",
+                'notes' => "طلب متجر إلكتروني ({$orderChannel}) برقم {$order->order_number}",
             ]);
 
             // Link SalesOrder ID to StoreOrder

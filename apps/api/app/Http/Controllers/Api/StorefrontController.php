@@ -46,7 +46,8 @@ class StorefrontController extends Controller
         app()->instance('current_tenant_id', $tenant->id);
 
         $preview = $request->boolean('preview') || $request->query('preview') === '1';
-        $details = $this->storefrontService->getStoreDetails($tenant->id, $preview);
+        $wholesaleToken = $request->bearerToken() ?: $request->header('X-Wholesale-Token') ?: $request->query('wholesale_token');
+        $details = $this->storefrontService->getStoreDetails($tenant->id, $preview, $wholesaleToken);
 
         if (isset($details['store_settings']) && !$details['store_settings']->is_store_enabled) {
             return response()->json([
@@ -100,6 +101,8 @@ class StorefrontController extends Controller
             'instapay_reference' => 'nullable|string|max:100',
             'instapay_receipt_url' => 'nullable|string',
             'shipping_fee' => 'nullable|numeric|min:0',
+            'channel' => 'nullable|string|in:retail,wholesale',
+            'wholesale_token' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.variant_id' => 'required|uuid',
             'items.*.product_name' => 'nullable|string',

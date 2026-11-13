@@ -376,7 +376,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                             value={item.component_type}
                             onChange={(e) => {
                               const val = e.target.value;
-                              setBomItems((prev) => prev.map((it, i) => (it === bomItems[idx] ? { ...it, component_type: val } : it)));
+                              setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, component_type: val } : it)));
                             }}
                             placeholder={isAr ? 'قماش / أزرار / سوستة / تكت' : 'Fabric / Buttons / Zipper / Label'}
                             className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100 mt-1"

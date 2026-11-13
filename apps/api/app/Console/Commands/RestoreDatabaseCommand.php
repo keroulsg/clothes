@@ -324,21 +324,32 @@ class RestoreDatabaseCommand extends Command
         $tenantCount = $conn->table('tenants')->count();
         $salesOrdersCount = $conn->table('sales_orders')->count();
         $journalEntriesCount = $conn->table('journal_entries')->count();
+        $inventoryItemsCount = $conn->table('inventory_items')->count();
+        $inventoryTransactionsCount = $conn->table('inventory_transactions')->count();
+        $purchaseOrdersCount = $conn->table('purchase_orders')->count();
+        $productionOrdersCount = $conn->table('production_orders')->count();
+        $salesInvoicesCount = $conn->table('sales_invoices')->count();
+        $migrationsCount = $conn->table('migrations')->count();
 
         $expectedSnap = $manifest['integrity_snapshot'] ?? [];
-        $expectedTenants = $expectedSnap['tenants_count'] ?? null;
-        $expectedOrders = $expectedSnap['sales_orders_count'] ?? null;
+        $actualCounts = [
+            'tenants_count' => $tenantCount,
+            'sales_orders_count' => $salesOrdersCount,
+            'journal_entries_count' => $journalEntriesCount,
+            'inventory_items_count' => $inventoryItemsCount,
+            'inventory_transactions_count' => $inventoryTransactionsCount,
+            'purchase_orders_count' => $purchaseOrdersCount,
+            'production_orders_count' => $productionOrdersCount,
+            'sales_invoices_count' => $salesInvoicesCount,
+            'migrations_count' => $migrationsCount,
+        ];
 
         $passed = true;
-        if ($expectedTenants !== null && $tenantCount !== $expectedTenants) {
-            $passed = false;
-        }
-        if ($expectedOrders !== null && $salesOrdersCount !== $expectedOrders) {
-            $passed = false;
-        }
-        $expectedJournalEntries = $expectedSnap['journal_entries_count'] ?? null;
-        if ($expectedJournalEntries !== null && $journalEntriesCount !== $expectedJournalEntries) {
-            $passed = false;
+        foreach ($actualCounts as $key => $actualCount) {
+            $expectedCount = $expectedSnap[$key] ?? null;
+            if ($expectedCount !== null && $actualCount !== $expectedCount) {
+                $passed = false;
+            }
         }
 
         return [
@@ -346,6 +357,12 @@ class RestoreDatabaseCommand extends Command
             'tenant_count' => $tenantCount,
             'sales_orders_count' => $salesOrdersCount,
             'journal_entries_count' => $journalEntriesCount,
+            'inventory_items_count' => $inventoryItemsCount,
+            'inventory_transactions_count' => $inventoryTransactionsCount,
+            'purchase_orders_count' => $purchaseOrdersCount,
+            'production_orders_count' => $productionOrdersCount,
+            'sales_invoices_count' => $salesInvoicesCount,
+            'migrations_count' => $migrationsCount,
             'integrity_passed' => $passed,
         ];
     }

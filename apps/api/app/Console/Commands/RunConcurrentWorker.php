@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 class RunConcurrentWorker extends Command
 {
     protected $signature = 'test:run-concurrent-worker 
-                            {--action= : Action to execute: inventory, grn, invoice, webhook}
+                            {--action= : Action to execute: inventory, grn, invoice, webhook, sales_reservation}
                             {--payload= : JSON string of data}
                             {--tenant-id= : Tenant UUID}
                             {--output-file= : Path to output JSON result}
@@ -90,6 +90,16 @@ class RunConcurrentWorker extends Command
                         'is_posted' => (bool) $inv->is_posted,
                         'matching_status' => $inv->matching_status,
                         'variance_notes' => $inv->variance_notes,
+                    ];
+                    break;
+
+                case 'sales_reservation':
+                    $service = app(SalesService::class);
+                    $order = $service->reserveOrderStock((string) ($payload['sales_order_id'] ?? ''));
+                    $result = [
+                        'status' => 200,
+                        'sales_order_id' => $order->id,
+                        'order_status' => $order->status,
                     ];
                     break;
 

@@ -1,9 +1,6 @@
 name: GarmentOS MySQL Compatibility
 
 on:
-  push:
-    branches:
-      - 'garmentos/**'
   pull_request:
     branches: [ main ]
 

@@ -7,24 +7,32 @@ use App\Models\CostCenter;
 use App\Models\Customer;
 use App\Models\FinancialAccount;
 use App\Models\FinancialAccountTransfer;
+use App\Models\ExternalOperation;
+use App\Models\ExternalOperationReceipt;
 use App\Models\FiscalPeriod;
 use App\Models\FiscalYear;
 use App\Models\GarmentModel;
 use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
 use App\Models\PaymentVoucher;
+use App\Models\PurchaseOrder;
 use App\Models\PieceWorkLog;
 use App\Models\ProductionCostSheet;
 use App\Models\ProductionOrder;
 use App\Models\SalesInvoice;
 use App\Models\Supplier;
+use App\Models\SupplierInvoice;
 use App\Models\Tenant;
 use App\Models\TenantAccountMapping;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\AccountingService;
 use App\Services\FinancialReportService;
+use App\Services\SubcontractingService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 class Batch5AccountingAndCostingTest extends TestCase
@@ -101,7 +109,7 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->assertEquals(1, $assets->level);
         $this->assertFalse((bool)$assets->is_postable);
 
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $this->assertNotNull($cash);
         $this->assertTrue((bool)$cash->is_postable);
         $this->assertTrue((bool)$cash->is_cash_bank);
@@ -125,7 +133,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_journal_entry_balance_enforcement_and_non_postable_parent_block(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $parentAssets = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1')->first();
 
@@ -174,7 +182,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_journal_entry_reversal_creates_compensating_entry(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $capital = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '3010')->first();
 
         $entry = $this->accountingService->createJournalEntry([
@@ -215,7 +223,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_fiscal_period_posting_guard_and_reopen_workflow(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // إنشاء سنة مالية 2026
@@ -237,6 +245,12 @@ class Batch5AccountingAndCostingTest extends TestCase
         $closeResp->assertStatus(200);
         $this->assertEquals('closed', $period1->fresh()->status);
 
+        // Repeating a close request must remain safe and must not change the closed state.
+        $repeatCloseResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson("/api/v1/accounting/fiscal-periods/{$period1->id}/close");
+        $repeatCloseResp->assertStatus(200);
+        $this->assertEquals('closed', $period1->fresh()->status);
+
         // محاولة ترحيل قيد في تاريخ الفترة المقفلة (2026-01-15)
         $blockedResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
             ->postJson('/api/v1/accounting/journal-entries', [
@@ -255,6 +269,14 @@ class Batch5AccountingAndCostingTest extends TestCase
                 'reason' => 'تسوية تسليمات نهاية شهر يناير بموافقة الإدارة المالية',
             ]);
         $reopenResp->assertStatus(200);
+
+        // Repeating an already-completed reopen request is idempotent.
+        $repeatReopenResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson("/api/v1/accounting/fiscal-periods/{$period1->id}/reopen", [
+                'reason' => 'طلب إعادة فتح مكرر لا يغير الحالة مرة أخرى',
+            ]);
+        $repeatReopenResp->assertStatus(200);
+        $this->assertEquals('open', $period1->fresh()->status);
 
         // الآن ينجح الترحيل في نفس التاريخ
         $successResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
@@ -275,8 +297,8 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_financial_accounts_and_inter_account_transfers(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cashCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
-        $bankCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1020')->first();
+        $cashCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
+        $bankCoa = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1021')->first();
 
         // إنشاء خزينة رئيسية برصيد افتتاحي 15000
         $vaultResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
@@ -354,7 +376,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_cost_centers_creation_and_journal_linking(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $expense = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '6010')->first();
 
         // إنشاء مركز تكلفة: قسم القص والتشغيل
@@ -425,6 +447,66 @@ class Batch5AccountingAndCostingTest extends TestCase
     }
 
     /**
+     * Supplier subledger reconciliation must expose invoice/balance mismatches instead of masking them with max().
+     */
+    public function test_ap_reconciliation_uses_supplier_subledger_balance_and_exposes_invoice_variance(): void
+    {
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+
+        $supplier = Supplier::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'SUP-AP-RECON',
+            'name' => 'مورد اختبار مطابقة الموردين',
+            'current_balance' => 500,
+            'is_active' => true,
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'مخزن اختبار المطابقة',
+            'code' => 'WH-AP-RECON',
+            'type' => 'raw_materials',
+            'is_active' => true,
+        ]);
+
+        $purchaseOrder = PurchaseOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'po_number' => 'PO-AP-RECON',
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'order_date' => now()->toDateString(),
+            'status' => 'received',
+            'subtotal' => 1000,
+            'total_amount' => 1000,
+        ]);
+
+        SupplierInvoice::create([
+            'tenant_id' => $this->tenantA->id,
+            'invoice_number' => 'SUP-INV-AP-RECON',
+            'internal_reference' => 'SINV-AP-RECON',
+            'supplier_id' => $supplier->id,
+            'purchase_order_id' => $purchaseOrder->id,
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => 1000,
+            'tax_amount' => 0,
+            'total_amount' => 1000,
+            'paid_amount' => 0,
+            'payment_status' => 'unpaid',
+            'matching_status' => 'matched',
+            'is_posted' => true,
+        ]);
+
+        $reconciliation = $this->accountingService->reconcileAccountsPayable($this->tenantA->id);
+
+        $this->assertSame(500.0, (float) $reconciliation['subledger_total']);
+        $this->assertSame(1000.0, (float) $reconciliation['breakdown'][0]['invoices_due']);
+        $this->assertSame(500.0, (float) $reconciliation['breakdown'][0]['current_balance']);
+        $this->assertSame(500.0, (float) $reconciliation['breakdown'][0]['total_balance']);
+        $this->assertFalse($reconciliation['is_matched']);
+    }
+
+    /**
      * 8. اختبار محرك التكاليف الصناعية: استيعاب الهالك ومنع القسمة على الصفر واستبعاد خامات تشغيل الغير CMT
      */
     public function test_manufacturing_costing_engine_and_cmt_isolation(): void
@@ -451,24 +533,48 @@ class Batch5AccountingAndCostingTest extends TestCase
         // حساب التكلفة بتكاليف خامات وأجور وتكاليف غير مباشرة بنسبة أجور
         $costResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
             ->postJson("/api/v1/accounting/cost-sheets/{$order->id}/calculate", [
-                'direct_materials_cost' => 3000,
+                'direct_materials_cost' => 0,
                 'direct_labor_cost' => 1500,
                 'applied_overhead_rate' => 0.20, // 20% أجور = 300
                 'overhead_allocation_method' => 'direct_labor_cost_pct',
-                'planned_total_cost' => 4500,
+                'planned_total_cost' => 1500,
             ]);
 
         $costResp->assertStatus(200);
         $sheet = $costResp->json('cost_sheet');
-        $this->assertEquals(4800, (float)$sheet['total_cost']); // 3000 + 1500 + 300
-        $this->assertEquals(48, (float)$sheet['cost_per_piece']); // 4800 / 100
-        $this->assertEquals(300, (float)$sheet['variance_amount']); // 4800 - 4500
+        $this->assertEquals(1800, (float)$sheet['total_cost']); // 1500 + 300
+        $this->assertEquals(18, (float)$sheet['cost_per_piece']); // 1800 / 100
+        $this->assertEquals(300, (float)$sheet['variance_amount']); // 1800 - 1500
 
         // اعتماد بطاقة التكلفة
         $approveResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
             ->postJson("/api/v1/accounting/cost-sheets/{$sheet['id']}/approve");
         $approveResp->assertStatus(200);
         $this->assertEquals('approved', $approveResp->json('cost_sheet.status'));
+        $wipCapitalization = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'production_cost_sheet')
+            ->where('reference_key', $sheet['id'])
+            ->firstOrFail();
+        $this->assertEquals(1800.0, (float) $wipCapitalization->total_debit);
+        $this->assertEquals(1800.0, (float) $wipCapitalization->total_credit);
+
+        // Bulk costing must not force-recalculate or mutate an approved historical cost sheet.
+        $bulkResp = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson('/api/v1/accounting/cost-sheets/auto-calculate-all');
+        $bulkResp->assertStatus(200)
+            ->assertJsonPath('skipped_approved_count', 1);
+        $this->assertEquals(1800.0, (float) ProductionCostSheet::findOrFail($sheet['id'])->total_cost);
+        $this->assertSame('approved', ProductionCostSheet::findOrFail($sheet['id'])->status);
+
+        // Even a direct force_recalculate request cannot rewrite an approved historical cost sheet.
+        $forcedRecalc = $this->withHeader('Authorization', 'Bearer ' . $this->tokenA)
+            ->postJson("/api/v1/accounting/cost-sheets/{$order->id}/calculate", [
+                'direct_materials_cost' => 9000,
+                'force_recalculate' => true,
+            ]);
+        $forcedRecalc->assertStatus(200);
+        $this->assertEquals(1800.0, (float) $forcedRecalc->json('cost_sheet.total_cost'));
+        $this->assertSame('approved', $forcedRecalc->json('cost_sheet.status'));
 
         // فحص تشغيل الغير (CMT): أمر إنتاج CMT يستبعد تكلفة الخامات الموردة من العميل
         $cmtOrder = ProductionOrder::create([
@@ -491,6 +597,81 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->assertEquals(0, (float)$cmtCost->direct_materials_cost);
         $this->assertEquals(2000, (float)$cmtCost->direct_labor_cost);
         $this->assertEquals(2200, (float)$cmtCost->total_cost);
+
+        // Subcontracting is recognized by returned receipt batches, not by dispatch commitments.
+        $externalOperation = ExternalOperation::create([
+            'tenant_id' => $this->tenantA->id,
+            'operation_number' => 'EXT-CMT-RECEIPTS-01',
+            'production_order_id' => $cmtOrder->id,
+            'subcontractor_name' => 'مقاول اختبار',
+            'operation_type' => 'printing',
+            'sent_quantity' => 100,
+            'received_accepted_quantity' => 0,
+            'received_rejected_quantity' => 0,
+            'scrap_quantity' => 0,
+            'unit_rate' => 5,
+            'total_cost' => 0,
+            'status' => 'dispatched',
+            'idempotency_key' => 'EXT-DISPATCH-TEST-01',
+        ]);
+
+        $subcontractingService = app(SubcontractingService::class);
+        $firstBatch = [
+            'received_accepted_quantity' => 40,
+            'received_rejected_quantity' => 0,
+            'scrap_quantity' => 0,
+            'idempotency_key' => 'EXT-RECEIPT-TEST-01',
+        ];
+        $subcontractingService->receiveExternalOperation($externalOperation->id, $firstBatch);
+        // Retrying the exact same batch must not add quantities or cost again.
+        $subcontractingService->receiveExternalOperation($externalOperation->id, $firstBatch);
+        try {
+            $subcontractingService->receiveExternalOperation($externalOperation->id, [
+                'received_accepted_quantity' => 41,
+                'received_rejected_quantity' => 0,
+                'scrap_quantity' => 0,
+                'idempotency_key' => 'EXT-RECEIPT-TEST-01',
+            ]);
+            $this->fail('Reusing a subcontract receipt key with changed quantities must be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('تعارض Idempotency', $exception->getMessage());
+        }
+
+        $subcontractingService->receiveExternalOperation($externalOperation->id, [
+            'received_accepted_quantity' => 60,
+            'received_rejected_quantity' => 0,
+            'scrap_quantity' => 0,
+            'idempotency_key' => 'EXT-RECEIPT-TEST-02',
+        ]);
+
+        $externalOperation->refresh();
+        $this->assertSame(100, (int) $externalOperation->received_accepted_quantity);
+        $this->assertSame('completed', $externalOperation->status);
+        $this->assertEquals(500, (float) $externalOperation->total_cost);
+        $this->assertSame(2, ExternalOperationReceipt::where('external_operation_id', $externalOperation->id)->count());
+
+        $cmtCostWithSubcontract = $this->accountingService->calculateProductionCost($cmtOrder->id, [
+            'direct_labor_cost' => 2000,
+            'applied_overhead_rate' => 0.10,
+        ]);
+        $this->assertEquals(500, (float) $cmtCostWithSubcontract->subcontracted_services_cost);
+        $this->assertEquals(2700, (float) $cmtCostWithSubcontract->total_cost);
+
+        $cmtCostWithSubcontract->status = 'approved';
+        $cmtCostWithSubcontract->save();
+        $wipJournal = $this->accountingService->postProductionCostSheetToWip($cmtCostWithSubcontract);
+        $subcontractExpense = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '5030')->firstOrFail();
+        $this->assertEquals(500.0, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+            ->where('account_id', $subcontractExpense->id)->sum('credit'));
+        $this->assertEquals(0.0, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+            ->where('account_id', $this->accountingService->getMappedAccount($this->tenantA->id, 'ap_control')->id)->sum('credit'));
+
+        $inventoryReconciliation = $this->accountingService->reconcileInventory($this->tenantA->id);
+        $wipBreakdown = collect($inventoryReconciliation['breakdown'])->firstWhere('gl_code', '1220');
+        $this->assertEquals(4500.0, (float) $wipBreakdown['gl_balance']);
+        $this->assertEquals(4500.0, (float) $wipBreakdown['warehouse_valuation']);
+        $this->assertEquals(0.0, (float) $wipBreakdown['variance']);
+        $this->assertTrue($inventoryReconciliation['wip_valuation_available']);
     }
 
     /**
@@ -499,7 +680,7 @@ class Batch5AccountingAndCostingTest extends TestCase
     public function test_financial_reports_derived_strictly_from_real_transactions(): void
     {
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
-        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
         $cogs = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '5010')->first();
         $inventory = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1230')->first();
@@ -557,7 +738,7 @@ class Batch5AccountingAndCostingTest extends TestCase
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
         $this->accountingService->initializeDefaultChartOfAccounts($this->tenantB->id);
 
-        $cashA = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashA = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revA = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // قيد للمستأجر A بمبلغ 77000
@@ -582,4 +763,43 @@ class Batch5AccountingAndCostingTest extends TestCase
         $bTbResp->assertStatus(200);
         $this->assertEquals(0, (float)$bTbResp->json('summary.total_period_debit'));
     }
+
+    public function test_reseeding_chart_metadata_preserves_existing_account_balances(): void
+    {
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+        $cash = ChartOfAccount::withoutGlobalScopes()
+            ->where('tenant_id', $this->tenantA->id)
+            ->where('code', '1011')
+            ->firstOrFail();
+
+        $cash->current_balance = 4321.50;
+        $cash->save();
+
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+
+        $this->assertSame(4321.5, (float) $cash->fresh()->current_balance);
+    }
+
+    public function test_numeric_journal_reference_is_stored_without_uuid_column_cast(): void
+    {
+        $this->accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
+        $cash = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '1011')->firstOrFail();
+        $revenue = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '4010')->firstOrFail();
+
+        $entry = $this->accountingService->createJournalEntry([
+            'tenant_id' => $this->tenantA->id,
+            'entry_number' => 'JE-NUMERIC-REF-TEST',
+            'reference_type' => 'legacy_numeric_reference',
+            'reference_id' => '12345',
+            'description' => 'Numeric reference compatibility test',
+            'lines' => [
+                ['account_id' => $cash->id, 'debit' => 125, 'credit' => 0],
+                ['account_id' => $revenue->id, 'debit' => 0, 'credit' => 125],
+            ],
+        ]);
+
+        $this->assertNull($entry->reference_id);
+        $this->assertSame('12345', $entry->reference_key);
+    }
+
 }

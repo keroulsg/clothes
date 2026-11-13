@@ -27,7 +27,7 @@ class VerifyBackupCommand extends Command
             $manifestPath = $target;
         } elseif (file_exists($target)) {
             // Target is a dump file
-            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
+            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sql|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
         } else {
             // Target is a backup ID
             $manifestPath = "{$backupDir}/{$target}.manifest.json";
@@ -38,14 +38,25 @@ class VerifyBackupCommand extends Command
             return Command::FAILURE;
         }
 
-        $manifest = json_decode(file_get_contents($manifestPath), true);
-        if (!$manifest || !isset($manifest['sha256'], $manifest['dump_file'])) {
-            $this->error("Corrupted or invalid manifest structure: {$manifestPath}");
+        $manifestContents = file_get_contents($manifestPath);
+        $manifest = $manifestContents === false ? null : json_decode($manifestContents, true);
+        if (
+            !is_array($manifest)
+            || !isset($manifest['backup_id'], $manifest['sha256'], $manifest['dump_file'], $manifest['file_size_bytes'])
+            || !is_string($manifest['backup_id'])
+            || !is_string($manifest['sha256'])
+            || !preg_match('/^[a-f0-9]{64}$/i', $manifest['sha256'])
+            || !is_string($manifest['dump_file'])
+            || basename($manifest['dump_file']) !== $manifest['dump_file']
+            || !is_int($manifest['file_size_bytes'])
+            || $manifest['file_size_bytes'] <= 0
+        ) {
+            $this->error("Corrupted, incomplete, or unsafe manifest structure: {$manifestPath}");
             return Command::FAILURE;
         }
 
-        $dumpPath = dirname($manifestPath) . '/' . $manifest['dump_file'];
-        if (!file_exists($dumpPath)) {
+        $dumpPath = dirname($manifestPath) . DIRECTORY_SEPARATOR . $manifest['dump_file'];
+        if (!file_exists($dumpPath) || !is_file($dumpPath)) {
             $this->error("Dump file referenced in manifest does not exist: {$dumpPath}");
             return Command::FAILURE;
         }

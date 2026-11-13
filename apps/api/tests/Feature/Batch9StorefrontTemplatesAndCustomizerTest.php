@@ -119,6 +119,16 @@ class Batch9StorefrontTemplatesAndCustomizerTest extends TestCase
             'average_cost' => 150.00,
             'is_customer_owned' => false,
         ]);
+
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenantA->id,
+            'store_name' => 'Delta Factory Store',
+            'theme_id' => StorefrontService::THEME_FASHION_BOUTIQUE,
+            'is_store_enabled' => true,
+            'allow_cod' => true,
+            'allow_card_payment' => false,
+            'allow_instapay' => false,
+        ]);
     }
 
     public function test_design_studio_returns_available_templates_and_current_config(): void

@@ -1,0 +1,124 @@
+name: GarmentOS MySQL Compatibility
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  mysql-migrations:
+    name: MySQL 8.4 Migrations, Regression & Backup Restore
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: garmentos_test
+          MYSQL_ROOT_PASSWORD: root_test_password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_test_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: garmentos_test
+      DB_USERNAME: root
+      DB_PASSWORD: root_test_password
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, bcmath
+          coverage: none
+
+      - name: Install MySQL client utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client
+
+      - name: Install Composer Dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare MySQL Test Environment
+        run: |
+          cat > .env <<'ENVVARS'
+          APP_ENV=testing
+          APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=garmentos_test
+          DB_USERNAME=root
+          DB_PASSWORD=root_test_password
+          CACHE_STORE=array
+          SESSION_DRIVER=array
+          QUEUE_CONNECTION=sync
+          ENVVARS
+          cp .env .env.testing
+
+      - name: Run Complete MySQL Migrations
+        run: php artisan migrate --database=mysql -v --force
+
+      - name: Verify MySQL Migration State
+        run: php artisan migrate:status --database=mysql
+
+      - name: Run Complete Backend Regression Suite on MySQL
+        run: php artisan test --colors=never
+
+      - name: Seed committed data for MySQL backup verification
+        run: |
+          php artisan tinker --execute='App\Models\Tenant::create(["name" => "Backup Verification Tenant", "code" => "BACKUP-VERIFY", "subdomain" => "backup-verify", "status" => "active"]);'
+
+      - name: Create and verify a real MySQL backup
+        env:
+          MYSQL_PWD: root_test_password
+        run: |
+          php artisan garmentos:backup --destination=local
+          BACKUP_ID="$(php -r '$files=glob("storage/app/private/backups/database/*.manifest.json"); rsort($files); $m=$files ? json_decode(file_get_contents($files[0]), true) : []; echo $m["backup_id"] ?? "";')"
+          test -n "$BACKUP_ID"
+          php artisan garmentos:verify-backup "$BACKUP_ID"
+          echo "GARMENTOS_BACKUP_ID=$BACKUP_ID" >> "$GITHUB_ENV"
+
+      - name: Restore MySQL backup into a new isolated database
+        env:
+          MYSQL_PWD: root_test_password
+          RESTORE_DB: garmentos_restore_test_${{ github.run_id }}_${{ github.run_attempt }}
+        run: php artisan garmentos:restore "$GARMENTOS_BACKUP_ID" --target-db="$RESTORE_DB" --force
+
+      - name: Prove MySQL restore refuses the active database
+        env:
+          MYSQL_PWD: root_test_password
+        run: |
+          set +e
+          php artisan garmentos:restore "$GARMENTOS_BACKUP_ID" --target-db=garmentos_test --force
+          RESTORE_EXIT=$?
+          set -e
+          test "$RESTORE_EXIT" -eq 1
+
+      - name: Remove isolated restore database
+        if: always()
+        env:
+          MYSQL_PWD: root_test_password
+          RESTORE_DB: garmentos_restore_test_${{ github.run_id }}_${{ github.run_attempt }}
+        run: mysql --host=127.0.0.1 --port=3306 --user=root --execute="DROP DATABASE IF EXISTS \`$RESTORE_DB\`"

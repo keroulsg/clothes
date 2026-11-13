@@ -300,5 +300,19 @@ class SubscriptionAndUsageMeterTest extends TestCase
         $this->assertCount(3, $response->json('plans'));
         $this->assertArrayHasKey('cutting_lays', $response->json('meters_catalog'));
     }
-}
 
+    public function test_inactive_users_do_not_consume_active_user_seats(): void
+    {
+        User::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'Inactive former employee',
+            'email' => 'inactive-seat@elnasr.test',
+            'password' => bcrypt('Secret123!'),
+            'role' => 'worker',
+            'is_active' => false,
+        ]);
+
+        $this->assertSame(1, $this->service->getCurrentUsage($this->tenantA->id, 'active_users'));
+    }
+
+}

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Branch;
 use App\Models\GarmentModel;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderItem;
@@ -12,6 +13,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProductionOrderController extends Controller
 {
@@ -22,8 +24,10 @@ class ProductionOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = ProductionOrder::where('tenant_id', $tenantId)
-            ->with(['garmentModel', 'billOfMaterial', 'branch', 'customer', 'items.color', 'items.size']);
+        $query = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->with(['garmentModel', 'billOfMaterial', 'branch', 'customer', 'items.color', 'items.size']);
 
         // 1. بحث بالرقم أو الملاحظات أو المسؤول
         if ($request->filled('search')) {
@@ -102,6 +106,44 @@ class ProductionOrderController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
+        // Every non-owner production order must belong to an assigned branch.
+        // If the user has exactly one branch, select it automatically.
+        $user = $request->user();
+        $branchId = $validated['branch_id'] ?? null;
+        if ($user && $user->role !== 'company_owner') {
+            $assignedBranchIds = $user->assignedBranchIds();
+            if (!$branchId && count($assignedBranchIds) === 1) {
+                $branchId = $assignedBranchIds[0];
+            }
+            if (!$branchId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAssignmentRequired',
+                    'message' => 'يجب تحديد فرع معيّن لإنشاء أمر الإنتاج.',
+                ], 422);
+            }
+            if (!in_array($branchId, $assignedBranchIds, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAccessDenied',
+                    'message' => 'لا يمكنك إنشاء أمر إنتاج لفرع غير معيّن لحسابك.',
+                ], 403);
+            }
+        }
+
+        if ($branchId) {
+            $branch = Branch::where('tenant_id', $tenantId)->find($branchId);
+            if (!$branch) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchNotFound',
+                    'message' => 'الفرع المحدد غير تابع لشركتك.',
+                ], 422);
+            }
+        } elseif ($user && $user->role === 'company_owner') {
+            $branchId = Branch::where('tenant_id', $tenantId)->where('is_main', true)->value('id');
+        }
+
         // التحقق من ملكية الموديل للشركة الحالية
         $model = GarmentModel::withoutGlobalScopes()->find($validated['garment_model_id']);
         if (!$model || $model->tenant_id !== $tenantId) {
@@ -115,6 +157,7 @@ class ProductionOrderController extends Controller
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['branch_id'] = $branchId;
             $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
             $order = $this->productionService->createProductionOrder($data, $validated['items']);
@@ -152,7 +195,10 @@ class ProductionOrderController extends Controller
     public function update(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         if (in_array($order->status, ['completed', 'cancelled'])) {
             return response()->json([
@@ -246,7 +292,10 @@ class ProductionOrderController extends Controller
     public function cancel(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            request()
+        )->findOrFail($id);
 
         if (in_array($order->status, ['completed', 'cancelled'])) {
             return response()->json([
@@ -293,8 +342,10 @@ class ProductionOrderController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)
-            ->with([
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->with([
                 'garmentModel',
                 'billOfMaterial',
                 'items.color',
@@ -315,7 +366,10 @@ class ProductionOrderController extends Controller
         $tenantId = app('current_tenant_id');
 
         // التحقق من ملكية أمر الإنتاج للشركة الحالية
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         try {
             $approvedOrder = $this->productionService->approveProductionOrder($order->id);
@@ -336,7 +390,10 @@ class ProductionOrderController extends Controller
     public function metrics(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeProductionOrdersToAssignedBranches(
+            ProductionOrder::where('tenant_id', $tenantId),
+            request()
+        )->findOrFail($id);
 
         try {
             $metrics = $this->productionService->getProductionMetrics($order->id);
@@ -356,30 +413,82 @@ class ProductionOrderController extends Controller
     public function complete(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = ProductionOrder::where('tenant_id', $tenantId)->findOrFail($id);
 
-        $order->status = 'completed';
-        $order->actual_completion_date = now()->toDateString();
-        if ($order->total_cut_quantity > 0 && $order->total_completed_quantity < $order->total_cut_quantity) {
-            $order->total_completed_quantity = $order->total_cut_quantity;
-        }
-        $order->save();
+        return DB::transaction(function () use ($request, $id, $tenantId) {
+            $order = $this->scopeProductionOrdersToAssignedBranches(
+                ProductionOrder::where('tenant_id', $tenantId),
+                $request
+            )->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        \App\Models\AuditLog::create([
-            'tenant_id' => $tenantId,
-            'user_id' => $request->user()?->id,
-            'action' => 'production_order_completed',
-            'auditable_type' => ProductionOrder::class,
-            'auditable_id' => $order->id,
-            'old_values' => ['status' => $order->getOriginal('status')],
-            'new_values' => ['status' => 'completed'],
-            'ip_address' => $request->ip(),
-        ]);
+            $cutQuantity = (float) $order->total_cut_quantity;
+            $completedQuantity = (float) $order->total_completed_quantity;
 
-        return response()->json([
-            'success' => true,
-            'message' => 'تم إنهاء واعتماد اكتمال أمر الإنتاج بنجاح.',
-            'data' => $order->fresh(['garmentModel']),
-        ]);
+            if ($cutQuantity <= 0 || $completedQuantity < $cutQuantity) {
+                throw ValidationException::withMessages([
+                    'production_order' => ['لا يمكن إغلاق أمر الإنتاج قبل تسجيل كمية إنتاج فعلية مقبولة لا تقل عن إجمالي الكمية المقصوصة.'],
+                ]);
+            }
+
+            $cuttingOrders = DB::table('cutting_orders')
+                ->where('tenant_id', $tenantId)
+                ->where('production_order_id', $order->id)
+                ->lockForUpdate()
+                ->get(['status']);
+
+            if ($cuttingOrders->isEmpty() || $cuttingOrders->contains(function ($cuttingOrder) {
+                return !in_array($cuttingOrder->status, ['cut_completed', 'completed', 'archived'], true);
+            })) {
+                throw ValidationException::withMessages([
+                    'production_order' => ['لا يمكن إغلاق أمر الإنتاج قبل إتمام وأرشفة جميع أوامر القص المرتبطة.'],
+                ]);
+            }
+
+            if ($order->status === 'completed') {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'أمر الإنتاج مكتمل بالفعل.',
+                    'data' => $order->fresh(['garmentModel']),
+                ]);
+            }
+
+            $order->status = 'completed';
+            $order->actual_completion_date = now()->toDateString();
+            // Never synthesize completed quantity from cut quantity.
+            $order->save();
+
+            \App\Models\AuditLog::create([
+                'tenant_id' => $tenantId,
+                'user_id' => $request->user()?->id,
+                'action' => 'production_order_completed',
+                'auditable_type' => ProductionOrder::class,
+                'auditable_id' => $order->id,
+                'old_values' => ['status' => $order->getOriginal('status')],
+                'new_values' => [
+                    'status' => 'completed',
+                    'total_cut_quantity' => $cutQuantity,
+                    'total_completed_quantity' => $completedQuantity,
+                ],
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إنهاء واعتماد اكتمال أمر الإنتاج بنجاح.',
+                'data' => $order->fresh(['garmentModel']),
+            ]);
+        });
     }
+    private function scopeProductionOrdersToAssignedBranches($query, ?Request $request = null)
+    {
+        $user = ($request ?? request())->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        return $query->whereIn('branch_id', $user->assignedBranchIds());
+    }
+
+
 }

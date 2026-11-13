@@ -24,9 +24,11 @@ class Payroll extends Model
         'total_paid',
         'status',
         'approved_by',
+        'approved_by_user_id',
         'approved_at',
         'rejection_reason',
         'finalized_by',
+        'finalized_by_user_id',
         'finalized_at',
         'notes',
     ];
@@ -63,11 +65,11 @@ class Payroll extends Model
 
     public function approver(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'approved_by_user_id');
     }
 
     public function finalizer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'finalized_by');
+        return $this->belongsTo(User::class, 'finalized_by_user_id');
     }
 }

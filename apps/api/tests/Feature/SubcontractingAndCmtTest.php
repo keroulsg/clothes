@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Color;
 use App\Models\Customer;
 use App\Models\CustomerMaterial;
@@ -185,6 +186,81 @@ class SubcontractingAndCmtTest extends TestCase
             ->assertJsonPath('data.status', 'confirmed');
     }
 
+    public function test_staff_without_branch_assignment_cannot_view_subcontracting_jobs(): void
+    {
+        $branch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع محمي',
+            'code' => 'SUB-BRANCH-LOCKED',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
+        $job = $this->subService->createJobOrder([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branch->id,
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'service_type' => 'contract_cutting',
+            'total_target_quantity' => 5,
+        ]);
+
+        $staff = User::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'موظف بلا تعيين فرع',
+            'email' => 'unassigned-branch-staff@nile.com',
+            'role' => 'production_manager',
+            'is_active' => true,
+            'password' => bcrypt('password123'),
+        ]);
+
+        $listResponse = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->getJson('/api/v1/subcontracting/jobs');
+
+        $listResponse->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $showResponse = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->getJson("/api/v1/subcontracting/jobs/{$job->id}");
+
+        $showResponse->assertStatus(403);
+    }
+
+    public function test_subcontracting_job_order_persists_its_branch_anchor(): void
+    {
+        $branch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الاختبار',
+            'code' => 'SUB-BRANCH-01',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
+        $job = $this->subService->createJobOrder([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branch->id,
+            'customer_id' => $this->customerA->id,
+            'customer_name' => $this->customerA->name,
+            'service_type' => 'contract_cutting',
+            'garment_model_id' => $this->modelA->id,
+            'fabric_source' => 'customer_supplied',
+            'pricing_basis' => 'per_piece',
+            'unit_rate' => 6.50,
+            'total_target_quantity' => 10,
+        ]);
+
+        $this->assertSame($branch->id, $job->branch_id);
+        $this->assertDatabaseHas('job_orders', [
+            'id' => $job->id,
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branch->id,
+        ]);
+    }
+
     /**
      * 2. دورة كاملة لخدمة القص للغير: استلام خامة العميل، تنفيذ التسليم، وإصدار الفاتورة
      */
@@ -297,18 +373,20 @@ class SubcontractingAndCmtTest extends TestCase
         ]);
 
         $this->assertEquals('dispatched', $extOp->status);
-        $this->assertEquals(350.0, (float)$extOp->total_cost);
+        $this->assertEquals(0.0, (float)$extOp->total_cost); // Dispatch is a commitment, not incurred receipt cost.
 
         // استلام المخرجات من ورشة التطريز: 98 سليم، 2 تالف
         $receivedOp = $this->subService->receiveExternalOperation($extOp->id, [
             'received_accepted_quantity' => 98,
             'received_rejected_quantity' => 0,
             'scrap_quantity' => 2,
+            'idempotency_key' => 'EXT-RECEIPT-CMT-01',
         ]);
 
         $this->assertEquals('completed', $receivedOp->status);
         $this->assertEquals(98, $receivedOp->received_accepted_quantity);
         $this->assertEquals(2, $receivedOp->scrap_quantity);
+        $this->assertEquals(350.0, (float) $receivedOp->total_cost);
 
         // تسليم الـ 98 قطعة الجاهزة للعميل
         $delivery = $this->subService->createDeliveryNote([

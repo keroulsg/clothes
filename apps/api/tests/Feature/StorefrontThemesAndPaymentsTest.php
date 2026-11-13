@@ -91,6 +91,17 @@ class StorefrontThemesAndPaymentsTest extends TestCase
             'type' => 'finished_goods',
         ]);
 
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenantA->id,
+            'store_name' => 'Alpha Factory Store',
+            'is_store_enabled' => true,
+            'allow_cod' => true,
+            'allow_card_payment' => false,
+            'allow_instapay' => true,
+            'instapay_account_verified' => true,
+            'instapay_handle' => 'alpha@instapay',
+        ]);
+
         $this->modelA = GarmentModel::create([
             'tenant_id' => $this->tenantA->id,
             'code' => 'MOD-101',
@@ -157,7 +168,7 @@ class StorefrontThemesAndPaymentsTest extends TestCase
             'products',
         ]);
 
-        $this->assertEquals(StorefrontService::THEME_MODERN_FASHION, $response->json('store_settings.theme_id'));
+        $this->assertEquals(StorefrontService::THEME_FASHION_BOUTIQUE, $response->json('store_settings.theme_id'));
     }
 
     public function test_tenant_can_configure_theme_and_branding(): void
@@ -288,7 +299,7 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         $updatedOrder = $verifyRes->json('order');
 
         $this->assertEquals('verified_paid', $updatedOrder['payment_status']);
-        $this->assertEquals($this->managerA->id, $updatedOrder['payment_reviewed_by']);
+        $this->assertEquals($this->managerA->id, $updatedOrder['payment_reviewed_by_user_id']);
         $this->assertNotNull($updatedOrder['payment_reviewed_at']);
         $this->assertNull($updatedOrder['payment_rejection_reason']);
     }
@@ -325,7 +336,7 @@ class StorefrontThemesAndPaymentsTest extends TestCase
 
         $this->assertEquals('rejected', $updatedOrder['payment_status']);
         $this->assertEquals('رقم العملية المرجعي غير مسجل في الكشف البنكي اليومي', $updatedOrder['payment_rejection_reason']);
-        $this->assertEquals($this->accountantA->id, $updatedOrder['payment_reviewed_by']);
+        $this->assertEquals($this->accountantA->id, $updatedOrder['payment_reviewed_by_user_id']);
     }
 
     public function test_inventory_synchronization_deducts_stock_on_order_and_restores_on_cancellation(): void
@@ -553,4 +564,92 @@ class StorefrontThemesAndPaymentsTest extends TestCase
         $crossAttempt = $this->postJson("/api/v1/storefront/orders/{$orderId}/verify-payment", ['approved' => true]);
         $crossAttempt->assertStatus(404);
     }
+
+    public function test_duplicate_cart_lines_cannot_reserve_more_than_available_stock(): void
+    {
+        $this->inventoryA->update([
+            'current_balance' => 5,
+            'reserved_balance' => 0,
+        ]);
+
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل اختبار تكرار الصنف',
+            'customer_phone' => '01055555555',
+            'shipping_address' => 'القاهرة',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 3],
+                ['variant_id' => $this->variantA->id, 'quantity' => 3],
+            ],
+        ]);
+
+        $orderRes->assertStatus(422);
+        $this->assertEquals(5.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float) $this->inventoryA->fresh()->reserved_balance);
+        $this->assertDatabaseMissing('store_orders', [
+            'tenant_id' => $this->tenantA->id,
+        ]);
+    }
+
+
+    public function test_shipping_storefront_order_fulfills_erp_order_and_posts_stock_issue(): void
+    {
+        $orderRes = $this->postJson("/api/v1/storefront/order/{$this->tenantA->id}", [
+            'customer_name' => 'عميل طلب شحن',
+            'customer_phone' => '01066666666',
+            'shipping_address' => 'مدينة نصر',
+            'city' => 'Cairo',
+            'payment_method' => 'cod',
+            'items' => [
+                ['variant_id' => $this->variantA->id, 'quantity' => 2],
+            ],
+        ]);
+        $orderRes->assertCreated();
+
+        $storeOrderId = $orderRes->json('order.id');
+        $salesOrderId = $orderRes->json('order.sales_order_id');
+
+        $this->assertEquals(20.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(2.0, (float) $this->inventoryA->fresh()->reserved_balance);
+
+        Sanctum::actingAs($this->managerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $shipRes = $this->patchJson("/api/v1/storefront/orders/{$storeOrderId}/status", [
+            'status' => 'shipped',
+        ]);
+        $shipRes->assertOk()
+            ->assertJsonPath('order.status', 'shipped');
+
+        $this->assertEquals(18.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float) $this->inventoryA->fresh()->reserved_balance);
+        $this->assertDatabaseHas('sales_orders', [
+            'id' => $salesOrderId,
+            'tenant_id' => $this->tenantA->id,
+            'status' => 'fulfilled',
+        ]);
+        $this->assertDatabaseHas('sales_invoices', [
+            'sales_order_id' => $salesOrderId,
+            'tenant_id' => $this->tenantA->id,
+            'status' => 'issued',
+        ]);
+        $this->assertDatabaseHas('inventory_transactions', [
+            'tenant_id' => $this->tenantA->id,
+            'inventory_item_id' => $this->inventoryA->id,
+            'direction' => 'OUT',
+            'transaction_type' => 'sales_delivery',
+            'reference_type' => 'sales_orders',
+            'reference_id' => $salesOrderId,
+        ]);
+
+        // Repeating the same shipped transition must not issue stock or create another invoice.
+        $repeatShip = $this->patchJson("/api/v1/storefront/orders/{$storeOrderId}/status", [
+            'status' => 'shipped',
+        ]);
+        $repeatShip->assertOk();
+        $this->assertEquals(18.0, (float) $this->inventoryA->fresh()->current_balance);
+        $this->assertDatabaseCount('sales_invoices', 1);
+    }
+
 }

@@ -68,7 +68,7 @@ class SecurityRegressionDay3Test extends TestCase
             'name' => 'مدير النيل',
             'email' => 'admin@nile-sec-a.com',
             'password' => bcrypt('SecPass123!'),
-            'role' => 'accountant',
+            'role' => 'company_owner',
             'is_active' => true,
         ]);
 
@@ -128,12 +128,25 @@ class SecurityRegressionDay3Test extends TestCase
 
         $this->accountA = ChartOfAccount::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenantA->id,
-            'code' => '1010',
-            'name' => 'خزينة النيل الرئيسية',
+            'code' => '1011',
+            'name' => 'خزينة النيل - حساب فرعي قابل للترحيل',
             'type' => 'asset',
             'category' => 'current_asset',
             'current_balance' => 1000.0,
             'is_active' => true,
+            'is_postable' => true,
+            'is_cash_bank' => true,
+        ]);
+
+        $otherExpenseAccountA = ChartOfAccount::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => '6012',
+            'name' => 'مصروف صيانة الماكينات',
+            'type' => 'expense',
+            'category' => 'indirect_cost',
+            'current_balance' => 0,
+            'is_active' => true,
+            'is_postable' => true,
         ]);
 
         $this->employeeA = Employee::withoutGlobalScopes()->create([
@@ -169,7 +182,7 @@ class SecurityRegressionDay3Test extends TestCase
             'name' => 'مدير الأهرام',
             'email' => 'admin@ahram-sec-b.com',
             'password' => bcrypt('SecPass123!'),
-            'role' => 'accountant',
+            'role' => 'company_owner',
             'is_active' => true,
         ]);
 
@@ -376,6 +389,7 @@ class SecurityRegressionDay3Test extends TestCase
                 'party_type' => 'other',
                 'party_name' => 'مصروفات صيانة',
                 'account_id' => $this->accountA->id,
+                'contra_account_id' => ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $this->tenantA->id)->where('code', '6012')->value('id'),
                 'amount' => 200.0,
                 'payment_method' => 'cash',
             ]);
@@ -603,7 +617,7 @@ class SecurityRegressionDay3Test extends TestCase
                 'period_end' => '2026-10-31',
             ]);
 
-        $response->assertStatus(500); // InvalidArgumentException thrown to block duplicate payouts
+        $response->assertStatus(422)->assertJsonPath('error', 'PayrollPeriodLocked');
     }
 
     /**
@@ -649,6 +663,6 @@ class SecurityRegressionDay3Test extends TestCase
         $response = $this->actingAs($this->userA, 'sanctum')
             ->postJson("/api/v1/sales/orders/{$salesOrder->id}/reserve");
 
-        $response->assertStatus(500); // Throws InvalidArgumentException: customer materials are never reserved for sales
+        $response->assertStatus(422)->assertJsonPath('error', 'StockReservationError');
     }
 }

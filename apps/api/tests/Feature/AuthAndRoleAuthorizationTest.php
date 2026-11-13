@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\BillOfMaterial;
+use App\Models\Branch;
+use App\Models\StockCount;
 use App\Models\Customer;
 use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
@@ -27,6 +29,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
     use RefreshDatabase;
 
     private Tenant $tenant;
+    private Branch $mainBranch;
     private User $ownerUser;
     private User $accountantUser;
     private User $productionManagerUser;
@@ -44,6 +47,15 @@ class AuthAndRoleAuthorizationTest extends TestCase
             'name' => 'مصنع النيل للملابس',
             'subdomain' => 'nile-auth',
             'status' => 'active',
+        ]);
+
+        $this->mainBranch = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'الفرع الرئيسي',
+            'code' => 'BR-AUTH-MAIN',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
         ]);
 
         $this->ownerUser = User::create([
@@ -90,8 +102,13 @@ class AuthAndRoleAuthorizationTest extends TestCase
             'is_active' => true,
         ]);
 
+        foreach ([$this->ownerUser, $this->accountantUser, $this->productionManagerUser, $this->workerUser] as $tenantUser) {
+            $tenantUser->branches()->sync([$this->mainBranch->id]);
+        }
+
         $this->warehouse = Warehouse::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->mainBranch->id,
             'name' => 'المخزن الرئيسي',
             'code' => 'WH-AUTH-01',
             'type' => 'fabric',
@@ -254,6 +271,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
         $prodOrder = ProductionOrder::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
             'garment_model_id' => $model->id,
+            'branch_id' => $this->mainBranch->id,
             'order_number' => 'PRD-AUTH-001',
             'planned_start_date' => now()->toDateString(),
             'target_delivery_date' => now()->addDays(10)->toDateString(),
@@ -363,6 +381,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
 
         $job = JobOrder::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->mainBranch->id,
             'customer_id' => $customer->id,
             'customer_name' => $customer->name,
             'order_number' => 'JOB-AUTH-001',
@@ -416,6 +435,7 @@ class AuthAndRoleAuthorizationTest extends TestCase
 
         $job = JobOrder::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->mainBranch->id,
             'customer_id' => $customer->id,
             'customer_name' => $customer->name,
             'order_number' => 'JOB-AUTH-002',
@@ -1337,5 +1357,281 @@ class AuthAndRoleAuthorizationTest extends TestCase
         $this->assertNotEquals(403, $resSupplier->status());
         $resSupplier->assertStatus(422); // مر من الدور وفشل في التحقق من صحة المدخلات
     }
+    public function test_user_specific_empty_permission_override_blocks_role_allowed_accounting_route(): void
+    {
+        $this->accountantUser->forceFill([
+            'permissions' => [],
+            'permissions_mode' => 'custom',
+        ])->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->postJson('/api/v1/accounting/journal-entries', [])
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'InsufficientPermission')
+            ->assertJsonPath('required_permission', 'accounting.post');
+    }
+
+    public function test_user_specific_permission_override_allows_only_the_selected_accounting_action(): void
+    {
+        $this->accountantUser->forceFill([
+            'permissions' => ['accounting.view'],
+            'permissions_mode' => 'custom',
+        ])->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->postJson('/api/v1/accounting/journal-entries', [])
+            ->assertStatus(403)
+            ->assertJsonPath('required_permission', 'accounting.post');
+    }
+
+    public function test_empty_custom_role_permissions_are_enforced_instead_of_falling_back_to_defaults(): void
+    {
+        $settings = $this->tenant->settings ?? [];
+        $settings['custom_role_permissions']['accountant'] = [];
+        $this->tenant->settings = $settings;
+        $this->tenant->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->postJson('/api/v1/accounting/journal-entries', [])
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'InsufficientPermission');
+    }
+
+    public function test_staff_branch_assignment_scopes_branch_warehouse_and_inventory_visibility(): void
+    {
+        $branchA = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'فرع أ',
+            'code' => 'BR-AUTH-A',
+            'type' => 'factory',
+            'is_main' => false,
+            'is_active' => true,
+        ]);
+        $branchB = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'فرع ب',
+            'code' => 'BR-AUTH-B',
+            'type' => 'outlet',
+            'is_main' => false,
+            'is_active' => true,
+        ]);
+
+        $this->productionManagerUser->branches()->sync([$branchA->id]);
+        $this->productionManagerUser->forceFill([
+            'permissions_mode' => 'custom',
+            'permissions' => ['branches.view', 'inventory.view', 'production.manage', 'procurement.view'],
+        ])->save();
+        $this->warehouse->update(['branch_id' => $branchB->id]);
+
+        $warehouseA = Warehouse::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'branch_id' => $branchA->id,
+            'name' => 'مخزن الفرع أ',
+            'code' => 'WH-BR-A',
+            'type' => 'fabric',
+            'allow_negative_stock' => false,
+        ]);
+        $warehouseB = Warehouse::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'branch_id' => $branchB->id,
+            'name' => 'مخزن الفرع ب',
+            'code' => 'WH-BR-B',
+            'type' => 'fabric',
+            'allow_negative_stock' => false,
+        ]);
+
+        InventoryItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouseA->id,
+            'item_type' => 'fabric_raw',
+            'code' => 'FAB-BR-A',
+            'name' => 'خامة الفرع أ',
+            'unit_of_measure' => 'm',
+            'current_balance' => 10,
+            'average_cost' => 1,
+        ]);
+        InventoryItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouseB->id,
+            'item_type' => 'fabric_raw',
+            'code' => 'FAB-BR-B',
+            'name' => 'خامة الفرع ب',
+            'unit_of_measure' => 'm',
+            'current_balance' => 20,
+            'average_cost' => 1,
+        ]);
+
+        $supplier = Supplier::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'مورد الفروع',
+            'code' => 'SUP-BR-01',
+        ]);
+        foreach ([[$warehouseA, 'PO-BR-A'], [$warehouseB, 'PO-BR-B']] as [$warehouse, $number]) {
+            PurchaseOrder::withoutGlobalScopes()->create([
+                'tenant_id' => $this->tenant->id,
+                'supplier_id' => $supplier->id,
+                'warehouse_id' => $warehouse->id,
+                'po_number' => $number,
+                'order_date' => now()->toDateString(),
+                'status' => 'draft',
+                'subtotal' => 100,
+                'total_amount' => 100,
+            ]);
+        }
+
+        Sanctum::actingAs($this->productionManagerUser);
+
+        $this->getJson('/api/v1/branches')
+            ->assertOk()
+            ->assertJsonCount(1, 'branches')
+            ->assertJsonPath('branches.0.id', $branchA->id);
+
+        $this->getJson('/api/v1/warehouses')
+            ->assertOk()
+            ->assertJsonCount(1, 'warehouses')
+            ->assertJsonPath('warehouses.0.id', $warehouseA->id);
+
+        $this->getJson('/api/v1/inventory/items')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        StockCount::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'count_number' => 'CNT-BR-A',
+            'warehouse_id' => $warehouseA->id,
+            'status' => 'draft',
+            'count_date' => now()->toDateString(),
+            'created_by' => $this->productionManagerUser->id,
+        ]);
+        StockCount::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'count_number' => 'CNT-BR-B',
+            'warehouse_id' => $warehouseB->id,
+            'status' => 'draft',
+            'count_date' => now()->toDateString(),
+            'created_by' => $this->ownerUser->id,
+        ]);
+
+        $this->getJson('/api/v1/inventory/counts')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->getJson('/api/v1/purchase-orders')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->postJson('/api/v1/branches', [
+            'name' => 'فرع ممنوع',
+            'code' => 'BR-FORBIDDEN',
+            'type' => 'factory',
+        ])->assertStatus(403);
+    }
+
+    public function test_platform_admin_is_denied_from_tenant_routes_without_role_middleware(): void
+    {
+        Sanctum::actingAs($this->platformAdminUser);
+
+        $this->withHeader('X-Tenant-ID', $this->tenant->id)
+            ->getJson('/api/v1/inventory/items')
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'UnauthorizedRole');
+    }
+
+    public function test_staff_cannot_access_subscription_administration_routes_without_permission(): void
+    {
+        $this->accountantUser->forceFill([
+            'permissions_mode' => 'custom',
+            'permissions' => [],
+        ])->save();
+
+        Sanctum::actingAs($this->accountantUser);
+
+        $this->getJson('/api/v1/subscriptions/my-status')
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'InsufficientPermission')
+            ->assertJsonPath('required_permission', 'admin.settings');
+    }
+
+    public function test_platform_admin_can_reach_platform_subscription_admin_but_not_tenant_inventory(): void
+    {
+        Sanctum::actingAs($this->platformAdminUser);
+
+        $this->getJson('/api/v1/platform-admin/overview')
+            ->assertOk();
+
+        $this->withHeader('X-Tenant-ID', $this->tenant->id)
+            ->getJson('/api/v1/inventory/items')
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'UnauthorizedRole');
+    }
+
+    public function test_owner_cannot_create_staff_user_without_a_branch_assignment(): void
+    {
+        Sanctum::actingAs($this->ownerUser);
+
+        $this->postJson('/api/v1/tenant/users', [
+            'name' => 'موظف بدون فرع',
+            'email' => 'no-branch@nile.com',
+            'password' => 'StrongPass123!',
+            'role' => 'sales_rep',
+        ])->assertStatus(422)
+            ->assertJsonPath('error', 'BranchAssignmentRequired');
+    }
+
+    public function test_owner_can_create_staff_user_with_an_explicit_branch_assignment(): void
+    {
+        Sanctum::actingAs($this->ownerUser);
+
+        $this->postJson('/api/v1/tenant/users', [
+            'name' => 'موظف الفرع',
+            'email' => 'assigned-branch@nile.com',
+            'password' => 'StrongPass123!',
+            'role' => 'sales_rep',
+            'branch_ids' => [$this->mainBranch->id],
+        ])->assertCreated()
+            ->assertJsonPath('user.branch_ids.0', $this->mainBranch->id);
+    }
+
+    public function test_owner_cannot_remove_all_branch_assignments_from_existing_staff_user(): void
+    {
+        Sanctum::actingAs($this->ownerUser);
+
+        $this->putJson('/api/v1/tenant/users/'.$this->workerUser->id, [
+            'branch_ids' => [],
+        ])->assertStatus(422)
+            ->assertJsonPath('error', 'BranchAssignmentRequired');
+    }
+
+    public function test_unassigned_custom_staff_user_sees_no_branch_bound_data(): void
+    {
+        $unassigned = User::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'موظف غير معيّن',
+            'email' => 'unassigned@nile.com',
+            'password' => bcrypt('StrongPass123!'),
+            'role' => 'production_manager',
+            'permissions_mode' => 'custom',
+            'permissions' => ['branches.view', 'inventory.view'],
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($unassigned);
+
+        $this->getJson('/api/v1/branches')
+            ->assertOk()
+            ->assertJsonCount(0, 'branches');
+
+        $this->getJson('/api/v1/warehouses')
+            ->assertOk()
+            ->assertJsonCount(0, 'warehouses');
+
+        $this->getJson('/api/v1/inventory/items')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
 }
 

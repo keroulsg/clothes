@@ -197,11 +197,11 @@ class Batch7RemainingModulesAndCostingEdgeCasesTest extends TestCase
             'production_order_id' => $order->id,
             'garment_model_id' => $this->model->id,
             'total_produced_pieces' => 100,
-            'direct_materials_cost' => 4000,
+            'direct_materials_cost' => 0,
             'direct_labor_cost' => 1000,
             'allocated_overhead_cost' => 750,
-            'total_cost' => 5750,
-            'cost_per_piece' => 57.50,
+            'total_cost' => 1750,
+            'cost_per_piece' => 17.50,
             'status' => 'calculated',
         ]);
 
@@ -418,7 +418,7 @@ class Batch7RemainingModulesAndCostingEdgeCasesTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $costSheet = $this->accountingService->calculateProductionCost($order->id);
+        $costSheet = $this->accountingService->calculateProductionCost($order->id, ['overhead_allocation_method' => 'materials_and_labor_pct']);
 
         // التحقق من أن صافي الخامات = 15000 - 3000 = 12000
         $this->assertEquals(12000.00, (float)$costSheet->direct_materials_cost);

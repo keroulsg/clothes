@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerMaterialReceipt;
+use App\Models\CuttingBundle;
+use App\Models\Employee;
 use App\Models\ExternalOperation;
 use App\Models\GarmentModel;
 use App\Models\JobDeliveryNote;
 use App\Models\JobInvoice;
 use App\Models\JobOrder;
+use App\Models\ProductionOrder;
 use App\Models\Warehouse;
 use App\Services\SubcontractingService;
 use Exception;
@@ -80,13 +83,21 @@ class SubcontractingController extends Controller
         }
 
         $customer->load([
-            'jobOrders' => function ($q) {
-                $q->with(['garmentModel:id,name,code', 'assignedEmployee:id,name'])->orderByDesc('created_at');
+            'jobOrders' => function ($q) use ($request) {
+                $this->scopeJobsToAssignedBranches($q, $request)
+                    ->with(['garmentModel:id,name,code', 'assignedEmployee:id,name'])
+                    ->orderByDesc('created_at');
             },
             'customerMaterials',
-            'materialReceipts.warehouse',
-            'deliveryNotes',
-            'invoices.items',
+            'materialReceipts' => function ($q) {
+                $q->with('warehouse');
+            },
+            'deliveryNotes' => function ($q) use ($request) {
+                $this->scopeRelatedJobRecords($q, $request);
+            },
+            'invoices' => function ($q) use ($request) {
+                $this->scopeRelatedJobRecords($q, $request)->with('items');
+            },
         ]);
 
         // الحسابات المالية والتشغيلية المجمعة
@@ -163,8 +174,10 @@ class SubcontractingController extends Controller
     public function jobs(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = JobOrder::where('tenant_id', $tenantId)
-            ->with(['customer', 'garmentModel', 'assignedEmployee', 'items', 'invoices', 'deliveryNotes', 'materialReceipts', 'externalOperations.assignedEmployee'])
+        $query = $this->scopeJobsToAssignedBranches(
+            JobOrder::where('tenant_id', $tenantId),
+            $request
+        )->with(['customer', 'garmentModel', 'assignedEmployee', 'items', 'invoices', 'deliveryNotes', 'materialReceipts', 'externalOperations.assignedEmployee'])
             ->orderBy('created_at', 'desc');
 
         if ($request->has('status') && $request->status !== '') {
@@ -207,6 +220,7 @@ class SubcontractingController extends Controller
             'garment_model_id' => 'nullable|uuid',
             'assigned_employee_id' => 'nullable|uuid',
             'production_order_id' => 'nullable|uuid',
+            'branch_id' => 'nullable|uuid',
             'fabric_source' => 'nullable|string|in:customer_supplied,factory_supplied,mixed',
             'trims_responsibility' => 'nullable|string|in:customer_supplied,factory_supplied,mixed',
             'pricing_basis' => 'nullable|string|in:per_piece,per_meter,per_operation,per_bundle',
@@ -250,9 +264,66 @@ class SubcontractingController extends Controller
             }
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
+        $productionOrder = null;
+        $assignedEmployee = null;
+        if (!empty($validated['production_order_id'])) {
+            $productionOrder = \App\Models\ProductionOrder::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->find($validated['production_order_id']);
+            if (!$productionOrder) {
+                return response()->json(['success' => false, 'error' => 'ProductionOrderNotFound'], 404);
+            }
+        }
+        if (!empty($validated['assigned_employee_id'])) {
+            $assignedEmployee = \App\Models\Employee::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->find($validated['assigned_employee_id']);
+            if (!$assignedEmployee) {
+                return response()->json(['success' => false, 'error' => 'EmployeeNotFound'], 404);
+            }
+        }
+        $jobBranchId = $validated['branch_id'] ?? $productionOrder?->branch_id ?? $assignedEmployee?->branch_id;
+        if ($productionOrder && $assignedEmployee && $productionOrder->branch_id !== $assignedEmployee->branch_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchMismatch',
+                'message' => 'يجب أن يتبع العامل وأمر الإنتاج نفس الفرع.',
+            ], 422);
+        }
+        if ($enforceBranchScope) {
+            if (!$jobBranchId && count($assignedBranchIds) === 1) {
+                $jobBranchId = $assignedBranchIds[0];
+            }
+            if (!$jobBranchId || !in_array($jobBranchId, $assignedBranchIds, true)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchAccessDenied',
+                    'message' => 'يجب تحديد فرع معيّن لأمر التشغيل قبل إنشائه.',
+                ], 403);
+            }
+        }
+        if ($jobBranchId) {
+            $branch = \App\Models\Branch::where('tenant_id', $tenantId)->find($jobBranchId);
+            if (!$branch) {
+                return response()->json(['success' => false, 'error' => 'BranchNotFound'], 404);
+            }
+            if (($productionOrder && $productionOrder->branch_id !== $jobBranchId)
+                || ($assignedEmployee && $assignedEmployee->branch_id !== $jobBranchId)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب أن يتبع أمر التشغيل والعامل وأمر الإنتاج نفس الفرع.',
+                ], 422);
+            }
+        }
+
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['branch_id'] = $jobBranchId;
             $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
             $order = $this->subcontractingService->createJobOrder($data, $validated['items'] ?? []);
@@ -290,7 +361,7 @@ class SubcontractingController extends Controller
     public function showJob(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $job = JobOrder::withoutGlobalScopes()->find($id);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
@@ -308,8 +379,16 @@ class SubcontractingController extends Controller
 
     public function confirmJob(Request $request, string $id): JsonResponse
     {
+        if (!in_array($request->user()?->role, ['company_owner', 'production_manager', 'accountant'], true)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'UnauthorizedRole',
+                'message' => 'ليس لديك صلاحية تأكيد أوامر التشغيل للغير.',
+            ], 403);
+        }
+
         $tenantId = app('current_tenant_id');
-        $job = JobOrder::withoutGlobalScopes()->find($id);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
@@ -382,9 +461,23 @@ class SubcontractingController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
+        if ($enforceBranchScope && !in_array($warehouse->branch_id, $assignedBranchIds, true)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك استلام خامات في مخزن تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
+        $jobBranchId = $warehouse->branch_id;
+
         // التحقق من ملكية أمر التشغيل إن مرر
         if (!empty($validated['job_order_id'])) {
-            $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)
+                ->with(['productionOrder', 'assignedEmployee', 'cuttingOrders.warehouse'])
+                ->find($validated['job_order_id']);
             if (!$job || $job->tenant_id !== $tenantId) {
                 return response()->json([
                     'success' => false,
@@ -392,11 +485,33 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
+            $jobAnchorIds = [$job->branch_id];
+            if ($job->productionOrder) {
+                $jobAnchorIds[] = $job->productionOrder->branch_id;
+            }
+            if ($job->assignedEmployee) {
+                $jobAnchorIds[] = $job->assignedEmployee->branch_id;
+            }
+            foreach ($job->cuttingOrders as $linkedCuttingOrder) {
+                if ($linkedCuttingOrder->warehouse) {
+                    $jobAnchorIds[] = $linkedCuttingOrder->warehouse->branch_id;
+                }
+            }
+            $jobAnchorIds = array_values(array_unique(array_filter($jobAnchorIds)));
+            if (count($jobAnchorIds) !== 1 || $jobAnchorIds[0] !== $warehouse->branch_id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب أن تتفق فروع أمر التشغيل وروابطه ومخزن استلام الخامات.',
+                ], 422);
+            }
+            $jobBranchId = $jobAnchorIds[0];
         }
 
         try {
             $data = $validated;
             $data['tenant_id'] = $tenantId;
+            $data['branch_id'] = $jobBranchId;
             $data['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
             $receipt = $this->subcontractingService->receiveCustomerMaterialReceipt($data);
@@ -437,7 +552,7 @@ class SubcontractingController extends Controller
     public function externalOperations(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = ExternalOperation::where('tenant_id', $tenantId)
+        $query = $this->scopeExternalOperationsToAssignedBranches(ExternalOperation::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder.customer', 'productionOrder', 'bundle', 'assignedEmployee'])
             ->orderBy('created_at', 'desc');
 
@@ -479,8 +594,15 @@ class SubcontractingController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
+        $operationBranchIds = [];
+
         if (!empty($validated['job_order_id'])) {
-            $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+            $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)
+                ->with(['productionOrder', 'assignedEmployee', 'cuttingOrders.warehouse'])
+                ->find($validated['job_order_id']);
             if (!$job || $job->tenant_id !== $tenantId) {
                 return response()->json([
                     'success' => false,
@@ -488,6 +610,66 @@ class SubcontractingController extends Controller
                     'message' => 'أمان: أمر التشغيل غير تابع لشركتك.',
                 ], 403);
             }
+            $operationBranchIds[] = $job->branch_id;
+            if ($job->productionOrder) {
+                $operationBranchIds[] = $job->productionOrder->branch_id;
+            }
+            if ($job->assignedEmployee) {
+                $operationBranchIds[] = $job->assignedEmployee->branch_id;
+            }
+            foreach ($job->cuttingOrders as $linkedCuttingOrder) {
+                if ($linkedCuttingOrder->warehouse) {
+                    $operationBranchIds[] = $linkedCuttingOrder->warehouse->branch_id;
+                }
+            }
+        }
+        if (!empty($validated['production_order_id'])) {
+            $productionOrder = ProductionOrder::where('tenant_id', $tenantId)->find($validated['production_order_id']);
+            if (!$productionOrder) {
+                return response()->json(['error' => 'ProductionOrderNotFound'], 404);
+            }
+            $operationBranchIds[] = $productionOrder->branch_id;
+        }
+        if (!empty($validated['cutting_bundle_id'])) {
+            $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)
+                ->with(['productionOrder', 'cuttingOrder.warehouse'])
+                ->find($validated['cutting_bundle_id']);
+            if (!$bundle) {
+                return response()->json(['error' => 'BundleNotFound'], 404);
+            }
+            if ($bundle->productionOrder) {
+                $operationBranchIds[] = $bundle->productionOrder->branch_id;
+            }
+            if ($bundle->cuttingOrder?->warehouse) {
+                $operationBranchIds[] = $bundle->cuttingOrder->warehouse->branch_id;
+            }
+        }
+        if (!empty($validated['assigned_employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->find($validated['assigned_employee_id']);
+            if (!$employee) {
+                return response()->json(['error' => 'EmployeeNotFound'], 404);
+            }
+            $operationBranchIds[] = $employee->branch_id;
+        }
+        $hasUnanchoredBranch = in_array(null, $operationBranchIds, true);
+        $operationBranchIds = array_values(array_unique(array_filter($operationBranchIds)));
+        if (count($operationBranchIds) > 1 || ($hasUnanchoredBranch && !empty($operationBranchIds))) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchMismatch',
+                'message' => 'يجب أن تتفق جميع روابط التشغيل الخارجي على فرع واحد.',
+            ], 422);
+        }
+        if ($enforceBranchScope && (
+            $hasUnanchoredBranch
+            || count($operationBranchIds) !== 1
+            || !in_array($operationBranchIds[0] ?? null, $assignedBranchIds, true)
+        )) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'يجب ربط التشغيل الخارجي بفرع واحد معيّن لحسابك.',
+            ], 403);
         }
 
         try {
@@ -530,7 +712,9 @@ class SubcontractingController extends Controller
     public function receiveExternalOperation(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $op = ExternalOperation::withoutGlobalScopes()->find($id);
+        $op = $this->scopeExternalOperationsToAssignedBranches(ExternalOperation::where('tenant_id', $tenantId), $request)
+            ->with(['jobOrder.productionOrder', 'jobOrder.assignedEmployee', 'jobOrder.cuttingOrders.warehouse', 'productionOrder', 'bundle.productionOrder', 'bundle.cuttingOrder.warehouse', 'assignedEmployee'])
+            ->find($id);
 
         if (!$op || $op->tenant_id !== $tenantId) {
             return response()->json([
@@ -546,7 +730,57 @@ class SubcontractingController extends Controller
             'scrap_quantity' => 'nullable|integer|min:0',
             'assigned_employee_id' => 'nullable|uuid',
             'worker_unit_rate' => 'nullable|numeric|min:0',
+            'idempotency_key' => 'nullable|string|max:120',
+            'notes' => 'nullable|string',
         ]);
+
+        $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
+
+        if (!empty($validated['assigned_employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->find($validated['assigned_employee_id']);
+            if (!$employee) {
+                return response()->json(['error' => 'EmployeeNotFound'], 404);
+            }
+
+            $anchorIds = [];
+            if ($op->jobOrder) {
+                $anchorIds[] = $op->jobOrder->branch_id;
+                if ($op->jobOrder->productionOrder) {
+                    $anchorIds[] = $op->jobOrder->productionOrder->branch_id;
+                }
+                if ($op->jobOrder->assignedEmployee) {
+                    $anchorIds[] = $op->jobOrder->assignedEmployee->branch_id;
+                }
+                foreach ($op->jobOrder->cuttingOrders as $cuttingOrder) {
+                    if ($cuttingOrder->warehouse) {
+                        $anchorIds[] = $cuttingOrder->warehouse->branch_id;
+                    }
+                }
+            }
+            if ($op->productionOrder) {
+                $anchorIds[] = $op->productionOrder->branch_id;
+            }
+            if ($op->bundle?->productionOrder) {
+                $anchorIds[] = $op->bundle->productionOrder->branch_id;
+            }
+            if ($op->bundle?->cuttingOrder?->warehouse) {
+                $anchorIds[] = $op->bundle->cuttingOrder->warehouse->branch_id;
+            }
+            if ($op->assignedEmployee) {
+                $anchorIds[] = $op->assignedEmployee->branch_id;
+            }
+
+            $hasUnanchoredBranch = in_array(null, $anchorIds, true);
+            $anchorIds = array_values(array_unique(array_filter($anchorIds)));
+            if (count($anchorIds) !== 1 || $hasUnanchoredBranch || !$employee->branch_id || $employee->branch_id !== $anchorIds[0]) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب أن يتبع العامل المستلم نفس فرع جميع روابط التشغيل الخارجي.'], 422);
+            }
+
+            $user = $request->user();
+            if ($user && $user->shouldEnforceBranchScope() && !in_array($anchorIds[0], $user->assignedBranchIds(), true)) {
+                return response()->json(['error' => 'BranchAccessDenied'], 403);
+            }
+        }
 
         try {
             $received = $this->subcontractingService->receiveExternalOperation($id, $validated);
@@ -569,7 +803,7 @@ class SubcontractingController extends Controller
     public function deliveryNotes(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $notes = JobDeliveryNote::where('tenant_id', $tenantId)
+        $notes = $this->scopeRelatedJobRecords(JobDeliveryNote::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder', 'items', 'customer'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -601,7 +835,7 @@ class SubcontractingController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
-        $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
@@ -653,7 +887,7 @@ class SubcontractingController extends Controller
     public function invoices(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $invoices = JobInvoice::where('tenant_id', $tenantId)
+        $invoices = $this->scopeRelatedJobRecords(JobInvoice::where('tenant_id', $tenantId), $request)
             ->with(['jobOrder', 'items', 'customer'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -685,7 +919,7 @@ class SubcontractingController extends Controller
             'idempotency_key' => 'nullable|string|max:120',
         ]);
 
-        $job = JobOrder::withoutGlobalScopes()->find($validated['job_order_id']);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($validated['job_order_id']);
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
@@ -734,7 +968,7 @@ class SubcontractingController extends Controller
     public function recordPayment(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $invoice = JobInvoice::withoutGlobalScopes()->find($id);
+        $invoice = $this->scopeRelatedJobRecords(JobInvoice::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$invoice || $invoice->tenant_id !== $tenantId) {
             return response()->json([
@@ -769,7 +1003,7 @@ class SubcontractingController extends Controller
     public function profitability(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $job = JobOrder::withoutGlobalScopes()->find($id);
+        $job = $this->scopeJobsToAssignedBranches(JobOrder::where('tenant_id', $tenantId), $request)->find($id);
 
         if (!$job || $job->tenant_id !== $tenantId) {
             return response()->json([
@@ -792,4 +1026,73 @@ class SubcontractingController extends Controller
             ], 422);
         }
     }
+    /**
+     * Non-owner access is restricted to explicitly assigned branches.
+     * An empty assignment is fail-closed (no branch records are visible).
+     */
+    private function scopeJobsToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->shouldEnforceBranchScope()) {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        return $query->whereIn('branch_id', $branchIds);
+    }
+
+    private function scopeRelatedJobRecords($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->shouldEnforceBranchScope()) {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        return $query->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request));
+    }
+
+    private function scopeExternalOperationsToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->shouldEnforceBranchScope()) {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+
+        // At least one ownership anchor must exist in an assigned branch, and
+        // every other populated anchor must agree. OR-only scoping can leak a
+        // mixed-branch operation to users assigned to just one of its branches.
+        return $query
+            ->where(function ($branchQuery) use ($branchIds, $request) {
+                $branchQuery
+                    ->whereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request))
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('bundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('bundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('assignedEmployee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds, $request) {
+                $branchQuery->whereDoesntHave('jobOrder')
+                    ->orWhereHas('jobOrder', fn ($jobQuery) => $this->scopeJobsToAssignedBranches($jobQuery, $request));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('productionOrder')
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('bundle.productionOrder')
+                    ->orWhereHas('bundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('bundle.cuttingOrder.warehouse')
+                    ->orWhereHas('bundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery->whereDoesntHave('assignedEmployee')
+                    ->orWhereHas('assignedEmployee', fn ($employeeQuery) => $employeeQuery->whereIn('branch_id', $branchIds));
+            });
+    }
+
 }

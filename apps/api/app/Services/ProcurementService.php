@@ -385,12 +385,35 @@ class ProcurementService
                     return $duplicateInvoice->load('supplier', 'purchaseOrder');
                 }
 
+                if (empty($data['goods_receipt_note_id'])) {
+                    throw new InvalidArgumentException('لا يمكن إنشاء أو ترحيل فاتورة مورد دون إذن استلام معتمد واجتياز فحص الجودة.');
+                }
+
                 $grn = null;
                 if (isset($data['goods_receipt_note_id'])) {
-                    $grn = GoodsReceiptNote::with('items')->where('tenant_id', $tenantId)->where('id', $data['goods_receipt_note_id'])->first();
+                    $grn = GoodsReceiptNote::with('items.inventoryItem')->where('tenant_id', $tenantId)->where('id', $data['goods_receipt_note_id'])->first();
                     if (!$grn) {
                         throw new InvalidArgumentException('أمان: إذن الاستلام غير موجود أو غير تابع لهذه الشركة.');
                     }
+                    if (
+                        (string) $grn->purchase_order_id !== (string) $po->id
+                        || (string) $grn->supplier_id !== (string) $supplier->id
+                    ) {
+                        throw new InvalidArgumentException('إذن الاستلام المحدد لا يخص أمر الشراء والمورد المحددين للفاتورة.');
+                    }
+                    if ($grn->status !== 'posted' || in_array($grn->inspection_status, ['failed', 'rejected'], true)) {
+                        throw new InvalidArgumentException('لا يمكن ترحيل فاتورة المورد قبل اعتماد إذن الاستلام واجتياز فحص الجودة.');
+                    }
+                }
+
+                $grnItems = GoodsReceiptNoteItem::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('goods_receipt_note_id', $grn->id)
+                    ->orderBy('id')
+                    ->get();
+
+                if ($grnItems->isEmpty() || $grnItems->every(fn ($item) => (float) $item->accepted_quantity <= 0)) {
+                    throw new InvalidArgumentException('إذن الاستلام لا يحتوي على كميات مقبولة قابلة للفوترة.');
                 }
 
                 $tenantRecord = \App\Models\Tenant::find($tenantId);
@@ -408,7 +431,7 @@ class ProcurementService
                 // مقارنة مع استلام البضاعة إذا وجد
                 if ($grn) {
                     $grnTotalValue = 0;
-                    foreach ($grn->items as $grnItem) {
+                    foreach ($grnItems as $grnItem) {
                         $grnTotalValue += ((float) $grnItem->accepted_quantity * (float) $grnItem->unit_cost);
                     }
 
@@ -441,9 +464,9 @@ class ProcurementService
                         'payment_status' => 'unpaid',
                         'matching_status' => $matchingStatus,
                         'variance_notes' => !empty($varianceNotes) ? implode('; ', $varianceNotes) : null,
-                        'is_posted' => true,
-                        'posted_at' => now(),
-                        'posted_by' => $data['posted_by'] ?? auth()->id(),
+                        'is_posted' => false,
+                        'posted_at' => null,
+                        'posted_by' => null,
                         'idempotency_key' => $idempotencyKey,
                     ]);
                 } catch (QueryException $e) {
@@ -463,7 +486,107 @@ class ProcurementService
                     throw $e;
                 }
 
-                // إثبات الالتزام المالي الحقيقي للمورد
+                if (!$grn) {
+                    throw new InvalidArgumentException('لا يمكن ترحيل فاتورة المورد قبل تسجيل إذن استلام معتمد يثبت دخول الخامات للمخزن.');
+                }
+
+                if (abs($invoiceTotal - ($invoiceSubtotal + $invoiceTax)) > 0.01) {
+                    throw new InvalidArgumentException('إجمالي فاتورة المورد لا يساوي صافي الفاتورة مضافاً إليه الضريبة. راجع المبالغ قبل الترحيل.');
+                }
+
+                // A three-way matching variance is a review state, not permission to post an unapproved liability.
+                if ($matchingStatus !== 'matched') {
+                    return $invoice->load('supplier', 'purchaseOrder');
+                }
+
+                $inventoryWeights = [];
+                foreach ($grnItems as $grnItem) {
+                    $acceptedQuantity = (float) $grnItem->accepted_quantity;
+                    if ($acceptedQuantity <= 0) {
+                        continue;
+                    }
+
+                    $inventoryItem = InventoryItem::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->whereKey($grnItem->inventory_item_id)
+                        ->first();
+                    if (!$inventoryItem) {
+                        throw new InvalidArgumentException('يوجد بند استلام غير مرتبط بصنف مخزني تابع لنفس الشركة؛ لا يمكن ترحيل فاتورة المورد.');
+                    }
+
+                    $itemType = strtolower((string) $inventoryItem->item_type);
+                    $mappingKey = in_array($itemType, ['accessory_raw', 'accessory', 'packaging', 'thread', 'trims'], true)
+                        ? 'accessories_inventory'
+                        : 'raw_materials_inventory';
+
+                    $inventoryWeights[$mappingKey] = ($inventoryWeights[$mappingKey] ?? 0.0)
+                        + ($acceptedQuantity * (float) $grnItem->unit_cost);
+                }
+
+                $weightTotal = array_sum($inventoryWeights);
+                if ($weightTotal <= 0) {
+                    throw new InvalidArgumentException('لا توجد كميات مستلمة مقبولة بقيمة موجبة لترحيل فاتورة المورد.');
+                }
+
+                $accounting = app(\App\Services\AccountingService::class);
+                $journalLines = [];
+                $allocatedSubtotal = 0.0;
+                $weightKeys = array_keys($inventoryWeights);
+
+                foreach ($weightKeys as $index => $mappingKey) {
+                    $allocatedAmount = $index === count($weightKeys) - 1
+                        ? round($invoiceSubtotal - $allocatedSubtotal, 4)
+                        : round($invoiceSubtotal * ($inventoryWeights[$mappingKey] / $weightTotal), 4);
+
+                    $allocatedSubtotal += $allocatedAmount;
+                    if ($allocatedAmount > 0) {
+                        $inventoryAccount = $accounting->getMappedAccount($tenantId, $mappingKey);
+                        $journalLines[] = [
+                            'account_id' => $inventoryAccount->id,
+                            'debit' => $allocatedAmount,
+                            'credit' => 0,
+                            'description' => "إثبات قيمة خامات مستلمة بفاتورة المورد {$invoice->invoice_number}",
+                        ];
+                    }
+                }
+
+                if ($invoiceTax > 0) {
+                    $inputTaxAccount = $accounting->getMappedAccount($tenantId, 'input_tax');
+                    $journalLines[] = [
+                        'account_id' => $inputTaxAccount->id,
+                        'debit' => $invoiceTax,
+                        'credit' => 0,
+                        'description' => "ضريبة مدخلات فاتورة المورد {$invoice->invoice_number}",
+                    ];
+                }
+
+                $apAccount = $accounting->getMappedAccount($tenantId, 'ap_control');
+                $journalLines[] = [
+                    'account_id' => $apAccount->id,
+                    'debit' => 0,
+                    'credit' => $invoiceTotal,
+                    'description' => "إثبات التزام المورد {$supplier->name} عن الفاتورة {$invoice->invoice_number}",
+                    'party_type' => 'supplier',
+                    'party_id' => $supplier->id,
+                ];
+
+                $accounting->createJournalEntry([
+                    'tenant_id' => $tenantId,
+                    'entry_number' => 'JE-SINV-' . $invoice->internal_reference,
+                    'entry_date' => $invoice->invoice_date,
+                    'reference_type' => 'supplier_invoice',
+                    'reference_id' => $invoice->id,
+                    'description' => "ترحيل فاتورة المورد {$invoice->invoice_number}",
+                    'lines' => $journalLines,
+                ]);
+
+                $invoice->update([
+                    'is_posted' => true,
+                    'posted_at' => now(),
+                    'posted_by' => auth()->id(),
+                ]);
+
+                // Update the supplier subledger only after the balanced GL journal succeeds.
                 $supplier->current_balance = (float) $supplier->current_balance + $invoiceTotal;
                 $supplier->save();
 
@@ -671,6 +794,9 @@ class ProcurementService
         $query = PurchaseRequisition::where('tenant_id', $tenantId)
             ->with(['requester:id,name,email', 'approver:id,name,email', 'items.inventoryItem', 'branch', 'convertedPurchaseOrder']);
 
+        if (array_key_exists('branch_ids', $filters)) {
+            $query->whereIn('branch_id', $filters['branch_ids']);
+        }
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }

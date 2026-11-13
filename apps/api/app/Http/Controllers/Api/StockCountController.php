@@ -8,6 +8,7 @@ use App\Models\StockCount;
 use App\Models\StockCountItem;
 use App\Models\Warehouse;
 use App\Services\InventoryService;
+use App\Services\AccountingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,10 +16,12 @@ use Illuminate\Support\Facades\DB;
 class StockCountController extends Controller
 {
     protected InventoryService $inventoryService;
+    protected AccountingService $accountingService;
 
-    public function __construct(InventoryService $inventoryService)
+    public function __construct(InventoryService $inventoryService, AccountingService $accountingService)
     {
         $this->inventoryService = $inventoryService;
+        $this->accountingService = $accountingService;
     }
 
     /**
@@ -30,6 +33,11 @@ class StockCountController extends Controller
         $query = StockCount::where('tenant_id', $tenantId)
             ->with(['warehouse.branch', 'creator', 'approver'])
             ->withCount('items');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
 
         if ($request->filled('warehouse_id')) {
             $query->where('warehouse_id', $request->warehouse_id);
@@ -61,6 +69,13 @@ class StockCountController extends Controller
         ]);
 
         $warehouse = Warehouse::where('tenant_id', $tenantId)->findOrFail($validated['warehouse_id']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner' && !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
+            return response()->json([
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك إنشاء جرد لمخزن تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
 
         $stockCount = DB::transaction(function () use ($tenantId, $validated, $warehouse) {
             $countNumber = 'CNT-' . date('Ymd') . '-' . rand(1000, 9999);
@@ -123,7 +138,12 @@ class StockCountController extends Controller
     public function record(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $count = StockCount::where('tenant_id', $tenantId)->findOrFail($id);
+        $countQuery = StockCount::where('tenant_id', $tenantId);
+        if ($request->user() && $request->user()->role !== 'company_owner') {
+            $branchIds = $request->user()->assignedBranchIds();
+            $countQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $count = $countQuery->findOrFail($id);
 
         if ($count->status === 'approved') {
             return response()->json([
@@ -172,71 +192,73 @@ class StockCountController extends Controller
     public function approve(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $count = StockCount::where('tenant_id', $tenantId)
-            ->with(['items.inventoryItem', 'warehouse'])
-            ->findOrFail($id);
 
-        if ($count->status === 'approved') {
-            return response()->json([
-                'error' => 'CountAlreadyApproved',
-                'message' => 'تم اعتماد هذا الجرد مسبقاً وترحيل تسوياته.',
-            ], 422);
-        }
+        $count = DB::transaction(function () use ($id, $tenantId) {
+            // Serialize approvals: two concurrent requests must never apply the same count twice.
+            $countQuery = StockCount::where('tenant_id', $tenantId);
+            $user = request()->user();
+            if ($user && $user->role !== 'company_owner') {
+                $branchIds = $user->assignedBranchIds();
+                $countQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            }
+            $count = $countQuery
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        DB::transaction(function () use ($count, $tenantId) {
+            if ($count->status === 'approved') {
+                return $count->load(['warehouse', 'items.inventoryItem', 'approver']);
+            }
+
+            if ($count->status !== 'in_progress') {
+                abort(422, 'لا يمكن اعتماد الجرد قبل تسجيل الكميات الفعلية ومراجعتها.');
+            }
+
+            $count->load(['items.inventoryItem', 'warehouse']);
+
             foreach ($count->items as $countItem) {
                 $diff = (float) $countItem->difference_quantity;
                 $item = $countItem->inventoryItem;
 
-                if ($diff > 0.0001) {
-                    // تسوية زيادة جردية (IN)
-                    $this->inventoryService->recordTransaction([
+                if (!$item) {
+                    throw new \RuntimeException("صنف الجرد [{$countItem->id}] لم يعد مرتبطاً بسجل مخزني صالح.");
+                }
+
+                if ($diff > 0.0001 || $diff < -0.0001) {
+                    $direction = $diff > 0 ? 'IN' : 'OUT';
+                    $quantity = abs($diff);
+                    $transaction = $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $item->id,
                         'warehouse_id' => $count->warehouse_id,
-                        'transaction_type' => 'adjustment_positive',
-                        'direction' => 'IN',
-                        'quantity' => $diff,
+                        'transaction_type' => $diff > 0 ? 'adjustment_positive' : 'adjustment_negative',
+                        'direction' => $direction,
+                        'quantity' => $quantity,
                         'unit_cost' => (float) $countItem->unit_cost,
                         'reference_type' => 'stock_count',
+                        'reference_id' => (string) $countItem->id,
                         'reference_number' => $count->count_number,
-                        'notes' => 'تسوية زيادة جردية معتمدة بجلسة ' . $count->count_number,
+                        'idempotency_key' => 'STOCK-COUNT-' . $count->id . '-' . $countItem->id,
+                        'notes' => 'تسوية جرد معتمدة بجلسة ' . $count->count_number,
                     ]);
+                    $this->accountingService->postStockCountAdjustment($transaction);
                     $countItem->adjustment_status = 'adjusted';
-                    $countItem->save();
-                } elseif ($diff < -0.0001) {
-                    // تسوية عجز جردي (OUT)
-                    $absDiff = abs($diff);
-                    $this->inventoryService->recordTransaction([
-                        'tenant_id' => $tenantId,
-                        'inventory_item_id' => $item->id,
-                        'warehouse_id' => $count->warehouse_id,
-                        'transaction_type' => 'adjustment_negative',
-                        'direction' => 'OUT',
-                        'quantity' => $absDiff,
-                        'unit_cost' => (float) $countItem->unit_cost,
-                        'reference_type' => 'stock_count',
-                        'reference_number' => $count->count_number,
-                        'notes' => 'تسوية عجز جردي معتمدة بجلسة ' . $count->count_number,
-                    ]);
-                    $countItem->adjustment_status = 'adjusted';
-                    $countItem->save();
                 } else {
                     $countItem->adjustment_status = 'matched';
-                    $countItem->save();
                 }
+                $countItem->save();
             }
 
             $count->status = 'approved';
             $count->approved_by = auth()->id();
             $count->approved_at = now();
             $count->save();
+
+            return $count->fresh(['warehouse', 'items.inventoryItem', 'approver']);
         });
 
-        $count->load(['warehouse', 'items.inventoryItem', 'approver']);
-
         return response()->json([
-            'message' => 'تم اعتماد محضر الجرد وترحيل كافة التسويات رسمياً إلى دفتر الأستاذ المخزني.',
+            'message' => 'تم اعتماد محضر الجرد وترحيل التسويات رسمياً إلى دفتر الأستاذ المخزني.',
             'stock_count' => $count,
         ]);
     }
@@ -247,9 +269,13 @@ class StockCountController extends Controller
     public function show(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $count = StockCount::where('tenant_id', $tenantId)
-            ->with(['warehouse.branch', 'items.inventoryItem', 'creator', 'approver'])
-            ->findOrFail($id);
+        $countQuery = StockCount::where('tenant_id', $tenantId)
+            ->with(['warehouse.branch', 'items.inventoryItem', 'creator', 'approver']);
+        if (request()->user() && request()->user()->role !== 'company_owner') {
+            $branchIds = request()->user()->assignedBranchIds();
+            $countQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $count = $countQuery->findOrFail($id);
 
         $totalSystemQty = $count->items->sum('system_quantity');
         $totalPhysicalQty = $count->items->sum('physical_quantity');

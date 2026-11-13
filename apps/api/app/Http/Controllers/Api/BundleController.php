@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CuttingBundle;
+use App\Models\Employee;
 use App\Services\ProductionService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -18,8 +19,10 @@ class BundleController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = CuttingBundle::where('tenant_id', $tenantId)
-            ->with(['productionOrder.garmentModel', 'color', 'size', 'assignedEmployee', 'stageLogs.productionStage']);
+        $query = $this->scopeToAssignedBranches(
+            CuttingBundle::where('tenant_id', $tenantId),
+            $request
+        )->with(['productionOrder.garmentModel', 'color', 'size', 'assignedEmployee', 'stageLogs.productionStage']);
 
         if ($request->filled('search')) {
             $s = trim($request->query('search'));
@@ -70,7 +73,7 @@ class BundleController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)
             ->with(['productionOrder.garmentModel', 'color', 'size', 'assignedEmployee', 'stageLogs.productionStage', 'stageLogs.employee'])
             ->findOrFail($id);
 
@@ -83,7 +86,7 @@ class BundleController extends Controller
     public function assign(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)->findOrFail($id);
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)->findOrFail($id);
 
         $validated = $request->validate([
             'employee_id' => 'nullable|uuid',
@@ -91,6 +94,18 @@ class BundleController extends Controller
             'issue_date' => 'nullable|date',
             'due_date' => 'nullable|date',
         ]);
+
+        if (!empty($validated['employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+            $bundleBranchId = $this->resolveBundleBranchId($bundle);
+            if (!$bundleBranchId || !$employee->branch_id || $employee->branch_id !== $bundleBranchId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب إسناد الحزمة إلى عامل من نفس فرع أمر الإنتاج.',
+                ], 422);
+            }
+        }
 
         try {
             $updated = $this->productionService->assignBundle($bundle->id, $validated);
@@ -111,7 +126,7 @@ class BundleController extends Controller
     public function history(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)
             ->with([
                 'productionOrder.garmentModel',
                 'color',
@@ -133,7 +148,7 @@ class BundleController extends Controller
     public function transfer(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $bundle = CuttingBundle::where('tenant_id', $tenantId)->findOrFail($id);
+        $bundle = $this->scopeToAssignedBranches(CuttingBundle::where('tenant_id', $tenantId), $request)->findOrFail($id);
 
         $validated = $request->validate([
             'to_stage_code' => 'required|string',
@@ -150,6 +165,18 @@ class BundleController extends Controller
             'completed_at' => 'nullable|date',
             'notes' => 'nullable|string',
         ]);
+
+        if (!empty($validated['employee_id'])) {
+            $employee = Employee::where('tenant_id', $tenantId)->findOrFail($validated['employee_id']);
+            $bundleBranchId = $this->resolveBundleBranchId($bundle);
+            if (!$bundleBranchId || !$employee->branch_id || $employee->branch_id !== $bundleBranchId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'BranchMismatch',
+                    'message' => 'يجب تسجيل حركة الحزمة بعامل من نفس فرع أمر الإنتاج.',
+                ], 422);
+            }
+        }
 
         try {
             $log = $this->productionService->transferBundleStage(
@@ -170,4 +197,48 @@ class BundleController extends Controller
             ], 422);
         }
     }
+    /**
+     * Bundles have no direct branch_id; every existing branch anchor must be
+     * inside the user's assignments, and at least one valid anchor is required.
+     */
+    private function scopeToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+        return $query
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery
+                    ->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery
+                    ->whereDoesntHave('productionOrder')
+                    ->orWhereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+            })
+            ->where(function ($branchQuery) use ($branchIds) {
+                $branchQuery
+                    ->whereDoesntHave('cuttingOrder')
+                    ->orWhereHas('cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            });
+    }
+
+    private function resolveBundleBranchId(CuttingBundle $bundle): ?string
+    {
+        $bundle->loadMissing(['productionOrder', 'cuttingOrder.warehouse']);
+
+        $productionBranchId = $bundle->productionOrder?->branch_id;
+        $warehouseBranchId = $bundle->cuttingOrder?->warehouse?->branch_id;
+
+        if ($productionBranchId && $warehouseBranchId && $productionBranchId !== $warehouseBranchId) {
+            return null;
+        }
+
+        return $productionBranchId ?? $warehouseBranchId;
+    }
+
 }

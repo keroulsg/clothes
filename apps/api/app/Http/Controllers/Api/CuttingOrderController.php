@@ -21,8 +21,10 @@ class CuttingOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $query = CuttingOrder::where('tenant_id', $tenantId)
-            ->with([
+        $query = $this->scopeCuttingOrdersToAssignedBranches(
+            CuttingOrder::where('tenant_id', $tenantId),
+            $request
+        )->with([
                 'productionOrder.garmentModel',
                 'warehouse',
                 'assignedCutter',
@@ -125,6 +127,23 @@ class CuttingOrderController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            ;
+        if ($enforceBranchScope && (
+            !$prodOrder->branch_id
+            || $warehouse->branch_id !== $prodOrder->branch_id
+            || !in_array($prodOrder->branch_id, $assignedBranchIds, true)
+            || !in_array($warehouse->branch_id, $assignedBranchIds, true)
+        )) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك إنشاء أمر قص باستخدام أمر إنتاج أو مخزن تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
+
         if (!empty($validated['fabric_inventory_item_id'])) {
             $fabricItem = InventoryItem::withoutGlobalScopes()->find($validated['fabric_inventory_item_id']);
             if (!$fabricItem || $fabricItem->tenant_id !== $tenantId) {
@@ -159,8 +178,10 @@ class CuttingOrderController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = CuttingOrder::where('tenant_id', $tenantId)
-            ->with([
+        $order = $this->scopeCuttingOrdersToAssignedBranches(
+            CuttingOrder::where('tenant_id', $tenantId),
+            $request
+        )->with([
                 'productionOrder.garmentModel',
                 'warehouse',
                 'assignedCutter',
@@ -181,7 +202,10 @@ class CuttingOrderController extends Controller
     public function cancel(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = CuttingOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeCuttingOrdersToAssignedBranches(
+            CuttingOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         $validated = $request->validate([
             'cancellation_reason' => 'required|string|max:255',
@@ -222,7 +246,10 @@ class CuttingOrderController extends Controller
     public function archive(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = CuttingOrder::where('tenant_id', $tenantId)->findOrFail($id);
+        $order = $this->scopeCuttingOrdersToAssignedBranches(
+            CuttingOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($id);
 
         $order->status = 'cut_completed';
         $order->save();
@@ -285,4 +312,19 @@ class CuttingOrderController extends Controller
             ]),
         ]);
     }
+    private function scopeCuttingOrdersToAssignedBranches($query, Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->role === 'company_owner') {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+
+        return $query
+            ->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+            ->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+    }
+
+
 }

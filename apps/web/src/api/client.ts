@@ -797,7 +797,7 @@ class ApiClient {
       });
     },
 
-    recordPayment: async (id: string, payload: { amount: number; payment_method: string; voucher_date?: string; reference_number?: string; supplier_invoice_id?: string; notes?: string }): Promise<{ message: string; voucher: any; supplier_current_balance: number }> => {
+    recordPayment: async (id: string, payload: { amount: number; payment_method: string; voucher_date?: string; reference_number?: string; supplier_invoice_id?: string; account_id?: string; notes?: string }): Promise<{ message: string; voucher: any; supplier_current_balance: number }> => {
       return this.request<{ message: string; voucher: any; supplier_current_balance: number }>(`/suppliers/${id}/payments`, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -947,10 +947,10 @@ class ApiClient {
       return this.request<any>(`/supplier-invoices${qs ? `?${qs}` : ''}`);
     },
 
-    createSupplierInvoice: async (payload: any, idempotencyKey?: string): Promise<{ message: string; is_duplicate: boolean; supplier_invoice: any }> => {
+    createSupplierInvoice: async (payload: any, idempotencyKey?: string): Promise<{ message: string; is_duplicate: boolean; is_posted: boolean; supplier_invoice: any }> => {
       const headers: Record<string, string> = {};
       if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
-      return this.request<{ message: string; is_duplicate: boolean; supplier_invoice: any }>('/supplier-invoices', {
+      return this.request<{ message: string; is_duplicate: boolean; is_posted: boolean; supplier_invoice: any }>('/supplier-invoices', {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -2481,6 +2481,22 @@ class ApiClient {
         method: 'PATCH',
         body: JSON.stringify({ status, notes }),
       });
+    },
+    downloadRfqAttachment: async (rfqId: string, attachmentId: string): Promise<Blob> => {
+      const headers: HeadersInit = { Accept: 'application/octet-stream' };
+      if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+      const response = await fetch(
+        `${this.baseUrl}/waslat-worsh/rfqs/${rfqId}/attachments/${attachmentId}`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل تحميل الملف');
+      }
+
+      return response.blob();
     },
   };
 

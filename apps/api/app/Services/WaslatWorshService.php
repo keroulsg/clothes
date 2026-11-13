@@ -481,7 +481,7 @@ class WaslatWorshService
             'full_path' => Storage::disk('local')->path($target['storage_path']),
             'storage_path' => $target['storage_path'],
             'mime_type' => $target['mime_type'] ?? 'application/octet-stream',
-            'filename' => $target['name'] ?? 'attachment',
+            'filename' => $target['file_name'] ?? $target['name'] ?? 'attachment',
         ];
     }
 

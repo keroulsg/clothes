@@ -19,6 +19,7 @@ use App\Services\AccountingService;
 use App\Services\FinancialReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -353,6 +354,12 @@ class AccountingController extends Controller
 
         $tenantId = app('current_tenant_id');
         $coa = ChartOfAccount::where('tenant_id', $tenantId)->findOrFail($validated['chart_of_account_id']);
+
+        if (!$coa->is_active || !$coa->is_postable || !$coa->is_cash_bank) {
+            throw Illuminate\Validation\ValidationException::withMessages([
+                'chart_of_account_id' => ['يجب اختيار حساب خزينة أو بنك فرعي نشط وقابل للترحيل، وليس حساباً رئيسياً أو تجميعياً.'],
+            ]);
+        }
 
         $openingBal = round((float)($validated['opening_balance'] ?? 0), 4);
 
@@ -1009,11 +1016,16 @@ class AccountingController extends Controller
             'party_type' => 'required|string|in:customer,supplier,employee,other',
             'party_name' => 'required|string|max:255',
             'account_id' => 'required|uuid',
+            'contra_account_id' => 'required_if:party_type,other|nullable|uuid',
             'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|string|in:cash,bank_transfer,card,check',
             'voucher_date' => 'nullable|date',
             'notes' => 'nullable|string',
         ]);
+
+        if ($request->filled('contra_account_id')) {
+            $validated['contra_account_id'] = $request->input('contra_account_id');
+        }
 
         $voucher = $this->accountingService->createPaymentVoucher($validated);
 
@@ -1042,16 +1054,38 @@ class AccountingController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $orders = \App\Models\ProductionOrder::where('tenant_id', $tenantId)
-            ->whereNotIn('status', ['archived'])
+            ->whereNotIn('status', ['archived', 'closed', 'cancelled'])
             ->get();
 
         $calculatedCount = 0;
+        $skippedApprovedCount = 0;
+        $failedOrders = [];
+
         foreach ($orders as $order) {
+            $existingSheet = ProductionCostSheet::where('tenant_id', $tenantId)
+                ->where('production_order_id', $order->id)
+                ->first();
+
+            // Approved cost sheets are immutable; never force-recalculate them in a bulk operation.
+            if ($existingSheet?->status === 'approved') {
+                $skippedApprovedCount++;
+                continue;
+            }
+
             try {
-                $this->accountingService->calculateProductionCost($order->id, ['force_recalculate' => true]);
+                $this->accountingService->calculateProductionCost($order->id);
                 $calculatedCount++;
             } catch (\Throwable $e) {
-                // ignore
+                $failedOrders[] = [
+                    'production_order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'reason' => $e->getMessage(),
+                ];
+                \Illuminate\Support\Facades\Log::error('Bulk production cost calculation failed', [
+                    'tenant_id' => $tenantId,
+                    'production_order_id' => $order->id,
+                    'exception' => $e,
+                ]);
             }
         }
 
@@ -1061,8 +1095,11 @@ class AccountingController extends Controller
             ->paginate(100);
 
         return response()->json([
-            'message' => "تم احتساب وتحديث {$calculatedCount} بطاقة تكلفة صناعية لأوامر الإنتاج",
+            'message' => 'اكتمل احتساب بطاقات التكلفة مع توضيح الأوامر التي تعذر احتسابها.',
             'calculated_count' => $calculatedCount,
+            'skipped_approved_count' => $skippedApprovedCount,
+            'failed_count' => count($failedOrders),
+            'failed_orders' => $failedOrders,
             'data' => $sheets->items(),
         ]);
     }
@@ -1093,25 +1130,36 @@ class AccountingController extends Controller
     public function approveCostSheet(string $id): JsonResponse
     {
         $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : auth()->user()->tenant_id;
-        $sheet = ProductionCostSheet::where('tenant_id', $tenantId)->findOrFail($id);
 
-        if ($sheet->total_produced_pieces <= 0 || (float)$sheet->cost_per_piece <= 0) {
-            throw ValidationException::withMessages([
-                'cost_sheet' => ['لا يمكن اعتماد بطاقة تكلفة صناعية لكمية سليمة تساوي صفر أو بتكلفة وحدة غير محسوبة.'],
-            ]);
-        }
+        $sheet = DB::transaction(function () use ($tenantId, $id) {
+            $sheet = ProductionCostSheet::where('tenant_id', $tenantId)
+                ->whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($sheet->status === 'approved') {
-            return response()->json([
-                'message' => 'بطاقة التكلفة معتمدة بالفعل',
-                'cost_sheet' => $sheet,
-            ]);
-        }
+            if ($sheet->total_produced_pieces <= 0 || (float) $sheet->cost_per_piece <= 0) {
+                throw ValidationException::withMessages([
+                    'cost_sheet' => ['لا يمكن اعتماد بطاقة تكلفة صناعية لكمية سليمة تساوي صفر أو بتكلفة وحدة غير محسوبة.'],
+                ]);
+            }
 
-        $sheet->status = 'approved';
-        $sheet->save();
+            if ($sheet->status === 'approved') {
+                $this->accountingService->postProductionCostSheetToWip($sheet);
+                return $sheet;
+            }
 
-        try {
+            if ($sheet->status !== 'calculated') {
+                throw ValidationException::withMessages([
+                    'cost_sheet' => ['لا يمكن اعتماد بطاقة تكلفة إلا بعد احتسابها ومراجعتها.'],
+                ]);
+            }
+
+            $sheet->status = 'approved';
+            $sheet->save();
+
+            // The approved cost sheet is the WIP subledger source; post it atomically.
+            $this->accountingService->postProductionCostSheetToWip($sheet);
+
             AuditLog::create([
                 'tenant_id' => $tenantId,
                 'user_id' => auth()->id(),
@@ -1125,10 +1173,14 @@ class AccountingController extends Controller
                 ],
                 'ip_address' => request()->ip(),
             ]);
-        } catch (\Throwable $e) {}
+
+            return $sheet->fresh(['productionOrder', 'garmentModel']);
+        });
 
         return response()->json([
-            'message' => 'تم اعتماد بطاقة التكلفة الصناعية بنجاح وأصبحت نهائية وغير قابلة للتعديل',
+            'message' => $sheet->status === 'approved'
+                ? 'تم اعتماد بطاقة التكلفة الصناعية بنجاح أو كانت معتمدة مسبقاً.'
+                : 'تم تحديث بطاقة التكلفة.',
             'cost_sheet' => $sheet,
         ]);
     }

@@ -22,8 +22,10 @@ class FiscalPeriod extends Model
         'status', // open, closed
         'closed_at',
         'closed_by',
+        'closed_by_user_id',
         'reopened_at',
         'reopened_by',
+        'reopened_by_user_id',
         'reopening_reason',
     ];
 

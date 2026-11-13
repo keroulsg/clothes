@@ -194,7 +194,7 @@ class SalesService
                 'customer_id' => $customerId,
                 'customer_name' => $data['customer_name'],
                 'quotation_id' => $data['quotation_id'] ?? null,
-                'warehouse_id' => $data['warehouse_id'] ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id') ?? Warehouse::where('tenant_id', $tenantId)->value('id'),
+                'warehouse_id' => $data['warehouse_id'] ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->where('is_active', true)->orderBy('id')->value('id'),
                 'order_type' => $data['order_type'] ?? 'wholesale',
                 'status' => $data['status'] ?? 'confirmed',
                 'payment_status' => 'unpaid',
@@ -250,55 +250,45 @@ class SalesService
                 throw new InvalidArgumentException("لا يمكن حجز مخزون لأمر بيع بحالة {$order->status}");
             }
 
+            if (!$order->warehouse_id) {
+                $warehouse = Warehouse::where('tenant_id', $tenantId)
+                    ->where('type', 'finished_goods')
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->first();
+
+                if (!$warehouse) {
+                    throw new InvalidArgumentException('يجب تحديد مخزن صالح قبل حجز المخزون.');
+                }
+
+                $order->warehouse_id = $warehouse->id;
+                $order->save();
+            }
+
             foreach ($order->items as $item) {
-                // البحث عن الصنف المخزني التام المرتبط بالمتغير في المخزن المحدد
-                $inventoryQuery = InventoryItem::where('tenant_id', $tenantId)
+                $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
                     ->where('variant_id', $item->variant_id)
-                    ->where('is_customer_owned', false); // أمان: حظر حجز أمانات العملاء للبيع التجاري
+                    ->where('warehouse_id', $order->warehouse_id)
+                    ->where('is_customer_owned', false)
+                    ->lockForUpdate()
+                    ->first();
 
-                if ($order->warehouse_id) {
-                    $inventoryQuery->where('warehouse_id', $order->warehouse_id);
-                }
-
-                $inventoryItem = $inventoryQuery->lockForUpdate()->first();
-
-                // توفير الصنف في مخزن المنتج التام تلقائياً إذا لم يكن مضافاً مسبقاً
                 if (!$inventoryItem) {
-                    $whId = $order->warehouse_id;
-                    if (!$whId) {
-                        $fgWarehouse = Warehouse::where('tenant_id', $tenantId)
-                            ->where('warehouse_type', 'finished_goods')
-                            ->first() ?? Warehouse::where('tenant_id', $tenantId)->first();
-                        $whId = $fgWarehouse?->id;
-                    }
-
-                    $variant = ProductVariant::with(['garmentModel', 'size', 'color'])->find($item->variant_id);
-                    $productName = $variant
-                        ? (($variant->garmentModel?->name ?? 'موديل ملابس') . ' - ' . ($variant->size?->name ?? 'M') . ' / ' . ($variant->color?->name ?? 'أساسي'))
-                        : 'منتج تام جاهز للتسليم';
-
-                    $inventoryItem = InventoryItem::create([
-                        'tenant_id' => $tenantId,
-                        'warehouse_id' => $whId,
-                        'variant_id' => $item->variant_id,
-                        'item_type' => 'finished_goods',
-                        'code' => $variant?->sku ?? ('SKU-' . strtoupper(substr(uniqid(), -6))),
-                        'name' => $productName,
-                        'barcode' => $variant?->barcode ?? ('BAR-' . rand(100000, 999999)),
-                        'unit_of_measure' => 'piece',
-                        'current_balance' => 0,
-                        'reserved_balance' => 0,
-                        'average_cost' => $item->unit_price ?? 0,
-                        'is_customer_owned' => false,
-                        'is_active' => true,
-                    ]);
+                    throw new InvalidArgumentException(
+                        "لا يوجد سجل مخزني للصنف [{$item->variant_id}] في المخزن المحدد. سجّل الاستلام أو الإنتاج أولاً."
+                    );
                 }
 
-                $needed = $item->ordered_quantity - $item->reserved_quantity;
+                $needed = (float) $item->ordered_quantity - (float) $item->reserved_quantity;
                 if ($needed > 0) {
-                    // إذا كان رصيد المخزن الحالي أقل من المطلوب للحجز، يتم توفير الرصيد فوراً لضمان تدفق عملية الحجز والبيع
-                    if ($inventoryItem->current_balance < $needed) {
-                        $inventoryItem->current_balance += max($needed * 2, 50);
+                    $onHand = (float) $inventoryItem->current_balance;
+                    $alreadyReserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                    $available = max(0, $onHand - $alreadyReserved);
+
+                    if ($available < $needed) {
+                        throw new InvalidArgumentException(
+                            "المخزون غير كافٍ للصنف [{$inventoryItem->name}]. المتاح للحجز: [{$available}]، المطلوب: [{$needed}]."
+                        );
                     }
 
                     $item->reserved_quantity += $needed;
@@ -334,9 +324,15 @@ class SalesService
                 throw new InvalidArgumentException("أمر البيع مكتمل أو ملغي مسبقاً");
             }
 
-            $targetWarehouseId = $order->warehouse_id
-                ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
-                ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+            $targetWarehouseId = $order->warehouse_id;
+            if (!$targetWarehouseId) {
+                throw new InvalidArgumentException('أمر البيع غير مرتبط بمستودع محدد؛ أعد حجز المخزون قبل التسليم.');
+            }
+
+            Warehouse::where('tenant_id', $tenantId)
+                ->where('id', $targetWarehouseId)
+                ->where('is_active', true)
+                ->firstOrFail();
 
             // إنشاء فاتورة المبيعات
             $invoice = SalesInvoice::create([
@@ -365,25 +361,30 @@ class SalesService
 
                 $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
                     ->where('id', $item->inventory_item_id)
+                    ->where('warehouse_id', $targetWarehouseId)
+                    ->where('is_customer_owned', false)
                     ->lockForUpdate()
                     ->first();
 
                 if (!$inventoryItem) {
-                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
-                        ->where('variant_id', $item->variant_id)
-                        ->where('is_customer_owned', false)
-                        ->lockForUpdate()
-                        ->first();
+                    throw new InvalidArgumentException("سجل مخزون الصنف [{$item->variant_id}] غير موجود في مستودع أمر البيع؛ أعد الحجز من المستودع الصحيح.");
                 }
 
-                if ($inventoryItem) {
-                    if ($inventoryItem->current_balance < $qtyToFulfill) {
-                        $inventoryItem->current_balance += max($qtyToFulfill, 50);
-                        $inventoryItem->save();
-                    }
+                $reservedForThisLine = (float) $item->reserved_quantity;
+                $inventoryReserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                $onHand = (float) $inventoryItem->current_balance;
+                if (
+                    $reservedForThisLine < $qtyToFulfill
+                    || $inventoryReserved < $qtyToFulfill
+                    || $onHand < $qtyToFulfill
+                ) {
+                    throw new InvalidArgumentException(
+                        "لا يوجد مخزون محجوز/فعلي كافٍ لتسليم الصنف [{$inventoryItem->name}]. حجز السطر: [{$reservedForThisLine}]، إجمالي المحجوز: [{$inventoryReserved}]، الرصيد: [{$onHand}]، المطلوب: [{$qtyToFulfill}]."
+                    );
+                }
 
-                    // تسجيل حركة صرف مخزني رسمية عبر محرك المخزون لمنع الرصيد السالب
-                    $this->inventoryService->recordTransaction([
+                // تسجيل حركة صرف مخزني رسمية عبر محرك المخزون؛ لا يتم إنشاء مخزون تلقائياً.
+                $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $inventoryItem->id,
                         'warehouse_id' => $inventoryItem->warehouse_id,
@@ -394,11 +395,14 @@ class SalesService
                         'reference_type' => 'sales_orders',
                         'reference_id' => $order->id,
                         'idempotency_key' => 'SO-DELIV-' . $order->id . '-' . $item->id,
-                    ]);
-                }
+                    'consume_reserved' => true,
+                ]);
+
+                $inventoryItem->reserved_balance = $inventoryReserved - $qtyToFulfill;
+                $inventoryItem->save();
 
                 $item->fulfilled_quantity += $qtyToFulfill;
-                $item->reserved_quantity = max(0, $item->reserved_quantity - $qtyToFulfill);
+                $item->reserved_quantity = max(0, (float) $item->reserved_quantity - $qtyToFulfill);
                 $item->save();
 
                 SalesInvoiceItem::create([
@@ -439,13 +443,20 @@ class SalesService
                     ->first();
             }
 
-            $subtotal = 0;
-            $taxTotal = 0;
+            $tenant = Tenant::findOrFail($tenantId);
+            $taxSettings = $tenant->settings['tax'] ?? ['enabled' => false, 'rate' => 0.0];
+            $defaultTaxRate = (!empty($taxSettings['enabled']) && isset($taxSettings['rate']))
+                ? (float) $taxSettings['rate']
+                : 0.0;
+
+            $subtotal = 0.0;
+            $taxTotal = 0.0;
+            $totalCogs = 0.0;
 
             foreach ($data['items'] as $item) {
                 $qty = (float) $item['quantity'];
                 $price = (float) $item['unit_price'];
-                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : 0.0;
+                $taxRate = isset($item['tax_rate']) ? (float) $item['tax_rate'] : $defaultTaxRate;
 
                 $itemSubtotal = round($qty * $price, 4);
                 $itemTax = round($itemSubtotal * ($taxRate / 100), 4);
@@ -457,9 +468,18 @@ class SalesService
             $discount = isset($data['discount_amount']) ? (float) $data['discount_amount'] : 0.0;
             $total = max(0, round($subtotal + $taxTotal - $discount, 4));
 
-            $posWarehouseId = $data['warehouse_id']
-                ?? Warehouse::where('tenant_id', $tenantId)->where('type', 'finished_goods')->value('id')
-                ?? Warehouse::where('tenant_id', $tenantId)->value('id');
+            $posWarehouse = !empty($data['warehouse_id'])
+                ? Warehouse::where('tenant_id', $tenantId)->where('id', $data['warehouse_id'])->where('is_active', true)->firstOrFail()
+                : Warehouse::where('tenant_id', $tenantId)
+                    ->where('is_active', true)
+                    ->where('type', 'finished_goods')
+                    ->orderBy('id')
+                    ->first();
+
+            if (!$posWarehouse) {
+                throw new InvalidArgumentException('لا يوجد مستودع منتجات تامة نشط لنقطة البيع. اختر مستودعاً صالحاً قبل البيع.');
+            }
+            $posWarehouseId = $posWarehouse->id;
 
             $invoice = SalesInvoice::create([
                 'tenant_id' => $tenantId,
@@ -497,40 +517,21 @@ class SalesService
                     ->first();
 
                 if (!$inventoryItem) {
-                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
-                        ->where('variant_id', $item['variant_id'])
-                        ->where('is_customer_owned', false)
-                        ->lockForUpdate()
-                        ->first();
+                    throw new InvalidArgumentException(
+                        "لا يوجد سجل مخزني للصنف المطلوب بيعه [{$item['variant_id']}]. سجّل الاستلام أو الإنتاج أولاً."
+                    );
                 }
 
-                if (!$inventoryItem) {
-                    $variant = ProductVariant::with(['garmentModel', 'size', 'color'])->find($item['variant_id']);
-                    $productName = $variant
-                        ? (($variant->garmentModel?->name ?? 'موديل ملابس') . ' - ' . ($variant->size?->name ?? 'M') . ' / ' . ($variant->color?->name ?? 'أساسي'))
-                        : 'منتج تام جاهز للبيع';
-
-                    $inventoryItem = InventoryItem::create([
-                        'tenant_id' => $tenantId,
-                        'warehouse_id' => $posWarehouseId,
-                        'variant_id' => $item['variant_id'],
-                        'item_type' => 'finished_goods',
-                        'code' => $variant?->sku ?? ('SKU-' . strtoupper(substr(uniqid(), -6))),
-                        'name' => $productName,
-                        'barcode' => $variant?->barcode ?? ('BAR-' . rand(100000, 999999)),
-                        'unit_of_measure' => 'piece',
-                        'current_balance' => 0,
-                        'reserved_balance' => 0,
-                        'average_cost' => $price,
-                        'is_customer_owned' => false,
-                        'is_active' => true,
-                    ]);
+                $onHand = (float) $inventoryItem->current_balance;
+                $reserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                $available = max(0, $onHand - $reserved);
+                if ($available < $qty) {
+                    throw new InvalidArgumentException(
+                        "المخزون غير كافٍ للصنف [{$inventoryItem->name}]. المتاح للبيع: [{$available}]، المطلوب: [{$qty}]."
+                    );
                 }
 
-                if ($inventoryItem->current_balance < $qty) {
-                    $inventoryItem->current_balance += max($qty * 2, 50);
-                    $inventoryItem->save();
-                }
+                $totalCogs = round($totalCogs + ($qty * (float) $inventoryItem->average_cost), 4);
 
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $tenantId,
@@ -542,7 +543,7 @@ class SalesService
                     'unit_cost' => $inventoryItem->average_cost,
                     'reference_type' => 'sales_invoices',
                     'reference_id' => $invoice->id,
-                    'idempotency_key' => 'POS-' . $invoice->id . '-' . $inventoryItem->id . '-' . uniqid(),
+                    'idempotency_key' => 'POS-' . $invoice->id . '-' . $inventoryItem->id,
                 ]);
 
                 SalesInvoiceItem::create([
@@ -564,31 +565,37 @@ class SalesService
                 $session->save();
             }
 
-            if ($discount > 0) {
-                try {
-                    $cashAccount = \App\Models\ChartOfAccount::where('tenant_id', $tenantId)->where('account_code', '1010')->first();
-                    $discountAccount = \App\Models\ChartOfAccount::where('tenant_id', $tenantId)
-                        ->where(function($q) {
-                            $q->where('account_code', '5100')->orWhere('account_code', '4120')->orWhere('account_type', 'expense');
-                        })->first();
+            // Post the complete POS transaction to the general ledger atomically.
+            $accounting = app(AccountingService::class);
+            $cashMapping = ($data['payment_method'] ?? 'cash') === 'cash' ? 'default_cash' : 'default_bank';
+            $cashAccount = $accounting->getMappedAccount($tenantId, $cashMapping);
+            $revenueAccount = $accounting->getMappedAccount($tenantId, 'sales_revenue');
+            $journalLines = [
+                ['account_id' => $cashAccount->id, 'debit' => $total, 'credit' => 0],
+                ['account_id' => $revenueAccount->id, 'debit' => $discount, 'credit' => 0],
+                ['account_id' => $revenueAccount->id, 'debit' => 0, 'credit' => $subtotal],
+            ];
 
-                    if ($cashAccount && $discountAccount) {
-                        app(AccountingService::class)->createJournalEntry([
-                            'entry_number' => 'JE-POS-DISC-' . $invoice->invoice_number,
-                            'entry_date' => now()->toDateString(),
-                            'description' => "إثبات خصم تجاري مباشر لمعرض المصنع بالفاتورة {$invoice->invoice_number} بمبلغ {$discount} ج.م",
-                            'reference_type' => 'sales_invoices',
-                            'reference_id' => $invoice->id,
-                            'lines' => [
-                                ['account_id' => $discountAccount->id, 'debit' => $discount, 'credit' => 0],
-                                ['account_id' => $cashAccount->id, 'debit' => 0, 'credit' => $discount],
-                            ],
-                        ]);
-                    }
-                } catch (\Throwable $e) {
-                    // Safe fallback
-                }
+            if ($taxTotal > 0) {
+                $taxAccount = $accounting->getMappedAccount($tenantId, 'sales_tax_payable');
+                $journalLines[] = ['account_id' => $taxAccount->id, 'debit' => 0, 'credit' => $taxTotal];
             }
+
+            if ($totalCogs > 0) {
+                $cogsAccount = $accounting->getMappedAccount($tenantId, 'cogs');
+                $inventoryAccount = $accounting->getMappedAccount($tenantId, 'finished_goods_inventory');
+                $journalLines[] = ['account_id' => $cogsAccount->id, 'debit' => $totalCogs, 'credit' => 0];
+                $journalLines[] = ['account_id' => $inventoryAccount->id, 'debit' => 0, 'credit' => $totalCogs];
+            }
+
+            $accounting->createJournalEntry([
+                'entry_number' => 'JE-POS-' . $invoice->invoice_number,
+                'entry_date' => now()->toDateString(),
+                'description' => "ترحيل عملية نقطة البيع للفاتورة {$invoice->invoice_number}",
+                'reference_type' => 'sales_invoices',
+                'reference_id' => $invoice->id,
+                'lines' => $journalLines,
+            ]);
 
             return $invoice->load([
                 'tenant',
@@ -1028,40 +1035,35 @@ class SalesService
                     throw new InvalidArgumentException("حساب الصرف المحدد غير موجود أو غير تابع للمستأجر الحالي.");
                 }
 
-                if (!$cashAccount->is_active) {
-                    throw new InvalidArgumentException("حساب الصرف المحدد غير نشط.");
-                }
-
-                if ($cashAccount->type !== 'asset' || $cashAccount->category !== 'current_asset') {
-                    throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب نقدية أو بنك مسموح به (يجب أن يكون أصل متداول).");
+                if (
+                    !$cashAccount->is_active
+                    || !$cashAccount->is_postable
+                    || !$cashAccount->is_cash_bank
+                    || $cashAccount->type !== 'asset'
+                    || $cashAccount->category !== 'current_asset'
+                ) {
+                    throw new InvalidArgumentException("حساب الصرف المحدد ليس حساب خزينة/بنك فرعي نشطاً وقابلاً للترحيل (يجب أن يكون أصل متداول).");
                 }
             } else {
-                $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card']) ? '1020' : '1010';
-                $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                    ->where('code', $preferredCode)
-                    ->lockForUpdate()
-                    ->first();
+                $mappingKey = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? 'default_bank' : 'default_cash';
+                $cashAccount = app(\App\Services\AccountingService::class)->getMappedAccount($tenantId, $mappingKey);
 
-                if (!$cashAccount && $preferredCode === '1020') {
-                    $cashAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                        ->where('code', '1010')
-                        ->lockForUpdate()
-                        ->first();
-                }
-
-                if (!$cashAccount || !$cashAccount->is_active || $cashAccount->type !== 'asset' || $cashAccount->category !== 'current_asset') {
-                    throw new InvalidArgumentException("حساب النقدية/البنك غير متوفر أو غير نشط في شجرة الحسابات لصرف الاسترداد.");
+                if (
+                    !$cashAccount->is_active
+                    || !$cashAccount->is_postable
+                    || !$cashAccount->is_cash_bank
+                    || $cashAccount->type !== 'asset'
+                    || $cashAccount->category !== 'current_asset'
+                ) {
+                    throw new InvalidArgumentException("حساب النقدية/البنك غير مضبوط كحساب فرعي نشط وقابل للترحيل لصرف الاسترداد.");
                 }
             }
 
-            // التحقق الصارم من حساب العملاء والمدينين (1110) قبل إنشاء أي سند أو تعديل مالي (Finding 2 & Scope B)
-            $arAccount = ChartOfAccount::where('tenant_id', $tenantId)
-                ->where('code', '1110')
-                ->lockForUpdate()
-                ->first();
+            // Resolve the tenant's configured, postable receivables control account.
+            $arAccount = app(\App\Services\AccountingService::class)->getMappedAccount($tenantId, 'ar_control');
 
-            if (!$arAccount || !$arAccount->is_active || $arAccount->type !== 'asset') {
-                throw new InvalidArgumentException("حساب العملاء والمدينين (1110) غير متوفر أو غير نشط في شجرة الحسابات لإثبات القيد المحاسبي للاسترداد.");
+            if (!$arAccount->is_active || !$arAccount->is_postable || $arAccount->type !== 'asset') {
+                throw new InvalidArgumentException("حساب العملاء والمدينين غير متوفر أو غير قابل للترحيل لإثبات قيد الاسترداد.");
             }
 
             // حساب المبالغ التراكمية للفاتورة لمنع استرداد يتجاوز الرصيد المسدد الفعلي (AUDIT-07B-05)
@@ -1362,11 +1364,11 @@ class SalesService
     /**
      * تحويل عرض سعر معتمد إلى أمر بيع رسمي دون تكرار
      */
-    public function convertQuotationToOrder(string $quotationId): SalesOrder
+    public function convertQuotationToOrder(string $quotationId, ?string $warehouseId = null): SalesOrder
     {
         $tenantId = app('current_tenant_id');
 
-        return DB::transaction(function () use ($quotationId, $tenantId) {
+        return DB::transaction(function () use ($quotationId, $tenantId, $warehouseId) {
             $quotation = Quotation::where('tenant_id', $tenantId)
                 ->where('id', $quotationId)
                 ->lockForUpdate()
@@ -1439,7 +1441,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'quotation_converted',
                 'auditable_type' => 'quotations',
                 'auditable_id' => $quotation->id,
@@ -1471,8 +1473,30 @@ class SalesService
                 throw new InvalidArgumentException("أمر البيع ملغي مسبقاً");
             }
 
-            // فك حجز المخزون المحجوز
+            // Release the reservation on the inventory row in the same transaction.
             foreach ($order->items as $item) {
+                $reservedToRelease = (float) $item->reserved_quantity;
+                if ($reservedToRelease > 0 && $item->inventory_item_id) {
+                    $inventoryItem = InventoryItem::where('tenant_id', $tenantId)
+                        ->where('id', $item->inventory_item_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$inventoryItem) {
+                        throw new InvalidArgumentException("تعذر العثور على سجل المخزون لفك حجز الصنف [{$item->variant_id}].");
+                    }
+
+                    $inventoryReserved = (float) ($inventoryItem->reserved_balance ?? 0);
+                    if ($inventoryReserved < $reservedToRelease) {
+                        throw new InvalidArgumentException(
+                            "رصيد الحجز غير متطابق للصنف [{$inventoryItem->name}]. المحجوز في المخزن: [{$inventoryReserved}]، المطلوب فكّه: [{$reservedToRelease}]."
+                        );
+                    }
+
+                    $inventoryItem->reserved_balance = $inventoryReserved - $reservedToRelease;
+                    $inventoryItem->save();
+                }
+
                 $item->reserved_quantity = 0;
                 $item->save();
             }
@@ -1484,7 +1508,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_order_cancelled',
                 'auditable_type' => 'sales_orders',
                 'auditable_id' => $order->id,
@@ -1523,7 +1547,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_invoice_cancelled',
                 'auditable_type' => 'sales_invoices',
                 'auditable_id' => $invoice->id,
@@ -1553,13 +1577,13 @@ class SalesService
 
             $warehouseId = $data['warehouse_id'] ?? $order->warehouse_id;
             if (!$warehouseId) {
-                $wh = Warehouse::where('tenant_id', $tenantId)->first();
-                $warehouseId = $wh?->id;
+                throw new InvalidArgumentException("يجب تحديد مستودع البضاعة التامة قبل إصدار إذن التسليم.");
             }
 
-            if (!$warehouseId) {
-                throw new InvalidArgumentException("يجب تحديد مستودع الصرف لتسليم أمر البيع");
-            }
+            Warehouse::where('tenant_id', $tenantId)
+                ->where('id', $warehouseId)
+                ->where('is_active', true)
+                ->firstOrFail();
 
             $deliveryNumber = $data['delivery_number'] ?? ('DN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
 
@@ -1622,38 +1646,59 @@ class SalesService
                     ->first();
 
                 if (!$invItem) {
-                    $invItem = InventoryItem::where('tenant_id', $tenantId)
-                        ->where('variant_id', $orderItem->variant_id)
-                        ->where('is_customer_owned', false)
-                        ->lockForUpdate()
-                        ->first();
+                    throw new InvalidArgumentException("لا يوجد سجل مخزني للصنف المطلوب تسليمه [{$orderItem->variant_id}].");
                 }
 
-                if ($invItem) {
-                    if ($invItem->current_balance < $qtyToDeliver) {
-                        throw new InvalidArgumentException("رصيد المخزن غير كافٍ لصرف الكمية المطلوبة للمنتج {$invItem->name}. المتاح: {$invItem->current_balance}، المطلوب: {$qtyToDeliver}");
+                $onHand = (float) $invItem->current_balance;
+                $totalReserved = (float) ($invItem->reserved_balance ?? 0);
+                $lineReserved = (float) ($orderItem->reserved_quantity ?? 0);
+                $availableForThisOrder = max(0, $onHand - max(0, $totalReserved - $lineReserved));
+                if ($availableForThisOrder < $qtyToDeliver) {
+                    throw new InvalidArgumentException(
+                        "المخزون المتاح غير كافٍ لتسليم الصنف [{$invItem->name}]. المتاح بعد حماية حجوزات الطلبات الأخرى: [{$availableForThisOrder}]، المطلوب: [{$qtyToDeliver}]."
+                    );
+                }
+
+                // Atomically reserve any unreserved part of this delivery before consuming it.
+                $reservationToAdd = max(0, $qtyToDeliver - $lineReserved);
+                if ($reservationToAdd > 0) {
+                    $totalReserved += $reservationToAdd;
+                    $lineReserved += $reservationToAdd;
+                    $invItem->reserved_balance = $totalReserved;
+                    $invItem->save();
+
+                    $orderItem->reserved_quantity = $lineReserved;
+                    $orderItem->save();
+                }
+
+                $unitCost = (float)($invItem->average_cost ?? 0);
+                $totalCogs = round(($totalCogs ?? 0) + ($qtyToDeliver * $unitCost), 4);
+
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $tenantId,
+                    'inventory_item_id' => $invItem->id,
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => $qtyToDeliver,
+                    'direction' => 'OUT',
+                    'transaction_type' => 'sales_delivery',
+                    'unit_cost' => $invItem->average_cost,
+                    'reference_type' => 'sales_delivery_notes',
+                    'reference_id' => $deliveryNote->id,
+                    'idempotency_key' => 'DN-' . $deliveryNote->id . '-' . $orderItem->id,
+                    'consume_reserved' => true,
+                ]);
+
+                $reservationToRelease = min($qtyToDeliver, $lineReserved);
+                if ($reservationToRelease > 0) {
+                    if ($totalReserved < $reservationToRelease) {
+                        throw new InvalidArgumentException(
+                            "رصيد الحجز غير متطابق للصنف [{$invItem->name}]. المحجوز: [{$totalReserved}]، المطلوب فكّه: [{$reservationToRelease}]."
+                        );
                     }
 
-                    $unitCost = (float)($invItem->average_cost ?? 0);
-                    $totalCogs = round(($totalCogs ?? 0) + ($qtyToDeliver * $unitCost), 4);
-
-                    $this->inventoryService->recordTransaction([
-                        'tenant_id' => $tenantId,
-                        'inventory_item_id' => $invItem->id,
-                        'warehouse_id' => $warehouseId,
-                        'quantity' => $qtyToDeliver,
-                        'direction' => 'OUT',
-                        'transaction_type' => 'sales_delivery',
-                        'unit_cost' => $invItem->average_cost,
-                        'reference_type' => 'sales_delivery_notes',
-                        'reference_id' => $deliveryNote->id,
-                        'idempotency_key' => 'DN-' . $deliveryNote->id . '-' . $orderItem->id,
-                    ]);
-
-                    if ((float)($invItem->reserved_balance ?? 0) > 0) {
-                        $invItem->reserved_balance = max(0, (float)$invItem->reserved_balance - $qtyToDeliver);
-                        $invItem->save();
-                    }
+                    $invItem->reserved_balance = $totalReserved - $reservationToRelease;
+                    $invItem->save();
+                    $orderItem->reserved_quantity = $lineReserved - $reservationToRelease;
                 }
 
                 SalesDeliveryItem::create([
@@ -1666,7 +1711,6 @@ class SalesService
                 ]);
 
                 $orderItem->fulfilled_quantity += $qtyToDeliver;
-                $orderItem->reserved_quantity = max(0, $orderItem->reserved_quantity - $qtyToDeliver);
                 $orderItem->save();
 
                 $totalPieces += $qtyToDeliver;
@@ -1697,7 +1741,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_order_delivered',
                 'auditable_type' => 'sales_orders',
                 'auditable_id' => $order->id,
@@ -1791,7 +1835,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_delivery_cancelled',
                 'auditable_type' => 'sales_delivery_notes',
                 'auditable_id' => $deliveryNote->id,
@@ -1810,44 +1854,26 @@ class SalesService
         $tenantId = app('current_tenant_id');
 
         return DB::transaction(function () use ($data, $tenantId) {
-            $customerId = $data['customer_id'];
-            $customer = Customer::where('tenant_id', $tenantId)->findOrFail($customerId);
-
-            $amount = (float) $data['amount'];
+            $customer = Customer::where('tenant_id', $tenantId)->findOrFail($data['customer_id']);
+            $amount = round((float) $data['amount'], 4);
             if ($amount <= 0) {
-                throw new InvalidArgumentException("مبلغ سند القبض يجب أن يكون أكبر من الصفر");
+                throw new InvalidArgumentException('مبلغ سند القبض يجب أن يكون أكبر من الصفر.');
             }
 
+            $accounting = app(AccountingService::class);
             $paymentMethod = $data['payment_method'] ?? 'cash';
-            $preferredCode = in_array($paymentMethod, ['bank_transfer', 'card']) ? '1020' : '1010';
-
-            $accountId = $data['account_id'] ?? null;
-            if ($accountId) {
-                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('id', $accountId)->first();
-            } else {
-                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', $preferredCode)->first();
-                if (!$cashAccount && $preferredCode === '1020') {
-                    $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1010')->first();
-                }
-            }
-
-            if (!$cashAccount) {
-                if (ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() === 0) {
-                    app(AccountingService::class)->initializeDefaultChartOfAccounts($tenantId);
-                }
-                $cashAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', $preferredCode)->first()
-                    ?? ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1010')->first()
-                    ?? ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('type', 'asset')->first();
-            }
-
-            $arAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1110')->first();
-            if (!$arAccount && ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->count() === 0) {
-                app(AccountingService::class)->initializeDefaultChartOfAccounts($tenantId);
-                $arAccount = ChartOfAccount::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('code', '1110')->first();
-            }
+            $cashMapping = in_array($paymentMethod, ['bank_transfer', 'card'], true) ? 'default_bank' : 'default_cash';
+            $cashAccount = !empty($data['account_id'])
+                ? ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('id', $data['account_id'])
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->firstOrFail()
+                : $accounting->getMappedAccount($tenantId, $cashMapping);
+            $arAccount = $accounting->getMappedAccount($tenantId, 'ar_control');
 
             $voucherNumber = $data['voucher_number'] ?? ('RCV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)));
-
             $voucher = PaymentVoucher::create([
                 'tenant_id' => $tenantId,
                 'voucher_number' => $voucherNumber,
@@ -1856,14 +1882,13 @@ class SalesService
                 'party_id' => $customer->id,
                 'party_name' => $customer->name,
                 'payment_method' => $paymentMethod,
-                'account_id' => $cashAccount ? $cashAccount->id : ($arAccount ? $arAccount->id : null),
+                'account_id' => $cashAccount->id,
                 'amount' => $amount,
                 'voucher_date' => $data['voucher_date'] ?? now()->toDateString(),
                 'notes' => $data['notes'] ?? null,
                 'idempotency_key' => $data['idempotency_key'] ?? null,
             ]);
 
-            // تخصيص الدفعة على الفواتير
             $allocations = $data['allocations'] ?? [];
             if (empty($allocations) && !empty($data['sales_invoice_id'])) {
                 $allocations = [['sales_invoice_id' => $data['sales_invoice_id'], 'amount' => $amount]];
@@ -1871,85 +1896,92 @@ class SalesService
                 $allocations = [['sales_invoice_id' => $data['invoice_id'], 'amount' => $amount]];
             }
 
-            // تخصيص تلقائي FIFO على الفواتير المفتوحة إذا لم يتم تحديد فواتير بعينها
             if (empty($allocations)) {
                 $unpaidInvoices = SalesInvoice::where('tenant_id', $tenantId)
                     ->where('customer_id', $customer->id)
                     ->whereIn('status', ['issued', 'partially_paid'])
                     ->where('balance_due', '>', 0)
                     ->orderBy('invoice_date', 'asc')
+                    ->lockForUpdate()
                     ->get();
 
                 $remainingToAllocate = $amount;
-                foreach ($unpaidInvoices as $inv) {
-                    if ($remainingToAllocate <= 0) break;
-                    $allocAmount = min($remainingToAllocate, (float) $inv->balance_due);
-                    $allocations[] = ['sales_invoice_id' => $inv->id, 'amount' => $allocAmount];
-                    $remainingToAllocate -= $allocAmount;
+                foreach ($unpaidInvoices as $invoice) {
+                    if ($remainingToAllocate <= 0) {
+                        break;
+                    }
+                    $allocationAmount = min($remainingToAllocate, (float) $invoice->balance_due);
+                    $allocations[] = ['sales_invoice_id' => $invoice->id, 'amount' => $allocationAmount];
+                    $remainingToAllocate -= $allocationAmount;
                 }
             }
 
-            foreach ($allocations as $alloc) {
-                $invId = $alloc['sales_invoice_id'] ?? $alloc['invoice_id'] ?? null;
-                $allocAmt = (float) ($alloc['amount'] ?? 0);
-                if (!$invId || $allocAmt <= 0) continue;
+            $allocatedTotal = 0.0;
+            foreach ($allocations as $allocation) {
+                $invoiceId = $allocation['sales_invoice_id'] ?? $allocation['invoice_id'] ?? null;
+                $allocationAmount = round((float) ($allocation['amount'] ?? 0), 4);
+                if (!$invoiceId || $allocationAmount <= 0) {
+                    throw new InvalidArgumentException('كل تخصيص دفعة يجب أن يحتوي على فاتورة ومبلغ موجب.');
+                }
 
                 $invoice = SalesInvoice::where('tenant_id', $tenantId)
-                    ->where('id', $invId)
+                    ->where('id', $invoiceId)
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if ($allocAmt > (float)$invoice->balance_due + 0.0001) {
-                    throw new InvalidArgumentException("مبلغ التخصيص ({$allocAmt}) يتجاوز الرصيد المستحق على الفاتورة {$invoice->invoice_number} ({$invoice->balance_due})");
+                if ($invoice->customer_id !== $customer->id) {
+                    throw new InvalidArgumentException('لا يمكن تخصيص سند القبض على فاتورة تخص عميلاً آخر.');
+                }
+                if ($allocationAmount > (float) $invoice->balance_due + 0.0001) {
+                    throw new InvalidArgumentException("مبلغ التخصيص يتجاوز الرصيد المستحق على الفاتورة {$invoice->invoice_number}.");
                 }
 
-                $invoice->paid_amount += $allocAmt;
-                $invoice->balance_due = max(0, round($invoice->total_amount - $invoice->paid_amount, 4));
-                $invoice->status = ($invoice->balance_due <= 0.0001) ? 'paid' : 'partially_paid';
+                $invoice->paid_amount = round((float) $invoice->paid_amount + $allocationAmount, 4);
+                $invoice->balance_due = max(0, round((float) $invoice->total_amount - (float) $invoice->paid_amount, 4));
+                $invoice->status = $invoice->balance_due <= 0.0001 ? 'paid' : 'partially_paid';
                 $invoice->save();
 
                 PaymentVoucherAllocation::create([
                     'tenant_id' => $tenantId,
                     'payment_voucher_id' => $voucher->id,
                     'sales_invoice_id' => $invoice->id,
-                    'amount' => $allocAmt,
+                    'amount' => $allocationAmount,
                 ]);
+                $allocatedTotal += $allocationAmount;
             }
 
-            // إثبات القيد المحاسبي المتوازن إذا كانت شجرة الحسابات نشطة
-            if ($cashAccount && $arAccount) {
-                try {
-                    $lines = [
-                        [
-                            'account_id' => $cashAccount->id,
-                            'debit' => $amount,
-                            'credit' => 0,
-                            'description' => "سند قبض من العميل {$customer->name} برقم {$voucher->voucher_number}",
-                        ],
-                        [
-                            'account_id' => $arAccount->id,
-                            'debit' => 0,
-                            'credit' => $amount,
-                            'description' => "سداد مديونية العميل {$customer->name} بموجب سند قبض {$voucher->voucher_number}",
-                        ]
-                    ];
-
-                    app(AccountingService::class)->createJournalEntry([
-                        'entry_number' => 'JE-RCV-' . $voucher->voucher_number,
-                        'description' => "سند قبض عميل {$voucher->voucher_number} - {$customer->name}",
-                        'reference_type' => 'payment_vouchers',
-                        'reference_id' => $voucher->id,
-                        'entry_date' => $voucher->voucher_date ? $voucher->voucher_date->toDateString() : now()->toDateString(),
-                        'lines' => $lines,
-                    ]);
-                } catch (\Throwable) {
-                    // فشل غير مانع إذا كانت الحسابات تجريبية
-                }
+            if ($allocatedTotal > $amount + 0.0001) {
+                throw new InvalidArgumentException('إجمالي تخصيصات سند القبض يتجاوز مبلغ السند.');
             }
+
+            // A receipt is not committed unless its balanced GL journal is committed too.
+            $accounting->createJournalEntry([
+                'entry_number' => 'JE-RCV-' . $voucher->voucher_number,
+                'description' => "سند قبض عميل {$voucher->voucher_number} - {$customer->name}",
+                'reference_type' => 'payment_vouchers',
+                'reference_id' => $voucher->id,
+                'entry_date' => $voucher->voucher_date ? $voucher->voucher_date->toDateString() : now()->toDateString(),
+                'lines' => [
+                    [
+                        'account_id' => $cashAccount->id,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "سند قبض من العميل {$customer->name} برقم {$voucher->voucher_number}",
+                    ],
+                    [
+                        'account_id' => $arAccount->id,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "سداد مديونية العميل {$customer->name} بموجب سند قبض {$voucher->voucher_number}",
+                        'party_type' => 'customer',
+                        'party_id' => $customer->id,
+                    ],
+                ],
+            ]);
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'customer_payment_recorded',
                 'auditable_type' => 'payment_vouchers',
                 'auditable_id' => $voucher->id,
@@ -1998,7 +2030,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'customer_payment_reversed',
                 'auditable_type' => 'payment_vouchers',
                 'auditable_id' => $voucher->id,
@@ -2043,7 +2075,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'credit_note_created',
                 'auditable_type' => 'credit_notes',
                 'auditable_id' => $creditNote->id,
@@ -2090,20 +2122,26 @@ class SalesService
     /**
      * فحص باركود فوري للـ POS
      */
-    public function barcodeLookup(string $barcode): ?array
+    public function barcodeLookup(string $barcode, ?array $branchIds = null): ?array
     {
         $tenantId = app('current_tenant_id');
 
-        $variant = ProductVariant::where('tenant_id', $tenantId)
-            ->where('barcode', $barcode)
-            ->with(['garmentModel', 'size', 'color'])
-            ->first();
+        $variantQuery = ProductVariant::where('tenant_id', $tenantId)
+            ->where('barcode', $barcode);
+        if ($branchIds !== null) {
+            $variantQuery->whereHas('inventoryItems', fn ($itemQuery) => $itemQuery
+                ->where('tenant_id', $tenantId)
+                ->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds)));
+        }
+        $variant = $variantQuery->with(['garmentModel', 'size', 'color'])->first();
 
         if (!$variant) {
-            $invItem = InventoryItem::where('tenant_id', $tenantId)
-                ->where('barcode', $barcode)
-                ->with(['variant.garmentModel', 'variant.size', 'variant.color'])
-                ->first();
+            $itemQuery = InventoryItem::where('tenant_id', $tenantId)
+                ->where('barcode', $barcode);
+            if ($branchIds !== null) {
+                $itemQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+            }
+            $invItem = $itemQuery->with(['variant.garmentModel', 'variant.size', 'variant.color'])->first();
 
             if ($invItem && $invItem->variant) {
                 $variant = $invItem->variant;
@@ -2114,9 +2152,12 @@ class SalesService
             return null;
         }
 
-        $stock = InventoryItem::where('tenant_id', $tenantId)
-            ->where('variant_id', $variant->id)
-            ->sum('current_balance');
+        $stockQuery = InventoryItem::where('tenant_id', $tenantId)
+            ->where('variant_id', $variant->id);
+        if ($branchIds !== null) {
+            $stockQuery->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $stock = $stockQuery->sum('current_balance');
 
         return [
             'id' => $variant->id,

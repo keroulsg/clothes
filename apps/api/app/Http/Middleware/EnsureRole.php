@@ -52,19 +52,24 @@ class EnsureRole
             'warehouse_manager' => ['inventory_custodian', 'warehouse', 'storekeeper', 'warehouse_manager'],
             'worker' => ['worker', 'operator'],
             'operator' => ['worker', 'operator'],
+            'sales_manager' => ['sales_manager', 'sales_rep', 'sales_officer'],
+            'sales_officer' => ['sales_officer', 'sales_rep'],
+            'sales_rep' => ['sales_rep', 'sales_officer'],
         ];
 
-        // فصل صريح: مشرف المنصة العام (platform_admin) محظور من تنفيذ العمليات التشغيلية والمالية داخل الشركات المستأجرة
+        // مشرف المنصة لا يدخل إلى مسارات ERP الخاصة بالمستأجرين مطلقاً.
+        // تُدار عملياته المركزية عبر مجموعة platform-admin المنفصلة.
         if ($userRole === 'platform_admin') {
             return response()->json([
                 'error' => 'UnauthorizedRole',
-                'message' => 'أمان: مشرف المنصة العام محظور من تنفيذ العمليات التشغيلية والمالية داخل الشركات المستأجرة.',
+                'message' => 'أمان: مشرف المنصة العام غير مصرح له بدخول مسارات تشغيل المصانع.',
             ], 403);
         }
 
         // مالك الشركة (company_owner) يمتلك صلاحيات تشغيلية كاملة داخل شركته فقط
         $effectiveUserRoles = $roleAliases[$userRole] ?? [$userRole];
-        $isAuthorized = $userRole === 'company_owner' || !empty(array_intersect($effectiveUserRoles, $allowedRoles));
+        $isAuthorized = $userRole === 'company_owner'
+            || !empty(array_intersect($effectiveUserRoles, $allowedRoles));
 
         if ($isAuthorized) {
             return $next($request);
@@ -75,5 +80,160 @@ class EnsureRole
             'message' => 'أمان: ليس لديك الصلاحية الكافية لتنفيذ هذا الإجراء الحساس (دورك الحالي: ' . $userRole . ').',
             'required_roles' => $allowedRoles,
         ], 403);
+    }
+
+    /**
+     * Resolve the fine-grained permission for role-protected tenant API routes.
+     * Role middleware remains the upper boundary; this check applies the user's
+     * effective permission set as a second, server-side authorization gate.
+     */
+    public function permissionForRequest(Request $request): ?string
+    {
+        $uri = $request->route()?->uri() ?? $request->path();
+        $uri = preg_replace('#^api/v[0-9]+/#', '', ltrim($uri, '/'));
+        $segments = explode('/', $uri);
+        $root = $segments[0] ?? '';
+        $method = strtoupper($request->method());
+        $path = strtolower($uri);
+
+        $isRead = in_array($method, ['GET', 'HEAD'], true);
+
+        if ($root === 'tenant') {
+            if (
+                str_starts_with($path, 'tenant/users')
+                || str_starts_with($path, 'tenant/roles')
+                || str_starts_with($path, 'tenant/permissions-catalog')
+            ) {
+                return 'admin.users';
+            }
+            if (str_starts_with($path, 'tenant/backup')) {
+                return 'admin.backup';
+            }
+            if (str_starts_with($path, 'tenant/subscription')) {
+                return 'admin.settings';
+            }
+            if (str_starts_with($path, 'tenant/settings/costing')) {
+                return $isRead ? 'costing.view' : 'costing.manage';
+            }
+            if (str_starts_with($path, 'tenant/settings/tax')) {
+                return $isRead ? 'accounting.view' : 'accounting.post';
+            }
+            if ($path === 'tenant/profile') {
+                return 'admin.settings';
+            }
+            return null;
+        }
+
+        if ($root === 'branches') {
+            return $isRead ? 'branches.view' : 'admin.settings';
+        }
+        if (in_array($root, ['categories', 'clothing-categories', 'size-categories', 'sizes', 'colors', 'models', 'garment-models'], true)) {
+            return 'production.manage';
+        }
+        if ($root === 'products') {
+            return $isRead ? 'sales.view' : 'sales.create';
+        }
+        if (in_array($root, ['warehouses', 'warehouse-types'], true)) {
+            return $isRead ? 'inventory.view' : 'admin.settings';
+        }
+        if ($root === 'inventory') {
+            if (str_contains($path, 'stock-count') || str_contains($path, '/counts')) {
+                return $isRead ? 'inventory.view' : 'inventory.manage';
+            }
+            if ($isRead) {
+                return 'inventory.view';
+            }
+            if (str_contains($path, 'transactions') && in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+                return strtolower((string) $request->input('transaction_type')) === 'goods_receipt'
+                    ? 'inventory.receive'
+                    : 'inventory.dispatch';
+            }
+            if (str_contains($path, 'items') || str_contains($path, 'units') || str_contains($path, 'convert-fabric')) {
+                return 'inventory.manage';
+            }
+            if (str_contains($path, 'customer-materials')) {
+                return str_contains($path, 'consume') ? 'inventory.dispatch' : 'inventory.receive';
+            }
+            return str_contains($path, 'receive') || str_contains($path, 'receipt')
+                ? 'inventory.receive'
+                : 'inventory.dispatch';
+        }
+        if (in_array($root, ['suppliers', 'purchase-orders', 'procurement', 'goods-receipts', 'supplier-invoices'], true)) {
+            return $isRead ? 'procurement.view' : 'procurement.create';
+        }
+        if ($root === 'boms') {
+            return $isRead ? 'costing.view' : 'costing.manage';
+        }
+        if ($root === 'production-orders') {
+            return 'production.manage';
+        }
+        if ($root === 'bundles') {
+            return 'production.work';
+        }
+        if ($root === 'cutting-orders') {
+            if (str_contains($path, 'issue')) {
+                return 'cutting.issue';
+            }
+            return $isRead ? 'cutting.view' : 'cutting.create';
+        }
+        if ($root === 'quality-inspections') {
+            if (str_contains($path, 'approve')) {
+                return 'qc.approve';
+            }
+            if (str_contains($path, 'reject')) {
+                return 'qc.reject';
+            }
+            return 'qc.inspect';
+        }
+        if ($root === 'subcontracting') {
+            if (str_contains($path, '/pay') || str_contains($path, 'invoice-payment')) {
+                return 'subcontracting.payments';
+            }
+            return $isRead ? 'subcontracting.view' : 'subcontracting.manage';
+        }
+        if (in_array($root, ['sales', 'sales-orders', 'pos', 'customers'], true)) {
+            if (str_contains($path, 'payments')) {
+                return 'sales.payments.view';
+            }
+            if (str_contains($path, 'discount')) {
+                return 'sales.discount';
+            }
+            return $isRead ? 'sales.view' : 'sales.create';
+        }
+        if ($root === 'accounting') {
+            return $isRead ? 'accounting.view' : 'accounting.post';
+        }
+        if ($root === 'hr') {
+            if (str_contains($path, 'payroll') || str_contains($path, 'salary')) {
+                return 'hr.payroll';
+            }
+            if (str_contains($path, 'defect-adjustments') && str_ends_with($path, '/object')) {
+                return 'hr.objection';
+            }
+            if (str_contains($path, 'piece-work-logs') && !$isRead) {
+                return 'production.work';
+            }
+            return $isRead ? 'hr.view' : 'hr.manage';
+        }
+        if ($root === 'storefront') {
+            return $isRead ? 'storefront.view' : 'storefront.manage';
+        }
+        if ($root === 'maintenance') {
+            return $isRead ? 'maintenance.view' : 'maintenance.manage';
+        }
+        if ($root === 'waslat-worsh') {
+            if (str_contains($path, 'payment') || str_contains($path, 'commission')) {
+                return 'waslat_worsh.payments';
+            }
+            return $isRead ? 'waslat_worsh.view' : 'waslat_worsh.manage';
+        }
+        if ($root === 'subscription' || $root === 'subscriptions') {
+            return 'admin.settings';
+        }
+        if ($root === 'admin') {
+            return 'admin.users';
+        }
+
+        return null;
     }
 }

@@ -23,6 +23,12 @@ class SupplierInvoiceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = SupplierInvoice::with(['supplier', 'purchaseOrder', 'goodsReceiptNote']);
+        $user = $request->user();
+        if ($user && $user->shouldEnforceBranchScope()) {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('purchaseOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                ->whereHas('goodsReceiptNote.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
 
         if ($request->has('supplier_id')) {
             $query->where('supplier_id', $request->supplier_id);
@@ -45,7 +51,7 @@ class SupplierInvoiceController extends Controller
         $validated = $request->validate([
             'invoice_number' => 'required|string|max:100',
             'purchase_order_id' => 'required|exists:purchase_orders,id',
-            'goods_receipt_note_id' => 'nullable|exists:goods_receipt_notes,id',
+            'goods_receipt_note_id' => 'required|uuid|exists:goods_receipt_notes,id',
             'invoice_date' => 'nullable|date',
             'due_date' => 'nullable|date',
             'subtotal' => 'required|numeric|min:0.01',
@@ -54,6 +60,26 @@ class SupplierInvoiceController extends Controller
         ]);
 
         $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->shouldEnforceBranchScope();
+        $purchaseOrder = \App\Models\PurchaseOrder::where('tenant_id', $tenantId)->find($validated['purchase_order_id']);
+        $goodsReceipt = \App\Models\GoodsReceiptNote::where('tenant_id', $tenantId)->find($validated['goods_receipt_note_id']);
+        if (!$purchaseOrder || !$goodsReceipt) {
+            return response()->json(['error' => 'ProcurementDocumentNotFound', 'message' => 'أمر الشراء أو إذن الاستلام غير متاح لهذا الحساب.'], 404);
+        }
+        if ($enforceBranchScope) {
+            $poWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($purchaseOrder->warehouse_id);
+            $grnWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($goodsReceipt->warehouse_id);
+            if (
+                !$poWarehouse || !$grnWarehouse
+                || !in_array($poWarehouse->branch_id, $assignedBranchIds, true)
+                || !in_array($grnWarehouse->branch_id, $assignedBranchIds, true)
+                || $poWarehouse->branch_id !== $grnWarehouse->branch_id
+            ) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك مطابقة فاتورة شراء من فرع غير معيّن لحسابك.'], 403);
+            }
+        }
         $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
         $validated['tenant_id'] = $tenantId;
 
@@ -72,13 +98,18 @@ class SupplierInvoiceController extends Controller
             ], 422);
         }
 
-        $statusCode = $invoice->wasRecentlyCreated ? 201 : 200;
+        $statusCode = !$invoice->is_posted
+            ? 202
+            : ($invoice->wasRecentlyCreated ? 201 : 200);
 
         return response()->json([
-            'message' => $invoice->wasRecentlyCreated
-                ? 'تم مطابقة فاتورة المورد وترحيل الالتزام المالي بنجاح.'
-                : 'تم استرجاع فاتورة المورد المسجلة مسبقاً (Replay Idempotency).',
+            'message' => !$invoice->is_posted
+                ? 'تم حفظ الفاتورة للمراجعة؛ لم يتم ترحيلها أو إثبات التزام على المورد بسبب فرق المطابقة.'
+                : ($invoice->wasRecentlyCreated
+                    ? 'تمت المطابقة الثلاثية وترحيل فاتورة المورد محاسبياً بنجاح.'
+                    : 'تم استرجاع فاتورة المورد المسجلة مسبقاً (Replay Idempotency).'),
             'is_duplicate' => !$invoice->wasRecentlyCreated,
+            'is_posted' => (bool) $invoice->is_posted,
             'supplier_invoice' => $invoice,
         ], $statusCode);
     }

@@ -89,10 +89,22 @@ class BackupDatabaseCommand extends Command
             $tenantCount = 0;
             $salesOrderCount = 0;
             $journalEntryCount = 0;
+            $inventoryItemCount = 0;
+            $inventoryTransactionCount = 0;
+            $purchaseOrderCount = 0;
+            $productionOrderCount = 0;
+            $salesInvoiceCount = 0;
+            $migrationCount = 0;
             try {
                 $tenantCount = Tenant::withoutGlobalScopes()->count();
                 $salesOrderCount = SalesOrder::withoutGlobalScopes()->count();
                 $journalEntryCount = JournalEntry::withoutGlobalScopes()->count();
+                $inventoryItemCount = DB::table('inventory_items')->count();
+                $inventoryTransactionCount = DB::table('inventory_transactions')->count();
+                $purchaseOrderCount = DB::table('purchase_orders')->count();
+                $productionOrderCount = DB::table('production_orders')->count();
+                $salesInvoiceCount = DB::table('sales_invoices')->count();
+                $migrationCount = DB::table('migrations')->count();
             } catch (\Throwable) {
                 // If tables do not exist yet in empty database
             }
@@ -112,6 +124,12 @@ class BackupDatabaseCommand extends Command
                     'tenants_count' => $tenantCount,
                     'sales_orders_count' => $salesOrderCount,
                     'journal_entries_count' => $journalEntryCount,
+                    'inventory_items_count' => $inventoryItemCount,
+                    'inventory_transactions_count' => $inventoryTransactionCount,
+                    'purchase_orders_count' => $purchaseOrderCount,
+                    'production_orders_count' => $productionOrderCount,
+                    'sales_invoices_count' => $salesInvoiceCount,
+                    'migrations_count' => $migrationCount,
                 ],
             ];
 

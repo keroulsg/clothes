@@ -406,7 +406,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               onClick={onToggleTheme}
               className="h-10 w-10 rounded-2xl glass-panel text-slate-600 dark:text-slate-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex items-center justify-center cursor-pointer"
               title={isDark ? (isAr ? 'الوضع المضيء' : 'Light Mode') : (isAr ? 'الوضع الداكن' : 'Dark Mode')}
-              aria-label={isDark ? (isAr ? "تفعيل الوضع الفاتح" : "Switch to light mode") : (isAr ? "تفعيل الوضع الداكن" : "Switch to dark mode")}\n              aria-pressed={isDark}
+              aria-label={isDark ? (isAr ? "تفعيل الوضع الفاتح" : "Switch to light mode") : (isAr ? "تفعيل الوضع الداكن" : "Switch to dark mode")}
+              aria-pressed={isDark}
             >
               {isDark ? <Sun className="w-4 h-4 text-amber-400 animate-spin-slow" /> : <Moon className="w-4 h-4 text-slate-600" />}
             </button>

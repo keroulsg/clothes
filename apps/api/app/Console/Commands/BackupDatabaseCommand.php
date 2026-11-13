@@ -46,7 +46,7 @@ class BackupDatabaseCommand extends Command
         }
 
         $timestamp = gmdate('Y-m-d\TH:i:s\Z');
-        $extension = $connection === 'pgsql' ? 'sql.gz' : 'sqlite';
+        $extension = match ($connection) { 'pgsql' => 'sql.gz', 'mysql' => 'sql', default => 'sqlite' };
         $dumpFileName = "{$backupId}.{$extension}";
         $partPath = "{$backupDir}/{$dumpFileName}.part";
         $finalDumpPath = "{$backupDir}/{$dumpFileName}";
@@ -59,6 +59,8 @@ class BackupDatabaseCommand extends Command
                 $this->dumpSqlite($dbConfig['database'] ?? database_path('database.sqlite'), $partPath);
             } elseif ($connection === 'pgsql') {
                 $this->dumpPostgres($dbConfig, $partPath);
+            } elseif ($connection === 'mysql') {
+                $this->dumpMysql($dbConfig, $partPath);
             } else {
                 throw new \RuntimeException("Unsupported database driver for backup: {$connection}");
             }
@@ -221,6 +223,49 @@ class BackupDatabaseCommand extends Command
 
         if ($returnCode !== 0) {
             throw new \RuntimeException("pg_dump failed with exit code {$returnCode}: " . implode("\n", $output));
+        }
+    }
+
+
+    private function dumpMysql(array $config, string $targetPart): void
+    {
+        $host = $config['host'] ?? '127.0.0.1';
+        $port = $config['port'] ?? 3306;
+        $database = $config['database'] ?? '';
+        $username = $config['username'] ?? '';
+        $password = $config['password'] ?? '';
+
+        if ($database === '' || $username === '') {
+            throw new \\RuntimeException('MySQL backup requires a configured database and username.');
+        }
+
+        // MYSQL_PWD keeps credentials out of the process argument list.
+        putenv("MYSQL_PWD={$password}");
+        $stderrPath = $targetPart . '.stderr';
+        $cmd = sprintf(
+            'mysqldump --host=%s --port=%s --user=%s --single-transaction --quick --routines --triggers --events --hex-blob --no-tablespaces --default-character-set=utf8mb4 %s > %s 2> %s',
+            escapeshellarg($host),
+            escapeshellarg((string) $port),
+            escapeshellarg($username),
+            escapeshellarg($database),
+            escapeshellarg($targetPart),
+            escapeshellarg($stderrPath)
+        );
+
+        exec($cmd, $output, $returnCode);
+        putenv('MYSQL_PWD');
+
+        $errorOutput = is_file($stderrPath) ? trim((string) file_get_contents($stderrPath)) : '';
+        if (is_file($stderrPath)) {
+            @unlink($stderrPath);
+        }
+
+        if ($returnCode !== 0) {
+            throw new \\RuntimeException("mysqldump failed with exit code {$returnCode}: {$errorOutput}");
+        }
+
+        if (!is_file($targetPart) || filesize($targetPart) === 0) {
+            throw new \\RuntimeException('mysqldump completed without producing a non-empty backup artifact.');
         }
     }
 

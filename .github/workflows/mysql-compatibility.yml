@@ -1,0 +1,83 @@
+name: GarmentOS MySQL Compatibility
+
+on:
+  push:
+    branches:
+      - 'garmentos/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  mysql-migrations:
+    name: MySQL 8.4 Migration Compatibility
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: garmentos_test
+          MYSQL_USER: garmentos
+          MYSQL_PASSWORD: secret_test_password
+          MYSQL_ROOT_PASSWORD: root_test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_test_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: garmentos_test
+      DB_USERNAME: garmentos
+      DB_PASSWORD: secret_test_password
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, bcmath
+          coverage: none
+
+      - name: Install Composer Dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare MySQL Test Environment
+        run: |
+          printf "%s\\n" \\
+            "APP_ENV=testing" \\
+            "APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=" \\
+            "DB_CONNECTION=mysql" \\
+            "DB_HOST=127.0.0.1" \\
+            "DB_PORT=3306" \\
+            "DB_DATABASE=garmentos_test" \\
+            "DB_USERNAME=garmentos" \\
+            "DB_PASSWORD=secret_test_password" \\
+            "CACHE_STORE=array" \\
+            "SESSION_DRIVER=array" \\
+            "QUEUE_CONNECTION=sync" \\
+            > .env
+          cp .env .env.testing
+
+      - name: Run Complete MySQL Migrations
+        run: php artisan migrate --database=mysql -v --force
+
+      - name: Verify MySQL Migration State
+        run: php artisan migrate:status --database=mysql

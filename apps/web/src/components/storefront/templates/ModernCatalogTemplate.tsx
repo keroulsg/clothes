@@ -31,6 +31,9 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   onNavigateToErp,
   onToggleTheme,
   onToggleLang,
+  wholesaleUser,
+  onOpenWholesaleModal,
+  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
@@ -81,6 +84,23 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-4 text-[11px]">
+            {wholesaleUser?.is_approved ? (
+              <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-2.5 py-1 rounded-lg">
+                <span className="font-bold">✓ {isAr ? `حساب جملة: ${wholesaleUser.company_name}` : `Wholesale: ${wholesaleUser.company_name}`}</span>
+                {onLogoutWholesale && (
+                  <button onClick={onLogoutWholesale} className="text-slate-400 hover:text-white underline text-[10px] ms-1">
+                    {isAr ? 'خروج' : 'Logout'}
+                  </button>
+                )}
+              </div>
+            ) : onOpenWholesaleModal ? (
+              <button
+                onClick={onOpenWholesaleModal}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1 rounded-lg transition-colors shadow-xs"
+              >
+                {isAr ? 'بوابة تجار الجملة (B2B)' : 'Wholesale Portal'}
+              </button>
+            ) : null}
             <button onClick={onNavigateToTracking} className="hover:text-white underline">
               {isAr ? 'تتبع طلبيات التوريد' : 'Track Shipments'}
             </button>
@@ -356,7 +376,7 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
                           <div>
                             <span className="text-slate-400 block text-[10px]">{isAr ? 'الحد الأدنى (MOQ)' : 'MOQ'}</span>
                             <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {isAr ? '1 قطعة' : '1 Piece'}
+                              {v.moq && v.moq > 1 ? `${v.moq} ${isAr ? 'قطعة' : 'Pcs'}` : (isAr ? '1 قطعة' : '1 Piece')}
                             </span>
                           </div>
                           <div>
@@ -364,13 +384,42 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
                             <span className="font-mono text-[11px] font-bold">{v.model_code || '---'}</span>
                           </div>
                         </div>
+
+                        {/* Wholesale Volume Tiers Preview */}
+                        {v.is_wholesale && v.wholesale_tiers && v.wholesale_tiers.length > 0 && (
+                          <div className="mt-2.5 p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-[11px]">
+                            <span className="font-bold text-emerald-800 dark:text-emerald-300 block mb-1">
+                              {isAr ? 'شرائح خصم الجملة:' : 'Volume Tiers:'}
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {v.wholesale_tiers.map((t: any, idx: number) => (
+                                <span key={idx} className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 font-mono text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                                  +{t.min_quantity}: {Number(t.unit_price).toFixed(0)} {currency}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {!v.is_wholesale && v.is_wholesale_eligible && onOpenWholesaleModal && (
+                          <button
+                            type="button"
+                            onClick={onOpenWholesaleModal}
+                            className="mt-2.5 w-full text-start p-1.5 rounded-lg bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-[10px] text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors font-medium flex items-center justify-between"
+                          >
+                            <span>{isAr ? '🏷️ أسعار خاصة لتجار الجملة والشركات' : '🏷️ Trade pricing available for B2B'}</span>
+                            <span className="underline font-bold">{isAr ? 'سجل هنا' : 'Apply'}</span>
+                          </button>
+                        )}
                       </div>
 
                       {/* Pricing & Order Action */}
                       <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
                         <div>
                           <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                            {isAr ? 'سعر الجملة والتجزئة' : 'Unit Price'}
+                            {v.is_wholesale
+                              ? (isAr ? 'سعر الجملة المعتمد' : 'Wholesale Unit Price')
+                              : (isAr ? 'سعر القطاعي' : 'Unit Price')}
                           </span>
                           <span className="text-lg font-black text-blue-600 dark:text-blue-400">
                             {v.price.toFixed(2)}{' '}

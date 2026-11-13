@@ -32,6 +32,9 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   onNavigateToErp,
   onToggleTheme,
   onToggleLang,
+  wholesaleUser,
+  onOpenWholesaleModal,
+  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
@@ -110,6 +113,24 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
 
           {/* Actions & Utilities */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {wholesaleUser?.is_approved ? (
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
+                <span>✓ {wholesaleUser.company_name}</span>
+                {onLogoutWholesale && (
+                  <button onClick={onLogoutWholesale} className="text-slate-400 hover:text-rose-500 underline text-[10px]">
+                    {isAr ? 'خروج' : 'Logout'}
+                  </button>
+                )}
+              </div>
+            ) : onOpenWholesaleModal ? (
+              <button
+                onClick={onOpenWholesaleModal}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white shadow-xs transition-colors"
+              >
+                {isAr ? 'بوابة الجملة (B2B)' : 'Trade Portal'}
+              </button>
+            ) : null}
+
             <button
               onClick={onNavigateToTracking}
               className={`text-xs font-semibold px-3 py-2 rounded-xl border transition-all ${
@@ -361,11 +382,42 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                           <span className="font-bold text-slate-700 dark:text-slate-300">{v.size}</span>
                         </div>
                       )}
+                      {v.is_wholesale && (
+                        <div className="mt-2 p-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[10px] space-y-1">
+                          <div className="flex items-center justify-between font-bold text-emerald-800 dark:text-emerald-300">
+                            <span>{isAr ? 'سعر الجملة المعتمد' : 'Wholesale Approved'}</span>
+                            {v.moq && v.moq > 1 && (
+                              <span className="font-mono">MOQ: {v.moq} {isAr ? 'قطعة' : 'pcs'}</span>
+                            )}
+                          </div>
+                          {v.wholesale_tiers && v.wholesale_tiers.length > 0 && (
+                            <div className="flex flex-wrap gap-1 text-[9px] font-mono">
+                              {v.wholesale_tiers.map((t: any, idx: number) => (
+                                <span key={idx} className="bg-white dark:bg-slate-900 px-1 py-0.2 rounded border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300">
+                                  +{t.min_quantity}: {Number(t.unit_price).toFixed(0)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {!v.is_wholesale && v.is_wholesale_eligible && onOpenWholesaleModal && (
+                        <button
+                          type="button"
+                          onClick={onOpenWholesaleModal}
+                          className="mt-1.5 text-[10px] text-sky-600 dark:text-sky-400 hover:underline block font-semibold text-start"
+                        >
+                          {isAr ? '🏷️ متوفر بأسعار الجملة للشركات والتجار' : '🏷️ Wholesale pricing available for trade'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                       <div>
-                        <span className="text-xs text-slate-400 block">{isAr ? 'سعر القطعة' : 'Price'}</span>
+                        <span className="text-xs text-slate-400 block">
+                          {v.is_wholesale ? (isAr ? 'سعر الجملة' : 'Wholesale Price') : (isAr ? 'سعر القطعة' : 'Price')}
+                        </span>
                         <span className="text-lg font-black" style={{ color: primaryColor }}>
                           {v.price.toFixed(2)}{' '}
                           <span className="text-xs font-bold text-slate-500">{storeSettings?.currency || 'EGP'}</span>

@@ -29,6 +29,9 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   onNavigateToErp,
   onToggleTheme,
   onToggleLang,
+  wholesaleUser,
+  onOpenWholesaleModal,
+  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
@@ -95,6 +98,24 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
 
           {/* Actions */}
           <div className="flex items-center gap-3 text-xs">
+            {wholesaleUser?.is_approved ? (
+              <div className="flex items-center gap-2 border border-amber-600/60 bg-amber-950/40 text-amber-300 px-3 py-1 font-sans text-xs">
+                <span className="font-bold">⚜️ {wholesaleUser.company_name}</span>
+                {onLogoutWholesale && (
+                  <button onClick={onLogoutWholesale} className="text-stone-400 hover:text-white underline text-[10px]">
+                    {isAr ? 'خروج' : 'Logout'}
+                  </button>
+                )}
+              </div>
+            ) : onOpenWholesaleModal ? (
+              <button
+                onClick={onOpenWholesaleModal}
+                className="border border-amber-600/70 text-amber-500 hover:bg-amber-600 hover:text-white px-3 py-1.5 font-sans font-bold uppercase tracking-wider text-[11px] transition-colors"
+              >
+                {isAr ? 'حساب تجاري / بوتيك' : 'Trade Account'}
+              </button>
+            ) : null}
+
             <button
               onClick={onNavigateToTracking}
               className="text-stone-400 hover:text-amber-500 transition-colors uppercase tracking-wider hidden sm:inline-block"
@@ -233,12 +254,31 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
                       <span className="font-serif">{v.size || 'Custom Size'}</span>
                     </div>
                     <h4 className="font-serif text-xl tracking-wide">{v.model_name}</h4>
+
+                    {v.is_wholesale && (
+                      <div className="mt-2 p-2 border border-amber-600/40 bg-amber-950/20 text-[10px] space-y-1 font-sans">
+                        <div className="flex items-center justify-between text-amber-400 font-bold">
+                          <span>{isAr ? 'تسعير بوتيك معتمد (Wholesale)' : 'Trade Boutique Pricing'}</span>
+                          {v.moq && v.moq > 1 && <span>MOQ: {v.moq} pcs</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    {!v.is_wholesale && v.is_wholesale_eligible && onOpenWholesaleModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenWholesaleModal}
+                        className="mt-1 text-[10px] text-amber-600 hover:text-amber-500 underline uppercase tracking-wider block font-sans"
+                      >
+                        {isAr ? '⚜️ استفسار توريدات البوتيكات والفنادق' : '⚜️ Boutique trade inquiry'}
+                      </button>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t border-stone-100 dark:border-zinc-800 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] uppercase tracking-widest text-stone-400 block">
-                        {isAr ? 'السعر الحصري' : 'Price'}
+                        {v.is_wholesale ? (isAr ? 'سعر التوريد الحصري' : 'Trade Price') : (isAr ? 'السعر الحصري' : 'Price')}
                       </span>
                       <span className="text-xl font-serif text-amber-600 dark:text-amber-400">
                         {v.price.toFixed(2)}{' '}

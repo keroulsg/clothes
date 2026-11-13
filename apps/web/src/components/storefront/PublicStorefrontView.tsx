@@ -11,6 +11,10 @@ import {
   Minus,
   Trash2,
   AlertCircle,
+  Building2,
+  Lock,
+  UserCheck,
+  Briefcase,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -40,6 +44,8 @@ interface CartItem {
   quantity: number;
   unit_price: number;
   available_stock: number;
+  moq?: number;
+  wholesale_tiers?: Array<{ min_quantity: number; unit_price: number }>;
 }
 
 export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
@@ -59,6 +65,36 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
   const [storeSettings, setStoreSettings] = useState<any | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any | null>(null);
   const [variants, setVariants] = useState<any[]>([]);
+
+  // Wholesale state & persistence
+  const [wholesaleToken, setWholesaleToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem('garmentos_wholesale_token') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [wholesaleUser, setWholesaleUser] = useState<any | null>(null);
+  const [isWholesaleModalOpen, setIsWholesaleModalOpen] = useState(false);
+  const [wholesaleTab, setWholesaleTab] = useState<'login' | 'register'>('login');
+  const [wholesaleLoginEmailOrPhone, setWholesaleLoginEmailOrPhone] = useState('');
+  const [wholesaleLoginPassword, setWholesaleLoginPassword] = useState('');
+  const [wholesaleRegForm, setWholesaleRegForm] = useState({
+    company_name: '',
+    business_type: 'retail_store',
+    contact_person: '',
+    phone: '',
+    email: '',
+    password: '',
+    commercial_register: '',
+    tax_id: '',
+    city: isAr ? 'القاهرة' : 'Cairo',
+    address: '',
+    notes: '',
+  });
+  const [wholesaleAuthLoading, setWholesaleAuthLoading] = useState(false);
+  const [wholesaleAuthError, setWholesaleAuthError] = useState<string | null>(null);
+  const [wholesaleAuthSuccess, setWholesaleAuthSuccess] = useState<string | null>(null);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,8 +122,9 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
   // Selected Product Details & Gallery Quick View Modal
   const [selectedProductDetails, setSelectedProductDetails] = useState<any | null>(null);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number>(0);
+  const [selectedQty, setSelectedQty] = useState<number>(1);
 
-  const fetchStoreData = async () => {
+  const fetchStoreData = async (tokenOverride?: string) => {
     if (!tenantIdentifier) {
       setStoreSettings(null);
       setTenantInfo(null);
@@ -103,7 +140,8 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     try {
       const isPreviewRequested =
         window.location.hash.includes('preview=1') || window.location.search.includes('preview=1');
-      const res = await api.storefront.getPublicStore(tenantIdentifier, isPreviewRequested);
+      const activeToken = tokenOverride !== undefined ? tokenOverride : wholesaleToken;
+      const res = await api.storefront.getPublicStore(tenantIdentifier, isPreviewRequested, activeToken || undefined);
       if (res) {
         let settings = res.store_settings;
         const urlParams = new URLSearchParams(window.location.search);
@@ -116,6 +154,16 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
         setTenantInfo(res.tenant);
         setVariants(res.products || res.catalog?.variants || res.variants || []);
         setIsPreview(Boolean(res.is_preview || isPreviewRequested));
+
+        if (res.customer) {
+          setWholesaleUser(res.customer);
+          if (res.customer.name && !custName) setCustName(res.customer.name);
+          if (res.customer.phone && !custPhone) setCustPhone(res.customer.phone);
+          if (res.customer.address && !custAddress) setCustAddress(res.customer.address);
+          if (res.customer.city && !custCity) setCustCity(res.customer.city);
+        } else if (!activeToken) {
+          setWholesaleUser(null);
+        }
       }
     } catch (err: any) {
       if (window.location.search.includes('mock_audit=1') || window.location.hash.includes('mock_audit=1')) {
@@ -147,10 +195,10 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
         });
         setTenantInfo({ name: isAr ? 'مصنع الدلتا للملابس الجاهزة' : 'Delta Apparel Factory', subdomain: 'delta-store' });
         setVariants([
-          { id: '1', sku: 'POLO-EG-01', model_name: isAr ? 'قميص بولو قطن مصري فاخر' : 'Premium Egyptian Cotton Polo', price: 350, in_stock: 45, size: 'L', color: isAr ? 'كحلي' : 'Navy' },
-          { id: '2', sku: 'TSH-CL-02', model_name: isAr ? 'تيشيرت كاجوال قطن 100%' : '100% Pure Cotton Casual T-Shirt', price: 220, in_stock: 80, size: 'M', color: isAr ? 'أبيض' : 'White' },
-          { id: '3', sku: 'PNT-DN-03', model_name: isAr ? 'بنطلون جينز تصدير فائق المرونة' : 'Export Stretch Denim Jeans', price: 480, in_stock: 25, size: '34', color: isAr ? 'أزرق داكن' : 'Dark Blue' },
-          { id: '4', sku: 'KID-BL-04', model_name: isAr ? 'سالوبيت أطفال قطن طبيعي ناعم' : 'Soft Natural Baby Bodysuit', price: 180, in_stock: 35, size: '2Y', color: isAr ? 'مشمشي' : 'Peach' },
+          { id: '1', sku: 'POLO-EG-01', model_name: isAr ? 'قميص بولو قطن مصري فاخر' : 'Premium Egyptian Cotton Polo', price: 350, in_stock: 45, size: 'L', color: isAr ? 'كحلي' : 'Navy', is_wholesale_eligible: true },
+          { id: '2', sku: 'TSH-CL-02', model_name: isAr ? 'تيشيرت كاجوال قطن 100%' : '100% Pure Cotton Casual T-Shirt', price: 220, in_stock: 80, size: 'M', color: isAr ? 'أبيض' : 'White', is_wholesale_eligible: true },
+          { id: '3', sku: 'PNT-DN-03', model_name: isAr ? 'بنطلون جينز تصدير فائق المرونة' : 'Export Stretch Denim Jeans', price: 480, in_stock: 25, size: '34', color: isAr ? 'أزرق داكن' : 'Dark Blue', is_wholesale_eligible: true },
+          { id: '4', sku: 'KID-BL-04', model_name: isAr ? 'سالوبيت أطفال قطن طبيعي ناعم' : 'Soft Natural Baby Bodysuit', price: 180, in_stock: 35, size: '2Y', color: isAr ? 'مشمشي' : 'Peach', is_wholesale_eligible: true },
         ]);
         setIsPreview(window.location.search.includes('preview=1') || window.location.hash.includes('preview=1'));
         setErrorMsg(null);
@@ -171,6 +219,137 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     fetchStoreData();
   }, [tenantIdentifier]);
 
+  // Check wholesale profile on mount if token exists
+  useEffect(() => {
+    if (wholesaleToken && tenantIdentifier) {
+      api.storefront.getWholesaleProfile(wholesaleToken, tenantIdentifier)
+        .then((res) => {
+          if (res?.customer) {
+            setWholesaleUser(res.customer);
+            if (res.customer.name && !custName) setCustName(res.customer.name);
+            if (res.customer.phone && !custPhone) setCustPhone(res.customer.phone);
+            if (res.customer.address && !custAddress) setCustAddress(res.customer.address);
+            if (res.customer.city && !custCity) setCustCity(res.customer.city);
+          }
+        })
+        .catch(() => {
+          try {
+            localStorage.removeItem('garmentos_wholesale_token');
+          } catch {}
+          setWholesaleToken('');
+          setWholesaleUser(null);
+        });
+    }
+  }, [wholesaleToken, tenantIdentifier]);
+  // Wholesale Authentication Handlers
+  const handleWholesaleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWholesaleAuthError(null);
+    setWholesaleAuthSuccess(null);
+    setWholesaleAuthLoading(true);
+    try {
+      const res = await api.storefront.loginWholesale(
+        {
+          email_or_phone: wholesaleLoginEmailOrPhone.trim(),
+          password: wholesaleLoginPassword,
+        },
+        tenantIdentifier
+      );
+      if (res?.token) {
+        try {
+          localStorage.setItem('garmentos_wholesale_token', res.token);
+        } catch {}
+        setWholesaleToken(res.token);
+        setWholesaleUser(res.customer);
+        if (res.customer?.name) setCustName(res.customer.name);
+        if (res.customer?.phone) setCustPhone(res.customer.phone);
+        if (res.customer?.address) setCustAddress(res.customer.address);
+        if (res.customer?.city) setCustCity(res.customer.city);
+
+        if (res.customer?.is_approved) {
+          setWholesaleAuthSuccess(isAr ? 'تم تسجيل الدخول بنجاح! تم تفعيل أسعار وخصومات الجملة المعتمدة.' : 'Logged in successfully! Wholesale pricing activated.');
+          setTimeout(() => {
+            setIsWholesaleModalOpen(false);
+            setWholesaleAuthSuccess(null);
+          }, 1000);
+          await fetchStoreData(res.token);
+        } else {
+          setWholesaleAuthSuccess(
+            isAr
+              ? `حسابكم مسجل بحالة (${res.customer?.status === 'rejected' ? 'مرفوض' : res.customer?.status === 'suspended' ? 'موقوف مؤقتاً' : 'قيد المراجعة'}). أسعار الجملة تتطلب اعتماد إدارة المصنع.`
+              : `Your account is ${res.customer?.status}. Wholesale pricing requires factory approval.`
+          );
+        }
+      }
+    } catch (err: any) {
+      setWholesaleAuthError(err?.message || (isAr ? 'فشل تسجيل الدخول، يرجى التحقق من بيانات الحساب.' : 'Login failed.'));
+    } finally {
+      setWholesaleAuthLoading(false);
+    }
+  };
+
+  const handleWholesaleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWholesaleAuthError(null);
+    setWholesaleAuthSuccess(null);
+    setWholesaleAuthLoading(true);
+    try {
+      const res = await api.storefront.registerWholesale(
+        {
+          company_name: wholesaleRegForm.company_name.trim(),
+          business_type: wholesaleRegForm.business_type,
+          contact_person: wholesaleRegForm.contact_person.trim(),
+          phone: wholesaleRegForm.phone.trim(),
+          email: wholesaleRegForm.email.trim(),
+          password: wholesaleRegForm.password,
+          commercial_register: wholesaleRegForm.commercial_register.trim() || null,
+          tax_id: wholesaleRegForm.tax_id.trim() || null,
+          city: wholesaleRegForm.city,
+          address: wholesaleRegForm.address.trim(),
+          notes: wholesaleRegForm.notes.trim() || null,
+        },
+        tenantIdentifier
+      );
+      if (res?.success) {
+        setWholesaleAuthSuccess(
+          isAr
+            ? 'تم استلام طلب اعتماد حساب الجملة بنجاح! الطلب قيد المراجعة والتدقيق من إدارة المصنع وسيتواصل معكم فريق المبيعات فور الاعتماد.'
+            : 'Wholesale application submitted! Awaiting factory review and approval.'
+        );
+        if (res.token) {
+          try {
+            localStorage.setItem('garmentos_wholesale_token', res.token);
+          } catch {}
+          setWholesaleToken(res.token);
+          setWholesaleUser(res.customer);
+        }
+      }
+    } catch (err: any) {
+      setWholesaleAuthError(err?.message || (isAr ? 'فشل إرسال طلب الاعتماد، يرجى التأكد من ملء الحقول المطلوبة.' : 'Registration failed.'));
+    } finally {
+      setWholesaleAuthLoading(false);
+    }
+  };
+
+  const handleLogoutWholesale = async () => {
+    try {
+      localStorage.removeItem('garmentos_wholesale_token');
+    } catch {}
+    setWholesaleToken('');
+    setWholesaleUser(null);
+    await fetchStoreData('');
+  };
+
+  // Compute dynamic unit price based on volume tiers
+  const resolveItemUnitPrice = (item: { quantity: number; unit_price: number; wholesale_tiers?: any[] }) => {
+    if (item.wholesale_tiers && item.wholesale_tiers.length > 0) {
+      const sorted = [...item.wholesale_tiers].sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
+      const matched = sorted.find((t) => item.quantity >= Number(t.min_quantity));
+      if (matched) return Number(matched.unit_price);
+    }
+    return item.unit_price;
+  };
+
   // Compute shipping fee authoritatively
   const calculateEstimatedShipping = (city: string, subtotal: number): number => {
     if (subtotal >= 1500) return 0;
@@ -181,20 +360,24 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     return 50;
   };
 
-  const cartSubtotal = cart.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+  const cartSubtotal = cart.reduce((sum, item) => sum + item.quantity * resolveItemUnitPrice(item), 0);
   const shippingFee = calculateEstimatedShipping(custCity, cartSubtotal);
   const cartTotal = cartSubtotal + shippingFee;
 
-  const handleAddToCart = (variant: any) => {
+  const handleAddToCart = (variant: any, requestedQty?: number) => {
+    const isWholesaleActive = Boolean(wholesaleUser?.is_approved && variant.is_wholesale);
+    const moq = isWholesaleActive ? Number(variant.moq || 1) : 1;
+    const initialQty = requestedQty && requestedQty >= moq ? requestedQty : Math.max(1, moq);
     const price = Number(variant.price ?? variant.retail_price ?? 250);
     const available = Number(variant.in_stock ?? variant.available_quantity ?? variant.current_balance ?? 99);
 
     setCart((prev) => {
       const existing = prev.find((i) => i.variant_id === variant.id);
       if (existing) {
-        if (existing.quantity >= available) return prev;
+        const nextQty = existing.quantity + (requestedQty || 1);
+        if (nextQty > available) return prev;
         return prev.map((i) =>
-          i.variant_id === variant.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.variant_id === variant.id ? { ...i, quantity: nextQty } : i
         );
       }
       return [
@@ -205,9 +388,11 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
           sku: variant.sku,
           size: variant.size?.name || variant.size_name || variant.size || 'L',
           color: variant.color?.name || variant.color_name || variant.color || 'Navy',
-          quantity: 1,
+          quantity: initialQty,
           unit_price: price,
           available_stock: available,
+          moq: isWholesaleActive ? moq : 1,
+          wholesale_tiers: isWholesaleActive ? (variant.wholesale_tiers || []) : [],
         },
       ];
     });
@@ -222,6 +407,9 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
           if (item.variant_id === variantId) {
             const nextQty = item.quantity + delta;
             if (nextQty <= 0) return null;
+            if (item.moq && item.moq > 1 && nextQty < item.moq && delta < 0) {
+              return null; // Remove item if reduced below MOQ
+            }
             if (nextQty > item.available_stock) return item;
             return { ...item, quantity: nextQty };
           }
@@ -249,6 +437,22 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
       return;
     }
 
+    const isWholesaleCheckout = Boolean(wholesaleUser?.is_approved);
+
+    // Validate MOQs for wholesale orders
+    if (isWholesaleCheckout) {
+      for (const item of cart) {
+        if (item.moq && item.quantity < item.moq) {
+          setCheckoutError(
+            isAr
+              ? `الصنف (${item.product_name}) يتطلب حداً أدنى للطلب ${item.moq} قطعة.`
+              : `Item (${item.product_name}) requires minimum order of ${item.moq} pcs.`
+          );
+          return;
+        }
+      }
+    }
+
     setIsPlacingOrder(true);
     setCheckoutError(null);
 
@@ -260,12 +464,14 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
       payment_method: paymentMethod,
       instapay_reference: paymentMethod === 'instapay' ? instapayRef.trim() : null,
       shipping_fee: shippingFee,
+      channel: isWholesaleCheckout ? 'wholesale' : 'retail',
+      wholesale_token: isWholesaleCheckout ? (wholesaleToken || undefined) : undefined,
       items: cart.map((i) => ({
         variant_id: i.variant_id,
         product_name: i.product_name,
         sku: i.sku,
         quantity: i.quantity,
-        unit_price: i.unit_price,
+        unit_price: resolveItemUnitPrice(i),
       })),
     };
 
@@ -358,12 +564,21 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
     onSelectProduct: (v: any) => {
       setSelectedProductDetails(v);
       setActiveGalleryIndex(0);
+      const isWholesaleActive = Boolean(wholesaleUser?.is_approved && v.is_wholesale);
+      setSelectedQty(isWholesaleActive && v.moq ? Math.max(1, v.moq) : 1);
     },
     onNavigateToTracking: (num?: string, phone?: string) => onNavigateToTracking(num, phone),
     onNavigateToErp,
     onToggleTheme,
     onToggleLang,
     isPreview,
+    wholesaleUser,
+    onOpenWholesaleModal: () => {
+      setWholesaleAuthError(null);
+      setWholesaleAuthSuccess(null);
+      setIsWholesaleModalOpen(true);
+    },
+    onLogoutWholesale: handleLogoutWholesale,
   };
 
   return (
@@ -513,19 +728,121 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
                       </p>
                     )}
 
-                    <div className="pt-4 flex items-center gap-3">
+                    {/* Wholesale status & Volume Tiers */}
+                    {wholesaleUser?.is_approved && selectedProductDetails.is_wholesale ? (
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                            <UserCheck className="w-4 h-4 text-emerald-600" />
+                            {isAr ? 'أسعار الجملة المعتمدة' : 'Approved Wholesale Price'}
+                          </span>
+                          {selectedProductDetails.moq && selectedProductDetails.moq > 1 && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold font-mono">
+                              MOQ: {selectedProductDetails.moq} {isAr ? 'قطعة' : 'pcs'}
+                            </span>
+                          )}
+                        </div>
+
+                        {selectedProductDetails.wholesale_tiers && selectedProductDetails.wholesale_tiers.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <span className="text-[10px] font-bold text-slate-500 block">
+                              {isAr ? 'جدول شرائح الخصم حسب الكمية:' : 'Volume Pricing Tiers:'}
+                            </span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-center text-[11px]">
+                              {selectedProductDetails.wholesale_tiers.map((tier: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className={`p-1.5 rounded-lg border ${
+                                    selectedQty >= tier.min_quantity
+                                      ? 'bg-emerald-100 dark:bg-emerald-900/50 border-emerald-400 font-bold text-emerald-900 dark:text-emerald-200'
+                                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                                  }`}
+                                >
+                                  <div>+{tier.min_quantity} {isAr ? 'قطعة' : 'pcs'}</div>
+                                  <div className="font-mono font-black">{Number(tier.unit_price).toFixed(2)} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedProductDetails.is_wholesale_eligible ? (
+                      <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between gap-3 text-xs">
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-blue-900 dark:text-blue-200 block flex items-center gap-1">
+                            <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+                            {isAr ? 'أسعار وخصومات خاصة لتجار الجملة' : 'Special Wholesale & B2B Tiers'}
+                          </span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {isAr ? 'سجل كتاجر أو سجل دخولك للاستفادة من أسعار التوريدات المباشرة.' : 'Sign in or apply for trade pricing.'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProductDetails(null);
+                            setWholesaleAuthError(null);
+                            setWholesaleAuthSuccess(null);
+                            setIsWholesaleModalOpen(true);
+                          }}
+                          className="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-[11px] hover:bg-blue-700 transition-colors"
+                        >
+                          {isAr ? 'بوابة الجملة' : 'B2B Login'}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* Quantity Picker for Details Modal */}
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        {isAr ? 'الكمية المطلوبة:' : 'Quantity:'}
+                      </span>
+                      <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const minAllowed = wholesaleUser?.is_approved && selectedProductDetails.is_wholesale && selectedProductDetails.moq ? selectedProductDetails.moq : 1;
+                            setSelectedQty((prev) => Math.max(minAllowed, prev - 1));
+                          }}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-10 text-center font-bold font-mono text-sm">{selectedQty}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const maxStock = selectedProductDetails.in_stock || 999;
+                            setSelectedQty((prev) => Math.min(maxStock, prev + 1));
+                          }}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-3">
                       <Button
                         size="md"
                         variant="primary"
                         onClick={() => {
-                          handleAddToCart(selectedProductDetails);
+                          handleAddToCart(selectedProductDetails, selectedQty);
                           setSelectedProductDetails(null);
                         }}
                         disabled={!inStock}
                         className="w-full flex items-center justify-center gap-2 py-3 text-sm font-bold shadow-md shadow-primary/20"
                       >
                         <ShoppingCart className="w-4 h-4" />
-                        <span>{inStock ? (isAr ? 'إضافة إلى سلة الشراء' : 'Add to Shopping Cart') : (isAr ? 'المنتج غير متوفر حالياً' : 'Out of Stock')}</span>
+                        <span>
+                          {inStock
+                            ? isAr
+                              ? `إضافة إلى سلة الشراء (${selectedQty} قطعة)`
+                              : `Add ${selectedQty} Pcs to Cart`
+                            : isAr
+                            ? 'المنتج غير متوفر حالياً'
+                            : 'Out of Stock'}
+                        </span>
                       </Button>
                     </div>
                   </div>
@@ -540,9 +857,29 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
       <Modal
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
-        title={isAr ? `سلة مشترياتك (${cart.length})` : `Shopping Cart (${cart.length})`}
+        title={
+          wholesaleUser?.is_approved
+            ? isAr
+              ? `سلة طلبيات الجملة والتوريدات (${cart.length})`
+              : `Wholesale Purchase Cart (${cart.length})`
+            : isAr
+            ? `سلة مشترياتك (${cart.length})`
+            : `Shopping Cart (${cart.length})`
+        }
       >
         <div className="space-y-4">
+          {wholesaleUser?.is_approved && (
+            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs flex items-center justify-between">
+              <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-emerald-600" />
+                {isAr ? `تاجر جملة معتمد: ${wholesaleUser.company_name}` : `Trade Account: ${wholesaleUser.company_name}`}
+              </span>
+              <span className="text-[10px] bg-emerald-600 text-white font-mono px-2 py-0.5 rounded-full font-bold">
+                B2B WHOLESALE
+              </span>
+            </div>
+          )}
+
           {cart.length === 0 ? (
             <div className="py-8 text-center text-slate-400">
               <ShoppingBag className="w-12 h-12 mx-auto mb-2 opacity-40" />
@@ -550,45 +887,61 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
             </div>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
-              {cart.map((item) => (
-                <div key={item.variant_id} className="py-3 flex items-center justify-between text-xs">
-                  <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white">{item.product_name}</h4>
-                    <p className="text-slate-400 mt-0.5">
-                      {item.size} • {item.color} • {item.unit_price.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
-                      <button
-                        onClick={() => handleUpdateCartQty(item.variant_id, -1)}
-                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-6 text-center font-bold font-mono">{item.quantity}</span>
-                      <button
-                        onClick={() => handleUpdateCartQty(item.variant_id, 1)}
-                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
+              {cart.map((item) => {
+                const effectiveUnitPrice = resolveItemUnitPrice(item);
+                const isTierApplied = effectiveUnitPrice < item.unit_price;
+                return (
+                  <div key={item.variant_id} className="py-3 flex items-center justify-between text-xs">
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>{item.product_name}</span>
+                        {item.moq && item.moq > 1 && (
+                          <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded font-mono">
+                            MOQ: {item.moq}
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-slate-400 mt-0.5">
+                        {item.size} • {item.color} • {effectiveUnitPrice.toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
+                        {isTierApplied && (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold ms-1">
+                            ({isAr ? 'سعر شريحة الجملة' : 'Tier Price'})
+                          </span>
+                        )}
+                      </p>
                     </div>
 
-                    <span className="font-bold text-primary w-20 text-end">
-                      {(item.quantity * item.unit_price).toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
+                        <button
+                          onClick={() => handleUpdateCartQty(item.variant_id, -1)}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-6 text-center font-bold font-mono">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateCartQty(item.variant_id, 1)}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
 
-                    <button
-                      onClick={() => handleRemoveFromCart(item.variant_id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                      <span className="font-bold text-primary w-24 text-end">
+                        {(item.quantity * effectiveUnitPrice).toLocaleString()} {tenantInfo?.currency || (isAr ? 'ج.م' : 'EGP')}
+                      </span>
+
+                      <button
+                        onClick={() => handleRemoveFromCart(item.variant_id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -619,7 +972,9 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
                   setIsCheckoutOpen(true);
                 }}
               >
-                {isAr ? 'متابعة الدفع وإنهاء الطلب' : 'Proceed to Checkout'}
+                {wholesaleUser?.is_approved
+                  ? (isAr ? 'متابعة أمر توريد الجملة' : 'Proceed to Wholesale Checkout')
+                  : (isAr ? 'متابعة الدفع وإنهاء الطلب' : 'Proceed to Checkout')}
                 <ArrowRight className="w-4 h-4 ms-1.5" />
               </Button>
             </div>
@@ -631,9 +986,31 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
       <Modal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
-        title={isAr ? 'إتمام طلب الشراء والشحن' : 'Checkout & Shipping'}
+        title={
+          wholesaleUser?.is_approved
+            ? isAr
+              ? 'إتمام أمر توريد الجملة والشحن'
+              : 'Wholesale Purchase Order Checkout'
+            : isAr
+            ? 'إتمام طلب الشراء والشحن'
+            : 'Checkout & Shipping'
+        }
       >
         <form onSubmit={handlePlaceOrder} className="space-y-4 text-xs">
+          {wholesaleUser?.is_approved && (
+            <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200 space-y-1">
+              <div className="flex items-center justify-between font-bold">
+                <span>{isAr ? 'قناة البيع: طلب توريد جملة (Wholesale)' : 'Sales Channel: Wholesale B2B'}</span>
+                <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded font-mono">B2B INVOICE</span>
+              </div>
+              <p className="text-[11px] text-blue-700 dark:text-blue-300">
+                {isAr
+                  ? `الشركة: ${wholesaleUser.company_name} • المسؤول: ${wholesaleUser.contact_person}`
+                  : `Company: ${wholesaleUser.company_name} • Rep: ${wholesaleUser.contact_person}`}
+              </p>
+            </div>
+          )}
+
           {checkoutError && (
             <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300">
               {checkoutError}
@@ -641,7 +1018,9 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
           )}
 
           <div>
-            <label className="block font-semibold mb-1">{isAr ? 'الاسم بالكامل' : 'Full Name'}</label>
+            <label className="block font-semibold mb-1">
+              {wholesaleUser?.is_approved ? (isAr ? 'اسم الشركة / المسؤول' : 'Company / Contact Person') : (isAr ? 'الاسم بالكامل' : 'Full Name')}
+            </label>
             <input
               type="text"
               value={custName}
@@ -683,12 +1062,12 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
           </div>
 
           <div>
-            <label className="block font-semibold mb-1">{isAr ? 'عنوان الشحن بالتفصيل' : 'Detailed Delivery Address'}</label>
+            <label className="block font-semibold mb-1">{isAr ? 'عنوان الشحن بالتفصيل (أو عنوان المستودع)' : 'Detailed Delivery / Warehouse Address'}</label>
             <textarea
               rows={2}
               value={custAddress}
               onChange={(e) => setCustAddress(e.target.value)}
-              placeholder={isAr ? 'الشارع، رقم العمارة، الشقة، وأقرب علامة مميزة' : 'Street name, building, apartment'}
+              placeholder={isAr ? 'الشارع، رقم المقر/المستودع، وأقرب علامة مميزة' : 'Street name, building, warehouse'}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
               required
             />
@@ -784,7 +1163,11 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
           </div>
 
           <Button type="submit" variant="primary" disabled={isPlacingOrder} className="w-full mt-2">
-            {isPlacingOrder ? (isAr ? 'جاري تأكيد الطلب...' : 'Placing Order...') : (isAr ? 'تأكيد الطلب وشحن الشحنة' : 'Confirm Order & Ship')}
+            {isPlacingOrder
+              ? (isAr ? 'جاري تأكيد الطلب...' : 'Placing Order...')
+              : wholesaleUser?.is_approved
+              ? (isAr ? 'تأكيد أمر توريد الجملة' : 'Confirm Wholesale Order')
+              : (isAr ? 'تأكيد الطلب وشحن الشحنة' : 'Confirm Order & Ship')}
           </Button>
         </form>
       </Modal>
@@ -805,7 +1188,11 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
               {isAr ? 'شكراً لثقتكم بمصنعنا!' : 'Thank you for your order!'}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              {isAr
+              {confirmedOrder?.order_type === 'wholesale'
+                ? isAr
+                  ? 'تم تسجيل أمر توريد الجملة وحجز الرصيد من المستودع وسيتم التواصل لإصدار الفاتورة الضريبية وتنسيق التسليم.'
+                  : 'Wholesale order registered and inventory reserved.'
+                : isAr
                 ? 'تم تسجيل طلب الشراء وحجز القطع من خط الإنتاج وسيتم التواصل معكم لتأكيد موعد التسليم.'
                 : 'Your order is recorded and items are reserved from inventory.'}
             </p>
@@ -816,6 +1203,12 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
               <div className="flex justify-between">
                 <span className="text-slate-500">{isAr ? 'رقم الطلب للتتبع:' : 'Order Number:'}</span>
                 <span className="font-mono font-bold text-primary">{confirmedOrder.order_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">{isAr ? 'نوع الطلب:' : 'Order Channel:'}</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">
+                  {confirmedOrder.order_type === 'wholesale' ? (isAr ? 'توريد جملة (Wholesale)' : 'Wholesale') : (isAr ? 'قطاعي (Retail)' : 'Retail')}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">{isAr ? 'الإجمالي الكلي:' : 'Total Amount:'}</span>
@@ -851,6 +1244,259 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
               {isAr ? 'متابعة التسوق' : 'Continue Shopping'}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* 7. WHOLESALE PORTAL MODAL (LOGIN & REGISTRATION) */}
+      <Modal
+        isOpen={isWholesaleModalOpen}
+        onClose={() => {
+          setIsWholesaleModalOpen(false);
+          setWholesaleAuthError(null);
+          setWholesaleAuthSuccess(null);
+        }}
+        title={isAr ? 'بوابة تجار الجملة والتوريدات التجارية (B2B)' : 'Wholesale Trade Portal (B2B)'}
+        maxWidth="lg"
+      >
+        <div className="space-y-4 text-xs">
+          {/* Header tabs */}
+          <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                setWholesaleTab('login');
+                setWholesaleAuthError(null);
+                setWholesaleAuthSuccess(null);
+              }}
+              className={`flex-1 py-2 rounded-lg font-bold transition-all text-xs flex items-center justify-center gap-1.5 ${
+                wholesaleTab === 'login'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>{isAr ? 'تسجيل دخول حساب الجملة' : 'Wholesale Login'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setWholesaleTab('register');
+                setWholesaleAuthError(null);
+                setWholesaleAuthSuccess(null);
+              }}
+              className={`flex-1 py-2 rounded-lg font-bold transition-all text-xs flex items-center justify-center gap-1.5 ${
+                wholesaleTab === 'register'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{isAr ? 'طلب اعتماد تاجر جديد' : 'Apply for Trade Account'}</span>
+            </button>
+          </div>
+
+          {/* Feedback messages */}
+          {wholesaleAuthError && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300">
+              {wholesaleAuthError}
+            </div>
+          )}
+          {wholesaleAuthSuccess && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200">
+              {wholesaleAuthSuccess}
+            </div>
+          )}
+
+          {/* Tab 1: Login */}
+          {wholesaleTab === 'login' && (
+            <form onSubmit={handleWholesaleLogin} className="space-y-3">
+              <div>
+                <label className="block font-semibold mb-1">{isAr ? 'البريد الإلكتروني أو رقم الهاتف' : 'Email or Phone'}</label>
+                <input
+                  type="text"
+                  value={wholesaleLoginEmailOrPhone}
+                  onChange={(e) => setWholesaleLoginEmailOrPhone(e.target.value)}
+                  placeholder={isAr ? 'merchant@example.com أو 010XXXXXXXX' : 'email or phone'}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">{isAr ? 'كلمة المرور' : 'Password'}</label>
+                <input
+                  type="password"
+                  value={wholesaleLoginPassword}
+                  onChange={(e) => setWholesaleLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-slate-500 text-[11px] leading-relaxed">
+                {isAr
+                  ? '🔒 تمنح بوابة تجار الجملة الوصول إلى أسعار التوريدات المباشرة من المصنع، شرائح الخصم حسب الكميات، وجدولة طلبيات الإنتاج.'
+                  : 'Direct factory pricing, volume discounts and purchase order scheduling for authorized businesses.'}
+              </div>
+
+              <Button type="submit" variant="primary" disabled={wholesaleAuthLoading} className="w-full">
+                {wholesaleAuthLoading ? (isAr ? 'جاري التحقق...' : 'Checking...') : (isAr ? 'تسجيل الدخول' : 'Sign In')}
+              </Button>
+            </form>
+          )}
+
+          {/* Tab 2: Register Application */}
+          {wholesaleTab === 'register' && (
+            <form onSubmit={handleWholesaleRegister} className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'اسم الشركة / المعرض / المحل *' : 'Company Name *'}</label>
+                  <input
+                    type="text"
+                    value={wholesaleRegForm.company_name}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, company_name: e.target.value })}
+                    placeholder={isAr ? 'شركة النور للأزياء' : 'Company Name'}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'نوع النشاط التجاري *' : 'Business Type *'}</label>
+                  <select
+                    value={wholesaleRegForm.business_type}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, business_type: e.target.value })}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                  >
+                    <option value="retail_store">{isAr ? 'محل / متجر تجزئة' : 'Retail Store'}</option>
+                    <option value="chain_stores">{isAr ? 'سلسلة متاجر' : 'Store Chain'}</option>
+                    <option value="wholesale_distributor">{isAr ? 'موزع جملة' : 'Wholesale Distributor'}</option>
+                    <option value="corporate_buyer">{isAr ? 'شركة توريدات / يونيفورم' : 'Corporate / Uniform'}</option>
+                    <option value="online_store">{isAr ? 'متجر إلكتروني' : 'Online Store'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'اسم المسؤول / المفوض *' : 'Contact Person *'}</label>
+                  <input
+                    type="text"
+                    value={wholesaleRegForm.contact_person}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, contact_person: e.target.value })}
+                    placeholder={isAr ? 'محمد إبراهيم' : 'Contact Person'}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'رقم الهاتف للتواصل *' : 'Phone Number *'}</label>
+                  <input
+                    type="tel"
+                    value={wholesaleRegForm.phone}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, phone: e.target.value })}
+                    placeholder="010XXXXXXXX"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'البريد الإلكتروني *' : 'Email Address *'}</label>
+                  <input
+                    type="email"
+                    value={wholesaleRegForm.email}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, email: e.target.value })}
+                    placeholder="merchant@example.com"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'كلمة المرور للحساب *' : 'Account Password *'}</label>
+                  <input
+                    type="password"
+                    value={wholesaleRegForm.password}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, password: e.target.value })}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'رقم السجل التجاري' : 'Commercial Registration'}</label>
+                  <input
+                    type="text"
+                    value={wholesaleRegForm.commercial_register}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, commercial_register: e.target.value })}
+                    placeholder="CR-12345"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'الرقم الضريبي' : 'Tax ID'}</label>
+                  <input
+                    type="text"
+                    value={wholesaleRegForm.tax_id}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, tax_id: e.target.value })}
+                    placeholder="TAX-67890"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono focus:ring-2 focus:ring-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'المحافظة / المدينة' : 'City'}</label>
+                  <input
+                    type="text"
+                    value={wholesaleRegForm.city}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, city: e.target.value })}
+                    placeholder={isAr ? 'القاهرة' : 'Cairo'}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">{isAr ? 'عنوان المعرض أو المستودع' : 'Warehouse / Store Address'}</label>
+                  <input
+                    type="text"
+                    value={wholesaleRegForm.address}
+                    onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, address: e.target.value })}
+                    placeholder={isAr ? 'المنطقة الصناعية، عمارة 12' : 'Address'}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">{isAr ? 'ملاحظات أو حجم التوريد الشهري المتوقع' : 'Notes / Estimated Monthly Volume'}</label>
+                <textarea
+                  rows={2}
+                  value={wholesaleRegForm.notes}
+                  onChange={(e) => setWholesaleRegForm({ ...wholesaleRegForm, notes: e.target.value })}
+                  placeholder={isAr ? 'توريدات دورية لـ 3 فروع ملابس رجالي' : 'Notes'}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary focus:outline-none"
+                />
+              </div>
+
+              <Button type="submit" variant="primary" disabled={wholesaleAuthLoading} className="w-full mt-2">
+                {wholesaleAuthLoading ? (isAr ? 'جاري إرسال الطلب...' : 'Submitting...') : (isAr ? 'إرسال طلب اعتماد تاجر الجملة' : 'Submit Trade Application')}
+              </Button>
+            </form>
+          )}
         </div>
       </Modal>
     </div>

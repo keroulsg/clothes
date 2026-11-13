@@ -2274,13 +2274,76 @@ class ApiClient {
       });
     },
 
-    // Public Consumer Storefront API
-    getPublicStore: async (tenantIdOrSlug?: string, preview?: boolean): Promise<any> => {
-      let endpoint = tenantIdOrSlug ? `/storefront/public/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/public';
-      if (preview) {
-        endpoint += `${endpoint.includes('?') ? '&' : '?'}preview=1`;
+    // --- Wholesale Accounts & Pricing Tiers (Phase 2, 3 & 6) ---
+    getWholesaleApplications: async (status?: string): Promise<{ success: boolean; data: any[] }> => {
+      const q = status ? `?status=${encodeURIComponent(status)}` : '';
+      return this.request(`/storefront/wholesale/applications${q}`);
+    },
+    approveWholesaleApplication: async (id: string): Promise<any> => {
+      return this.request(`/storefront/wholesale/applications/${id}/approve`, { method: 'POST' });
+    },
+    rejectWholesaleApplication: async (id: string, reason: string): Promise<any> => {
+      return this.request(`/storefront/wholesale/applications/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    suspendWholesaleApplication: async (id: string, reason: string): Promise<any> => {
+      return this.request(`/storefront/wholesale/applications/${id}/suspend`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    reactivateWholesaleApplication: async (id: string): Promise<any> => {
+      return this.request(`/storefront/wholesale/applications/${id}/reactivate`, { method: 'POST' });
+    },
+    getVariantWholesaleTiers: async (variantId: string): Promise<any> => {
+      return this.request(`/catalog/variants/${variantId}/wholesale-tiers`);
+    },
+    saveVariantWholesaleTiers: async (variantId: string, tiers: any[], moq = 1): Promise<any> => {
+      return this.request(`/catalog/variants/${variantId}/wholesale-tiers`, {
+        method: 'POST',
+        body: JSON.stringify({ tiers, moq }),
+      });
+    },
+    registerWholesale: async (payload: any, tenantIdOrSlug?: string): Promise<any> => {
+      const endpoint = tenantIdOrSlug ? `/storefront/wholesale/register/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/wholesale/register';
+      return this.request(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    loginWholesale: async (payload: any, tenantIdOrSlug?: string): Promise<any> => {
+      const endpoint = tenantIdOrSlug ? `/storefront/wholesale/login/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/wholesale/login';
+      return this.request(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    getWholesaleProfile: async (token?: string, tenantIdOrSlug?: string): Promise<any> => {
+      const endpoint = tenantIdOrSlug ? `/storefront/wholesale/profile/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/wholesale/profile';
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['X-Wholesale-Token'] = token;
       }
-      return this.request(endpoint);
+      return this.request(endpoint, { headers });
+    },
+
+    // Public Consumer Storefront API
+    getPublicStore: async (tenantIdOrSlug?: string, preview?: boolean, wholesaleToken?: string): Promise<any> => {
+      let endpoint = tenantIdOrSlug ? `/storefront/public/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/public';
+      const params = new URLSearchParams();
+      if (preview) params.append('preview', '1');
+      if (wholesaleToken) params.append('wholesale_token', wholesaleToken);
+      const qs = params.toString();
+      if (qs) {
+        endpoint += `${endpoint.includes('?') ? '&' : '?'}${qs}`;
+      }
+      const headers: Record<string, string> = {};
+      if (wholesaleToken) {
+        headers['X-Wholesale-Token'] = wholesaleToken;
+      }
+      return this.request(endpoint, { headers });
     },
     placePublicOrder: async (payload: any, tenantIdOrSlug?: string): Promise<{ message: string; order: any }> => {
       const endpoint = tenantIdOrSlug ? `/storefront/order/${encodeURIComponent(tenantIdOrSlug)}` : '/storefront/order';

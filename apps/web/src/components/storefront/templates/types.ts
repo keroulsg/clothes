@@ -16,5 +16,13 @@ export interface StorefrontTemplateProps {
   onToggleTheme: () => void;
   onToggleLang: () => void;
   isPreview?: boolean;
+  wholesaleUser?: {
+    id: string;
+    company_name: string;
+    contact_person: string;
+    is_approved: boolean;
+  } | null;
+  onOpenWholesaleModal?: () => void;
+  onLogoutWholesale?: () => void;
 }
 

@@ -30,6 +30,9 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sizesList, setSizesList] = useState<any[]>([]);
   const [colorsList, setColorsList] = useState<any[]>([]);
+  const [approvedBoms, setApprovedBoms] = useState<any[]>([]);
+  const [selectedBomId, setSelectedBomId] = useState('');
+  const [isLoadingBoms, setIsLoadingBoms] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   React.useEffect(() => {
@@ -52,6 +55,39 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         });
     }
   }, [isOpen]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setApprovedBoms([]);
+    setSelectedBomId('');
+    if (!isOpen || !selectedModelId) {
+      setIsLoadingBoms(false);
+      return () => { cancelled = true; };
+    }
+
+    setIsLoadingBoms(true);
+    api.production.getBoms({ garment_model_id: selectedModelId })
+      .then((response) => {
+        if (cancelled) return;
+        const approved = (response?.data || []).filter((bom: any) =>
+          bom.status === 'approved' && bom.is_active === true
+        );
+        setApprovedBoms(approved);
+        setSelectedBomId(approved[0]?.id || '');
+      })
+      .catch((error: any) => {
+        if (!cancelled) {
+          setApprovedBoms([]);
+          setSelectedBomId('');
+          setErrorMsg(error?.message || (isAr ? 'تعذر تحميل إصدارات BOM المعتمدة لهذا الموديل.' : 'Could not load approved BOM versions for this model.'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingBoms(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [isOpen, selectedModelId, isAr]);
 
   const [items, setItems] = useState<ProductionOrderItem[]>([]);
 
@@ -116,6 +152,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
     try {
       const res = await api.production.createProductionOrder({
         garment_model_id: selectedModel?.id,
+        bill_of_material_id: selectedBomId || undefined,
         planned_start_date: new Date().toISOString().split('T')[0],
         target_delivery_date: targetDeliveryDate,
         priority,
@@ -187,6 +224,34 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
               <option value="urgent">{isAr ? 'عاجلة جداً (Urgent)' : 'Urgent'}</option>
             </select>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {isAr ? 'نسخة BOM المعتمدة للموديل' : 'Approved BOM Version'}
+          </label>
+          <select
+            value={selectedBomId}
+            onChange={(e) => setSelectedBomId(e.target.value)}
+            disabled={isLoadingBoms || approvedBoms.length === 0}
+            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100"
+          >
+            <option value="">
+              {isLoadingBoms
+                ? (isAr ? 'جارٍ تحميل نسخ BOM...' : 'Loading BOM versions...')
+                : (isAr ? 'لا توجد نسخة BOM معتمدة — سيُنشأ الأمر دون ربط BOM' : 'No approved BOM — order will be created without BOM')}
+            </option>
+            {approvedBoms.map((bom) => (
+              <option key={bom.id} value={bom.id}>
+                {bom.name || 'BOM'} · {bom.version || '1.0'} · {bom.bom_code || ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {isAr
+              ? 'سيتم حفظ نسخة BOM المختارة مع أمر الإنتاج. لا يتم صرف الخامات في هذه الخطوة.'
+              : 'The selected BOM version is stored with the production order. Materials are not issued at this step.'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

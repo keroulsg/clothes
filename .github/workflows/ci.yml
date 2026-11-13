@@ -67,10 +67,10 @@ jobs:
           #!/usr/bin/env bash
           set -euo pipefail
           tool="${0##*/}"
-          docker run --rm --network host \\
-            -e PGPASSWORD="${PGPASSWORD:-}" \\
-            -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \\
-            -w "${PWD}" \\
+          docker run --rm --network host \
+            -e PGPASSWORD="${PGPASSWORD:-}" \
+            -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+            -w "${PWD}" \
             postgres:16 "$tool" "$@"
           WRAPPER
             chmod +x "$RUNNER_TEMP/$tool"

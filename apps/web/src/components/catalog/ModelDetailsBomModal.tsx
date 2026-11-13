@@ -111,10 +111,14 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
   };
 
   const handleAddBomItemRow = () => {
+    if (!inventoryItems.length) {
+      setErrorMsg(isAr ? 'أضف أصناف الخامات والمستلزمات إلى المخزون أولاً.' : 'Add raw materials and accessories to inventory first.');
+      return;
+    }
     setBomItems((prev) => [
       ...prev,
       {
-        inventory_item_id: inventoryItems[0]?.id || '',
+        inventory_item_id: inventoryItems[0].id,
         component_type: 'accessory',
         consumption_per_unit: 1,
         unit_of_measure: 'piece',
@@ -128,9 +132,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     e.preventDefault();
     if (!model.id) return;
 
-    const validItems = bomItems.filter((i) => i.consumption_per_unit > 0);
-    if (validItems.length === 0) {
-      setErrorMsg(isAr ? 'يجب إضافة مكون واحد على الأقل باستهلاك سليم.' : 'At least one component with valid consumption is required.');
+    const validItems = bomItems.filter((i) => i.inventory_item_id && i.consumption_per_unit > 0);
+    if (validItems.length === 0 || validItems.length !== bomItems.length) {
+      setErrorMsg(isAr
+        ? 'اختر صنف مخزون حقيقيًا لكل مكوّن، وأدخل استهلاكًا أكبر من صفر.'
+        : 'Select a real inventory item for every component and enter consumption greater than zero.');
       return;
     }
 
@@ -144,7 +150,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
         name: bomName || `BOM ${model.name}`,
         items: validItems.map((it) => ({
           ...it,
-          inventory_item_id: it.inventory_item_id || inventoryItems[0]?.id || model.id,
+          inventory_item_id: it.inventory_item_id,
         })),
       });
 
@@ -342,16 +348,38 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                     {bomItems.map((item, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60 text-xs items-center">
                         <div className="col-span-4">
-                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'نوع المكون / الخامة' : 'Component Type / Item'}</label>
+                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'صنف المخزون / الخامة' : 'Inventory Item / Material'}</label>
+                          <select
+                            required
+                            value={item.inventory_item_id}
+                            onChange={(e) => {
+                              const selectedItem = inventoryItems.find((candidate) => candidate.id === e.target.value);
+                              setBomItems((prev) => prev.map((it, i) => (i === idx ? {
+                                ...it,
+                                inventory_item_id: selectedItem?.id || '',
+                                component_type: selectedItem?.name || it.component_type,
+                                unit_cost: Number(selectedItem?.average_cost ?? selectedItem?.unit_cost ?? it.unit_cost),
+                              } : it)));
+                            }}
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
+                          >
+                            <option value="">{isAr ? 'اختر صنفًا من المخزون' : 'Select an inventory item'}</option>
+                            {inventoryItems.map((inventoryItem) => (
+                              <option key={inventoryItem.id} value={inventoryItem.id}>
+                                {inventoryItem.name}{inventoryItem.sku ? ` — ${inventoryItem.sku}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="text-[10px] text-zinc-500 block mt-1">{isAr ? 'وصف المكوّن' : 'Component Type'}</label>
                           <input
                             type="text"
                             value={item.component_type}
                             onChange={(e) => {
                               const val = e.target.value;
-                              setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, component_type: val } : it)));
+                              setBomItems((prev) => prev.map((it, i) => (it === bomItems[idx] ? { ...it, component_type: val } : it)));
                             }}
-                            placeholder={isAr ? 'قماش أساسي / أزرار / تكت' : 'Main fabric / Buttons / Label'}
-                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
+                            placeholder={isAr ? 'قماش / أزرار / سوستة / تكت' : 'Fabric / Buttons / Zipper / Label'}
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100 mt-1"
                           />
                         </div>
 

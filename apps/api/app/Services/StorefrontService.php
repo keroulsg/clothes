@@ -1050,12 +1050,35 @@ class StorefrontService
      */
     public function calculateAuthoritativeShipping(string $tenantId, ?string $city, float $subtotal): float
     {
+        $cityClean = mb_strtolower(trim($city ?? ''));
+
+        // Check if tenant has customized shipping rules in theme_config
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings && !empty($settings->theme_config['shipping'])) {
+            $shippingConfig = $settings->theme_config['shipping'];
+            $freeThreshold = isset($shippingConfig['free_shipping_threshold']) ? (float)$shippingConfig['free_shipping_threshold'] : 1500.0;
+            if ($freeThreshold > 0 && $subtotal >= $freeThreshold) {
+                return 0.0;
+            }
+
+            if (!empty($shippingConfig['zones']) && is_array($shippingConfig['zones'])) {
+                foreach ($shippingConfig['zones'] as $zone) {
+                    $cities = array_map('mb_strtolower', array_map('trim', $zone['cities'] ?? []));
+                    if (in_array($cityClean, $cities, true)) {
+                        return (float)($zone['rate'] ?? 50.0);
+                    }
+                }
+            }
+
+            if (isset($shippingConfig['flat_rate']) && $shippingConfig['flat_rate'] !== null) {
+                return (float)$shippingConfig['flat_rate'];
+            }
+        }
+
         // شحن مجاني للطلبات الكبيرة بقيمة 1500 جنيه فأكثر
         if ($subtotal >= 1500.0) {
             return 0.0;
         }
-
-        $cityClean = mb_strtolower(trim($city ?? ''));
 
         // القاهرة الكبرى والجيزة
         if (in_array($cityClean, ['cairo', 'giza', 'القاهرة', 'الجيزة', 'october', 'أكتوبر', 'زايد', 'nasr city', 'new cairo'], true)) {

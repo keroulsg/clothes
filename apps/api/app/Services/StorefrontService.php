@@ -202,10 +202,11 @@ class StorefrontService
                     : 0.0;
 
                 // سعر البيع المعتمد للمتجر الإلكتروني (Website Price)
+                // Public catalog is retail-only. Wholesale pricing must never leak to anonymous visitors.
                 $websitePrice = (float) (
                     $variant->product && (float) $variant->product->selling_price > 0
                         ? $variant->product->selling_price
-                        : ($variant->retail_price > 0 ? $variant->retail_price : $variant->wholesale_price)
+                        : ($variant->retail_price ?? 0)
                 );
 
                 return [
@@ -552,11 +553,12 @@ class StorefrontService
                     throw new InvalidArgumentException("المنتج {$variant->sku} غير متاح للبيع في المتجر حالياً (مسودة أو مؤرشف).");
                 }
 
-                // Security P0: Compute unit price authoritatively using website price from commercial catalog or variant retail price
+                // Public checkout is retail-only until an authenticated, approved wholesale account is resolved.
+                // Never fall back to wholesale_price or a client-supplied price for an anonymous retail order.
                 $authoritativeUnitPrice = (float) (
                     $variant->product && (float) $variant->product->selling_price > 0
                         ? $variant->product->selling_price
-                        : ($variant->retail_price > 0 ? $variant->retail_price : ($variant->wholesale_price > 0 ? $variant->wholesale_price : ($variant->price ?? 0)))
+                        : ($variant->retail_price ?? 0)
                 );
                 if ($authoritativeUnitPrice <= 0) {
                     throw new InvalidArgumentException("سعر المنتج {$variant->sku} غير مهيأ بالمتجر.");
@@ -914,6 +916,7 @@ class StorefrontService
     {
         DB::transaction(function () use ($order) {
             $lockedOrder = StoreOrder::withoutGlobalScopes()
+                ->where('tenant_id', $order->tenant_id)
                 ->lockForUpdate()
                 ->find($order->id);
 
@@ -921,31 +924,65 @@ class StorefrontService
                 return;
             }
 
-            // Release inventory reservation safely
-            foreach ($lockedOrder->items as $item) {
+            if (!$lockedOrder->sales_order_id) {
+                throw new InvalidArgumentException('طلب المتجر لا يحتوي على أمر بيع مرتبط؛ لا يمكن فك الحجز بأمان.');
+            }
+
+            $salesOrder = SalesOrder::withoutGlobalScopes()
+                ->where('tenant_id', $lockedOrder->tenant_id)
+                ->lockForUpdate()
+                ->find($lockedOrder->sales_order_id);
+
+            if (!$salesOrder) {
+                throw new InvalidArgumentException('أمر البيع المرتبط بطلب المتجر غير موجود؛ لم يتم تغيير المخزون.');
+            }
+
+            if (in_array($salesOrder->status, ['fulfilled', 'cancelled'], true)) {
+                throw new InvalidArgumentException('لا يمكن فك حجز طلب تم تسليمه أو إلغاؤه بالفعل من خلال مسار الحجز.');
+            }
+
+            // Release exactly the reservation rows created for this ERP order.
+            // Lock by inventory_item_id (not variant_id) to avoid releasing stock from another warehouse.
+            $salesLines = SalesOrderItem::withoutGlobalScopes()
+                ->where('tenant_id', $lockedOrder->tenant_id)
+                ->where('sales_order_id', $salesOrder->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($salesLines as $salesLine) {
+                $reservedForLine = (float) ($salesLine->reserved_quantity ?? 0);
+                if ($reservedForLine <= 0) {
+                    continue;
+                }
+
+                if (!$salesLine->inventory_item_id) {
+                    throw new InvalidArgumentException('سطر أمر البيع لا يحتوي على سجل مخزون محدد؛ لا يمكن فك الحجز بأمان.');
+                }
+
                 $invItem = InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $lockedOrder->tenant_id)
-                    ->where('variant_id', $item->variant_id)
+                    ->where('warehouse_id', $salesOrder->warehouse_id)
+                    ->where('id', $salesLine->inventory_item_id)
                     ->where('is_customer_owned', false)
                     ->lockForUpdate()
                     ->first();
 
-                if ($invItem) {
-                    $invItem->decrement('reserved_balance', $item->quantity);
+                if (!$invItem || (float) $invItem->reserved_balance < $reservedForLine) {
+                    throw new InvalidArgumentException('رصيد الحجز لا يطابق سطر أمر البيع؛ أوقفنا الإلغاء لمنع فساد المخزون.');
                 }
+
+                $invItem->reserved_balance = round((float) $invItem->reserved_balance - $reservedForLine, 4);
+                $invItem->save();
+
+                $salesLine->reserved_quantity = 0;
+                $salesLine->save();
             }
 
-            // Cancel linked ERP sales order
-            if ($lockedOrder->sales_order_id) {
-                $salesOrder = SalesOrder::withoutGlobalScopes()->where('id', $lockedOrder->sales_order_id)->first();
-                if ($salesOrder && $salesOrder->status !== 'cancelled') {
-                    $salesOrder->update([
-                        'status' => 'cancelled',
-                        'cancelled_at' => now(),
-                        'cancellation_reason' => 'Storefront order cancelled',
-                    ]);
-                }
-            }
+            $salesOrder->update([
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'cancellation_reason' => 'Storefront order cancelled',
+            ]);
 
             $lockedOrder->update(['inventory_synced' => false]);
         });

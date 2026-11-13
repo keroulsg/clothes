@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BillOfMaterial;
 use App\Models\ChartOfAccount;
 use App\Models\Branch;
+use App\Models\Customer;
 use App\Models\Color;
 use App\Models\CustomerMaterial;
 use App\Models\CuttingBundle;
@@ -16,13 +17,17 @@ use App\Models\JournalEntryLine;
 use App\Models\InventoryTransaction;
 use App\Models\ProductionOrder;
 use App\Models\ProductionStage;
+use App\Models\ProductVariant;
 use App\Models\QualityInspection;
 use App\Models\Size;
+use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\AccountingService;
 use App\Services\InventoryService;
+use App\Services\ProcurementService;
+use App\Services\SalesService;
 use App\Services\ProductionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -239,6 +244,55 @@ class ProductionAndCuttingTest extends TestCase
      */
     public function test_full_production_cycle_from_order_to_cutting_bundles_and_qc(): void
     {
+        // Start with zero raw-material stock: the material used below must come from a real PO + GRN flow.
+        $this->fabricItemA->current_balance = 0.0;
+        $this->fabricItemA->average_cost = 0.0;
+        $this->fabricItemA->save();
+
+        $supplier = Supplier::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'SUP-E2E-' . uniqid(),
+            'name' => 'مورد خامات رحلة المصنع المتكاملة',
+            'payment_terms' => 'net_30',
+            'is_active' => true,
+        ]);
+
+        $procurementService = app(ProcurementService::class);
+        $purchaseOrder = $procurementService->createPurchaseOrder([
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouseFabA->id,
+            'po_number' => 'PO-E2E-' . strtoupper(substr(uniqid(), -8)),
+            'order_date' => date('Y-m-d'),
+            'items' => [
+                [
+                    'inventory_item_id' => $this->fabricItemA->id,
+                    'ordered_quantity' => 110.0,
+                    'unit_price' => 120.0,
+                ],
+            ],
+        ]);
+        $procurementService->approvePurchaseOrder($purchaseOrder->id, $this->userA->id);
+        $goodsReceipt = $procurementService->receiveGoods([
+            'purchase_order_id' => $purchaseOrder->id,
+            'warehouse_id' => $this->warehouseFabA->id,
+            'receipt_date' => date('Y-m-d'),
+            'inspection_status' => 'passed',
+            'idempotency_key' => 'E2E-GRN-' . $purchaseOrder->id,
+            'items' => [
+                [
+                    'purchase_order_item_id' => $purchaseOrder->items->first()->id,
+                    'delivered_quantity' => 110.0,
+                    'accepted_quantity' => 110.0,
+                    'rejected_quantity' => 0.0,
+                ],
+            ],
+        ]);
+
+        $this->assertSame('received', $purchaseOrder->fresh()->status);
+        $this->assertEquals(110.0, (float) $this->fabricItemA->fresh()->current_balance);
+        $this->assertEquals(120.0, (float) $this->fabricItemA->fresh()->average_cost);
+        $this->assertSame('posted', $goodsReceipt->status);
+
         // 1. إنشاء أمر الإنتاج
         $orderPayload = [
             'garment_model_id' => $this->modelA->id,
@@ -502,6 +556,62 @@ class ProductionAndCuttingTest extends TestCase
         $this->assertEquals(100, $metricsRes->json('data.total_completed_quantity'));
         $this->assertEquals(2, $metricsRes->json('data.total_rework_quantity'));
         $this->assertArrayHasKey('skip_stitch', $metricsRes->json('data.defects_breakdown'));
+
+        // 6. Sell the produced finished goods through the real reservation and fulfillment services.
+        $variant = ProductVariant::create([
+            'tenant_id' => $this->tenantA->id,
+            'garment_model_id' => $this->modelA->id,
+            'size_id' => $this->size2Y->id,
+            'color_id' => $this->colorRed->id,
+            'sku' => 'SKU-E2E-' . strtoupper(substr(uniqid(), -8)),
+            'barcode' => 'BC-E2E-' . strtoupper(substr(uniqid(), -10)),
+            'wholesale_price' => 250.0,
+            'retail_price' => 350.0,
+        ]);
+        $this->finishedGoodItemA->variant_id = $variant->id;
+        $this->finishedGoodItemA->save();
+
+        $customer = Customer::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'CUST-E2E-' . strtoupper(substr(uniqid(), -8)),
+            'name' => 'عميل رحلة المصنع المتكاملة',
+            'is_active' => true,
+        ]);
+
+        $salesService = app(SalesService::class);
+        $salesOrder = $salesService->createSalesOrder([
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'warehouse_id' => $this->warehouseFGA->id,
+            'order_type' => 'wholesale',
+            'items' => [
+                [
+                    'variant_id' => $variant->id,
+                    'ordered_quantity' => 100.0,
+                    'unit_price' => 250.0,
+                ],
+            ],
+        ]);
+        $reservedOrder = $salesService->reserveOrderStock($salesOrder->id);
+        $this->assertSame('reserved', $reservedOrder->status);
+        $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->reserved_balance);
+
+        $salesInvoice = $salesService->fulfillOrder($salesOrder->id);
+        $this->assertSame('issued', $salesInvoice->status);
+        $this->assertSame(1, $salesInvoice->items->count());
+        $this->assertEquals(100.0, (float) $salesInvoice->items->first()->quantity);
+        $this->assertSame('fulfilled', $salesOrder->fresh()->status);
+        $this->assertEquals(0.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float) $this->finishedGoodItemA->fresh()->reserved_balance);
+
+        $salesDelivery = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'sales_orders')
+            ->where('reference_id', $salesOrder->id)
+            ->where('transaction_type', 'sales_delivery')
+            ->firstOrFail();
+        $this->assertEquals(100.0, (float) $salesDelivery->quantity);
+        $this->assertEquals(100.0, (float) $salesDelivery->balance_before);
+        $this->assertEquals(0.0, (float) $salesDelivery->balance_after);
     }
 
     /**

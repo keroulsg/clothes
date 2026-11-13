@@ -60,11 +60,22 @@ jobs:
       - name: Install Composer Dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Install PostgreSQL 16 client utilities
+      - name: Prepare PostgreSQL 16 client utilities
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
-          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          for tool in pg_dump pg_restore createdb; do
+            cat > "$RUNNER_TEMP/$tool" <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          tool="${0##*/}"
+          docker run --rm --network host \\
+            -e PGPASSWORD="${PGPASSWORD:-}" \\
+            -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \\
+            -w "${PWD}" \\
+            postgres:16 "$tool" "$@"
+          WRAPPER
+            chmod +x "$RUNNER_TEMP/$tool"
+          done
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           pg_dump --version
           pg_restore --version
 

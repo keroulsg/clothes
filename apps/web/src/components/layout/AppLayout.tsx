@@ -308,7 +308,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   return (
     <div
       dir={dir}
-      className="h-screen max-h-screen w-full max-w-full overflow-hidden bg-slate-50 dark:bg-[#000000] text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-[var(--brand-primary)] selection:text-white transition-colors duration-200"
+      className="h-screen max-h-screen w-full max-w-full overflow-hidden bg-slate-50 dark:bg-[var(--bg-app)] text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-[var(--brand-primary)] selection:text-white transition-colors duration-200"
     >
       {/* ───── Top Navbar: Masterpiece Nano-Glass Floating Bar ───── */}
       <header className="h-16 shrink-0 z-40 px-3 sm:px-6 flex items-center justify-between glass-panel border-b border-white/60 dark:border-white/10 max-w-full overflow-hidden">
@@ -406,7 +406,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               onClick={onToggleTheme}
               className="h-10 w-10 rounded-2xl glass-panel text-slate-600 dark:text-slate-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex items-center justify-center cursor-pointer"
               title={isDark ? (isAr ? 'الوضع المضيء' : 'Light Mode') : (isAr ? 'الوضع الداكن' : 'Dark Mode')}
-              aria-label="Toggle theme"
+              aria-label={isDark ? (isAr ? "تفعيل الوضع الفاتح" : "Switch to light mode") : (isAr ? "تفعيل الوضع الداكن" : "Switch to dark mode")}\n              aria-pressed={isDark}
             >
               {isDark ? <Sun className="w-4 h-4 text-amber-400 animate-spin-slow" /> : <Moon className="w-4 h-4 text-slate-600" />}
             </button>
@@ -605,7 +605,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       <div className="flex-1 flex min-w-0 w-full max-w-full overflow-hidden">
         {/* ───── CoreUI Pro Nano-Glass Sidebar ───── */}
         <aside
-          className={`glass-panel dark:bg-[#070102]/95 border-e border-white/60 dark:border-[#2d080e] p-2.5 hidden md:flex flex-col justify-between shrink-0 overflow-y-auto transition-all duration-300 ease-out shadow-[4px_0_30px_-5px_rgba(0,0,0,0.04)] ${
+          className={`glass-panel dark:bg-[var(--bg-sidebar)] border-e border-white/60 dark:border-[var(--border-subtle)] p-2.5 hidden md:flex flex-col justify-between shrink-0 overflow-y-auto transition-all duration-300 ease-out shadow-[4px_0_30px_-5px_rgba(0,0,0,0.04)] ${
             sidebarCollapsed ? 'w-[78px]' : 'w-64'
           }`}
         >
@@ -782,7 +782,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         </aside>
 
         {/* ───── Main Content Area ───── */}
-        <main className="flex-1 h-full min-w-0 max-w-full w-full overflow-y-auto overflow-x-hidden p-3.5 sm:p-6 lg:p-8 bg-slate-50/70 dark:bg-[#000000]">
+        <main className="flex-1 h-full min-w-0 max-w-full w-full overflow-y-auto overflow-x-hidden p-3.5 sm:p-6 lg:p-8 bg-slate-50/70 dark:bg-[var(--bg-app)]">
           <div className="max-w-7xl mx-auto space-y-6 w-full min-w-0">{children}</div>
         </main>
       </div>

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Http\Controllers\Api\SubscriptionWebhookController;
 use App\Services\InventoryService;
 use App\Services\ProcurementService;
+use App\Services\SalesService;
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
 

@@ -61,19 +61,19 @@ jobs:
 
       - name: Prepare MySQL Test Environment
         run: |
-          printf "%s\\n" \\
-            "APP_ENV=testing" \\
-            "APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=" \\
-            "DB_CONNECTION=mysql" \\
-            "DB_HOST=127.0.0.1" \\
-            "DB_PORT=3306" \\
-            "DB_DATABASE=garmentos_test" \\
-            "DB_USERNAME=garmentos" \\
-            "DB_PASSWORD=secret_test_password" \\
-            "CACHE_STORE=array" \\
-            "SESSION_DRIVER=array" \\
-            "QUEUE_CONNECTION=sync" \\
-            > .env
+          cat > .env <<'ENVVARS'
+          APP_ENV=testing
+          APP_KEY=base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=garmentos_test
+          DB_USERNAME=garmentos
+          DB_PASSWORD=secret_test_password
+          CACHE_STORE=array
+          SESSION_DRIVER=array
+          QUEUE_CONNECTION=sync
+          ENVVARS
           cp .env .env.testing
 
       - name: Run Complete MySQL Migrations

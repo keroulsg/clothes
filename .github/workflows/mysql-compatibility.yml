@@ -9,7 +9,7 @@ on:
 
 jobs:
   mysql-migrations:
-    name: MySQL 8.4 Migration Compatibility
+    name: MySQL 8.4 Migrations & Backend Regression
     runs-on: ubuntu-latest
 
     services:
@@ -81,3 +81,6 @@ jobs:
 
       - name: Verify MySQL Migration State
         run: php artisan migrate:status --database=mysql
+
+      - name: Run Complete Backend Regression Suite on MySQL
+        run: php artisan test --colors=never

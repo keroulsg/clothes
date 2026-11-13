@@ -1441,7 +1441,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'quotation_converted',
                 'auditable_type' => 'quotations',
                 'auditable_id' => $quotation->id,
@@ -1508,7 +1508,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_order_cancelled',
                 'auditable_type' => 'sales_orders',
                 'auditable_id' => $order->id,
@@ -1547,7 +1547,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_invoice_cancelled',
                 'auditable_type' => 'sales_invoices',
                 'auditable_id' => $invoice->id,
@@ -1741,7 +1741,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_order_delivered',
                 'auditable_type' => 'sales_orders',
                 'auditable_id' => $order->id,
@@ -1835,7 +1835,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'sales_delivery_cancelled',
                 'auditable_type' => 'sales_delivery_notes',
                 'auditable_id' => $deliveryNote->id,
@@ -2030,7 +2030,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'customer_payment_reversed',
                 'auditable_type' => 'payment_vouchers',
                 'auditable_id' => $voucher->id,
@@ -2075,7 +2075,7 @@ class SalesService
 
             AuditLog::create([
                 'tenant_id' => $tenantId,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->id(),
                 'action' => 'credit_note_created',
                 'auditable_type' => 'credit_notes',
                 'auditable_id' => $creditNote->id,

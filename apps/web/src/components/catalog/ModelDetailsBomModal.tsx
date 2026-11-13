@@ -357,7 +357,6 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? {
                                 ...it,
                                 inventory_item_id: selectedItem?.id || '',
-                                component_type: selectedItem?.name || it.component_type,
                                 unit_cost: Number(selectedItem?.average_cost ?? selectedItem?.unit_cost ?? it.unit_cost),
                               } : it)));
                             }}
@@ -366,7 +365,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                             <option value="">{isAr ? 'اختر صنفًا من المخزون' : 'Select an inventory item'}</option>
                             {inventoryItems.map((inventoryItem) => (
                               <option key={inventoryItem.id} value={inventoryItem.id}>
-                                {inventoryItem.name}{inventoryItem.sku ? ` — ${inventoryItem.sku}` : ''}
+                                {inventoryItem.name}{inventoryItem.code ? ` — ${inventoryItem.code}` : ''}
                               </option>
                             ))}
                           </select>

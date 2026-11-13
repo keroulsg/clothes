@@ -91,7 +91,7 @@ jobs:
 
       - name: Seed committed data for MySQL backup verification
         run: |
-          php artisan tinker --execute='App\\Models\\Tenant::create(["name" => "Backup Verification Tenant", "code" => "BACKUP-VERIFY", "subdomain" => "backup-verify", "status" => "active"]);'
+          php artisan tinker --execute='App\Models\Tenant::create(["name" => "Backup Verification Tenant", "code" => "BACKUP-VERIFY", "subdomain" => "backup-verify", "status" => "active"]);'
 
       - name: Create and verify a real MySQL backup
         env:

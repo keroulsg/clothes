@@ -236,7 +236,7 @@ class BackupDatabaseCommand extends Command
         $password = $config['password'] ?? '';
 
         if ($database === '' || $username === '') {
-            throw new \\RuntimeException('MySQL backup requires a configured database and username.');
+            throw new \RuntimeException('MySQL backup requires a configured database and username.');
         }
 
         // MYSQL_PWD keeps credentials out of the process argument list.
@@ -261,11 +261,11 @@ class BackupDatabaseCommand extends Command
         }
 
         if ($returnCode !== 0) {
-            throw new \\RuntimeException("mysqldump failed with exit code {$returnCode}: {$errorOutput}");
+            throw new \RuntimeException("mysqldump failed with exit code {$returnCode}: {$errorOutput}");
         }
 
         if (!is_file($targetPart) || filesize($targetPart) === 0) {
-            throw new \\RuntimeException('mysqldump completed without producing a non-empty backup artifact.');
+            throw new \RuntimeException('mysqldump completed without producing a non-empty backup artifact.');
         }
     }
 

@@ -131,6 +131,14 @@
   --cui-secondary-color: var(--text-secondary);
 }
 
+/* CoreUI ships a global .bg-white utility with !important. Keep legacy
+   white-surface markup theme-aware without removing CoreUI's component CSS. */
+html.dark .bg-white,
+html[data-theme="dark"] .bg-white,
+html[data-coreui-theme="dark"] .bg-white {
+  background-color: var(--bg-card) !important;
+}
+
 @layer base {
   * {
     border-color: var(--border-color);

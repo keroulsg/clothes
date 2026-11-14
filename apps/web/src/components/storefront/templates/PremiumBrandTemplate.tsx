@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Crown,
   ArrowRight,
@@ -11,14 +11,17 @@ import {
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
-import { getActiveSortedSections } from '../common/StorefrontSectionRegistry';
+import { getActiveSortedSections, normalizeSectionId } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  variants,
+  variants = [],
+  searchQuery = '',
+  selectedCategory = 'all',
+  setSelectedCategory,
   onSelectProduct,
   onNavigateToShop,
   onNavigateToCategories,
@@ -64,6 +67,28 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
       setTimeout(() => setCopiedCode(null), 2000);
     } catch {}
   };
+
+  // Dynamic Category Extraction from actual product catalog
+  const categories = useMemo(() => {
+    const extracted = Array.from(
+      new Set(variants.map((v) => v.category).filter((c): c is string => Boolean(c) && c.trim() !== ''))
+    );
+    return ['all', ...(extracted.length > 0 ? extracted : [])];
+  }, [variants]);
+
+  // Product Filtering logic
+  const displayedVariants = useMemo(() => {
+    return variants.filter((v) => {
+      const matchCat = !selectedCategory || selectedCategory === 'all' || v.category === selectedCategory;
+      const q = (searchQuery || '').trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (v.model_name || v.name || '').toLowerCase().includes(q) ||
+        (v.sku || '').toLowerCase().includes(q) ||
+        (v.category || '').toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [variants, selectedCategory, searchQuery]);
 
   // Dynamic Section Registry Rendering
   const activeSections = getActiveSortedSections(themeConfig?.sections);
@@ -126,10 +151,20 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   const renderCategoriesSection = () => (
     <section className="py-8 max-w-7xl mx-auto px-4 text-center border-b border-stone-200 dark:border-zinc-800 font-sans">
       <div className="flex items-center justify-center gap-4 flex-wrap text-xs uppercase tracking-widest font-bold">
-        <span className="text-amber-500 border-b-2 border-amber-500 pb-1">{isAr ? 'كافة القطع' : 'All Works'}</span>
-        <span className="text-stone-400 hover:text-stone-200 pb-1 cursor-pointer">{isAr ? 'أزياء سهرة' : 'Evening'}</span>
-        <span className="text-stone-400 hover:text-stone-200 pb-1 cursor-pointer">{isAr ? 'أقمشة كشمير وقطن' : 'Cashmere & Cotton'}</span>
-        <span className="text-stone-400 hover:text-stone-200 pb-1 cursor-pointer">{isAr ? 'إصدارات خاصة' : 'Special Editions'}</span>
+        {categories.map((cat: any) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setSelectedCategory?.(cat)}
+            className={`pb-1 transition-all cursor-pointer ${
+              selectedCategory === cat
+                ? 'text-amber-500 border-b-2 border-amber-500'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            {cat === 'all' ? (isAr ? 'كافة القطع' : 'All Works') : cat}
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -205,8 +240,22 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
         <div className="w-12 h-px bg-amber-600 mx-auto mt-4" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-        {variants.map((v) => {
+      {displayedVariants.length === 0 ? (
+        <div className="py-20 text-center text-stone-500 font-sans border border-dashed border-stone-800 p-8">
+          <p className="text-sm uppercase tracking-widest">{isAr ? 'لا توجد إصدارات مطابقة لهذا الاختيار' : 'No atelier pieces match this selection'}</p>
+          {selectedCategory !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setSelectedCategory?.('all')}
+              className="mt-3 text-xs text-amber-500 underline cursor-pointer"
+            >
+              {isAr ? 'استعراض كافة الإصدارات' : 'View all atelier pieces'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+          {displayedVariants.map((v: any) => {
           const inStock = v.in_stock > 0;
           return (
             <div
@@ -296,6 +345,7 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
           );
         })}
       </div>
+      )}
     </section>
   );
 
@@ -343,7 +393,8 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
     );
   };
 
-  const renderSectionById = (id: string) => {
+  const renderSectionById = (rawId: string) => {
+    const id = normalizeSectionId(rawId);
     switch (id) {
       case 'hero':
         return renderHeroSection();
@@ -352,11 +403,34 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
       case 'promotions':
         return renderPromotionsSection();
       case 'featured_products':
+      case 'new_arrivals':
         return renderProductsSection();
+      case 'trust_badges':
       case 'story':
         return renderStorySection();
       case 'contact_info':
         return renderContactSection();
+      case 'wholesale_cta':
+        return (
+          <section className="py-12 max-w-7xl mx-auto px-4 font-sans">
+            <div className="p-8 border border-amber-600/40 bg-zinc-950 text-stone-200 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div>
+                <span className="text-[10px] font-mono tracking-widest text-amber-500 uppercase">{isAr ? 'حسابات البوتيك والطلب المخصص' : 'Boutique Accounts & Bespoke Supply'}</span>
+                <h4 className="font-serif text-2xl text-stone-100 mt-1">{isAr ? 'امتيازات تجار الجملة وشركاء التوزيع' : 'VIP Wholesale & Atelier Distribution'}</h4>
+                <p className="text-xs text-stone-400 mt-1 max-w-xl">{isAr ? 'تسعير حصري معتمد لكبار التجار وأصحاب البوتيكات مع خط إنتاج مخصص.' : 'Tiered pricing and dedicated atelier production slots for verified partners.'}</p>
+              </div>
+              {onOpenWholesaleModal && (
+                <button
+                  type="button"
+                  onClick={onOpenWholesaleModal}
+                  className="px-6 py-3 border border-amber-500 text-amber-400 hover:bg-amber-500 hover:text-stone-950 font-bold text-xs uppercase tracking-widest transition cursor-pointer shrink-0"
+                >
+                  {isAr ? 'طلب اعتماد الشريك' : 'Apply for Partnership'}
+                </button>
+              )}
+            </div>
+          </section>
+        );
       default:
         return null;
     }

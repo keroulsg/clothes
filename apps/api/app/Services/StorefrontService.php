@@ -266,12 +266,33 @@ class StorefrontService
             })
             ->values();
 
+        // استخراج التصنيفات الفعلية من قائمة الموديلات والمنتجات الجاهزة
+        $categories = $variants->pluck('category')
+            ->filter()
+            ->unique()
+            ->values()
+            ->map(function ($cat) use ($variants) {
+                return [
+                    'id' => $cat,
+                    'name' => $cat,
+                    'name_ar' => $cat,
+                    'count' => $variants->where('category', $cat)->count(),
+                ];
+            })
+            ->values();
+
         return [
             'store_settings' => $settings,
             'is_preview' => $preview,
             'has_draft_changes' => !empty($settings->draft_theme_id) || !empty($settings->draft_theme_config),
             'available_themes' => self::AVAILABLE_THEMES,
             'products' => $variants,
+            'variants' => $variants, // توافق كامل مع الكود السابق
+            'catalog' => [
+                'variants' => $variants,
+                'count' => $variants->count(),
+            ],
+            'categories' => $categories,
             'wholesale_user' => $isApprovedWholesale ? [
                 'id' => $wholesaleCustomer->id,
                 'company_name' => $wholesaleCustomer->company_name,
@@ -310,10 +331,14 @@ class StorefrontService
             'announcement_bar_enabled' => true,
             'announcement_bar_text' => 'شحن سريع لجميع المحافظات خلال 48 ساعة 🚚',
             'sections' => [
-                ['id' => 'hero_banner', 'enabled' => true, 'order' => 1, 'title' => 'تشكيلة الموسم الجديد'],
-                ['id' => 'featured_categories', 'enabled' => true, 'order' => 2, 'title' => 'الأقسام المميزة'],
-                ['id' => 'new_arrivals', 'enabled' => true, 'order' => 3, 'title' => 'وصل حديثاً'],
-                ['id' => 'brand_story', 'enabled' => true, 'order' => 4, 'title' => 'قصة الجودة والمصنع'],
+                ['id' => 'hero', 'enabled' => true, 'order' => 1, 'name_ar' => 'البانر الترويجي الرئيسي', 'name_en' => 'Hero Banner'],
+                ['id' => 'trust_badges', 'enabled' => true, 'order' => 2, 'name_ar' => 'شارات الجودة وثقة المصنع', 'name_en' => 'Trust & Quality Badges'],
+                ['id' => 'categories', 'enabled' => true, 'order' => 3, 'name_ar' => 'أقسام وتصنيفات الموديلات', 'name_en' => 'Category Filters'],
+                ['id' => 'featured_products', 'enabled' => true, 'order' => 4, 'name_ar' => 'الموديلات الجاهزة للشحن', 'name_en' => 'Ready to Dispatch Styles'],
+                ['id' => 'promotions', 'enabled' => true, 'order' => 5, 'name_ar' => 'العروض والخصومات الخاصة', 'name_en' => 'Special Promotions'],
+                ['id' => 'wholesale_cta', 'enabled' => true, 'order' => 6, 'name_ar' => 'دعوة تجار وشركات الجملة', 'name_en' => 'B2B Wholesale CTA'],
+                ['id' => 'story', 'enabled' => true, 'order' => 7, 'name_ar' => 'قصة المصنع والحرفية المصرية', 'name_en' => 'Brand Heritage Story'],
+                ['id' => 'contact_info', 'enabled' => true, 'order' => 8, 'name_ar' => 'بيانات التواصل المباشر', 'name_en' => 'Direct Contact Info'],
             ],
             'banners' => [
                 [

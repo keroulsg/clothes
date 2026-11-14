@@ -189,6 +189,11 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
 
   useEffect(() => {
     fetchStoreData();
+    const handleHash = () => {
+      fetchStoreData();
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
   }, [tenantIdentifier]);
 
   // Check wholesale profile on mount if token exists

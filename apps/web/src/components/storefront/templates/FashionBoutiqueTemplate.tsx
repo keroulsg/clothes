@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ShoppingBag,
   Sparkles,
@@ -13,18 +13,20 @@ import {
   Phone,
   Mail,
   MapPin,
+  RefreshCw,
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
-import { getActiveSortedSections } from '../common/StorefrontSectionRegistry';
+import { getActiveSortedSections, normalizeSectionId } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  variants,
-  selectedCategory,
+  variants = [],
+  searchQuery = '',
+  selectedCategory = 'all',
   setSelectedCategory,
   onSelectProduct,
   onNavigateToShop,
@@ -43,9 +45,18 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   const isHeroEnabled = heroBanner.enabled !== false;
   const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
   const heroMobileImage = heroBanner.mobile_image || heroImage;
-  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'أناقة راقية بأسعار المصنع مباشرة' : 'Refined Fashion Directly from the Workshop');
-  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'خامات قطنية 100%، تفصيل متقن، وضمان استبدال فوري. استمتع بأعلى معايير الملابس الجاهزة دون وسطاء.' : '100% natural fabrics, master tailoring, and immediate replacement guarantee.');
-  const heroBadge = heroBanner.badge || (isAr ? 'تشكيلة الموسم الجديد — جودة تصدير' : 'New Season Collection — Export Quality');
+  const heroTitle =
+    heroBanner.title ||
+    storeSettings?.banner_title ||
+    (isAr ? 'أناقة راقية بأسعار المصنع مباشرة' : 'Refined Fashion Directly from the Workshop');
+  const heroSubtitle =
+    heroBanner.subtitle ||
+    storeSettings?.banner_subtitle ||
+    (isAr
+      ? 'خامات قطنية 100%، تفصيل متقن، وضمان استبدال فوري. استمتع بأعلى معايير الملابس الجاهزة دون وسطاء.'
+      : '100% natural fabrics, master tailoring, and immediate replacement guarantee.');
+  const heroBadge =
+    heroBanner.badge || (isAr ? 'تشكيلة الموسم الجديد — جودة تصدير' : 'New Season Collection — Export Quality');
   const heroCtaText = heroBanner.cta_text || (isAr ? 'تصفح التشكيلة الكاملة' : 'Shop Collection');
   const heroCtaDestination = heroBanner.cta_destination || 'shop';
 
@@ -66,7 +77,9 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
     }
   };
 
-  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners)
+    ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false)
+    : [];
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const handleCopyCode = (code: string) => {
@@ -77,8 +90,28 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
     } catch {}
   };
 
-  // Categories extraction
-  const categories = ['all', 'T-Shirts', 'Polos', 'Pants', 'Dresses'];
+  // Dynamic Category Extraction from actual product catalog
+  const categories = useMemo(() => {
+    const extracted = Array.from(
+      new Set(variants.map((v) => v.category).filter((c): c is string => Boolean(c) && c.trim() !== ''))
+    );
+    return ['all', ...(extracted.length > 0 ? extracted : [])];
+  }, [variants]);
+
+  // Product Filtering logic
+  const displayedVariants = useMemo(() => {
+    return variants.filter((v) => {
+      const matchesCategory =
+        !selectedCategory || selectedCategory === 'all' || v.category === selectedCategory;
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        (v.model_name || v.name || '').toLowerCase().includes(q) ||
+        (v.sku || '').toLowerCase().includes(q) ||
+        (v.category || '').toLowerCase().includes(q);
+      return matchesCategory && matchesSearch;
+    });
+  }, [variants, selectedCategory, searchQuery]);
 
   // Dynamic Section Registry Rendering
   const activeSections = getActiveSortedSections(themeConfig?.sections);
@@ -155,12 +188,12 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   // 2. Categories Bar Section
   const renderCategoriesSection = () => (
     <section className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800">
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full">
         {categories.map((cat) => (
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`text-xs font-bold px-4 py-2 rounded-full whitespace-nowrap transition-all ${
+            className={`text-xs font-bold px-4 py-2 rounded-full whitespace-nowrap transition-all cursor-pointer ${
               selectedCategory === cat
                 ? 'text-white shadow-md'
                 : isDark
@@ -211,8 +244,20 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                     onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ الكود' : 'Copy Code')}</span>
+                    {copiedCode === (promo.discount_code || promo.badge_text) ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {copiedCode === (promo.discount_code || promo.badge_text)
+                        ? isAr
+                          ? 'تم النسخ!'
+                          : 'Copied!'
+                        : isAr
+                        ? 'نسخ الكود'
+                        : 'Copy Code'}
+                    </span>
                   </button>
                 )}
                 <button
@@ -247,16 +292,37 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
             {isAr ? 'الموديلات الجاهزة للشحن الفوري' : 'Ready to Dispatch Styles'}
           </h3>
         </div>
+        {selectedCategory !== 'all' && (
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('all')}
+            className="text-xs text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>{isAr ? 'عرض كافة التصنيفات' : 'Show all categories'}</span>
+          </button>
+        )}
       </div>
 
-      {/* Product Grid */}
-      {variants.length === 0 ? (
-        <div className="py-16 text-center text-slate-400">
-          <p className="text-base font-semibold">{isAr ? 'لا توجد منتجات مطابقة حالياً' : 'No products found'}</p>
+      {displayedVariants.length === 0 ? (
+        <div className="py-16 text-center text-slate-400 space-y-3 bg-slate-100/50 dark:bg-slate-900/50 rounded-3xl p-8 border border-dashed border-slate-200 dark:border-slate-800">
+          <ShoppingBag className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700" />
+          <p className="text-base font-semibold text-slate-600 dark:text-slate-400">
+            {isAr ? 'لا توجد منتجات مطابقة لهذا التصنيف حالياً' : 'No products found matching this filter'}
+          </p>
+          {selectedCategory !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('all')}
+              className="text-xs font-bold text-sky-600 dark:text-sky-400 underline cursor-pointer"
+            >
+              {isAr ? 'إعادة ضبط التصفية وعرض كل الموديلات' : 'Reset filter & view all models'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {variants.map((v) => {
+          {displayedVariants.map((v) => {
             const inStock = v.in_stock > 0;
             return (
               <div
@@ -270,8 +336,8 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                 {/* Image Card Top with StorefrontImage */}
                 <div className="relative aspect-[3/4] bg-slate-100 dark:bg-slate-800 overflow-hidden">
                   <StorefrontImage
-                    src={v.image}
-                    alt={v.model_name}
+                    src={v.image || v.image_url}
+                    alt={v.model_name || v.name}
                     aspectRatio="portrait"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -316,7 +382,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                       <span className="font-mono">{v.sku}</span>
                       {v.color && <span>{v.color}</span>}
                     </div>
-                    <h4 className="font-extrabold text-base leading-snug line-clamp-1">{v.model_name}</h4>
+                    <h4 className="font-extrabold text-base leading-snug line-clamp-1">{v.model_name || v.name}</h4>
                     {v.size && (
                       <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                         <span>{isAr ? 'المقاس:' : 'Size:'}</span>
@@ -328,13 +394,18 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                         <div className="flex items-center justify-between font-bold text-emerald-800 dark:text-emerald-300">
                           <span>{isAr ? 'سعر الجملة المعتمد' : 'Wholesale Approved'}</span>
                           {v.moq && v.moq > 1 && (
-                            <span className="font-mono">MOQ: {v.moq} {isAr ? 'قطعة' : 'pcs'}</span>
+                            <span className="font-mono">
+                              MOQ: {v.moq} {isAr ? 'قطعة' : 'pcs'}
+                            </span>
                           )}
                         </div>
                         {v.wholesale_tiers && v.wholesale_tiers.length > 0 && (
                           <div className="flex flex-wrap gap-1 text-[9px] font-mono">
                             {v.wholesale_tiers.map((t: any, idx: number) => (
-                              <span key={idx} className="bg-white dark:bg-slate-900 px-1 py-0.2 rounded border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300">
+                              <span
+                                key={idx}
+                                className="bg-white dark:bg-slate-900 px-1 py-0.2 rounded border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
+                              >
                                 +{t.min_quantity}: {Number(t.unit_price).toFixed(0)}
                               </span>
                             ))}
@@ -357,10 +428,16 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                     <div>
                       <span className="text-xs text-slate-400 block">
-                        {v.is_wholesale ? (isAr ? 'سعر الجملة' : 'Wholesale Price') : (isAr ? 'سعر القطعة' : 'Price')}
+                        {v.is_wholesale
+                          ? isAr
+                            ? 'سعر الجملة'
+                            : 'Wholesale Price'
+                          : isAr
+                          ? 'سعر القطعة'
+                          : 'Price'}
                       </span>
                       <span className="text-lg font-black" style={{ color: primaryColor }}>
-                        {v.price.toFixed(2)}{' '}
+                        {Number(v.price).toFixed(2)}{' '}
                         <span className="text-xs font-bold text-slate-500">{storeSettings?.currency || 'EGP'}</span>
                       </span>
                     </div>
@@ -416,7 +493,35 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
     </section>
   );
 
-  // 6. Contact Info Section
+  // 6. Wholesale B2B Callout
+  const renderWholesaleCtaSection = () => (
+    <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className="rounded-3xl p-8 bg-gradient-to-r from-slate-900 to-sky-950 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-sky-800/40">
+        <div className="space-y-2">
+          <span className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider">
+            {isAr ? 'قطاع الشركات وتجارة الجملة (B2B)' : 'Corporate & Wholesale Procurement'}
+          </span>
+          <h4 className="text-2xl font-black">{isAr ? 'أسعار تصنيع خاصة للكميات والمحلات' : 'Direct Factory Wholesale Pricing'}</h4>
+          <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
+            {isAr
+              ? 'نوفر أسعار جملة مخفضة، فواتير ضريبية، وشحن مجمع لكافة المحافظات مع إمكانية تصنيع طلبات خاصة.'
+              : 'Bulk tiers, tax invoices, and express shipping across all governorates.'}
+          </p>
+        </div>
+        {onOpenWholesaleModal && (
+          <button
+            type="button"
+            onClick={onOpenWholesaleModal}
+            className="px-6 py-3 rounded-2xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-sky-50 transition cursor-pointer shrink-0"
+          >
+            {isAr ? 'طلب اعتماد حساب تاجر' : 'Apply for Wholesale Account'}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+
+  // 7. Contact Info Section
   const renderContactSection = () => {
     const contact = themeConfig.contact || {};
     return (
@@ -424,7 +529,9 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
         <div className="p-8 rounded-3xl bg-slate-900 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h4 className="text-2xl font-black">{isAr ? 'تواصل مع فريق التصميم والإنتاج' : 'Contact Our Design Team'}</h4>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1">{isAr ? 'جاهزون للإجابة على كافة الاستفسارات وطلبات التفصيل' : 'Available for bespoke orders & retail customer support'}</p>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1">
+              {isAr ? 'جاهزون للإجابة على كافة الاستفسارات وطلبات التفصيل' : 'Available for bespoke orders & retail customer support'}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <div className="flex items-center gap-2 bg-white/10 px-3 py-2 rounded-xl">
@@ -445,20 +552,56 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
     );
   };
 
-  const renderSectionById = (id: string) => {
+  // 8. Newsletter Section
+  const renderNewsletterSection = () => (
+    <section className="py-12 border-t border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-900/40">
+      <div className="max-w-2xl mx-auto px-4 text-center space-y-4">
+        <h4 className="text-xl font-bold">{isAr ? 'اشترك في النشرة البريدية للمصنع' : 'Subscribe to Factory Updates'}</h4>
+        <p className="text-xs text-slate-500">
+          {isAr
+            ? 'احصل على إشعارات فور نزول الموديلات الجديدة وكوبونات الخصم الحصرية.'
+            : 'Get notified of new production releases and exclusive discounts.'}
+        </p>
+        <div className="flex gap-2 max-w-md mx-auto">
+          <input
+            type="email"
+            placeholder={isAr ? 'أدخل بريدك الإلكتروني' : 'Enter your email'}
+            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none"
+          />
+          <button
+            type="button"
+            style={{ backgroundColor: primaryColor }}
+            className="px-5 py-2.5 rounded-xl text-white font-bold text-xs cursor-pointer shadow"
+          >
+            {isAr ? 'اشتراك' : 'Subscribe'}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderSectionById = (rawId: string) => {
+    const id = normalizeSectionId(rawId);
     switch (id) {
       case 'hero':
         return renderHeroSection();
+      case 'trust_badges':
+        return renderStorySection();
       case 'categories':
         return renderCategoriesSection();
       case 'promotions':
         return renderPromotionsSection();
       case 'featured_products':
+      case 'new_arrivals':
         return renderProductsSection();
+      case 'wholesale_cta':
+        return renderWholesaleCtaSection();
       case 'story':
         return renderStorySection();
       case 'contact_info':
         return renderContactSection();
+      case 'newsletter':
+        return renderNewsletterSection();
       default:
         return null;
     }

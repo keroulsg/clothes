@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ShoppingBag,
   SlidersHorizontal,
@@ -16,15 +16,16 @@ import {
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
-import { getActiveSortedSections } from '../common/StorefrontSectionRegistry';
+import { getActiveSortedSections, normalizeSectionId } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  variants,
-  selectedCategory,
+  variants = [],
+  searchQuery = '',
+  selectedCategory = 'all',
   setSelectedCategory,
   onSelectProduct,
   onNavigateToShop,
@@ -75,26 +76,41 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   const [stockOnlyFilter, setStockOnlyFilter] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'price_asc' | 'price_desc' | 'stock'>('default');
 
-  // Filter & sort logic
-  const filteredVariants = variants
-    .filter((v) => {
-      if (stockOnlyFilter && v.in_stock <= 0) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'price_asc') return a.price - b.price;
-      if (sortBy === 'price_desc') return b.price - a.price;
-      if (sortBy === 'stock') return b.in_stock - a.in_stock;
-      return 0;
-    });
+  // Dynamic Category Extraction from actual product catalog
+  const categories = useMemo(() => {
+    const extracted = Array.from(
+      new Set(variants.map((v) => v.category).filter((c): c is string => Boolean(c) && c.trim() !== ''))
+    );
+    return [
+      { id: 'all', name_ar: 'كافة التصنيفات', name_en: 'All Categories' },
+      ...extracted.map((c) => ({ id: c, name_ar: c, name_en: c })),
+    ];
+  }, [variants]);
 
-  const categories = [
-    { id: 'all', name_ar: 'كافة التصنيفات', name_en: 'All Categories' },
-    { id: 'casual', name_ar: 'ملابس كاجوال', name_en: 'Casual Wear' },
-    { id: 'uniform', name_ar: 'زي موحد ويونيفورم', name_en: 'Uniform & Corporate' },
-    { id: 'polo', name_ar: 'بولو وقمصان رجالي', name_en: 'Polos & Shirts' },
-    { id: 'workwear', name_ar: 'ملابس عمال ومصانع', name_en: 'Industrial Workwear' },
-  ];
+  // Filter & sort logic
+  const filteredVariants = useMemo(() => {
+    return variants
+      .filter((v) => {
+        if (stockOnlyFilter && v.in_stock <= 0) return false;
+        if (selectedCategory && selectedCategory !== 'all' && v.category !== selectedCategory) return false;
+        const q = (searchQuery || '').trim().toLowerCase();
+        if (
+          q &&
+          !(v.model_name || v.name || '').toLowerCase().includes(q) &&
+          !(v.sku || '').toLowerCase().includes(q) &&
+          !(v.category || '').toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'price_asc') return Number(a.price) - Number(b.price);
+        if (sortBy === 'price_desc') return Number(b.price) - Number(a.price);
+        if (sortBy === 'stock') return Number(b.in_stock) - Number(a.in_stock);
+        return 0;
+      });
+  }, [variants, stockOnlyFilter, selectedCategory, searchQuery, sortBy]);
 
   // Dynamic Section Registry Rendering
   const activeSections = getActiveSortedSections(themeConfig?.sections);
@@ -154,7 +170,7 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   // 2. Categories Bar Section
   const renderCategoriesSection = () => (
     <section className="mb-6 flex flex-wrap items-center gap-2">
-      {categories.map((c) => (
+      {categories.map((c: any) => (
         <button
           key={c.id}
           type="button"
@@ -249,7 +265,7 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
 
           {/* Categories in sidebar */}
           <div className="space-y-1.5 mb-6">
-            {categories.map((c) => (
+            {categories.map((c: any) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedCategory(c.id)}
@@ -349,7 +365,7 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredVariants.map((v) => {
+            {filteredVariants.map((v: any) => {
               const inStock = v.in_stock > 0;
               return (
                 <div
@@ -532,7 +548,8 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
     );
   };
 
-  const renderSectionById = (id: string) => {
+  const renderSectionById = (rawId: string) => {
+    const id = normalizeSectionId(rawId);
     switch (id) {
       case 'hero':
         return renderHeroSection();
@@ -541,11 +558,32 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
       case 'promotions':
         return renderPromotionsSection();
       case 'featured_products':
+      case 'new_arrivals':
         return renderProductsSection();
+      case 'trust_badges':
       case 'story':
         return renderStorySection();
       case 'contact_info':
         return renderContactSection();
+      case 'wholesale_cta':
+        return (
+          <section className="my-8 p-6 rounded-3xl bg-gradient-to-r from-blue-900 to-indigo-950 text-white shadow flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-mono font-bold text-blue-300 uppercase tracking-widest block">{isAr ? 'عقود التوريد وتجارة الجملة' : 'B2B Wholesale Procurement'}</span>
+              <h4 className="text-xl font-black mt-0.5">{isAr ? 'طلب عروض أسعار وتوريد زي موحد للمؤسسات' : 'Request Corporate Quote & Uniform Supply'}</h4>
+              <p className="text-xs text-blue-100 max-w-xl mt-1">{isAr ? 'نوفر كميات إنتاجية ضخمة بمواصفات مطابقة لكراسات الشروط مع شحن مباشر من خطوط الحياكة.' : 'Volume supply contracts with batch certification and direct delivery.'}</p>
+            </div>
+            {onOpenWholesaleModal && (
+              <button
+                type="button"
+                onClick={onOpenWholesaleModal}
+                className="px-5 py-2.5 rounded-xl bg-white text-blue-950 font-bold text-xs shadow hover:bg-blue-50 transition cursor-pointer shrink-0"
+              >
+                {isAr ? 'تقديم طلب توريد' : 'Submit Wholesale Application'}
+              </button>
+            )}
+          </section>
+        );
       default:
         return null;
     }

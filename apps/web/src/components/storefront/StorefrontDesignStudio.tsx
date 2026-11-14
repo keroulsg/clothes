@@ -36,6 +36,7 @@ import { FashionBoutiqueTemplate } from './templates/FashionBoutiqueTemplate';
 import { ModernCatalogTemplate } from './templates/ModernCatalogTemplate';
 import { KidsFamilyTemplate } from './templates/KidsFamilyTemplate';
 import { PremiumBrandTemplate } from './templates/PremiumBrandTemplate';
+import { DEFAULT_HOMEPAGE_SECTIONS, normalizeSectionId } from './common/StorefrontSectionRegistry';
 import type { Language, StorefrontThemeId, DesignStudioConfig } from '../../types';
 
 interface StorefrontDesignStudioProps {
@@ -114,19 +115,19 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   // Homepage Sections toggle & order
   const [sections, setSections] = useState<Array<{
     id: string;
-    name_ar: string;
-    name_en: string;
+    name_ar?: string;
+    name_en?: string;
     enabled: boolean;
-    alignment: 'start' | 'center' | 'end';
-  }>>([
-    { id: 'hero_banner', name_ar: 'البنر الرئيسي الترويجي', name_en: 'Hero Promotional Banner', enabled: true, alignment: 'start' },
-    { id: 'trust_badges', name_ar: 'شريط ثقة وجودة المصنع', name_en: 'Trust & Quality Badges', enabled: true, alignment: 'center' },
-    { id: 'categories', name_ar: 'تصفية الأقسام والتصنيفات', name_en: 'Category Filters & Showcase', enabled: true, alignment: 'start' },
-    { id: 'catalog_grid', name_ar: 'شبكة المنتجات المعروضة', name_en: 'Product Catalog Grid', enabled: true, alignment: 'start' },
-    { id: 'new_arrivals', name_ar: 'وصل حديثاً من خط الإنتاج', name_en: 'New Arrivals Collection', enabled: true, alignment: 'start' },
-    { id: 'promo_banner', name_ar: 'بنر العروض والخصومات الخاصة', name_en: 'Promotional Discount Banner', enabled: true, alignment: 'center' },
-    { id: 'brand_story', name_ar: 'قصة المصنع والحرفية المصرية', name_en: 'Brand Heritage & Craftsmanship', enabled: true, alignment: 'start' },
-  ]);
+    alignment?: 'start' | 'center' | 'end';
+  }>>(() =>
+    DEFAULT_HOMEPAGE_SECTIONS.map((s) => ({
+      id: s.id,
+      name_ar: s.name_ar,
+      name_en: s.name_en,
+      enabled: s.enabled,
+      alignment: 'start',
+    }))
+  );
 
   // Navigation Links
   const [headerLinks, setHeaderLinks] = useState<Array<{
@@ -203,8 +204,31 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
           setPromoBanners(config.promo_banners);
         }
 
-        if (config.sections && Array.isArray(config.sections)) {
-          setSections(config.sections);
+        if (config.sections && Array.isArray(config.sections) && config.sections.length > 0) {
+          const seen = new Set<string>();
+          const normalized = config.sections
+            .map((sec: any, idx: number) => {
+              const canonicalId = normalizeSectionId(sec.id);
+              const defaultRef = DEFAULT_HOMEPAGE_SECTIONS.find((d) => d.id === canonicalId);
+              return {
+                ...sec,
+                id: canonicalId,
+                name_ar: sec.name_ar || sec.name || defaultRef?.name_ar || canonicalId,
+                name_en: sec.name_en || sec.name || defaultRef?.name_en || canonicalId,
+                enabled: sec.enabled !== false,
+                alignment: sec.alignment || 'start',
+                order: sec.order ?? idx + 1,
+              };
+            })
+            .filter((sec: any) => {
+              if (seen.has(sec.id)) return false;
+              seen.add(sec.id);
+              return true;
+            })
+            .sort((a: any, b: any) => a.order - b.order);
+          setSections(normalized);
+        } else {
+          setSections(DEFAULT_HOMEPAGE_SECTIONS as any);
         }
 
         if (config.navigation?.header_links && Array.isArray(config.navigation.header_links)) {
@@ -357,7 +381,14 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
         ...p,
         image_url: (p.image_url || p.image || '')?.trim(),
       })),
-      sections,
+      sections: sections.map((s: any, idx: number) => ({
+        id: normalizeSectionId(s.id),
+        name_ar: s.name_ar,
+        name_en: s.name_en,
+        enabled: s.enabled !== false,
+        order: idx + 1,
+        alignment: s.alignment || 'start',
+      })),
       navigation: {
         header_links: headerLinks,
       },
@@ -1215,7 +1246,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                       </div>
 
                       <div>
-                        <h5 className="font-bold text-xs">{isAr ? sec.name_ar : sec.name_en}</h5>
+                        <h5 className="font-bold text-xs">{isAr ? sec.name_ar || sec.name_en || sec.id : sec.name_en || sec.name_ar || sec.id}</h5>
                         <span className="font-mono text-[10px] text-slate-400">Block ID: #{sec.id}</span>
                       </div>
                     </div>

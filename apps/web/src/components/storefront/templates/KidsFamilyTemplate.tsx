@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Heart,
   Sparkles,
@@ -15,14 +15,17 @@ import {
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
-import { getActiveSortedSections } from '../common/StorefrontSectionRegistry';
+import { getActiveSortedSections, normalizeSectionId } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  variants,
+  variants = [],
+  searchQuery = '',
+  selectedCategory = 'all',
+  setSelectedCategory,
   onSelectProduct,
   onNavigateToShop,
   onNavigateToCategories,
@@ -77,6 +80,38 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
     { id: '5-9y', label_ar: 'أولاد وبنات 5-9 سنوات 🚀', label_en: 'Kids 5-9Y 🚀' },
     { id: '10-14y', label_ar: 'ناشئين 10-14 سنة 🎒', label_en: 'Junior 10-14Y 🎒' },
   ];
+
+  // Dynamic Category Extraction from actual product catalog
+  const categories = useMemo(() => {
+    const extracted = Array.from(
+      new Set(variants.map((v) => v.category).filter((c): c is string => Boolean(c) && c.trim() !== ''))
+    );
+    return ['all', ...(extracted.length > 0 ? extracted : [])];
+  }, [variants]);
+
+  // Product Filtering logic
+  const displayedVariants = useMemo(() => {
+    return variants.filter((v) => {
+      const matchCat = !selectedCategory || selectedCategory === 'all' || v.category === selectedCategory;
+      const q = (searchQuery || '').trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (v.model_name || v.name || '').toLowerCase().includes(q) ||
+        (v.sku || '').toLowerCase().includes(q) ||
+        (v.category || '').toLowerCase().includes(q);
+
+      let matchAge = true;
+      if (selectedAge && selectedAge !== 'all') {
+        const text = `${v.size || ''} ${v.model_name || ''} ${v.name || ''}`.toLowerCase();
+        if (selectedAge === '0-12m') {
+          matchAge = text.includes('0-3') || text.includes('0-12') || text.includes('ولادة') || text.includes('baby') || text.includes('رضيع') || text.includes('3-6');
+        } else if (selectedAge === '1-4y') {
+          matchAge = text.includes('1y') || text.includes('2y') || text.includes('3y') || text.includes('4y') || text.includes('سنة') || text.includes('سنتين');
+        }
+      }
+      return matchCat && matchSearch && matchAge;
+    });
+  }, [variants, selectedCategory, searchQuery, selectedAge]);
 
   // Dynamic Section Registry Rendering
   const activeSections = getActiveSortedSections(themeConfig?.sections);
@@ -142,9 +177,27 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
 
   // 2. Categories & Age Brackets Section
   const renderCategoriesSection = () => (
-    <section className="py-6 max-w-7xl mx-auto px-4">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h3 className="font-black text-lg text-slate-900 dark:text-white flex items-center gap-2">
+    <section className="py-6 max-w-7xl mx-auto px-4 space-y-4">
+      {categories.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {categories.map((cat: string) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory?.(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                selectedCategory === cat
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                  : 'bg-amber-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-200/60'
+              }`}
+            >
+              {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
           <span>{isAr ? 'تسوق حسب الفئة العمرية' : 'Shop by Age Range'}</span>
         </h3>
       </div>
@@ -154,7 +207,7 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
             key={age.id}
             type="button"
             onClick={() => setSelectedAge(age.id)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all shadow-xs ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all shadow-xs cursor-pointer ${
               selectedAge === age.id
                 ? 'bg-orange-500 text-white shadow-md'
                 : isDark
@@ -241,13 +294,25 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
         </div>
       </div>
 
-      {variants.length === 0 ? (
-        <div className="py-16 text-center text-slate-400">
-          <p className="text-base font-semibold">{isAr ? 'لا توجد منتجات حالياً' : 'No products available'}</p>
+      {displayedVariants.length === 0 ? (
+        <div className="py-16 text-center text-slate-400 bg-white/40 dark:bg-slate-900/40 rounded-3xl p-8 border border-dashed border-amber-200 dark:border-amber-900/40">
+          <p className="text-base font-semibold">{isAr ? 'لا توجد منتجات مطابقة لهذا الاختيار حالياً' : 'No products match this filter'}</p>
+          {(selectedCategory !== 'all' || selectedAge !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory?.('all');
+                setSelectedAge('all');
+              }}
+              className="mt-2 text-xs font-bold text-orange-600 dark:text-orange-400 underline cursor-pointer"
+            >
+              {isAr ? 'عرض كافة منتجات الأطفال' : 'View all kids products'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {variants.map((v) => {
+          {displayedVariants.map((v: any) => {
             const inStock = v.in_stock > 0;
             return (
               <div
@@ -394,18 +459,21 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
     );
   };
 
-  const renderSectionById = (id: string) => {
+  const renderSectionById = (rawId: string) => {
+    const id = normalizeSectionId(rawId);
     switch (id) {
       case 'hero':
         return renderHeroSection();
+      case 'trust_badges':
+      case 'story':
+        return renderStorySection();
       case 'categories':
         return renderCategoriesSection();
       case 'promotions':
         return renderPromotionsSection();
       case 'featured_products':
+      case 'new_arrivals':
         return renderProductsSection();
-      case 'story':
-        return renderStorySection();
       case 'contact_info':
         return renderContactSection();
       default:

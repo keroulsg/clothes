@@ -8,6 +8,11 @@ import {
   Phone,
   Mail,
   MapPin,
+  Award,
+  Building2,
+  Scissors,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
@@ -49,6 +54,16 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   const cardShadow = layoutConfig.card_shadow || 'none';
   const cardImageAspect = layoutConfig.card_image_aspect || 'portrait';
   const cardImageFit = layoutConfig.card_image_fit || 'cover';
+  const categoriesStyle = layoutConfig.categories_style || 'pills';
+  const containerWidth = layoutConfig.container_width || 'boxed_standard';
+  const containerWidthClass =
+    containerWidth === 'boxed_compact'
+      ? 'max-w-5xl mx-auto px-4 sm:px-6'
+      : containerWidth === 'wide'
+      ? 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10'
+      : containerWidth === 'full_width'
+      ? 'w-full px-4 sm:px-8 lg:px-12'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
 
   // Hero Display Controls
   const heroHeight = heroBanner?.height || 'standard';
@@ -196,32 +211,89 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   };
 
   // 2. Categories Section
-  const renderCategoriesSection = () => (
-    <section className="py-8 max-w-7xl mx-auto px-4 text-center border-b border-stone-200 dark:border-zinc-800 font-sans">
-      <div className="flex items-center justify-center gap-4 flex-wrap text-xs uppercase tracking-widest font-bold">
-        {categories.map((cat: any) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setSelectedCategory?.(cat)}
-            className={`pb-1 transition-all cursor-pointer ${
-              selectedCategory === cat
-                ? 'text-amber-500 border-b-2 border-amber-500'
-                : 'text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            {cat === 'all' ? (isAr ? 'كافة القطع' : 'All Works') : cat}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
+  const renderCategoriesSection = () => {
+    if (categoriesStyle === 'factory_icon_cards') {
+      return (
+        <section className={`py-10 ${containerWidthClass} border-b border-stone-200 dark:border-zinc-800 font-sans`}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-black uppercase tracking-widest text-amber-500">
+              {isAr ? 'أقسام المشغل والإنتاج الراقي' : 'Atelier Lines & Haute Couture'}
+            </span>
+            <span className="text-xs text-stone-400 font-mono">
+              {categories.length} {isAr ? 'خطوط' : 'lines'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {categories.map((cat: any) => {
+              const isSelected = selectedCategory === cat;
+              const count = cat === 'all'
+                ? (variants?.length || 0)
+                : (variants?.filter(v => getCategoryString(v.category) === cat).length || 0);
+
+              let CategoryIcon = Crown;
+              const catLower = String(cat).toLowerCase();
+              if (cat === 'all') CategoryIcon = Award;
+              else if (catLower.includes('رجال') || catLower.includes('men')) CategoryIcon = Scissors;
+              else if (catLower.includes('حريم') || catLower.includes('women')) CategoryIcon = Sparkles;
+              else if (catLower.includes('يونيفورم') || catLower.includes('uniform')) CategoryIcon = Building2;
+              else CategoryIcon = Layers;
+
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory?.(cat)}
+                  className={`p-4 border text-start transition-all cursor-pointer flex flex-col justify-between min-h-[105px] group ${
+                    isSelected
+                      ? 'border-amber-500 bg-stone-900 text-amber-400 shadow-md ring-1 ring-amber-500/40'
+                      : 'border-stone-800 bg-stone-950/80 text-stone-300 hover:border-amber-500/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-amber-500 text-stone-950' : 'bg-stone-900 text-amber-400'}`}>
+                      <CategoryIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono text-stone-500">{count}</span>
+                  </div>
+                  <div className="mt-3">
+                    <span className="text-xs font-black uppercase tracking-wider block truncate">{cat === 'all' ? (isAr ? 'كافة القطع' : 'All Works') : cat}</span>
+                    <span className="text-[9px] text-stone-400 block truncate mt-0.5">{isAr ? 'إصدار مشغل خاص' : 'Atelier Edition'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className={`py-8 ${containerWidthClass} text-center border-b border-stone-200 dark:border-zinc-800 font-sans`}>
+        <div className="flex items-center justify-center gap-4 flex-wrap text-xs uppercase tracking-widest font-bold">
+          {categories.map((cat: any) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory?.(cat)}
+              className={`pb-1 transition-all cursor-pointer ${
+                selectedCategory === cat
+                  ? 'text-amber-500 border-b-2 border-amber-500'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              {cat === 'all' ? (isAr ? 'كافة القطع' : 'All Works') : cat}
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   // 3. Promotions Section
   const renderPromotionsSection = () => {
     if (promoBanners.length === 0) return null;
     return (
-      <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-stone-200 dark:border-zinc-800 font-sans">
+      <section className={`py-16 ${containerWidthClass} border-t border-stone-200 dark:border-zinc-800 font-sans`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {promoBanners.map((promo: any) => (
             <div
@@ -277,7 +349,7 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
 
   // 4. Products Grid Section
   const renderProductsSection = () => (
-    <section id="collection" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <section id="collection" className={`py-20 ${containerWidthClass}`}>
       <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
         <span className="text-xs uppercase tracking-[0.3em] text-amber-600 font-sans font-bold">
           {isAr ? 'مختارات الموسم' : 'Haute Curations'}
@@ -447,7 +519,7 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   const renderContactSection = () => {
     const contact = themeConfig.contact || {};
     return (
-      <section className="py-12 max-w-7xl mx-auto px-4 font-sans">
+      <section className={`py-12 ${containerWidthClass} font-sans`}>
         <div className="p-8 border border-amber-600/30 bg-zinc-900 text-stone-200 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h4 className="font-serif text-xl text-amber-400">{isAr ? 'خدمة كونسيرج البوتيك الخاص' : 'Atelier Private Concierge'}</h4>

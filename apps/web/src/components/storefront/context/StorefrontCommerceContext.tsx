@@ -13,7 +13,8 @@ export type StorefrontView =
   | 'tracking'
   | 'about'
   | 'contact'
-  | 'policies';
+  | 'policies'
+  | 'custom_page';
 
 export interface CartItem {
   variant_id: string;
@@ -66,6 +67,8 @@ interface StorefrontCommerceContextType {
   setFilters: React.Dispatch<React.SetStateAction<CommerceFilters>>;
   navigateToProduct: (productId: string) => void;
   navigateToCategory: (categoryId: string) => void;
+  activeCustomPageId: string | null;
+  navigateToCustomPage: (pageId: string) => void;
 
   // Cart Management
   cart: CartItem[];
@@ -157,7 +160,7 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
   const currency = storeSettings?.currency || 'EGP';
 
   // Navigation State with Hash Parsing
-  const parseHashView = (): { view: StorefrontView; productId?: string; categoryId?: string } => {
+  const parseHashView = (): { view: StorefrontView; productId?: string; categoryId?: string; customPageId?: string } => {
     try {
       const hashClean = window.location.hash.split('?')[0].replace(/^#\/?/, '').toLowerCase().trim();
       const parts = hashClean.split('/');
@@ -171,6 +174,7 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
         if (sub === 'about') return { view: 'about' };
         if (sub === 'contact') return { view: 'contact' };
         if (sub === 'policies' || sub === 'policy') return { view: 'policies' };
+        if (sub === 'page' && parts[3]) return { view: 'custom_page', customPageId: parts[3] };
         if (sub === 'product' && parts[3]) return { view: 'product', productId: parts[3] };
         if (sub === 'category' && parts[3]) return { view: 'category', categoryId: decodeURIComponent(parts[3]) };
       }
@@ -180,6 +184,7 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
 
   const initialParsed = parseHashView();
   const [activeView, setActiveViewState] = useState<StorefrontView>(initialParsed.view);
+  const [activeCustomPageId, setActiveCustomPageId] = useState<string | null>(initialParsed.customPageId || null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(initialParsed.productId || null);
   const [selectedCategory, setSelectedCategory] = useState<string>(initialParsed.categoryId || 'all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -203,10 +208,24 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
     }
   };
 
+  const navigateToCustomPage = (pageId: string) => {
+    setActiveCustomPageId(pageId);
+    setActiveViewState('custom_page');
+    const tenantSlug = tenantInfo?.subdomain || tenantInfo?.code || tenantInfo?.id;
+    if (tenantSlug) {
+      const baseHash = `#/store/${tenantSlug}/page/${pageId}`;
+      const query = window.location.hash.includes('?') ? '?' + window.location.hash.split('?')[1] : '';
+      try {
+        window.history.replaceState(null, '', `${baseHash}${query}`);
+      } catch {}
+    }
+  };
+
   useEffect(() => {
     const handleHash = () => {
       const parsed = parseHashView();
       setActiveViewState(parsed.view);
+      if (parsed.customPageId) setActiveCustomPageId(parsed.customPageId);
       if (parsed.productId) setSelectedProductId(parsed.productId);
       if (parsed.categoryId) setSelectedCategory(parsed.categoryId);
     };
@@ -469,6 +488,8 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
         setFilters,
         navigateToProduct,
         navigateToCategory,
+        activeCustomPageId,
+        navigateToCustomPage,
         cart,
         addToCart,
         updateQuantity,

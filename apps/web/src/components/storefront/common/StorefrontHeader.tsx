@@ -39,6 +39,8 @@ export const StorefrontHeader: React.FC = () => {
     onToggleLang,
     storeSettings,
     tenantInfo,
+    activeCustomPageId,
+    navigateToCustomPage,
   } = useStorefrontCommerce();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -86,6 +88,8 @@ export const StorefrontHeader: React.FC = () => {
 
   // Custom navigation links from themeConfig or defaults
   const customHeaderLinks = themeConfig.navigation?.header_links || null;
+  const customPages = Array.isArray(themeConfig.custom_pages) ? themeConfig.custom_pages : [];
+  const headerCustomPages = customPages.filter((p: any) => p.show_in_header);
 
   return (
     <header className="sticky top-0 z-40 w-full shadow-xs select-none">
@@ -320,6 +324,22 @@ export const StorefrontHeader: React.FC = () => {
                 >
                   {isAr ? 'سياسات المتجر' : 'Policies'}
                 </button>
+                {headerCustomPages.map((cp: any) => (
+                  <button
+                    key={cp.id}
+                    onClick={() => {
+                      navigateToCustomPage(cp.id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`transition py-1 border-b-2 ${
+                      activeView === 'custom_page' && activeCustomPageId === cp.id
+                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-black'
+                        : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-blue-600'
+                    }`}
+                  >
+                    {isAr ? cp.title_ar || cp.title : cp.title_en || cp.title_ar || cp.title}
+                  </button>
+                ))}
               </>
             )}
           </nav>
@@ -555,6 +575,23 @@ export const StorefrontHeader: React.FC = () => {
               >
                 {isAr ? 'سياسات وشروط المتجر' : 'Store Policies'}
               </button>
+              {headerCustomPages.map((cp: any) => (
+                <button
+                  key={cp.id}
+                  onClick={() => {
+                    navigateToCustomPage(cp.id);
+                    setMobileMenuOpen(false);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`text-start py-2 px-3 rounded-lg ${
+                    activeView === 'custom_page' && activeCustomPageId === cp.id
+                      ? 'bg-blue-50 text-blue-600 dark:bg-slate-800'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {isAr ? cp.title_ar || cp.title : cp.title_en || cp.title_ar || cp.title}
+                </button>
+              ))}
               <button
                 onClick={() => {
                   setActiveView('tracking');

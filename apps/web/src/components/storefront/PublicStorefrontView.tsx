@@ -562,6 +562,7 @@ const StorefrontMainContent: React.FC<StorefrontMainContentProps> = ({
         {activeView === 'about' && <StorefrontContentPage pageType="about" />}
         {activeView === 'contact' && <StorefrontContentPage pageType="contact" />}
         {activeView === 'policies' && <StorefrontContentPage pageType="policies" />}
+        {activeView === 'custom_page' && <StorefrontContentPage pageType="custom" />}
       </main>
 
       {/* 4. Global Quick Slide-Over Cart Drawer */}

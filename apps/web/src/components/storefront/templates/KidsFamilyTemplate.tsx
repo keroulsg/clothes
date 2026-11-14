@@ -12,6 +12,9 @@ import {
   Phone,
   Mail,
   MapPin,
+  Building2,
+  Scissors,
+  Layers,
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
@@ -52,6 +55,16 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   const cardShadow = layoutConfig.card_shadow || 'md';
   const cardImageAspect = layoutConfig.card_image_aspect || 'square';
   const cardImageFit = layoutConfig.card_image_fit || 'cover';
+  const categoriesStyle = layoutConfig.categories_style || 'pills';
+  const containerWidth = layoutConfig.container_width || 'boxed_standard';
+  const containerWidthClass =
+    containerWidth === 'boxed_compact'
+      ? 'max-w-5xl mx-auto px-4 sm:px-6'
+      : containerWidth === 'wide'
+      ? 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10'
+      : containerWidth === 'full_width'
+      ? 'w-full px-4 sm:px-8 lg:px-12'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
 
   // Hero Display Controls
   const heroHeight = heroBanner?.height || 'standard';
@@ -236,57 +249,125 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   };
 
   // 2. Categories & Age Brackets Section
-  const renderCategoriesSection = () => (
-    <section className="py-6 max-w-7xl mx-auto px-4 space-y-4">
-      {categories.length > 1 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {categories.map((cat: string) => (
+  const renderCategoriesSection = () => {
+    if (categoriesStyle === 'factory_icon_cards') {
+      return (
+        <section className={`py-6 ${containerWidthClass} space-y-4`}>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                {isAr ? 'خطوط إنتاج الأطفال والمواليد' : 'Kids & Baby Production Lines'}
+              </span>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {isAr ? 'تصفح أقسام المصنع المعتمدة' : 'Factory Certified Categories'}
+              </h3>
+            </div>
+            <span className="text-xs text-slate-400 font-mono">
+              {categories.length} {isAr ? 'أقسام' : 'divisions'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {categories.map((cat: string) => {
+              const isSelected = selectedCategory === cat;
+              const count = cat === 'all'
+                ? (variants?.length || 0)
+                : (variants?.filter(v => getCategoryString(v.category) === cat).length || 0);
+
+              let CategoryIcon = Layers;
+              const catLower = cat.toLowerCase();
+              if (cat === 'all') CategoryIcon = Award;
+              else if (catLower.includes('مواليد') || catLower.includes('baby') || catLower.includes('رضع')) CategoryIcon = Sparkles;
+              else if (catLower.includes('بنات') || catLower.includes('girls')) CategoryIcon = Heart;
+              else if (catLower.includes('أولاد') || catLower.includes('boys')) CategoryIcon = Scissors;
+              else if (catLower.includes('يونيفورم') || catLower.includes('مدرسي')) CategoryIcon = Building2;
+
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory?.(cat)}
+                  className={`p-3.5 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between min-h-[100px] group ${
+                    isSelected
+                      ? 'shadow-md ring-2 ring-amber-500/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-amber-400 bg-white dark:bg-slate-900'
+                  }`}
+                  style={isSelected ? { borderColor: primaryColor } : {}}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected ? 'bg-amber-600 text-white' : 'bg-amber-50 dark:bg-slate-800 text-amber-700 dark:text-amber-400'
+                      }`}
+                      style={isSelected ? { backgroundColor: primaryColor } : {}}
+                    >
+                      <CategoryIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                      {count}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-xs font-bold truncate block">{cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}</span>
+                    <span className="text-[9px] text-slate-400 block truncate mt-0.5">{isAr ? 'قطن مصري 100%' : '100% Egyptian Cotton'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className={`py-6 ${containerWidthClass} space-y-4`}>
+        {categories.length > 1 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {categories.map((cat: string) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory?.(cat)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                    : 'bg-amber-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-200/60'
+                }`}
+              >
+                {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+            <span>{isAr ? 'تسوق حسب الفئة العمرية' : 'Shop by Age Range'}</span>
+          </h3>
+        </div>
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+          {ageBrackets.map((age) => (
             <button
-              key={cat}
+              key={age.id}
               type="button"
-              onClick={() => setSelectedCategory?.(cat)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                  : 'bg-amber-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-200/60'
+              onClick={() => setSelectedAge(age.id)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all shadow-xs cursor-pointer ${
+                selectedAge === age.id
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
               }`}
             >
-              {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}
+              <span>{isAr ? age.label_ar : age.label_en}</span>
             </button>
           ))}
         </div>
-      )}
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-          <span>{isAr ? 'تسوق حسب الفئة العمرية' : 'Shop by Age Range'}</span>
-        </h3>
-      </div>
-      <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-        {ageBrackets.map((age) => (
-          <button
-            key={age.id}
-            type="button"
-            onClick={() => setSelectedAge(age.id)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all shadow-xs cursor-pointer ${
-              selectedAge === age.id
-                ? 'bg-orange-500 text-white shadow-md'
-                : isDark
-                ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
-                : 'bg-white border border-orange-100 text-slate-700 hover:bg-orange-50'
-            }`}
-          >
-            {isAr ? age.label_ar : age.label_en}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   // 3. Promotions Section
   const renderPromotionsSection = () => {
     if (promoBanners.length === 0) return null;
     return (
-      <section className="py-6 max-w-7xl mx-auto px-4">
+      <section className={`py-6 ${containerWidthClass}`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {promoBanners.map((promo: any) => (
             <div
@@ -342,7 +423,7 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
 
   // 4. Products Grid Section
   const renderProductsSection = () => (
-    <section id="products" className="py-8 max-w-7xl mx-auto px-4">
+    <section id="products" className={`py-8 ${containerWidthClass}`}>
       <div className="flex items-center justify-between mb-6">
         <div>
           <span className="text-xs font-extrabold uppercase tracking-wider text-orange-600 dark:text-orange-400">
@@ -531,7 +612,7 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   const renderContactSection = () => {
     const contact = themeConfig.contact || {};
     return (
-      <section className="py-8 max-w-7xl mx-auto px-4">
+      <section className={`py-8 ${containerWidthClass}`}>
         <div className="p-6 rounded-3xl bg-amber-500 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <h4 className="font-black text-xl">{isAr ? 'خدمة أولياء الأمور والأطفال' : 'Parents Care Support'}</h4>

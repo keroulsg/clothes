@@ -8,8 +8,12 @@ import {
   Phone,
   Mail,
   MapPin,
+  Award,
+  Sparkles,
+  Package,
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
+import { api } from '../../../api/client';
 
 export const StorefrontFooter: React.FC = () => {
   const {
@@ -18,6 +22,7 @@ export const StorefrontFooter: React.FC = () => {
     isAr,
     storeSettings,
     tenantInfo,
+    navigateToCustomPage,
   } = useStorefrontCommerce();
 
   const themeConfig = storeSettings?.theme_config || {};
@@ -27,6 +32,75 @@ export const StorefrontFooter: React.FC = () => {
   const contactPhone = themeConfig.contact?.phone || tenantInfo?.phone || '+20 100 000 0000';
   const contactEmail = themeConfig.contact?.email || 'support@delta-garments.com';
   const contactAddress = themeConfig.contact?.address || (isAr ? 'المنطقة الصناعية، جمهورية مصر العربية' : 'Industrial Zone, Egypt');
+
+  const footerConfig = themeConfig.footer || {};
+  const showFooterLogo = footerConfig.show_logo !== false;
+  const logoUrl = themeConfig.logo_url ? api.getMediaUrl(themeConfig.logo_url) : null;
+  const showBadges = footerConfig.show_badges !== false;
+  const customFooterDesc = isAr
+    ? footerConfig.desc_ar || themeConfig.pages?.about_summary || storeSettings?.banner_subtitle
+    : footerConfig.desc_en || themeConfig.pages?.about_summary || storeSettings?.banner_subtitle;
+
+  const customPages = Array.isArray(themeConfig.custom_pages) ? themeConfig.custom_pages : [];
+  const footerCustomPages = customPages.filter((p: any) => p.show_in_footer !== false);
+
+  const defaultBadges = [
+    {
+      icon: 'truck',
+      title_ar: 'شحن سريع لجميع المحافظات',
+      title_en: 'Nationwide Express Delivery',
+      desc_ar: 'توصيل لباب المنزل في القاهرة الكبرى وكافة المحافظات',
+      desc_en: 'Doorstep delivery to Cairo, Alex, and all governorates',
+      color: 'blue',
+    },
+    {
+      icon: 'rotate',
+      title_ar: 'ضمان استبدال واسترجاع',
+      title_en: 'Hassle-Free Returns & Exchange',
+      desc_ar: 'حق استبدال خلال 14 يوماً وفق قانون حماية المستهلك',
+      desc_en: '14-day exchange according to consumer protection laws',
+      color: 'emerald',
+    },
+    {
+      icon: 'shield',
+      title_ar: 'جودة وتصنيع مصري 100%',
+      title_en: '100% Egyptian Apparel Quality',
+      desc_ar: 'منتجات جاهزة مصنعة بأعلى مواصفات الغزل والنسيج',
+      desc_en: 'Factory-direct finished garments with premium textiles',
+      color: 'amber',
+    },
+  ];
+
+  const activeBadges = Array.isArray(footerConfig.badges) && footerConfig.badges.length > 0
+    ? footerConfig.badges
+    : defaultBadges;
+
+  const renderBadgeIcon = (iconName: string, color: string) => {
+    const iconColor =
+      color === 'emerald' ? 'text-emerald-400' :
+      color === 'amber' ? 'text-amber-400' :
+      color === 'indigo' ? 'text-indigo-400' :
+      color === 'rose' ? 'text-rose-400' : 'text-blue-400';
+    const boxBorder =
+      color === 'emerald' ? 'bg-emerald-950 border-emerald-800' :
+      color === 'amber' ? 'bg-amber-950 border-amber-800' :
+      color === 'indigo' ? 'bg-indigo-950 border-indigo-800' :
+      color === 'rose' ? 'bg-rose-950 border-rose-800' : 'bg-blue-950 border-blue-800';
+
+    let IconComp = Truck;
+    if (iconName === 'rotate') IconComp = RotateCcw;
+    else if (iconName === 'shield') IconComp = ShieldCheck;
+    else if (iconName === 'factory' || iconName === 'building') IconComp = Building2;
+    else if (iconName === 'award') IconComp = Award;
+    else if (iconName === 'sparkles') IconComp = Sparkles;
+    else if (iconName === 'package') IconComp = Package;
+
+    return (
+      <div className={`w-12 h-12 rounded-xl ${boxBorder} border flex items-center justify-center shrink-0`}>
+        <IconComp className={`w-6 h-6 ${iconColor}`} />
+      </div>
+    );
+  };
 
   return (
     <footer
@@ -38,66 +112,42 @@ export const StorefrontFooter: React.FC = () => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Value Propositions Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-10 border-b border-slate-800 text-center md:text-start">
-          <div className="flex items-center gap-4 justify-center md:justify-start">
-            <div className="w-12 h-12 rounded-xl bg-blue-950 border border-blue-800 flex items-center justify-center shrink-0">
-              <Truck className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <h4 className="font-bold text-white text-sm">
-                {isAr ? 'شحن سريع لجميع المحافظات' : 'Nationwide Express Delivery'}
-              </h4>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {isAr
-                  ? 'توصيل لباب المنزل في القاهرة الكبرى وكافة المحافظات'
-                  : 'Doorstep delivery to Cairo, Alex, and all governorates'}
-              </p>
-            </div>
+        {showBadges && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-10 border-b border-slate-800 text-center md:text-start">
+            {activeBadges.map((badge: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-4 justify-center md:justify-start">
+                {renderBadgeIcon(badge.icon || 'truck', badge.color || 'blue')}
+                <div>
+                  <h4 className="font-bold text-white text-sm">
+                    {isAr ? badge.title_ar || badge.title : badge.title_en || badge.title_ar || badge.title}
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {isAr ? badge.desc_ar || badge.desc : badge.desc_en || badge.desc_ar || badge.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-
-          <div className="flex items-center gap-4 justify-center md:justify-start">
-            <div className="w-12 h-12 rounded-xl bg-emerald-950 border border-emerald-800 flex items-center justify-center shrink-0">
-              <RotateCcw className="w-6 h-6 text-emerald-400" />
-            </div>
-            <div>
-              <h4 className="font-bold text-white text-sm">
-                {isAr ? 'ضمان استبدال واسترجاع' : 'Hassle-Free Returns & Exchange'}
-              </h4>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {isAr
-                  ? 'حق استبدال خلال 14 يوماً وفق قانون حماية المستهلك'
-                  : '14-day exchange according to consumer protection laws'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 justify-center md:justify-start">
-            <div className="w-12 h-12 rounded-xl bg-amber-950 border border-amber-800 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-6 h-6 text-amber-400" />
-            </div>
-            <div>
-              <h4 className="font-bold text-white text-sm">
-                {isAr ? 'جودة وتصنيع مصري 100%' : '100% Egyptian Apparel Quality'}
-              </h4>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {isAr
-                  ? 'منتجات جاهزة مصنعة بأعلى مواصفات الغزل والنسيج'
-                  : 'Factory-direct finished garments with premium textiles'}
-              </p>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Links Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 py-10">
           {/* Column 1: Store & Factory Heritage */}
           <div>
-            <h5 className="font-bold text-white text-sm mb-4">
-              {isAr ? 'عن المصنع والمتجر' : 'About Factory Store'}
+            {showFooterLogo && logoUrl && (
+              <div className="mb-4">
+                <img
+                  src={logoUrl}
+                  alt={storeName}
+                  className="h-10 w-auto object-contain brightness-110 drop-shadow-sm"
+                />
+              </div>
+            )}
+            <h5 className="font-bold text-white text-sm mb-3">
+              {storeName}
             </h5>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              {themeConfig.pages?.about_summary ||
-                storeSettings?.banner_subtitle ||
+              {customFooterDesc ||
                 (isAr
                   ? 'منصة بيع مباشرة متصلة بخطوط إنتاج مصنعنا لتقديم أفضل أزياء وملابس موحدة بأعلى جودة وسعر منافس.'
                   : 'Direct-to-consumer & B2B storefront powered by GarmentOS Cloud apparel manufacturing ERP.')}
@@ -108,7 +158,7 @@ export const StorefrontFooter: React.FC = () => {
             </div>
           </div>
 
-          {/* Column 2: Quick Shopping */}
+          {/* Column 2: Quick Shopping & Categories */}
           <div>
             <h5 className="font-bold text-white text-sm mb-4">
               {isAr ? 'روابط التسوق' : 'Quick Shopping'}
@@ -161,10 +211,10 @@ export const StorefrontFooter: React.FC = () => {
             </ul>
           </div>
 
-          {/* Column 3: Customer Care & Policies */}
+          {/* Column 3: Customer Care, Policies & Custom Pages */}
           <div>
             <h5 className="font-bold text-white text-sm mb-4">
-              {isAr ? 'خدمة العملاء والسياسات' : 'Customer Care & Policies'}
+              {isAr ? 'خدمة العملاء والصفحات' : 'Customer Care & Pages'}
             </h5>
             <ul className="space-y-2.5 text-xs text-slate-400">
               <li>
@@ -187,18 +237,7 @@ export const StorefrontFooter: React.FC = () => {
                   }}
                   className="hover:text-white transition text-start"
                 >
-                  {isAr ? 'سياسة الاستبدال والاسترجاع' : 'Exchange & Return Terms'}
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => {
-                    setActiveView('policies');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="hover:text-white transition text-start"
-                >
-                  {isAr ? 'مواعيد وتكاليف الشحن' : 'Shipping Schedules & Rates'}
+                  {isAr ? 'سياسات الشحن والاسترجاع' : 'Exchange & Return Terms'}
                 </button>
               </li>
               <li>
@@ -223,6 +262,22 @@ export const StorefrontFooter: React.FC = () => {
                   {isAr ? 'تواصل معنا مباشرة' : 'Contact Support'}
                 </button>
               </li>
+
+              {/* Dynamically Render Custom Pages in Footer */}
+              {footerCustomPages.map((cp: any) => (
+                <li key={cp.id}>
+                  <button
+                    onClick={() => {
+                      navigateToCustomPage(cp.id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="hover:text-blue-400 transition text-start flex items-center gap-1"
+                  >
+                    <span>•</span>
+                    <span>{isAr ? cp.title_ar || cp.title : cp.title_en || cp.title_ar || cp.title}</span>
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -262,7 +317,13 @@ export const StorefrontFooter: React.FC = () => {
 
         {/* Bottom Copyright */}
         <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
-          <p>© {new Date().getFullYear()} {storeName}. {isAr ? 'جميع الحقوق محفوظة للمصنع.' : 'All rights reserved.'}</p>
+          <p>
+            {footerConfig.copyright_ar && isAr
+              ? footerConfig.copyright_ar.replace('{year}', new Date().getFullYear().toString())
+              : footerConfig.copyright_en && !isAr
+              ? footerConfig.copyright_en.replace('{year}', new Date().getFullYear().toString())
+              : `© ${new Date().getFullYear()} ${storeName}. ${isAr ? 'جميع الحقوق محفوظة للمصنع.' : 'All rights reserved.'}`}
+          </p>
           <div className="flex items-center gap-2 text-slate-400">
             <span>Powered by</span>
             <span className="font-black text-white bg-slate-800 px-2 py-0.5 rounded text-[11px] border border-slate-700">

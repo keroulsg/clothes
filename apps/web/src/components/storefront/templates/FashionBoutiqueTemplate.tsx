@@ -14,6 +14,11 @@ import {
   Mail,
   MapPin,
   RefreshCw,
+  Scissors,
+  Package,
+  Award,
+  Building2,
+  Layers,
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
@@ -51,6 +56,15 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   const cardBorderColor = layoutConfig.card_border_color || '';
   const cardBorderRadius = layoutConfig.card_border_radius || 'md';
   const cardShadow = layoutConfig.card_shadow || 'md';
+  const containerWidth = layoutConfig.container_width || 'boxed_standard';
+  const containerWidthClass =
+    containerWidth === 'boxed_compact'
+      ? 'max-w-5xl mx-auto px-4 sm:px-6'
+      : containerWidth === 'wide'
+      ? 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10'
+      : containerWidth === 'full_width'
+      ? 'w-full px-4 sm:px-8 lg:px-12'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
 
   // Hero Banner Extraction (full ERP control)
   const heroBanner = themeConfig.hero_banner || {};
@@ -242,11 +256,85 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
     );
   };
 
-  // 2. Categories Bar Section (Pills, Circular Stories, or Grid Cards)
+  // 2. Categories Bar Section (Pills, Circular Stories, Grid Cards, or Factory Icon Cards)
   const renderCategoriesSection = () => {
+    if (categoriesStyle === 'factory_icon_cards') {
+      return (
+        <section className={`py-8 ${containerWidthClass} border-b border-slate-200 dark:border-slate-800`}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <span className="text-[11px] font-black tracking-wider uppercase text-blue-600 dark:text-blue-400">
+                {isAr ? 'خطوط التصنيع والأقسام' : 'Production Lines & Categories'}
+              </span>
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                {isAr ? 'تصفح تشكيلات المصنع المعتمدة' : 'Verified Factory Collections'}
+              </h3>
+            </div>
+            <span className="text-xs text-slate-400 font-mono hidden sm:inline">
+              {categories.length} {isAr ? 'أقسام إنتاج' : 'divisions'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat;
+              const count = cat === 'all' ? (variants?.length || 0) : (variants?.filter(v => getCategoryString(v.category) === cat).length || 0);
+
+              let CategoryIcon = Layers;
+              const catLower = String(cat).toLowerCase();
+              if (catLower === 'all') CategoryIcon = Award;
+              else if (catLower.includes('رجال') || catLower.includes('men')) CategoryIcon = Scissors;
+              else if (catLower.includes('حريم') || catLower.includes('نسائ') || catLower.includes('women')) CategoryIcon = Sparkles;
+              else if (catLower.includes('طفل') || catLower.includes('أطفال') || catLower.includes('kid') || catLower.includes('baby')) CategoryIcon = Sparkles;
+              else if (catLower.includes('يونيفورم') || catLower.includes('uniform') || catLower.includes('عمل')) CategoryIcon = Building2;
+              else if (catLower.includes('جملة') || catLower.includes('wholesale')) CategoryIcon = Package;
+
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`p-4 rounded-2xl border text-start transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[110px] group ${
+                    isSelected
+                      ? 'shadow-lg ring-2 ring-blue-500/30 scale-[1.02]'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 bg-white dark:bg-slate-900/60 hover:shadow-md'
+                  }`}
+                  style={isSelected ? { borderColor: primaryColor, backgroundColor: isDark ? '#0f172a' : '#ffffff' } : {}}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-blue-50 dark:group-hover:bg-blue-950 group-hover:text-blue-500'
+                      }`}
+                      style={isSelected ? { backgroundColor: primaryColor } : {}}
+                    >
+                      <CategoryIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                      {count}
+                    </span>
+                  </div>
+
+                  <div className="mt-3">
+                    <span className="text-xs sm:text-sm font-extrabold truncate block text-slate-900 dark:text-white">
+                      {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All Collection') : cat}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium block truncate mt-0.5">
+                      {cat === 'all' ? (isAr ? 'إنتاج كامل المصنع' : 'All factory catalog') : (isAr ? 'إنتاج خط التصنيع' : 'Production line')}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
     if (categoriesStyle === 'circular_stories') {
       return (
-        <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-slate-200 dark:border-slate-800">
+        <section className={`py-8 ${containerWidthClass} border-b border-slate-200 dark:border-slate-800`}>
           <div className="flex items-center gap-6 overflow-x-auto pb-4 scrollbar-none">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat;
@@ -293,7 +381,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
 
     if (categoriesStyle === 'grid_cards') {
       return (
-        <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-slate-200 dark:border-slate-800">
+        <section className={`py-8 ${containerWidthClass} border-b border-slate-200 dark:border-slate-800`}>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat;
@@ -322,7 +410,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
 
     // Default: Pills style
     return (
-      <section className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800">
+      <section className={`py-6 ${containerWidthClass} flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800`}>
         <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full">
           {categories.map((cat) => (
             <button
@@ -350,7 +438,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   const renderPromotionsSection = () => {
     if (promoBanners.length === 0) return null;
     return (
-      <section className="py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section className={`py-10 ${containerWidthClass}`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {promoBanners.map((promo: any) => (
             <div
@@ -451,7 +539,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
         : 'aspect-[3/4]';
 
     return (
-      <section id="products" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section id="products" className={`py-12 ${containerWidthClass}`}>
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
@@ -641,7 +729,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   // 5. Brand Heritage & Trust Badges Section
   const renderStorySection = () => (
     <section className="py-12 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
-      <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+      <div className={`${containerWidthClass} grid grid-cols-2 md:grid-cols-4 gap-6 text-center`}>
         <div className="flex flex-col items-center gap-1.5 p-3">
           <Truck className="w-6 h-6 text-sky-500" />
           <h4 className="font-bold text-sm">{isAr ? 'شحن فوري سريع' : 'Express Delivery'}</h4>
@@ -668,7 +756,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
 
   // 6. Wholesale B2B Callout
   const renderWholesaleCtaSection = () => (
-    <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <section className={`py-12 ${containerWidthClass}`}>
       <div className="rounded-3xl p-8 bg-gradient-to-r from-slate-900 to-sky-950 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-sky-800/40">
         <div className="space-y-2">
           <span className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider">
@@ -698,7 +786,7 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   const renderContactSection = () => {
     const contact = themeConfig.contact || {};
     return (
-      <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section className={`py-12 ${containerWidthClass}`}>
         <div className="p-8 rounded-3xl bg-slate-900 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h4 className="text-2xl font-black">{isAr ? 'تواصل مع فريق التصميم والإنتاج' : 'Contact Our Design Team'}</h4>

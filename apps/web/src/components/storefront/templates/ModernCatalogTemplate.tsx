@@ -13,6 +13,10 @@ import {
   Phone,
   Mail,
   MapPin,
+  Award,
+  Building2,
+  Scissors,
+  Layers,
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
@@ -54,6 +58,16 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   const cardShadow = layoutConfig.card_shadow || 'sm';
   const cardImageAspect = layoutConfig.card_image_aspect || 'wide';
   const cardImageFit = layoutConfig.card_image_fit || 'cover';
+  const categoriesStyle = layoutConfig.categories_style || 'pills';
+  const containerWidth = layoutConfig.container_width || 'boxed_standard';
+  const containerWidthClass =
+    containerWidth === 'boxed_compact'
+      ? 'max-w-5xl mx-auto px-4 sm:px-6'
+      : containerWidth === 'wide'
+      ? 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10'
+      : containerWidth === 'full_width'
+      ? 'w-full px-4 sm:px-8 lg:px-12'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
 
   // Hero Display Controls
   const heroHeight = heroBanner?.height || 'standard';
@@ -228,27 +242,92 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   };
 
   // 2. Categories Bar Section
-  const renderCategoriesSection = () => (
-    <section className="mb-6 flex flex-wrap items-center gap-2">
-      {categories.map((c: any) => (
-        <button
-          key={c.id}
-          type="button"
-          onClick={() => setSelectedCategory(c.id)}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-            selectedCategory === c.id
-              ? 'text-white shadow-sm'
-              : isDark
-              ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-          }`}
-          style={selectedCategory === c.id ? { backgroundColor: primaryColor } : {}}
-        >
-          {isAr ? c.name_ar : c.name_en}
-        </button>
-      ))}
-    </section>
-  );
+  const renderCategoriesSection = () => {
+    if (categoriesStyle === 'factory_icon_cards') {
+      return (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              {isAr ? 'خطوط التوريد والتصنيع' : 'Production Lines & Supply'}
+            </span>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {categories.length} {isAr ? 'أقسام' : 'categories'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {categories.map((c: any) => {
+              const isSelected = selectedCategory === c.id;
+              const count = c.id === 'all'
+                ? (variants?.length || 0)
+                : (variants?.filter(v => getCategoryString(v.category) === c.id).length || 0);
+
+              let CategoryIcon = Layers;
+              const nameLower = (c.name_ar + ' ' + c.name_en).toLowerCase();
+              if (c.id === 'all') CategoryIcon = Award;
+              else if (nameLower.includes('رجال') || nameLower.includes('men')) CategoryIcon = Scissors;
+              else if (nameLower.includes('حريم') || nameLower.includes('نسائ') || nameLower.includes('women')) CategoryIcon = Sparkles;
+              else if (nameLower.includes('يونيفورم') || nameLower.includes('uniform') || nameLower.includes('عمل')) CategoryIcon = Building2;
+              else if (nameLower.includes('جملة') || nameLower.includes('wholesale')) CategoryIcon = Package;
+
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(c.id)}
+                  className={`p-3.5 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between min-h-[100px] group ${
+                    isSelected
+                      ? 'shadow-md ring-2 ring-blue-500/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 bg-white dark:bg-slate-900'
+                  }`}
+                  style={isSelected ? { borderColor: primaryColor } : {}}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                      style={isSelected ? { backgroundColor: primaryColor } : {}}
+                    >
+                      <CategoryIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                      {count}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-xs font-bold truncate block">{isAr ? c.name_ar : c.name_en}</span>
+                    <span className="text-[9px] text-slate-400 block truncate mt-0.5">{isAr ? 'توريد مصنع' : 'Factory supply'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="mb-6 flex flex-wrap items-center gap-2">
+        {categories.map((c: any) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setSelectedCategory(c.id)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              selectedCategory === c.id
+                ? 'text-white shadow-sm'
+                : isDark
+                ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+            style={selectedCategory === c.id ? { backgroundColor: primaryColor } : {}}
+          >
+            {isAr ? c.name_ar : c.name_en}
+          </button>
+        ))}
+      </section>
+    );
+  };
 
   // 3. Promotional Banners Section
   const renderPromotionsSection = () => {
@@ -684,7 +763,7 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={`${containerWidthClass} py-8`}>
         {activeSections.map((sec) => (
           <React.Fragment key={sec.id}>
             {renderSectionById(sec.id)}

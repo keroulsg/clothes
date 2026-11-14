@@ -14,12 +14,17 @@ import {
   Award,
   Layers,
   FileText,
+  CheckCircle2,
+  ArrowRight,
+  ArrowLeft,
+  ShoppingBag,
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
+import { api } from '../../../api/client';
 
 interface StorefrontContentPageProps {
-  pageType: 'about' | 'contact' | 'policies';
+  pageType: 'about' | 'contact' | 'policies' | 'custom';
 }
 
 export const StorefrontContentPage: React.FC<StorefrontContentPageProps> = ({ pageType }) => {
@@ -30,12 +35,18 @@ export const StorefrontContentPage: React.FC<StorefrontContentPageProps> = ({ pa
     tenantInfo,
     setActiveView,
     addToast,
+    activeCustomPageId,
   } = useStorefrontCommerce();
 
   const themeConfig = storeSettings?.theme_config || {};
   const storeName = storeSettings?.store_name || tenantInfo?.name || (isAr ? 'مصنع الملابس الجاهزة' : 'Apparel Factory');
   const whatsappNumber = storeSettings?.contact_whatsapp || tenantInfo?.phone || '+201000000000';
   const cleanWhatsapp = whatsappNumber.replace(/[^0-9]/g, '');
+
+  const customPages = Array.isArray(themeConfig.custom_pages) ? themeConfig.custom_pages : [];
+  const customPage = customPages.find(
+    (p: any) => p.id === activeCustomPageId || p.slug === activeCustomPageId
+  );
 
   // Contact form local state
   const [contactName, setContactName] = useState('');
@@ -92,7 +103,11 @@ export const StorefrontContentPage: React.FC<StorefrontContentPageProps> = ({ pa
               ? isAr ? 'عن المصنع والمتجر' : 'About Factory Store'
               : pageType === 'contact'
               ? isAr ? 'تواصل مع المصنع' : 'Contact Us'
-              : isAr ? 'سياسات وشروط المتجر' : 'Store Policies'}
+              : pageType === 'policies'
+              ? isAr ? 'سياسات وشروط المتجر' : 'Store Policies'
+              : customPage
+              ? isAr ? customPage.title_ar || customPage.title : customPage.title_en || customPage.title_ar || customPage.title
+              : isAr ? 'صفحة مخصصة' : 'Custom Page'}
           </span>
         </div>
 
@@ -466,6 +481,163 @@ export const StorefrontContentPage: React.FC<StorefrontContentPageProps> = ({ pa
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ----------------- 4. CUSTOM PAGES ----------------- */}
+        {pageType === 'custom' && (
+          <div className="space-y-10">
+            {customPage ? (
+              <div className="space-y-8">
+                {/* Hero / Header of Custom Page */}
+                <div className="relative rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white shadow-xl">
+                  {customPage.featured_image && (
+                    <div className="relative h-64 sm:h-80 w-full overflow-hidden">
+                      <img
+                        src={api.getMediaUrl(customPage.featured_image)}
+                        alt={isAr ? customPage.title_ar || customPage.title : customPage.title_en || customPage.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+                    </div>
+                  )}
+
+                  <div className={`p-6 sm:p-10 space-y-4 ${customPage.featured_image ? 'relative -mt-16 sm:-mt-24 z-10' : ''}`}>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 backdrop-blur-md">
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>{storeName}</span>
+                      <span>•</span>
+                      <span>{isAr ? 'توثيق رسمي' : 'Official Page'}</span>
+                    </div>
+
+                    <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
+                      {isAr ? customPage.title_ar || customPage.title : customPage.title_en || customPage.title_ar || customPage.title}
+                    </h1>
+
+                    {(customPage.subtitle_ar || customPage.subtitle_en) && (
+                      <p className="text-sm sm:text-base text-slate-300 max-w-2xl leading-relaxed">
+                        {isAr ? customPage.subtitle_ar || customPage.subtitle_en : customPage.subtitle_en || customPage.subtitle_ar}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Content Body */}
+                <div className="p-6 sm:p-10 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                  {(() => {
+                    const rawContent = isAr
+                      ? customPage.content_ar || customPage.content_en || customPage.content || ''
+                      : customPage.content_en || customPage.content_ar || customPage.content || '';
+                    const lines = rawContent.split('\n');
+
+                    return (
+                      <div className="space-y-4 text-slate-700 dark:text-slate-300 text-sm sm:text-base leading-relaxed">
+                        {lines.map((line: string, idx: number) => {
+                          const trimmed = line.trim();
+                          if (!trimmed) {
+                            return <div key={idx} className="h-2" />;
+                          }
+                          if (trimmed.startsWith('### ')) {
+                            return (
+                              <h4 key={idx} className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white pt-3">
+                                {trimmed.replace(/^###\s+/, '')}
+                              </h4>
+                            );
+                          }
+                          if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+                            return (
+                              <h3 key={idx} className="font-black text-lg sm:text-xl text-slate-900 dark:text-white pt-4 pb-1 border-b border-slate-200 dark:border-slate-800">
+                                {trimmed.replace(/^#+\s+/, '')}
+                              </h3>
+                            );
+                          }
+                          if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ')) {
+                            return (
+                              <div key={idx} className="flex items-start gap-2.5 ms-2">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-1" />
+                                <span>{trimmed.replace(/^[-*•]\s+/, '')}</span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <p key={idx} className="text-slate-600 dark:text-slate-400">
+                              {trimmed}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Actions & Inquiry Footer */}
+                  <div className="pt-8 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {cleanWhatsapp && (
+                        <a
+                          href={`https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(
+                            isAr
+                              ? `مرحباً، أستفسر بخصوص صفحة: ${customPage.title_ar || customPage.title}`
+                              : `Hello, inquiry regarding: ${customPage.title_en || customPage.title}`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm px-5 py-2.5 rounded-xl font-bold transition shadow-sm"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>{isAr ? 'استفسار عبر واتساب المصنع' : 'WhatsApp Inquiry'}</span>
+                        </a>
+                      )}
+
+                      <Button
+                        variant="primary"
+                        className="text-xs sm:text-sm rounded-xl inline-flex items-center gap-2"
+                        onClick={() => {
+                          setActiveView('shop');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>{isAr ? 'تصفح تشكيلة الملابس' : 'Browse Garment Catalog'}</span>
+                      </Button>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      className="text-xs text-slate-500 inline-flex items-center gap-1.5"
+                      onClick={() => {
+                        setActiveView('home');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    >
+                      <span>{isAr ? 'العودة للرئيسية' : 'Back to Home'}</span>
+                      {isAr ? <ArrowLeft className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-16 px-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 max-w-lg mx-auto">
+                <FileText className="w-12 h-12 text-slate-400 mx-auto" />
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  {isAr ? 'الصفحة قيد الإعداد أو غير موجودة' : 'Page Not Found or Under Setup'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {isAr
+                    ? 'لم يتم العثور على محتوى لهذه الصفحة أو تم تعديل الرابط في استوديو التصميم.'
+                    : 'The requested page content is not available or has been modified in Design Studio.'}
+                </p>
+                <Button
+                  variant="primary"
+                  className="text-xs rounded-xl"
+                  onClick={() => {
+                    setActiveView('home');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  {isAr ? 'العودة لمتجر المصنع' : 'Return to Storefront'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

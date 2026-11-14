@@ -6,7 +6,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   FileSpreadsheet,
+  ArrowRight,
+  Sparkles,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { api } from '../../../api/client';
 import type { StorefrontTemplateProps } from './types';
 
 export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
@@ -17,12 +22,50 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   selectedCategory,
   setSelectedCategory,
   onSelectProduct,
+  onNavigateToShop,
+  onNavigateToCategories,
+  onNavigateToAbout,
+  onNavigateToContact,
+  onNavigateToPolicies,
   onOpenWholesaleModal,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#2563eb';
   const currency = storeSettings?.currency || 'EGP';
+
+  const heroBanner = themeConfig.hero_banner || {};
+  const isHeroEnabled = heroBanner.enabled !== false;
+  const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
+  const heroMobileImage = heroBanner.mobile_image || heroImage;
+  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'كتالوج المصنع للإنتاج المباشر والتوريدات' : 'Factory Direct Catalog & Supply');
+  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'موديلات جاهزة للشحن بأسعار الجملة والتجزئة من أرض المصنع مع إمكانية التعاقد والتوريد بكميات ضخمة.' : 'Export quality apparel ready for dispatch with tiered wholesale and corporate ordering.');
+  const heroBadge = heroBanner.badge || (isAr ? 'توريدات مصانع وشركات — B2B & Retail' : 'Wholesale & Retail Ready');
+  const heroCtaText = heroBanner.cta_text || (isAr ? 'تصفح كافة المعروضات' : 'Explore Full Catalog');
+  const heroCtaDestination = heroBanner.cta_destination || 'shop';
+
+  const handleHeroCtaClick = () => {
+    if (heroCtaDestination === 'categories' && onNavigateToCategories) onNavigateToCategories();
+    else if (heroCtaDestination === 'contact' && onNavigateToContact) onNavigateToContact();
+    else if (heroCtaDestination === 'about' && onNavigateToAbout) onNavigateToAbout();
+    else if (heroCtaDestination === 'policies' && onNavigateToPolicies) onNavigateToPolicies();
+    else if (onNavigateToShop) onNavigateToShop();
+    else {
+      const el = document.getElementById('catalog-grid');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {}
+  };
 
   const [stockOnlyFilter, setStockOnlyFilter] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'price_asc' | 'price_desc' | 'stock'>('default');
@@ -57,7 +100,56 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
     >
       {/* Catalog Body: Sidebar + Main Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Configurable Hero Banner */}
+        {isHeroEnabled && (
+          <section className="mb-8 rounded-3xl overflow-hidden relative shadow-lg min-h-[220px] sm:min-h-[280px] flex items-center bg-slate-900 text-white">
+            {heroImage ? (
+              <>
+                <picture className="absolute inset-0 w-full h-full block">
+                  {heroMobileImage && <source media="(max-width: 640px)" srcSet={api.getMediaUrl(heroMobileImage)} />}
+                  <img
+                    src={api.getMediaUrl(heroImage)}
+                    alt={heroTitle}
+                    className="w-full h-full object-cover"
+                  />
+                </picture>
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-transparent pointer-events-none" />
+              </>
+            ) : (
+              <>
+                <img
+                  src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80"
+                  alt={heroTitle}
+                  className="w-full h-full object-cover absolute inset-0 filter brightness-[0.4]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-transparent pointer-events-none" />
+              </>
+            )}
+            <div className="relative z-10 p-6 sm:p-10 max-w-2xl space-y-3">
+              {heroBadge && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{heroBadge}</span>
+                </div>
+              )}
+              <h2 className="text-2xl sm:text-4xl font-black leading-tight">{heroTitle}</h2>
+              <p className="text-xs sm:text-sm text-slate-200 line-clamp-2">{heroSubtitle}</p>
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleHeroCtaClick}
+                  style={{ backgroundColor: primaryColor }}
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white shadow-md hover:brightness-110 transition cursor-pointer inline-flex items-center gap-2"
+                >
+                  <span>{heroCtaText}</span>
+                  <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <div id="catalog-grid" className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar Filters */}
           <aside className="lg:col-span-1 space-y-6">
             <div
@@ -209,11 +301,11 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
                         >
                           {v.image ? (
                             <img
-                              src={v.image}
+                              src={api.getMediaUrl(v.image)}
                               alt={v.model_name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&q=80';
                               }}
                             />
                           ) : (
@@ -321,6 +413,61 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
             )}
           </section>
         </div>
+
+        {/* Promotional Banners Grid (if configured by owner) */}
+        {promoBanners.length > 0 && (
+          <section className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {promoBanners.map((promo: any) => (
+                <div
+                  key={promo.id}
+                  style={{ backgroundColor: promo.bg_color || undefined }}
+                  className="relative rounded-3xl overflow-hidden p-6 sm:p-8 flex flex-col justify-between min-h-[220px] shadow-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-900 to-indigo-900 text-white"
+                >
+                  {(promo.image_url || promo.image) && (
+                    <img
+                      src={api.getMediaUrl(promo.image_url || promo.image)}
+                      alt={promo.title}
+                      className="absolute inset-0 w-full h-full object-cover opacity-30 filter brightness-75"
+                    />
+                  )}
+                  <div className="relative z-10 space-y-2">
+                    {(promo.badge_text || promo.discount_code) && (
+                      <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-400 text-slate-950 shadow-sm">
+                        {promo.badge_text || `CODE: ${promo.discount_code}`}
+                      </span>
+                    )}
+                    <h4 className="text-2xl font-black">{promo.title}</h4>
+                    <p className="text-xs sm:text-sm text-blue-100 max-w-md">{promo.subtitle}</p>
+                  </div>
+                  <div className="relative z-10 pt-4 flex items-center justify-between gap-4">
+                    {(promo.discount_code || promo.badge_text) && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ الكود' : 'Copy Code')}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('catalog-grid');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-white text-blue-900 shadow-md hover:bg-blue-50 transition flex items-center gap-1.5 cursor-pointer ms-auto"
+                    >
+                      <span>{isAr ? 'تصفح العرض' : 'Browse Offer'}</span>
+                      <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

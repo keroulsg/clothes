@@ -23,6 +23,7 @@ import {
   Upload,
   Trash2,
   Copy,
+  Store,
   Plus,
   Compass,
   FileText,
@@ -303,11 +304,18 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
       secondary_color: secondaryColor,
       accent_color: accentColor,
       font_family: fontFamily,
-      logo_url: logoUrl,
+      logo_url: logoUrl?.trim() || '',
       announcement_bar_enabled: announcementEnabled,
       announcement_bar_text: announcementText,
-      hero_banner: heroBanner,
-      promo_banners: promoBanners,
+      hero_banner: {
+        ...heroBanner,
+        desktop_image: heroBanner.desktop_image?.trim() || '',
+        mobile_image: heroBanner.mobile_image?.trim() || '',
+      },
+      promo_banners: promoBanners.map((p: any) => ({
+        ...p,
+        image_url: (p.image_url || p.image || '')?.trim(),
+      })),
       sections,
       navigation: {
         header_links: headerLinks,
@@ -349,6 +357,27 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
       await fetchStudio();
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل نشر التعديلات' : 'Failed to publish changes'));
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Direct 1-Click Save & Publish Live
+  const handleSaveAndPublishDirect = async () => {
+    setIsPublishing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await api.storefront.saveDesignDraft(getFullPayload());
+      await api.storefront.publishDesign();
+      setSuccessMsg(
+        isAr
+          ? 'تم حفظ ونشر التعديلات بنجاح إلى المتجر الإلكتروني الحي! الصور والروابط معروضة الآن.'
+          : 'Successfully saved and published to live store! Images and banners are now live.'
+      );
+      await fetchStudio();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل حفظ ونشر التعديلات' : 'Failed to publish changes'));
     } finally {
       setIsPublishing(false);
     }
@@ -510,15 +539,27 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
             size="sm"
             onClick={() => onNavigateToLiveStore(true)}
             className="text-xs bg-slate-50 dark:bg-slate-800"
+            title={isAr ? 'معاينة التعديلات غير المنشورة' : 'Preview draft changes'}
           >
             <Eye className="w-3.5 h-3.5 me-1.5 text-amber-500" />
-            {isAr ? 'معاينة المسودة (Preview)' : 'Live Preview'}
+            {isAr ? 'معاينة المسودة' : 'Live Preview'}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateToLiveStore(false)}
+            className="text-xs bg-slate-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400"
+            title={isAr ? 'زيارة المتجر الإلكتروني المنشور حالياً' : 'Visit live published store'}
+          >
+            <Store className="w-3.5 h-3.5 me-1.5" />
+            {isAr ? 'زيارة المتجر الحي' : 'Live Store'}
           </Button>
 
           <Button
             variant="secondary"
             size="sm"
-            disabled={isSaving}
+            disabled={isSaving || isPublishing}
             onClick={handleSaveDraft}
             className="text-xs"
           >
@@ -529,12 +570,13 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
           <Button
             variant="primary"
             size="sm"
-            disabled={isPublishing}
-            onClick={() => setShowPublishModal(true)}
-            className="text-xs"
+            disabled={isPublishing || isSaving}
+            onClick={handleSaveAndPublishDirect}
+            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-bold"
+            title={isAr ? 'حفظ ونشر التعديلات فوراً على المتجر ليراها العملاء' : 'Save & publish directly to live store'}
           >
             <Send className="w-3.5 h-3.5 me-1.5" />
-            {isAr ? 'نشر للمتجر الحي' : 'Publish to Live'}
+            {isPublishing ? (isAr ? 'جاري النشر...' : 'Publishing...') : (isAr ? 'حفظ ونشر فوري للمتجر' : 'Save & Publish Live')}
           </Button>
 
           {onBackToOrders && (
@@ -748,6 +790,24 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                           <img src={api.getMediaUrl(heroBanner.desktop_image)} alt="Desktop Preview" className="h-full w-full object-cover" />
                         </div>
                       )}
+                      {mediaList.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر من مكتبة الوسائط المرفوعة:' : 'Or pick from uploaded media:'}</span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {mediaList.slice(0, 6).map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setHeroBanner({ ...heroBanner, desktop_image: m.url })}
+                                className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-blue-500 transition cursor-pointer"
+                                title={m.title || m.filename}
+                              >
+                                <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -773,6 +833,24 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                       {heroBanner.mobile_image && (
                         <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 h-24 bg-slate-100 flex items-center justify-center">
                           <img src={api.getMediaUrl(heroBanner.mobile_image)} alt="Mobile Preview" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      {mediaList.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر من مكتبة الوسائط المرفوعة:' : 'Or pick from uploaded media:'}</span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {mediaList.slice(0, 6).map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setHeroBanner({ ...heroBanner, mobile_image: m.url })}
+                                className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-amber-500 transition cursor-pointer"
+                                title={m.title || m.filename}
+                              >
+                                <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -829,27 +907,130 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                             <span>{isAr ? 'حذف' : 'Remove'}</span>
                           </button>
                         </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <input
-                            type="text"
-                            placeholder={isAr ? 'عنوان العرض...' : 'Offer title...'}
-                            value={promo.title}
-                            onChange={(e) => {
-                              const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, title: e.target.value } : p));
-                              setPromoBanners(updated);
-                            }}
-                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
-                          />
-                          <input
-                            type="text"
-                            placeholder={isAr ? 'نص الشارة (Badge)...' : 'Badge text...'}
-                            value={promo.badge_text}
-                            onChange={(e) => {
-                              const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, badge_text: e.target.value } : p));
-                              setPromoBanners(updated);
-                            }}
-                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
-                          />
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'عنوان العرض' : 'Offer Title'}</label>
+                            <input
+                              type="text"
+                              placeholder={isAr ? 'عنوان العرض...' : 'Offer title...'}
+                              value={promo.title}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, title: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'كود الخصم أو نص الشارة (Badge)' : 'Coupon Code / Badge'}</label>
+                            <input
+                              type="text"
+                              placeholder={isAr ? 'مثال: FACTORY20 أو خصم 20%...' : 'e.g. FACTORY20 or 20% OFF...'}
+                              value={promo.badge_text}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, badge_text: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'تفاصيل العرض' : 'Details / Subtitle'}</label>
+                            <input
+                              type="text"
+                              placeholder={isAr ? 'تفاصيل العرض...' : 'Offer details...'}
+                              value={promo.subtitle || ''}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, subtitle: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'وجهة الرابط' : 'Link Destination'}</label>
+                            <input
+                              type="text"
+                              placeholder="shop, categories, https://..."
+                              value={promo.link_url || 'shop'}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, link_url: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Promo Banner Image URL with Live Preview & Quick Picker */}
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            {isAr ? 'رابط صورة العرض (Promo Image URL)' : 'Promo Image URL'}
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              value={promo.image_url || (promo as any).image || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, image_url: val, image: val } : p));
+                                setPromoBanners(updated);
+                              }}
+                              placeholder="https://... أو /storage/..."
+                              className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 font-mono"
+                            />
+                            {(promo.image_url || (promo as any).image) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, image_url: '', image: '' } : p));
+                                  setPromoBanners(updated);
+                                }}
+                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
+                                title={isAr ? 'مسح الصورة' : 'Clear Image'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {(promo.image_url || (promo as any).image) && (
+                            <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 h-20 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                              <img
+                                src={api.getMediaUrl(promo.image_url || (promo as any).image)}
+                                alt="Promo Preview"
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          )}
+
+                          {mediaList.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] text-slate-400 block">
+                                {isAr ? 'أو اختر صورة للبنر من مكتبة الوسائط:' : 'Or pick an image from media library:'}
+                              </span>
+                              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                                {mediaList.slice(0, 6).map((m) => (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, image_url: m.url, image: m.url } : p));
+                                      setPromoBanners(updated);
+                                    }}
+                                    className="w-9 h-9 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-emerald-500 transition cursor-pointer"
+                                    title={m.title || m.filename}
+                                  >
+                                    <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-cover" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1101,15 +1282,27 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
               </div>
 
               {/* Logo URL */}
-              <div className="space-y-2 text-xs">
-                <label className="block font-bold">{isAr ? 'رابط شعار المصنع (Logo Image URL)' : 'Logo Image URL'}</label>
+              <div className="space-y-3 text-xs p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold">{isAr ? 'شعار المتجر الرسمي (Official Store Logo)' : 'Official Store Logo'}</label>
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="text-rose-500 hover:text-rose-700 text-xs flex items-center gap-1 font-semibold"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isAr ? 'حذف الشعار' : 'Remove'}</span>
+                    </button>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="url"
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
-                    placeholder="https://.../logo.png"
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    placeholder="https://.../logo.png أو رابط من مكتبة الوسائط"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
                   />
                   {logoUrl && (
                     <button
@@ -1121,6 +1314,44 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     </button>
                   )}
                 </div>
+
+                {logoUrl && (
+                  <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="h-12 w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-1 overflow-hidden">
+                      <img
+                        src={api.getMediaUrl(logoUrl)}
+                        alt="Logo Preview"
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+                        }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">{isAr ? 'معاينة الشعار الحالي' : 'Current Logo Preview'}</p>
+                      <p className="text-[10px] text-slate-400">{isAr ? 'يظهر في أعلى الهيدر بجميع صفحات المتجر' : 'Displays in header across all storefront pages'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {mediaList.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر الشعار من مكتبة الوسائط المرفوعة:' : 'Or pick logo from uploaded media:'}</span>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {mediaList.slice(0, 6).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setLogoUrl(m.url)}
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-blue-500 transition cursor-pointer p-0.5 bg-white dark:bg-slate-900"
+                          title={m.title || m.filename}
+                        >
+                          <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Announcement Bar */}
@@ -1269,8 +1500,81 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
               <div>
                 <h4 className="font-extrabold text-base mb-1">{isAr ? 'الألوان والخطوط وهوية المتجر' : 'Branding & Color Palettes'}</h4>
                 <p className="text-xs text-slate-500">
-                  {isAr ? 'تخصيص الألوان الأساسية ونوع الخط العربي للمتجر' : 'Select color theme and typography'}
+                  {isAr ? 'تخصيص الألوان الأساسية، الشعار الرسمي، ونوع الخط العربي للمتجر' : 'Select color theme, official logo, and typography'}
                 </p>
+              </div>
+
+              {/* Official Store Logo */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold">{isAr ? 'شعار المتجر الرسمي (Official Store Logo)' : 'Official Store Logo'}</label>
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="text-rose-500 hover:text-rose-700 text-xs flex items-center gap-1 font-semibold"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isAr ? 'حذف الشعار' : 'Remove'}</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    placeholder="https://.../logo.png أو رابط من مكتبة الوسائط"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                  />
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="p-2.5 text-rose-500 hover:bg-rose-50 rounded-xl"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {logoUrl && (
+                  <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="h-12 w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-1 overflow-hidden">
+                      <img
+                        src={api.getMediaUrl(logoUrl)}
+                        alt="Logo Preview"
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+                        }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">{isAr ? 'معاينة الشعار الحالي' : 'Current Logo Preview'}</p>
+                      <p className="text-[10px] text-slate-400">{isAr ? 'يظهر في أعلى الهيدر بجميع صفحات المتجر' : 'Displays in header across all storefront pages'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {mediaList.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر الشعار من مكتبة الوسائط المرفوعة:' : 'Or pick logo from uploaded media:'}</span>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {mediaList.slice(0, 6).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setLogoUrl(m.url)}
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-blue-500 transition cursor-pointer p-0.5 bg-white dark:bg-slate-900"
+                          title={m.title || m.filename}
+                        >
+                          <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Preset Color Schemes */}

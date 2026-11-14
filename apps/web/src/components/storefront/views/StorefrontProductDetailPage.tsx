@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
+import { api } from '../../../api/client';
 
 export const StorefrontProductDetailPage: React.FC = () => {
   const {
@@ -47,8 +48,13 @@ export const StorefrontProductDetailPage: React.FC = () => {
 
   // Gallery state
   const images = useMemo(() => {
-    if (product?.image_url) {
-      return [product.image_url, product.image_url, product.image_url];
+    const rawImage = product?.image_url || product?.image;
+    if (Array.isArray(product?.gallery) && product.gallery.length > 0) {
+      return product.gallery.map((g: any) => api.getMediaUrl(g.url || g));
+    }
+    if (rawImage) {
+      const full = api.getMediaUrl(rawImage);
+      return [full, full, full];
     }
     return [
       'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80',
@@ -207,7 +213,7 @@ export const StorefrontProductDetailPage: React.FC = () => {
 
             {/* Thumbnail Carousel */}
             <div className="grid grid-cols-4 gap-3">
-              {images.map((img, idx) => (
+              {images.map((img: string, idx: number) => (
                 <button
                   key={idx}
                   onClick={() => setActiveImageIndex(idx)}
@@ -573,10 +579,14 @@ export const StorefrontProductDetailPage: React.FC = () => {
                   <div className="aspect-[4/5] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
                     <img
                       src={
-                        rel.image_url ||
-                        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80'
+                        (rel.image_url || rel.image)
+                          ? api.getMediaUrl(rel.image_url || rel.image)
+                          : 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80'
                       }
                       alt={rel.name}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                   </div>

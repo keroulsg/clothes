@@ -6,7 +6,10 @@ import {
   ArrowRight,
   Smile,
   Award,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { api } from '../../../api/client';
 import type { StorefrontTemplateProps } from './types';
 
 export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
@@ -15,12 +18,50 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   storeSettings,
   variants,
   onSelectProduct,
+  onNavigateToShop,
+  onNavigateToCategories,
+  onNavigateToAbout,
+  onNavigateToContact,
+  onNavigateToPolicies,
   onOpenWholesaleModal,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#f97316';
   const currency = storeSettings?.currency || 'EGP';
+
+  const heroBanner = themeConfig.hero_banner || {};
+  const isHeroEnabled = heroBanner.enabled !== false;
+  const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
+  const heroMobileImage = heroBanner.mobile_image || heroImage;
+  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'أجمل إطلالات طفلك من المصنع مباشرة' : 'Pure Comfort for Little Smiles');
+  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'ملابس أطفال ومواليد مصممة بخيوط قطنية نقية 100% بدون أي مواد كيميائية ضارة. مقاسات دقيقة وتصاميم مريحة للحركة واللعب.' : 'Gentle, 100% natural cotton garments crafted with non-toxic dyes, tagless labels, and stretchy designs for play and nap time.');
+  const heroBadge = heroBanner.badge || (isAr ? 'نعومة فائقة وألوان مبهجة تناسب براءة طفلك' : 'Ultra-soft & Gentle Baby Care');
+  const heroCtaText = heroBanner.cta_text || (isAr ? 'تصفح ملابس الأطفال' : 'Explore Outfits');
+  const heroCtaDestination = heroBanner.cta_destination || 'shop';
+
+  const handleHeroCtaClick = () => {
+    if (heroCtaDestination === 'categories' && onNavigateToCategories) onNavigateToCategories();
+    else if (heroCtaDestination === 'contact' && onNavigateToContact) onNavigateToContact();
+    else if (heroCtaDestination === 'about' && onNavigateToAbout) onNavigateToAbout();
+    else if (heroCtaDestination === 'policies' && onNavigateToPolicies) onNavigateToPolicies();
+    else if (onNavigateToShop) onNavigateToShop();
+    else {
+      const el = document.getElementById('products');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {}
+  };
 
   const [selectedAge, setSelectedAge] = useState<string>('all');
 
@@ -40,37 +81,60 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
       dir={isAr ? 'rtl' : 'ltr'}
     >
       {/* Warm Hero Banner */}
-      <section className="py-10 md:py-16 px-4 max-w-7xl mx-auto">
-        <div className="relative rounded-3xl overflow-hidden p-8 sm:p-12 bg-gradient-to-r from-orange-400 via-amber-300 to-rose-300 text-slate-900 shadow-xl">
-          <div className="max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-xs font-black text-orange-600 shadow-sm">
-              <Smile className="w-4 h-4" />
-              <span>{isAr ? 'نعومة فائقة وألوان مبهجة تناسب براءة طفلك' : 'Ultra-soft & Gentle Baby Care'}</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black leading-tight text-slate-950">
-              {storeSettings?.banner_title || (isAr ? 'أجمل إطلالات طفلك من المصنع مباشرة' : 'Pure Comfort for Little Smiles')}
-            </h2>
-            <p className="text-sm sm:text-base font-medium text-slate-800 leading-relaxed">
-              {storeSettings?.banner_subtitle ||
-                (isAr
-                  ? 'ملابس أطفال ومواليد مصممة بخيوط قطنية نقية 100% بدون أي مواد كيميائية ضارة. مقاسات دقيقة وتصاميم مريحة للحركة واللعب.'
-                  : 'Gentle, 100% natural cotton garments crafted with non-toxic dyes, tagless labels, and stretchy designs for play and nap time.')}
-            </p>
-            <div className="pt-2 flex flex-wrap items-center gap-3">
-              <a
-                href="#products"
-                className="bg-slate-950 text-white font-black text-xs sm:text-sm px-6 py-3 rounded-full shadow-lg hover:bg-slate-800 transition-all inline-flex items-center gap-2"
-              >
-                <span>{isAr ? 'تصفح ملابس الأطفال' : 'Explore Outfits'}</span>
-                <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
-              </a>
-              <span className="text-xs font-bold text-slate-800 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                {isAr ? '✨ دفع عند الاستلام أو InstaPay' : '✨ COD or InstaPay'}
-              </span>
+      {isHeroEnabled && (
+        <section className="py-10 md:py-16 px-4 max-w-7xl mx-auto">
+          <div className="relative rounded-3xl overflow-hidden shadow-xl min-h-[360px] flex items-center">
+            {heroImage ? (
+              <>
+                <picture className="absolute inset-0 w-full h-full block">
+                  {heroMobileImage && <source media="(max-width: 640px)" srcSet={api.getMediaUrl(heroMobileImage)} />}
+                  <img
+                    src={api.getMediaUrl(heroImage)}
+                    alt={heroTitle}
+                    className="w-full h-full object-cover"
+                  />
+                </picture>
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-transparent dark:from-slate-950/95 dark:via-slate-900/90 dark:to-slate-900/50 pointer-events-none" />
+              </>
+            ) : (
+              <>
+                <img
+                  src="https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=1200&q=80"
+                  alt={heroTitle}
+                  className="w-full h-full object-cover absolute inset-0"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-transparent dark:from-slate-950/95 dark:via-slate-900/90 dark:to-slate-900/50 pointer-events-none" />
+              </>
+            )}
+
+            <div className="relative z-10 p-8 sm:p-12 max-w-2xl space-y-4">
+              <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-xs font-black text-orange-600 shadow-sm">
+                <Smile className="w-4 h-4" />
+                <span>{heroBadge}</span>
+              </div>
+              <h2 className="text-3xl sm:text-5xl font-black leading-tight text-slate-950 dark:text-white">
+                {heroTitle}
+              </h2>
+              <p className="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-200 leading-relaxed">
+                {heroSubtitle}
+              </p>
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleHeroCtaClick}
+                  className="bg-slate-950 text-white font-black text-xs sm:text-sm px-6 py-3 rounded-full shadow-lg hover:bg-slate-800 transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <span>{heroCtaText}</span>
+                  <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
+                </button>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                  {isAr ? '✨ دفع عند الاستلام أو InstaPay' : '✨ COD or InstaPay'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Safety & Quality Badges */}
       <section className="py-6 max-w-7xl mx-auto px-4">
@@ -148,11 +212,11 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
                 >
                   {v.image ? (
                     <img
-                      src={v.image}
+                      src={api.getMediaUrl(v.image)}
                       alt={v.model_name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80';
                       }}
                     />
                   ) : (
@@ -236,6 +300,64 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
           })}
         </div>
       </section>
+
+      {/* Promotional Banners Grid (if configured by owner) */}
+      {promoBanners.length > 0 && (
+        <section className="py-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-amber-200/60 dark:border-amber-900/30">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {promoBanners.map((promo: any) => (
+              <div
+                key={promo.id}
+                style={{ backgroundColor: promo.bg_color || undefined }}
+                className="relative rounded-3xl overflow-hidden p-6 sm:p-8 flex flex-col justify-between min-h-[220px] shadow-lg border border-amber-200 dark:border-amber-900/40 bg-gradient-to-r from-orange-500 to-amber-500 text-white"
+              >
+                {(promo.image_url || promo.image) && (
+                  <img
+                    src={api.getMediaUrl(promo.image_url || promo.image)}
+                    alt={promo.title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-30 filter brightness-75"
+                  />
+                )}
+                <div className="relative z-10 space-y-2">
+                  {(promo.badge_text || promo.discount_code) && (
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold bg-white text-orange-600 shadow-sm">
+                      {promo.badge_text || `CODE: ${promo.discount_code}`}
+                    </span>
+                  )}
+                  <h4 className="text-2xl font-black">{promo.title}</h4>
+                  <p className="text-xs sm:text-sm text-amber-100 max-w-md">{promo.subtitle}</p>
+                </div>
+                <div className="relative z-10 pt-4 flex items-center justify-between gap-4">
+                  {(promo.discount_code || promo.badge_text) && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
+                      className="px-3 py-1.5 rounded-full text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ الكود' : 'Copy Code')}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onNavigateToShop) onNavigateToShop();
+                      else {
+                        const el = document.getElementById('products');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    className="px-4 py-2 rounded-full text-xs font-black bg-slate-950 text-white shadow-md hover:bg-slate-800 transition flex items-center gap-1.5 cursor-pointer ms-auto"
+                  >
+                    <span>{isAr ? 'تسوق العرض 🎈' : 'Shop Offer 🎈'}</span>
+                    <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

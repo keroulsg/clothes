@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
+import { api } from '../../../api/client';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -98,6 +99,18 @@ export const CartDrawer: React.FC = () => {
                   key={item.variant_id}
                   className="flex gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 relative group"
                 >
+                  {((item as any).image_url || (item as any).image) && (
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 border border-slate-200 dark:border-slate-700">
+                      <img
+                        src={api.getMediaUrl((item as any).image_url || (item as any).image)}
+                        alt={item.product_name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                   {/* Item info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">

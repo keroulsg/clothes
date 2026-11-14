@@ -297,9 +297,9 @@ export function App() {
       const slug = parts[0] || undefined;
       return { mode: 'store' as const, tenantSlug: slug };
     }
-    if (raw === 'store' || raw === 'shop') {
+    if (raw === 'store' || raw === 'shop' || raw === 'products' || raw === 'collection' || raw === 'catalog') {
       const storedTenant = api.auth.getStoredTenant();
-      const slug = (storedTenant as any)?.subdomain || storedTenant?.code || 'msnaa-aldlta-llmlabs-algahz-429';
+      const slug = (storedTenant as any)?.subdomain || storedTenant?.code || '01a14f55-ecd1-7056-98aa-fa5dd1aa9a3a';
       return { mode: 'store' as const, tenantSlug: slug };
     }
 

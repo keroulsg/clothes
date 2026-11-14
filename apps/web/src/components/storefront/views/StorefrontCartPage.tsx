@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
+import { api } from '../../../api/client';
 
 export const StorefrontCartPage: React.FC = () => {
   const {
@@ -113,8 +114,15 @@ export const StorefrontCartPage: React.FC = () => {
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
                       <img
-                        src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=300&auto=format&fit=crop&q=80"
+                        src={
+                          ((item as any).image_url || (item as any).image)
+                            ? api.getMediaUrl((item as any).image_url || (item as any).image)
+                            : 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=300&auto=format&fit=crop&q=80'
+                        }
                         alt={item.product_name}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=300&auto=format&fit=crop&q=80';
+                        }}
                         className="w-full h-full object-cover"
                       />
                     </div>

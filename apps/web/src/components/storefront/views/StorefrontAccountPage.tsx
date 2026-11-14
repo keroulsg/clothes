@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
+import { api } from '../../../api/client';
 
 export const StorefrontAccountPage: React.FC = () => {
   const {
@@ -260,10 +261,14 @@ export const StorefrontAccountPage: React.FC = () => {
                     >
                       <img
                         src={
-                          item.image_url ||
-                          'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80'
+                          (item.image_url || item.image)
+                            ? api.getMediaUrl(item.image_url || item.image)
+                            : 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80'
                         }
-                        alt={item.name}
+                        alt={item.name || item.model_name}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80';
+                        }}
                         className="w-full h-full object-cover"
                       />
                       <button

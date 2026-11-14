@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Crown,
   Sparkles,
@@ -6,7 +6,10 @@ import {
   ShieldCheck,
   Award,
   Gem,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { api } from '../../../api/client';
 import type { StorefrontTemplateProps } from './types';
 
 export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
@@ -15,12 +18,50 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   storeSettings,
   variants,
   onSelectProduct,
+  onNavigateToShop,
+  onNavigateToCategories,
+  onNavigateToAbout,
+  onNavigateToContact,
+  onNavigateToPolicies,
   onOpenWholesaleModal,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#d97706';
   const currency = storeSettings?.currency || 'EGP';
+
+  const heroBanner = themeConfig.hero_banner || {};
+  const isHeroEnabled = heroBanner.enabled !== false;
+  const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
+  const heroMobileImage = heroBanner.mobile_image || heroImage;
+  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'فخامة لا تخطئها العين' : 'Timeless Elegance & Prestige');
+  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'قصات دقيقة تعكس روح الفخامة المعاصرة. قطع منسوجة خصيصاً للمناسبات الراقية والإطلالات التي تستحق التميز.' : 'Impeccable silhouettes meeting exquisite textiles. Tailored pieces crafted strictly for those who discern the art of fine dressing.');
+  const heroBadge = heroBanner.badge || (isAr ? 'إصدار فاخر محدود' : 'Limited Atelier Edition');
+  const heroCtaText = heroBanner.cta_text || (isAr ? 'اكتشف المجموعة' : 'Explore The Atelier');
+  const heroCtaDestination = heroBanner.cta_destination || 'shop';
+
+  const handleHeroCtaClick = () => {
+    if (heroCtaDestination === 'categories' && onNavigateToCategories) onNavigateToCategories();
+    else if (heroCtaDestination === 'contact' && onNavigateToContact) onNavigateToContact();
+    else if (heroCtaDestination === 'about' && onNavigateToAbout) onNavigateToAbout();
+    else if (heroCtaDestination === 'policies' && onNavigateToPolicies) onNavigateToPolicies();
+    else if (onNavigateToShop) onNavigateToShop();
+    else {
+      const el = document.getElementById('collection');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {}
+  };
 
   return (
     <div
@@ -30,36 +71,56 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
       dir={isAr ? 'rtl' : 'ltr'}
     >
       {/* Editorial Luxury Hero */}
-      <section className="relative py-20 sm:py-28 px-4 text-center border-b border-stone-200 dark:border-zinc-800">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div className="inline-flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs uppercase tracking-[0.3em] font-sans font-bold">
-            <Gem className="w-4 h-4" />
-            <span>{isAr ? 'إصدار فاخر محدود' : 'Limited Atelier Edition'}</span>
+      {isHeroEnabled && (
+        <section className="relative py-24 sm:py-32 px-4 text-center border-b border-stone-200 dark:border-zinc-800 overflow-hidden">
+          <div className="absolute inset-0 z-0">
+            {heroImage ? (
+              <picture className="w-full h-full block">
+                {heroMobileImage && <source media="(max-width: 640px)" srcSet={api.getMediaUrl(heroMobileImage)} />}
+                <img
+                  src={api.getMediaUrl(heroImage)}
+                  alt={heroTitle}
+                  className="w-full h-full object-cover filter brightness-[0.35]"
+                />
+              </picture>
+            ) : (
+              <img
+                src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=80"
+                alt={heroTitle}
+                className="w-full h-full object-cover filter brightness-[0.35]"
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-stone-950/40 pointer-events-none" />
           </div>
 
-          <h2 className="text-4xl sm:text-6xl lg:text-7xl font-serif font-normal tracking-tight leading-tight">
-            {storeSettings?.banner_title || (isAr ? 'فخامة لا تخطئها العين' : 'Timeless Elegance & Prestige')}
-          </h2>
+          <div className="relative z-10 max-w-4xl mx-auto space-y-6">
+            <div className="inline-flex items-center gap-2 text-amber-500 text-xs uppercase tracking-[0.3em] font-sans font-bold">
+              <Gem className="w-4 h-4" />
+              <span>{heroBadge}</span>
+            </div>
 
-          <p className="text-base sm:text-lg text-stone-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed font-sans font-light">
-            {storeSettings?.banner_subtitle ||
-              (isAr
-                ? 'قصات دقيقة تعكس روح الفخامة المعاصرة. قطع منسوجة خصيصاً للمناسبات الراقية والإطلالات التي تستحق التميز.'
-                : 'Impeccable silhouettes meeting exquisite textiles. Tailored pieces crafted strictly for those who discern the art of fine dressing.')}
-          </p>
+            <h2 className={`text-4xl sm:text-6xl lg:text-7xl font-serif font-normal tracking-tight leading-tight ${heroImage ? 'text-white' : ''}`}>
+              {heroTitle}
+            </h2>
 
-          <div className="pt-4 font-sans">
-            <a
-              href="#collection"
-              style={{ backgroundColor: primaryColor }}
-              className="text-stone-950 font-bold text-xs uppercase tracking-[0.2em] px-8 py-4 inline-flex items-center gap-3 shadow-2xl hover:brightness-110 transition-all"
-            >
-              <span>{isAr ? 'اكتشف المجموعة' : 'Explore The Atelier'}</span>
-              <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
-            </a>
+            <p className={`text-base sm:text-lg max-w-2xl mx-auto leading-relaxed font-sans font-light ${heroImage ? 'text-stone-300' : 'text-stone-500 dark:text-zinc-400'}`}>
+              {heroSubtitle}
+            </p>
+
+            <div className="pt-4 font-sans">
+              <button
+                type="button"
+                onClick={handleHeroCtaClick}
+                style={{ backgroundColor: primaryColor }}
+                className="text-stone-950 font-bold text-xs uppercase tracking-[0.2em] px-8 py-4 inline-flex items-center gap-3 shadow-2xl hover:brightness-110 transition-all cursor-pointer"
+              >
+                <span>{heroCtaText}</span>
+                <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Haute Couture Gallery Grid */}
       <section id="collection" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -92,11 +153,11 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
                 >
                   {v.image ? (
                     <img
-                      src={v.image}
+                      src={api.getMediaUrl(v.image)}
                       alt={v.model_name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=600&q=80';
                       }}
                     />
                   ) : (
@@ -179,6 +240,65 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
           })}
         </div>
       </section>
+
+      {/* Promotional Banners Grid (if configured by owner) */}
+      {promoBanners.length > 0 && (
+        <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-stone-200 dark:border-zinc-800 font-sans">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {promoBanners.map((promo: any) => (
+              <div
+                key={promo.id}
+                style={{ backgroundColor: promo.bg_color || undefined }}
+                className="relative p-8 sm:p-10 flex flex-col justify-between min-h-[240px] border border-amber-600/40 bg-zinc-900 text-stone-100 shadow-xl overflow-hidden"
+              >
+                {(promo.image_url || promo.image) && (
+                  <img
+                    src={api.getMediaUrl(promo.image_url || promo.image)}
+                    alt={promo.title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-25 filter brightness-50"
+                  />
+                )}
+                <div className="relative z-10 space-y-3">
+                  {(promo.badge_text || promo.discount_code) && (
+                    <span className="inline-block px-3 py-1 text-[10px] font-mono tracking-widest uppercase bg-amber-600 text-stone-950 font-bold">
+                      {promo.badge_text || `PRIVILEGE CODE: ${promo.discount_code}`}
+                    </span>
+                  )}
+                  <h4 className="text-2xl sm:text-3xl font-serif font-normal">{promo.title}</h4>
+                  <p className="text-xs sm:text-sm text-stone-400 max-w-md font-light leading-relaxed">{promo.subtitle}</p>
+                </div>
+                <div className="relative z-10 pt-6 flex items-center justify-between gap-4">
+                  {(promo.discount_code || promo.badge_text) && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
+                      className="px-4 py-2 text-xs uppercase tracking-widest font-bold border border-stone-600 text-stone-300 hover:border-amber-500 hover:text-amber-400 transition flex items-center gap-2 cursor-pointer"
+                    >
+                      {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-amber-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ' : 'Copied') : (isAr ? 'نسخ الرمز' : 'Copy Code')}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onNavigateToShop) onNavigateToShop();
+                      else {
+                        const el = document.getElementById('collection');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    style={{ backgroundColor: primaryColor }}
+                    className="px-5 py-2.5 text-xs uppercase tracking-widest font-bold text-stone-950 shadow hover:brightness-110 transition flex items-center gap-2 cursor-pointer ms-auto"
+                  >
+                    <span>{isAr ? 'عرض المجموعة الحصرية' : 'Acquire Privilege'}</span>
+                    <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Atelier Guarantee */}
       <section className="py-16 border-t border-stone-200 dark:border-zinc-800 bg-stone-100/50 dark:bg-zinc-900/40 text-center font-sans">

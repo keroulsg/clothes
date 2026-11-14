@@ -100,7 +100,21 @@ const THEME_OPTIONS: Array<{
 
 export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr: propIsAr, variants }) => {
   const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'themes' | 'design_studio' | 'preview' | 'settings' | 'pending_payments' | 'wholesale_applications'>('orders');
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'themes' | 'design_studio' | 'preview' | 'settings' | 'pending_payments' | 'wholesale_applications'>(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const sub = searchParams.get('subtab');
+      if (sub && ['orders', 'themes', 'design_studio', 'preview', 'settings', 'pending_payments', 'wholesale_applications'].includes(sub)) {
+        return sub as any;
+      }
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      const hashSub = hashParams.get('subtab');
+      if (hashSub && ['orders', 'themes', 'design_studio', 'preview', 'settings', 'pending_payments', 'wholesale_applications'].includes(hashSub)) {
+        return hashSub as any;
+      }
+    } catch {}
+    return 'orders';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);

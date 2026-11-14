@@ -8,7 +8,10 @@ import {
   RotateCcw,
   Eye,
   Tag,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { api } from '../../../api/client';
 import type { StorefrontTemplateProps } from './types';
 
 export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
@@ -19,11 +22,55 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   selectedCategory,
   setSelectedCategory,
   onSelectProduct,
+  onNavigateToShop,
+  onNavigateToCategories,
+  onNavigateToAbout,
+  onNavigateToContact,
+  onNavigateToPolicies,
   onOpenWholesaleModal,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#0284c7';
+
+  // Hero Banner Extraction (full ERP control)
+  const heroBanner = themeConfig.hero_banner || {};
+  const isHeroEnabled = heroBanner.enabled !== false;
+  const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
+  const heroMobileImage = heroBanner.mobile_image || heroImage;
+  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'أناقة راقية بأسعار المصنع مباشرة' : 'Refined Fashion Directly from the Workshop');
+  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'خامات قطنية 100%، تفصيل متقن، وضمان استبدال فوري. استمتع بأعلى معايير الملابس الجاهزة دون وسطاء.' : '100% natural fabrics, master tailoring, and immediate replacement guarantee.');
+  const heroBadge = heroBanner.badge || (isAr ? 'تشكيلة الموسم الجديد — جودة تصدير' : 'New Season Collection — Export Quality');
+  const heroCtaText = heroBanner.cta_text || (isAr ? 'تصفح التشكيلة الكاملة' : 'Shop Collection');
+  const heroCtaDestination = heroBanner.cta_destination || 'shop';
+
+  const handleHeroCtaClick = () => {
+    if (heroCtaDestination === 'categories' && onNavigateToCategories) {
+      onNavigateToCategories();
+    } else if (heroCtaDestination === 'contact' && onNavigateToContact) {
+      onNavigateToContact();
+    } else if (heroCtaDestination === 'about' && onNavigateToAbout) {
+      onNavigateToAbout();
+    } else if (heroCtaDestination === 'policies' && onNavigateToPolicies) {
+      onNavigateToPolicies();
+    } else if (onNavigateToShop) {
+      onNavigateToShop();
+    } else {
+      const el = document.getElementById('products');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {}
+  };
 
   // Categories extraction
   const categories = ['all', 'T-Shirts', 'Polos', 'Pants', 'Dresses'];
@@ -36,57 +83,70 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
       dir={isAr ? 'rtl' : 'ltr'}
     >
       {/* Hero Editorial Campaign Banner */}
-      <section className="relative overflow-hidden py-12 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-sky-500/10 via-transparent to-transparent">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{isAr ? 'تشكيلة الموسم الجديد — جودة تصدير' : 'New Season Collection — Export Quality'}</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
-              {storeSettings?.banner_title || (isAr ? 'أناقة راقية بأسعار المصنع مباشرة' : 'Refined Fashion Directly from the Workshop')}
-            </h2>
-            <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-              {storeSettings?.banner_subtitle ||
-                (isAr
-                  ? 'خامات قطنية 100%، تفصيل متقن، وضمان استبدال فوري. استمتع بأعلى معايير الملابس الجاهزة دون وسطاء.'
-                  : '100% natural fabrics, master tailoring, and immediate replacement guarantee. Enjoy top garment standards with zero middlemen.')}
-            </p>
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <a
-                href="#products"
-                style={{ backgroundColor: primaryColor }}
-                className="px-6 py-3.5 rounded-2xl text-white font-bold text-sm shadow-xl hover:shadow-2xl hover:brightness-110 active:scale-95 transition-all inline-flex items-center gap-2"
-              >
-                <span>{isAr ? 'تصفح التشكيلة الكاملة' : 'Shop Collection'}</span>
-                <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
-              </a>
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span>{isAr ? 'دفع عند الاستلام أو InstaPay' : 'COD & InstaPay Supported'}</span>
+      {isHeroEnabled && (
+        <section className="relative overflow-hidden py-12 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-sky-500/10 via-transparent to-transparent">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-7 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{heroBadge}</span>
+              </div>
+              <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
+                {heroTitle}
+              </h2>
+              <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
+                {heroSubtitle}
+              </p>
+              <div className="flex flex-wrap items-center gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={handleHeroCtaClick}
+                  style={{ backgroundColor: primaryColor }}
+                  className="px-6 py-3.5 rounded-2xl text-white font-bold text-sm shadow-xl hover:shadow-2xl hover:brightness-110 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <span>{heroCtaText}</span>
+                  <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
+                </button>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <span>{isAr ? 'دفع عند الاستلام أو InstaPay' : 'COD & InstaPay Supported'}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="lg:col-span-5 relative">
-            <div className="relative mx-auto max-w-md aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-800">
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent z-10" />
-              <div className="absolute inset-0 flex flex-col justify-end p-6 z-20 text-white">
-                <span className="text-xs uppercase tracking-widest text-sky-300 font-bold">
-                  {isAr ? 'إصدار محدود' : 'Limited Edition'}
-                </span>
-                <h3 className="text-xl font-black">{isAr ? 'الأزياء الشبابية والكاجوال' : 'Youth & Casual Attire'}</h3>
-                <p className="text-xs text-slate-200 mt-1">
-                  {isAr ? 'خامات مصرية ناعمة مقاومة للانكماش' : 'Shrink-resistant ultra-soft Egyptian cotton'}
-                </p>
-              </div>
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-sky-400 to-indigo-600">
-                <span className="text-8xl opacity-30 select-none">✨</span>
+            <div className="lg:col-span-5 relative">
+              <div className="relative mx-auto max-w-md aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-800 group">
+                {heroImage ? (
+                  <picture className="w-full h-full block">
+                    {heroMobileImage && <source media="(max-width: 640px)" srcSet={api.getMediaUrl(heroMobileImage)} />}
+                    <img
+                      src={api.getMediaUrl(heroImage)}
+                      alt={heroTitle}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    />
+                  </picture>
+                ) : (
+                  <img
+                    src="https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=1200&q=80"
+                    alt={heroTitle}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent z-10 pointer-events-none" />
+                <div className="absolute inset-0 flex flex-col justify-end p-6 z-20 text-white pointer-events-none">
+                  <span className="text-xs uppercase tracking-widest text-sky-300 font-bold">
+                    {heroBadge}
+                  </span>
+                  <h3 className="text-xl font-black">{heroTitle}</h3>
+                  <p className="text-xs text-slate-200 mt-1 line-clamp-2">
+                    {heroSubtitle}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Trust Badges */}
       <section className="py-8 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
@@ -170,11 +230,11 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                   <div className="relative aspect-[3/4] bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     {v.image ? (
                       <img
-                        src={v.image}
+                        src={api.getMediaUrl(v.image)}
                         alt={v.model_name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&q=80';
                         }}
                       />
                     ) : (
@@ -293,6 +353,65 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
           </div>
         )}
       </section>
+
+      {/* Promotional Banners Grid (if configured by owner) */}
+      {promoBanners.length > 0 && (
+        <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {promoBanners.map((promo: any) => (
+              <div
+                key={promo.id}
+                style={{ backgroundColor: promo.bg_color || undefined }}
+                className="relative rounded-3xl overflow-hidden p-6 sm:p-8 flex flex-col justify-between min-h-[220px] shadow-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800 text-white"
+              >
+                {(promo.image_url || promo.image) && (
+                  <img
+                    src={api.getMediaUrl(promo.image_url || promo.image)}
+                    alt={promo.title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-30 filter brightness-75"
+                  />
+                )}
+                <div className="relative z-10 space-y-2">
+                  {(promo.badge_text || promo.discount_code) && (
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-400 text-slate-950">
+                      {promo.badge_text || `CODE: ${promo.discount_code}`}
+                    </span>
+                  )}
+                  <h4 className="text-2xl font-black">{promo.title}</h4>
+                  <p className="text-xs sm:text-sm text-slate-300 max-w-md">{promo.subtitle}</p>
+                </div>
+                <div className="relative z-10 pt-4 flex items-center justify-between gap-4">
+                  {(promo.discount_code || promo.badge_text) && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ الكود' : 'Copy Code')}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onNavigateToShop) onNavigateToShop();
+                      else {
+                        const el = document.getElementById('products');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    style={{ backgroundColor: primaryColor }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-md hover:brightness-110 transition flex items-center gap-1.5 cursor-pointer ms-auto"
+                  >
+                    <span>{isAr ? 'تسوق العرض' : 'Shop Offer'}</span>
+                    <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Brand Craftsmanship Story Section */}
       <section className="py-16 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">

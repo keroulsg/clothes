@@ -117,7 +117,7 @@ export const ProductPrintModal: React.FC<ProductPrintModalProps> = ({
             <div className="w-40 h-40 rounded-xl border border-slate-200 overflow-hidden bg-slate-50 flex items-center justify-center flex-shrink-0">
               {product.main_image ? (
                 <img
-                  src={product.main_image}
+                  src={api.getMediaUrl(product.main_image)}
                   alt={product.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {

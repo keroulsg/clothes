@@ -427,6 +427,7 @@ const StorefrontMainContent: React.FC<StorefrontMainContentProps> = ({
 }) => {
   const {
     activeView,
+    setActiveView,
     storeSettings,
     tenantInfo,
     variants,
@@ -470,6 +471,26 @@ const StorefrontMainContent: React.FC<StorefrontMainContentProps> = ({
     onOpenCart: () => setIsCartOpen(true),
     onSelectProduct: (v: any) => navigateToProduct(v.id),
     onNavigateToTracking: () => onNavigateToTracking(),
+    onNavigateToShop: () => {
+      setActiveView('shop');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    onNavigateToCategories: () => {
+      setActiveView('category');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    onNavigateToAbout: () => {
+      setActiveView('about');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    onNavigateToContact: () => {
+      setActiveView('contact');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    onNavigateToPolicies: () => {
+      setActiveView('policies');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
     onNavigateToErp,
     onToggleTheme,
     onToggleLang,

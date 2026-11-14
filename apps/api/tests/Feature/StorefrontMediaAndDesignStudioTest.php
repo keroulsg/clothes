@@ -220,6 +220,90 @@ class StorefrontMediaAndDesignStudioTest extends TestCase
         $this->postJson('/api/v1/storefront/design/publish')->assertStatus(401);
     }
 
+    public function test_tenant_can_upload_multiple_media_files_simultaneously(): void
+    {
+        Sanctum::actingAs($this->userA);
+
+        $img1 = UploadedFile::fake()->image('banner_1.jpg', 1200, 600);
+        $img2 = UploadedFile::fake()->image('banner_2.png', 800, 800);
+        $img3 = UploadedFile::fake()->image('banner_3.webp', 1000, 500);
+
+        $response = $this->postJson('/api/v1/storefront/media/upload-multiple', [
+            'files' => [$img1, $img2, $img3],
+            'category' => 'banner',
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonStructure([
+            'message',
+            'media' => [
+                '*' => ['id', 'url', 'path', 'filename', 'width', 'height', 'category'],
+            ],
+        ]);
+
+        $this->assertCount(3, $response->json('media'));
+        foreach ($response->json('media') as $item) {
+            Storage::disk('public')->assertExists($item['path']);
+            $this->assertNotNull($item['width']);
+            $this->assertNotNull($item['height']);
+        }
+    }
+
+    public function test_media_upload_rejects_svg_and_disallowed_formats(): void
+    {
+        Sanctum::actingAs($this->userA);
+
+        $svg = UploadedFile::fake()->create('vector.svg', 10, 'image/svg+xml');
+
+        $response = $this->postJson('/api/v1/storefront/media/upload', [
+            'file' => $svg,
+            'category' => 'logo',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['file']);
+    }
+
+    public function test_cannot_delete_media_actively_referenced_without_force(): void
+    {
+        Sanctum::actingAs($this->userA);
+
+        $image = UploadedFile::fake()->image('hero_active.jpg', 1200, 600);
+        $uploadRes = $this->postJson('/api/v1/storefront/media/upload', [
+            'file' => $image,
+            'category' => 'banner',
+        ])->assertStatus(201);
+
+        $path = $uploadRes->json('media.path');
+        $url = $uploadRes->json('media.url');
+
+        // Reference image in active theme_config
+        $setting = TenantStoreSetting::where('tenant_id', $this->tenantA->id)->first();
+        $config = $setting->theme_config;
+        $config['hero_banner'] = ['desktop_image' => $url];
+        $setting->update(['theme_config' => $config]);
+
+        // Attempt delete without force -> must fail with 422 MediaInUse
+        $deleteRes = $this->deleteJson('/api/v1/storefront/media', [
+            'path' => $path,
+        ]);
+
+        $deleteRes->assertStatus(422);
+        $deleteRes->assertJson([
+            'error' => 'MediaInUse',
+        ]);
+        Storage::disk('public')->assertExists($path);
+
+        // Attempt delete with force: true -> must succeed
+        $forceRes = $this->deleteJson('/api/v1/storefront/media', [
+            'path' => $path,
+            'force' => true,
+        ]);
+
+        $forceRes->assertStatus(200);
+        Storage::disk('public')->assertMissing($path);
+    }
+
     public function test_design_studio_draft_saving_and_publishing_with_advanced_components(): void
     {
         Sanctum::actingAs($this->userA);

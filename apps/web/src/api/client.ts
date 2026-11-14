@@ -2293,13 +2293,24 @@ class ApiClient {
         body: formData,
       });
     },
+    uploadMultipleMedia: async (files: File[], category?: string): Promise<{ message: string; media: any[] }> => {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files[]', files[i]);
+      }
+      if (category) formData.append('category', category);
+      return this.request('/storefront/media/upload-multiple', {
+        method: 'POST',
+        body: formData,
+      });
+    },
     listMedia: async (): Promise<{ media: any[] }> => {
       return this.request('/storefront/media');
     },
-    deleteMedia: async (pathOrUrl: string): Promise<any> => {
+    deleteMedia: async (pathOrUrl: string, force = false): Promise<any> => {
       return this.request('/storefront/media', {
         method: 'DELETE',
-        body: JSON.stringify({ path: pathOrUrl, url: pathOrUrl }),
+        body: JSON.stringify({ path: pathOrUrl, url: pathOrUrl, force }),
       });
     },
 

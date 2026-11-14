@@ -657,8 +657,8 @@ class StorefrontController extends Controller
         $tenantId = app('current_tenant_id');
 
         $request->validate([
-            'file' => 'required_without:image|file|image|mimes:jpeg,png,jpg,webp,svg,gif|max:5120',
-            'image' => 'required_without:file|file|image|mimes:jpeg,png,jpg,webp,svg,gif|max:5120',
+            'file' => 'required_without:image|file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'image' => 'required_without:file|file|image|mimes:jpeg,png,jpg,webp|max:5120',
             'title' => 'nullable|string|max:255',
             'category' => 'nullable|string|in:banner,logo,category,general',
         ]);
@@ -670,6 +670,10 @@ class StorefrontController extends Controller
         $path = $file->storeAs("storefront/{$tenantId}", $safeName, 'public');
         $publicUrl = "/storage/{$path}";
 
+        $dimensions = @getimagesize($file->getRealPath());
+        $width = $dimensions ? (int) $dimensions[0] : null;
+        $height = $dimensions ? (int) $dimensions[1] : null;
+
         $mediaItem = [
             'id' => 'med_' . Str::random(10),
             'url' => $publicUrl,
@@ -678,8 +682,10 @@ class StorefrontController extends Controller
             'original_name' => $file->getClientOriginalName(),
             'size' => $file->getSize(),
             'mime_type' => $file->getMimeType(),
+            'width' => $width,
+            'height' => $height,
             'category' => $request->input('category', 'general'),
-            'title' => $request->input('title', $file->getClientOriginalName()),
+            'title' => $request->input('title', pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)),
             'created_at' => now()->toISOString(),
         ];
 
@@ -689,13 +695,71 @@ class StorefrontController extends Controller
             $config = $settings->theme_config ?? [];
             $mediaList = $config['media_library'] ?? [];
             array_unshift($mediaList, $mediaItem);
-            $config['media_library'] = array_slice($mediaList, 0, 50);
+            $config['media_library'] = array_slice($mediaList, 0, 100);
             $settings->update(['theme_config' => $config]);
         }
 
         return response()->json([
             'message' => 'تم رفع الصورة بنجاح إلى مكتبة وسائط المتجر',
             'media' => $mediaItem,
+        ], 201);
+    }
+
+    /**
+     * رفع ملفات متعددة دفعة واحدة إلى مكتبة الوسائط
+     */
+    public function uploadMultipleMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => 'file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'category' => 'nullable|string|in:banner,logo,category,general',
+        ]);
+
+        $category = $request->input('category', 'general');
+        $uploaded = [];
+
+        foreach ($request->file('files') as $file) {
+            $extension = $file->getClientOriginalExtension() ?: 'webp';
+            $safeName = 'media_' . date('Ymd_His') . '_' . Str::random(8) . '.' . strtolower($extension);
+
+            $path = $file->storeAs("storefront/{$tenantId}", $safeName, 'public');
+            $publicUrl = "/storage/{$path}";
+
+            $dimensions = @getimagesize($file->getRealPath());
+            $width = $dimensions ? (int) $dimensions[0] : null;
+            $height = $dimensions ? (int) $dimensions[1] : null;
+
+            $uploaded[] = [
+                'id' => 'med_' . Str::random(10),
+                'url' => $publicUrl,
+                'path' => $path,
+                'filename' => $safeName,
+                'original_name' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'width' => $width,
+                'height' => $height,
+                'category' => $category,
+                'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
+                'created_at' => now()->toISOString(),
+            ];
+        }
+
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings) {
+            $config = $settings->theme_config ?? [];
+            $mediaList = $config['media_library'] ?? [];
+            $mediaList = array_merge($uploaded, $mediaList);
+            $config['media_library'] = array_slice($mediaList, 0, 100);
+            $settings->update(['theme_config' => $config]);
+        }
+
+        return response()->json([
+            'message' => 'تم رفع ' . count($uploaded) . ' صورة بنجاح إلى مكتبة وسائط المتجر',
+            'media' => $uploaded,
         ], 201);
     }
 
@@ -714,7 +778,7 @@ class StorefrontController extends Controller
     }
 
     /**
-     * حذف صورة من مكتبة الوسائط
+     * حذف صورة من مكتبة الوسائط مع التحقق من عدم استخدامها
      */
     public function deleteMedia(Request $request): JsonResponse
     {
@@ -733,12 +797,56 @@ class StorefrontController extends Controller
             ], 422);
         }
 
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+
+        // التحقق من الاستخدام إذا لم يتم طلب الحذف القسري (force)
+        if ($settings && !$request->boolean('force')) {
+            $configsToCheck = array_filter([$settings->theme_config, $settings->draft_theme_config]);
+            $isUsed = false;
+            $usedIn = [];
+
+            foreach ($configsToCheck as $cfg) {
+                if (empty($cfg)) continue;
+                $logo = $cfg['logo_url'] ?? '';
+                $heroDesk = $cfg['hero_banner']['desktop_image'] ?? '';
+                $heroMob = $cfg['hero_banner']['mobile_image'] ?? '';
+                $promos = $cfg['promo_banners'] ?? [];
+
+                if ((!empty($logo) && str_contains($logo, $path)) || ($url && !empty($logo) && str_contains($logo, $url))) {
+                    $isUsed = true;
+                    $usedIn[] = 'شعار المتجر (Store Logo)';
+                }
+                if ((!empty($heroDesk) && str_contains($heroDesk, $path)) || ($url && !empty($heroDesk) && str_contains($heroDesk, $url))) {
+                    $isUsed = true;
+                    $usedIn[] = 'بانر المتجر للديسكتوب (Desktop Hero)';
+                }
+                if ((!empty($heroMob) && str_contains($heroMob, $path)) || ($url && !empty($heroMob) && str_contains($heroMob, $url))) {
+                    $isUsed = true;
+                    $usedIn[] = 'بانر المتجر للموبايل (Mobile Hero)';
+                }
+                foreach ($promos as $promo) {
+                    $pImg = $promo['image_url'] ?? $promo['image'] ?? '';
+                    if ((!empty($pImg) && str_contains($pImg, $path)) || ($url && !empty($pImg) && str_contains($pImg, $url))) {
+                        $isUsed = true;
+                        $usedIn[] = 'بانر ترويجي: ' . ($promo['title'] ?? 'عرض');
+                    }
+                }
+            }
+
+            if ($isUsed) {
+                return response()->json([
+                    'error' => 'MediaInUse',
+                    'message' => 'هذه الصورة قيد الاستخدام حالياً في: ' . implode('، ', array_unique($usedIn)) . '. يرجى استبدالها أولاً أو تأكيد الحذف القسري.',
+                    'used_in' => array_values(array_unique($usedIn)),
+                ], 422);
+            }
+        }
+
         if (Storage::disk('public')->exists($path)) {
             Storage::disk('public')->delete($path);
         }
 
         // حذف من القائمة
-        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
         if ($settings) {
             $config = $settings->theme_config ?? [];
             $mediaList = $config['media_library'] ?? [];

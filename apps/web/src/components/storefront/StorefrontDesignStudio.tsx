@@ -32,6 +32,10 @@ import {
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { api } from '../../api/client';
+import { FashionBoutiqueTemplate } from './templates/FashionBoutiqueTemplate';
+import { ModernCatalogTemplate } from './templates/ModernCatalogTemplate';
+import { KidsFamilyTemplate } from './templates/KidsFamilyTemplate';
+import { PremiumBrandTemplate } from './templates/PremiumBrandTemplate';
 import type { Language, StorefrontThemeId, DesignStudioConfig } from '../../types';
 
 interface StorefrontDesignStudioProps {
@@ -219,12 +223,24 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
           setMediaList(config.media_library);
         }
       }
+
+      // Fetch representative store products for the live preview
+      try {
+        const storeRes = await api.storefront.getPublicStore(undefined, true);
+        if (storeRes?.products && Array.isArray(storeRes.products)) {
+          setPreviewVariants(storeRes.products);
+        }
+      } catch {}
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تحميل بيانات استوديو التصميم' : 'Failed to load design studio'));
     } finally {
       setIsLoading(false);
     }
   };
+
+  const [previewVariants, setPreviewVariants] = useState<any[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [deleteInUseData, setDeleteInUseData] = useState<{ path: string; message: string; used_in: string[] } | null>(null);
 
   useEffect(() => {
     fetchStudio();
@@ -240,35 +256,45 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     } catch {}
   };
 
-  // Upload Media Handler
-  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Upload Single or Multiple Media Files Handler
+  const handleUploadFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
 
-    // Validate size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg(isAr ? 'حجم الملف يتجاوز الحد المسموح به (5 ميجابايت)' : 'File exceeds 5MB size limit');
-      return;
-    }
-
-    // Validate type
-    if (!file.type.match(/^image\/(jpeg|png|webp|svg\+xml|jpg|gif)$/i)) {
-      setErrorMsg(isAr ? 'نوع الملف غير مدعوم. يرجى رفع صورة JPG أو PNG أو WebP أو SVG' : 'Unsupported file type');
-      return;
+    // Validate size & type for all files
+    const validFiles: File[] = [];
+    for (const file of fileArray) {
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorMsg(isAr ? `الملف "${file.name}" يتجاوز الحد المسموح به (5 ميجابايت)` : `File "${file.name}" exceeds 5MB size limit`);
+        return;
+      }
+      if (!file.type.match(/^image\/(jpeg|png|webp|jpg)$/i)) {
+        setErrorMsg(isAr ? `نوع الملف "${file.name}" غير مدعوم. يرجى رفع صور JPG أو PNG أو WebP` : `Unsupported file type for "${file.name}"`);
+        return;
+      }
+      validFiles.push(file);
     }
 
     setIsUploadingMedia(true);
-    setUploadProgress(isAr ? 'جاري رفع الملف إلى الخادم بأمان...' : 'Uploading file securely...');
+    setUploadProgress(isAr ? `جاري رفع ${validFiles.length} صورة إلى الخادم...` : `Uploading ${validFiles.length} images...`);
     setErrorMsg(null);
 
     try {
-      const res = await api.storefront.uploadMedia(file, 'general', file.name);
-      if (res?.media) {
-        setSuccessMsg(isAr ? `تم رفع "${file.name}" بنجاح إلى مكتبة الوسائط!` : 'File uploaded successfully!');
-        setMediaList((prev) => [res.media, ...prev]);
+      if (validFiles.length === 1) {
+        const res = await api.storefront.uploadMedia(validFiles[0], 'general', validFiles[0].name);
+        if (res?.media) {
+          setSuccessMsg(isAr ? `تم رفع "${validFiles[0].name}" بنجاح إلى مكتبة الوسائط!` : 'File uploaded successfully!');
+          setMediaList((prev) => [res.media, ...prev]);
+        }
+      } else {
+        const res = await api.storefront.uploadMultipleMedia(validFiles, 'general');
+        if (res?.media && Array.isArray(res.media)) {
+          setSuccessMsg(isAr ? `تم رفع ${res.media.length} صور بنجاح إلى مكتبة الوسائط!` : `${res.media.length} images uploaded successfully!`);
+          setMediaList((prev) => [...res.media, ...prev]);
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل رفع الملف إلى الخادم' : 'Failed to upload image'));
+      setErrorMsg(err?.message || (isAr ? 'فشل رفع الملفات إلى الخادم' : 'Failed to upload images'));
     } finally {
       setIsUploadingMedia(false);
       setUploadProgress(null);
@@ -276,14 +302,29 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     }
   };
 
-  // Delete Media Handler
-  const handleDeleteMedia = async (pathOrUrl: string) => {
+  const handleUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleUploadFiles(e.target.files);
+    }
+  };
+
+  // Delete Media Handler with In-Use Reference Verification
+  const handleDeleteMedia = async (pathOrUrl: string, force = false) => {
     try {
-      await api.storefront.deleteMedia(pathOrUrl);
+      await api.storefront.deleteMedia(pathOrUrl, force);
       setMediaList((prev) => prev.filter((m) => m.path !== pathOrUrl && m.url !== pathOrUrl));
       setSuccessMsg(isAr ? 'تم حذف الصورة من مكتبة الوسائط بنجاح.' : 'Media deleted successfully.');
+      setDeleteInUseData(null);
     } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل حذف الصورة' : 'Failed to delete image'));
+      if (err?.error === 'MediaInUse' || err?.data?.error === 'MediaInUse') {
+        setDeleteInUseData({
+          path: pathOrUrl,
+          message: err?.message || err?.data?.message || (isAr ? 'هذه الصورة قيد الاستخدام حالياً' : 'This media is currently in use'),
+          used_in: err?.used_in || err?.data?.used_in || [],
+        });
+      } else {
+        setErrorMsg(err?.message || (isAr ? 'فشل حذف الصورة' : 'Failed to delete image'));
+      }
     }
   };
 
@@ -455,6 +496,85 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const hasDraftChanges = studioConfig?.has_draft_changes;
   const canRollback = studioConfig?.can_rollback;
   const publishedTheme = studioConfig?.published?.theme_id || 'fashion_boutique';
+
+  const displayVariants = previewVariants.length > 0 ? previewVariants : [
+    {
+      id: 'demo-1',
+      model_name: isAr ? 'تيشيرت قطن مصري فاخر' : '100% Egyptian Cotton Tee',
+      price: 380,
+      in_stock: 45,
+      sku: 'TSH-COT-01',
+      size: 'L',
+      color: isAr ? 'كحلي داكن' : 'Navy',
+      image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      id: 'demo-2',
+      model_name: isAr ? 'قميص بولو كلاسيك' : 'Classic Polo Shirt',
+      price: 520,
+      in_stock: 30,
+      sku: 'POL-CLS-02',
+      size: 'XL',
+      color: isAr ? 'أبيض' : 'White',
+      image: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      id: 'demo-3',
+      model_name: isAr ? 'بنطلون جبردين تصدير' : 'Export Gabardine Trousers',
+      price: 690,
+      in_stock: 18,
+      sku: 'PNT-GAB-03',
+      size: '34',
+      color: isAr ? 'بيج' : 'Beige',
+      image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=600&q=80',
+    },
+  ];
+
+  const currentDraftSettings = {
+    ...studioConfig?.store_settings,
+    store_name: studioConfig?.store_settings?.store_name || (isAr ? 'مصنع الملابس' : 'Store'),
+    theme_id: selectedTemplate,
+    theme_config: getFullPayload().theme_config,
+  };
+
+  const commonTemplateProps = {
+    lang,
+    isDark: false,
+    storeSettings: currentDraftSettings,
+    tenantInfo: { name: currentDraftSettings.store_name },
+    variants: displayVariants,
+    searchQuery: '',
+    setSearchQuery: () => {},
+    selectedCategory: 'all',
+    setSelectedCategory: () => {},
+    cartCount: 0,
+    onOpenCart: () => {},
+    onSelectProduct: () => {},
+    onNavigateToTracking: () => {},
+    onNavigateToShop: () => {},
+    onNavigateToCategories: () => {},
+    onNavigateToAbout: () => {},
+    onNavigateToContact: () => {},
+    onNavigateToPolicies: () => {},
+    onToggleTheme: () => {},
+    onToggleLang: () => {},
+    isPreview: true,
+  };
+
+  const renderActiveLiveTemplate = () => {
+    switch (selectedTemplate) {
+      case 'fashion_boutique':
+        return <FashionBoutiqueTemplate {...commonTemplateProps} />;
+      case 'modern_catalog':
+        return <ModernCatalogTemplate {...commonTemplateProps} />;
+      case 'kids_family':
+        return <KidsFamilyTemplate {...commonTemplateProps} />;
+      case 'premium_brand':
+        return <PremiumBrandTemplate {...commonTemplateProps} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -1149,7 +1269,8 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
                     className="hidden"
                     onChange={handleUploadFile}
                   />
@@ -1162,9 +1283,39 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     className="text-xs flex items-center gap-1.5"
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    <span>{isUploadingMedia ? (isAr ? 'جاري الرفع...' : 'Uploading...') : (isAr ? 'رفع صورة جديدة' : 'Upload Image')}</span>
+                    <span>{isUploadingMedia ? (isAr ? 'جاري الرفع...' : 'Uploading...') : (isAr ? 'رفع صور جديدة' : 'Upload Images')}</span>
                   </Button>
                 </div>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingOver(true);
+                }}
+                onDragLeave={() => setIsDraggingOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingOver(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    handleUploadFiles(e.dataTransfer.files);
+                  }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-6 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all ${
+                  isDraggingOver
+                    ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-inner'
+                    : 'border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:border-blue-400'
+                }`}
+              >
+                <Upload className="w-8 h-8 text-blue-500 mx-auto mb-2 opacity-80" />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  {isAr ? 'اضغط لاختيار الصور أو اسحبها وأفلتها هنا مباشرة' : 'Click to select or drag and drop images here'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {isAr ? 'يدعم JPG, PNG, WebP حتى 5 ميجابايت لكل صورة — إمكانية رفع عدة صور دفعة واحدة' : 'Supports JPG, PNG, WebP up to 5MB each — multi-file upload ready'}
+                </p>
               </div>
 
               {/* Upload Progress Alert */}
@@ -1203,6 +1354,11 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                           alt={media.filename || 'Media'}
                           className="h-full w-full object-cover group-hover:scale-105 transition-transform"
                         />
+                        {media.width && media.height && (
+                          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white font-mono text-[9px] backdrop-blur-xs">
+                            {media.width}x{media.height}
+                          </span>
+                        )}
                       </div>
                       <div className="p-2.5 space-y-2">
                         <p className="text-[10px] font-bold truncate">{media.original_name || media.filename}</p>
@@ -1716,126 +1872,104 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
               </div>
             </div>
 
-            {/* Interactive Mockup Container */}
+            {/* Interactive Real Live Template Container */}
             <div
-              className={`mx-auto rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 shadow-inner bg-slate-100 dark:bg-slate-950 transition-all ${
-                previewDevice === 'mobile' ? 'max-w-[280px]' : previewDevice === 'tablet' ? 'max-w-[360px]' : 'w-full'
+              className={`mx-auto rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 shadow-2xl bg-white dark:bg-slate-950 transition-all ${
+                previewDevice === 'mobile' ? 'max-w-[320px]' : previewDevice === 'tablet' ? 'max-w-[480px]' : 'w-full'
               }`}
             >
-              {/* Browser Address Bar */}
-              <div className="bg-slate-200 dark:bg-slate-800 px-3 py-1.5 flex items-center gap-1.5 text-[9px] font-mono text-slate-500">
+              {/* Browser Address Bar with Live Route & Device indicator */}
+              <div className="bg-slate-200 dark:bg-slate-800 px-3 py-1.5 flex items-center justify-between text-[10px] font-mono text-slate-600 dark:text-slate-300 border-b border-slate-300 dark:border-slate-700">
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />
                   <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
                   <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                 </div>
-                <span className="truncate flex-1 text-center bg-white dark:bg-slate-900 rounded px-1.5 py-0.5">
-                  store.garmentos.com?preview=1
+                <span className="truncate flex-1 text-center bg-white dark:bg-slate-900 rounded px-1.5 py-0.5 mx-2 text-[9px]">
+                  store.garmentos.com/#/store?preview=1
+                </span>
+                <span className="text-[9px] font-sans font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  {previewDevice}
                 </span>
               </div>
 
-              {/* Mockup Preview Content */}
-              <div className="p-3 text-[10px] space-y-3" style={{ fontFamily }}>
-                {/* Mock Announcement */}
-                {announcementEnabled && (
-                  <div
-                    style={{ backgroundColor: primaryColor }}
-                    className="text-white text-[9px] px-2 py-1 rounded text-center truncate font-bold"
-                  >
-                    {announcementText}
-                  </div>
-                )}
-
-                {/* Mock Header */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-1.5">
-                    {logoUrl ? (
-                      <img src={api.getMediaUrl(logoUrl)} alt="Logo" className="w-5 h-5 object-contain rounded" />
-                    ) : (
-                      <div
-                        style={{ backgroundColor: primaryColor }}
-                        className="w-5 h-5 rounded flex items-center justify-center text-white font-black text-[9px]"
-                      >
-                        {selectedTemplate === 'kids_family' ? <Baby className="w-3 h-3" /> : selectedTemplate === 'premium_brand' ? <Crown className="w-3 h-3" /> : 'G'}
-                      </div>
-                    )}
-                    <span className="font-extrabold text-[10px] truncate max-w-[120px]">
-                      {studioConfig?.store_settings?.store_name || (isAr ? 'مصنع الملابس' : 'Store')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="p-1 rounded bg-slate-200 dark:bg-slate-800 text-[8px] font-bold">
-                      {isAr ? 'سلة' : 'Cart'} (0)
-                    </span>
-                  </div>
+              {/* Announcement Bar if enabled */}
+              {announcementEnabled && (
+                <div
+                  style={{ backgroundColor: primaryColor }}
+                  className="text-white text-[10px] py-1 px-2 text-center font-bold"
+                >
+                  {announcementText}
                 </div>
+              )}
 
-                {/* Mock Hero Banner */}
-                {heroBanner.enabled && (
-                  <div
-                    style={{
-                      backgroundColor: selectedTemplate === 'premium_brand' ? '#18181b' : `${primaryColor}15`,
-                      borderColor: primaryColor,
-                    }}
-                    className="p-3 rounded-xl border text-center space-y-2 relative overflow-hidden"
-                  >
-                    {heroBanner.desktop_image && (
-                      <img
-                        src={api.getMediaUrl(heroBanner.desktop_image)}
-                        alt="Hero"
-                        className="w-full h-16 object-cover rounded-lg mb-1"
-                      />
-                    )}
-                    <p className={`font-black text-[11px] leading-tight ${selectedTemplate === 'premium_brand' ? 'text-amber-400 font-serif' : ''}`}>
-                      {heroBanner.title}
-                    </p>
-                    <p className="text-[9px] text-slate-500 leading-tight line-clamp-2">
-                      {heroBanner.subtitle}
-                    </p>
-                    <button
-                      type="button"
-                      style={{ backgroundColor: primaryColor }}
-                      className="text-white text-[9px] font-bold px-3 py-1 rounded-lg shadow-xs inline-block"
-                    >
-                      {heroBanner.cta_text}
-                    </button>
-                  </div>
-                )}
+              {/* Scrollable Live Template Render Canvas */}
+              <div className="max-h-[620px] overflow-y-auto overflow-x-hidden text-start">
+                {renderActiveLiveTemplate()}
+              </div>
 
-                {/* Mock Ordered Section Pills */}
-                <div className="space-y-1.5 pt-1">
-                  <span className="text-[9px] font-bold text-slate-400 block">{isAr ? 'تسلسل الأقسام المفعلة:' : 'Active Sections Flow:'}</span>
-                  {sections
-                    .filter((s) => s.enabled)
-                    .map((s, idx) => (
-                      <div
-                        key={s.id}
-                        className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between text-[9px]"
-                      >
-                        <span className="font-semibold">{idx + 1}. {isAr ? s.name_ar : s.name_en}</span>
-                        <span className="text-emerald-500 font-bold">✓</span>
-                      </div>
-                    ))}
-                </div>
-
-                {/* Live Preview Button */}
-                <div className="pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-[10px] py-1.5"
-                    onClick={() => onNavigateToLiveStore(true)}
-                  >
-                    <Eye className="w-3 h-3 me-1 text-amber-500" />
-                    <span>{isAr ? 'فتح المعاينة في تبويب جديد' : 'Open Preview in New Tab'}</span>
-                  </Button>
-                </div>
+              {/* Viewport Footer Bar */}
+              <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>{isAr ? 'معاينة حية متزامنة فورياً مع التعديلات' : 'Live Connected Preview'}</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] py-1 px-2 h-auto"
+                  onClick={() => onNavigateToLiveStore(true)}
+                >
+                  <Eye className="w-3 h-3 me-1 text-amber-500" />
+                  <span>{isAr ? 'فتح بنافذة كاملة' : 'Full Window'}</span>
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Media In Use Warning Modal */}
+      {deleteInUseData && (
+        <Modal
+          isOpen={!!deleteInUseData}
+          onClose={() => setDeleteInUseData(null)}
+          title={isAr ? 'تنبيه: الصورة قيد الاستخدام حالياً' : 'Warning: Media in Active Use'}
+          maxWidth="sm"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200">
+              <span className="font-bold block mb-1">
+                {isAr ? 'هذه الصورة مستخدمة في الأماكن التالية:' : 'This image is currently used in:'}
+              </span>
+              <ul className="list-disc list-inside space-y-0.5 font-semibold">
+                {deleteInUseData.used_in.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300">
+              {isAr
+                ? 'إذا قمت بالحذف، قد تظهر أماكن استخدام الصورة فارغة في المتجر. يمكنك تأكيد الحذف القسري أو استبدالها أولاً.'
+                : 'Deleting will remove the image from the store. You may force delete or replace it first.'}
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setDeleteInUseData(null)}>
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={() => handleDeleteMedia(deleteInUseData.path, true)}
+              >
+                {isAr ? 'حذف قسري على أي حال' : 'Force Delete Anyway'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Publish Confirmation Modal */}
       {showPublishModal && (

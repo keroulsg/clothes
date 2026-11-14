@@ -492,6 +492,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/storefront/design/draft', [\App\Http\Controllers\Api\StorefrontController::class, 'saveDraft']);
             Route::post('/storefront/design/publish', [\App\Http\Controllers\Api\StorefrontController::class, 'publishDraft'])->middleware('role:company_owner,production_manager');
             Route::post('/storefront/design/rollback', [\App\Http\Controllers\Api\StorefrontController::class, 'rollback'])->middleware('role:company_owner,production_manager');
+            Route::post('/storefront/media/upload', [\App\Http\Controllers\Api\StorefrontController::class, 'uploadMedia'])->middleware('role:company_owner,production_manager,sales_manager');
+            Route::get('/storefront/media', [\App\Http\Controllers\Api\StorefrontController::class, 'listMedia']);
+            Route::delete('/storefront/media', [\App\Http\Controllers\Api\StorefrontController::class, 'deleteMedia'])->middleware('role:company_owner,production_manager,sales_manager');
             Route::post('/storefront/instapay-settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateInstaPaySettings'])->middleware('role:company_owner,accountant');
             Route::get('/storefront/orders', [\App\Http\Controllers\Api\StorefrontController::class, 'orders']);
             Route::patch('/storefront/orders/{id}/status', [\App\Http\Controllers\Api\StorefrontController::class, 'updateStatus'])->middleware('role:company_owner,production_manager,accountant,sales_manager');

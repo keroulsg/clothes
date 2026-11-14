@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
 import {
-  Baby,
   Heart,
-  ShoppingBag,
   Sparkles,
   ShieldCheck,
-  Sun,
-  Moon,
-  Globe,
-  Search,
   ArrowRight,
   Smile,
   Award,
@@ -19,25 +13,13 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  tenantInfo,
   variants,
-  searchQuery,
-  setSearchQuery,
-  cartCount,
-  onOpenCart,
   onSelectProduct,
-  onNavigateToTracking,
-  onNavigateToErp,
-  onToggleTheme,
-  onToggleLang,
-  wholesaleUser,
   onOpenWholesaleModal,
-  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#f97316';
-  const storeName = storeSettings?.store_name || tenantInfo?.name || 'Kids & Baby Haven';
   const currency = storeSettings?.currency || 'EGP';
 
   const [selectedAge, setSelectedAge] = useState<string>('all');
@@ -57,121 +39,6 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
-      {/* Top Friendly Announcement Bar */}
-      <div className="bg-gradient-to-r from-orange-400 via-amber-400 to-rose-400 text-white text-xs sm:text-sm py-2 px-4 text-center font-bold shadow-sm">
-        <span>
-          {themeConfig.announcement_bar_text ||
-            (isAr
-              ? '🍼 قطن مصري 100% طبيعي آمن على بشرة طفلك — شحن سريع وتوصيل آمن لجميع المحافظات 🧸'
-              : '🍼 100% Gentle Egyptian cotton safe for baby skin — fast nationwide home delivery 🧸')}
-        </span>
-      </div>
-
-      {/* Playful Header */}
-      <header
-        className={`sticky top-0 z-30 backdrop-blur-md border-b transition-colors ${
-          isDark ? 'bg-slate-900/90 border-amber-900/40' : 'bg-white/90 border-amber-100 shadow-sm'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          {/* Logo with Baby Icon */}
-          <div className="flex items-center gap-3">
-            <div
-              style={{ backgroundColor: primaryColor }}
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg transform -rotate-3 hover:rotate-3 transition-transform"
-            >
-              <Baby className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-black text-xl sm:text-2xl tracking-tight leading-none text-orange-600 dark:text-orange-400">
-                {storeName}
-              </h1>
-              <span className="text-[11px] font-bold text-amber-700/70 dark:text-amber-400/70">
-                {isAr ? 'ملابس الأطفال والمواليد بأعلى معايير الأمان' : 'Kids & Baby Safe Comfort Wear'}
-              </span>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className="flex-1 max-w-md mx-4 hidden md:block">
-            <div className="relative">
-              <Search className={`absolute ${isAr ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500`} />
-              <input
-                type="text"
-                placeholder={isAr ? 'ابحث عن سالوبيت، بيجامات، فساتين، أطقم خروج...' : 'Search bodysuits, pajamas, dresses...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full py-2.5 text-sm rounded-full transition-all focus:outline-none focus:ring-2 ${
-                  isAr ? 'pr-10 pl-4' : 'pl-10 pr-4'
-                } ${
-                  isDark
-                    ? 'bg-slate-800 border border-slate-700 text-white placeholder-slate-400 focus:ring-orange-500'
-                    : 'bg-amber-50 border border-amber-200 text-slate-800 placeholder-amber-400 focus:ring-orange-400'
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {wholesaleUser?.is_approved ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs font-bold">
-                <span>🧸 {wholesaleUser.company_name}</span>
-                {onLogoutWholesale && (
-                  <button onClick={onLogoutWholesale} className="text-slate-400 hover:text-rose-500 underline text-[10px] ms-1">
-                    {isAr ? 'خروج' : 'Logout'}
-                  </button>
-                )}
-              </div>
-            ) : onOpenWholesaleModal ? (
-              <button
-                onClick={onOpenWholesaleModal}
-                className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-orange-600 hover:bg-orange-500 text-white shadow-xs transition-colors"
-              >
-                {isAr ? 'توريدات الجملة والحضانات (B2B)' : 'Wholesale / Nursery'}
-              </button>
-            ) : null}
-
-            <button
-              onClick={onNavigateToTracking}
-              className={`text-xs font-bold px-3 py-2 rounded-full border transition-all ${
-                isDark
-                  ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                  : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'
-              }`}
-            >
-              {isAr ? 'أين طلبي؟ 🚚' : 'Where is my order?'}
-            </button>
-
-            {onNavigateToErp && (
-              <button
-                onClick={onNavigateToErp}
-                className="hidden sm:inline-block text-xs font-bold px-3 py-2 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300"
-              >
-                {isAr ? 'المصنع' : 'ERP'}
-              </button>
-            )}
-
-            <button onClick={onToggleLang} className="p-2 rounded-full text-slate-400 hover:text-slate-600">
-              <Globe className="w-5 h-5" />
-            </button>
-            <button onClick={onToggleTheme} className="p-2 rounded-full text-slate-400 hover:text-slate-600">
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-
-            <button
-              onClick={onOpenCart}
-              style={{ backgroundColor: primaryColor }}
-              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-full shadow-lg font-black text-sm hover:scale-105 active:scale-95 transition-all"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>{isAr ? 'سلة التسوق' : 'Cart'}</span>
-              <span className="bg-white/30 px-2 py-0.5 rounded-full text-xs">{cartCount}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
       {/* Warm Hero Banner */}
       <section className="py-10 md:py-16 px-4 max-w-7xl mx-auto">
         <div className="relative rounded-3xl overflow-hidden p-8 sm:p-12 bg-gradient-to-r from-orange-400 via-amber-300 to-rose-300 text-slate-900 shadow-xl">
@@ -369,16 +236,6 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
           })}
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="py-8 mt-12 border-t border-amber-200 dark:border-slate-800 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} {storeName} — {isAr ? 'صنع بكل حب للأطفال' : 'Crafted with Love for Kids'}</p>
-          <button onClick={onNavigateToTracking} className="hover:underline font-bold text-orange-600 dark:text-orange-400">
-            {isAr ? 'تتبع شحنة طفلك 🚚' : 'Track Baby Delivery 🚚'}
-          </button>
-        </div>
-      </footer>
     </div>
   );
 };

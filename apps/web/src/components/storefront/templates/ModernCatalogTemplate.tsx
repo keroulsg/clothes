@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
 import {
-  Search,
   ShoppingBag,
   SlidersHorizontal,
   Package,
   CheckCircle2,
   AlertTriangle,
-  Building2,
   FileSpreadsheet,
-  Globe,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import type { StorefrontTemplateProps } from './types';
 
@@ -18,27 +13,15 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  tenantInfo,
   variants,
-  searchQuery,
-  setSearchQuery,
   selectedCategory,
   setSelectedCategory,
-  cartCount,
-  onOpenCart,
   onSelectProduct,
-  onNavigateToTracking,
-  onNavigateToErp,
-  onToggleTheme,
-  onToggleLang,
-  wholesaleUser,
   onOpenWholesaleModal,
-  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#2563eb';
-  const storeName = storeSettings?.store_name || tenantInfo?.name || 'Modern Apparel Catalog';
   const currency = storeSettings?.currency || 'EGP';
 
   const [stockOnlyFilter, setStockOnlyFilter] = useState(false);
@@ -72,116 +55,6 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
-      {/* Top B2B / Wholesale Notice Banner */}
-      <div className="bg-slate-900 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">B2B & WHOLESALE</span>
-            <span>
-              {isAr
-                ? 'كتالوج المصنع المباشر: أسعار تجارية خاصة للمحلات والشركات وتوريدات الملابس الموحدة'
-                : 'Direct Factory Catalog: Special trade pricing for retail chains, corporate uniforms & bulk supply'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-[11px]">
-            {wholesaleUser?.is_approved ? (
-              <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-2.5 py-1 rounded-lg">
-                <span className="font-bold">✓ {isAr ? `حساب جملة: ${wholesaleUser.company_name}` : `Wholesale: ${wholesaleUser.company_name}`}</span>
-                {onLogoutWholesale && (
-                  <button onClick={onLogoutWholesale} className="text-slate-400 hover:text-white underline text-[10px] ms-1">
-                    {isAr ? 'خروج' : 'Logout'}
-                  </button>
-                )}
-              </div>
-            ) : onOpenWholesaleModal ? (
-              <button
-                onClick={onOpenWholesaleModal}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1 rounded-lg transition-colors shadow-xs"
-              >
-                {isAr ? 'بوابة تجار الجملة (B2B)' : 'Wholesale Portal'}
-              </button>
-            ) : null}
-            <button onClick={onNavigateToTracking} className="hover:text-white underline">
-              {isAr ? 'تتبع طلبيات التوريد' : 'Track Shipments'}
-            </button>
-            {onNavigateToErp && (
-              <button onClick={onNavigateToErp} className="hover:text-white font-bold">
-                {isAr ? 'بوابة إدارة المصنع' : 'ERP Portal'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Catalog Header */}
-      <header
-        className={`sticky top-0 z-30 border-b backdrop-blur-md transition-colors ${
-          isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-sm'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              style={{ backgroundColor: primaryColor }}
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow font-black text-xl"
-            >
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-black text-xl tracking-tight leading-none">{storeName}</h1>
-              <span className="text-xs font-semibold text-slate-400">
-                {isAr ? 'كتالوج التوريدات والملابس الجاهزة' : 'Commercial Catalog & Ready-wear'}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Search */}
-          <div className="flex-1 max-w-xl mx-4 hidden md:block">
-            <div className="relative">
-              <Search className={`absolute ${isAr ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
-              <input
-                type="text"
-                placeholder={isAr ? 'ابحث برقم الكود SKU، اسم الموديل، اللون، أو الباركود...' : 'Search by SKU, Model name, Color or Barcode...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full py-2.5 text-sm rounded-xl transition-all focus:outline-none focus:ring-2 ${
-                  isAr ? 'pr-10 pl-4' : 'pl-10 pr-4'
-                } ${
-                  isDark
-                    ? 'bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:ring-blue-500'
-                    : 'bg-slate-100 border border-slate-300 text-slate-900 placeholder-slate-400 focus:ring-blue-600'
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Header Controls */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onToggleLang}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-            >
-              <Globe className="w-5 h-5" />
-            </button>
-            <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button
-              onClick={onOpenCart}
-              style={{ backgroundColor: primaryColor }}
-              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl shadow-md font-bold text-sm hover:brightness-110 active:scale-95 transition-all"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>{isAr ? 'أمر الشراء' : 'Purchase Order'}</span>
-              <span className="bg-white/20 px-2 py-0.5 rounded text-xs font-black">{cartCount}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
       {/* Catalog Body: Sidebar + Main Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -449,20 +322,6 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
           </section>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="py-8 mt-12 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 text-center sm:text-start flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} {storeName} — {isAr ? 'نظام توريدات المصانع GarmentOS' : 'GarmentOS Factory Procurement'}</p>
-          <div className="flex items-center gap-4">
-            <button onClick={onNavigateToTracking} className="hover:underline">
-              {isAr ? 'الاستعلام عن شحنة' : 'Track Order'}
-            </button>
-            <span>•</span>
-            <span>{isAr ? 'الرقم الضريبي وتراخيص التشغيل مسجلة' : 'Registered Commercial Factory'}</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

@@ -10,7 +10,10 @@ export type StorefrontView =
   | 'cart'
   | 'checkout'
   | 'account'
-  | 'tracking';
+  | 'tracking'
+  | 'about'
+  | 'contact'
+  | 'policies';
 
 export interface CartItem {
   variant_id: string;
@@ -153,15 +156,63 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
   const isAr = lang === 'ar';
   const currency = storeSettings?.currency || 'EGP';
 
-  // Navigation State
-  const [activeView, setActiveView] = useState<StorefrontView>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // Navigation State with Hash Parsing
+  const parseHashView = (): { view: StorefrontView; productId?: string; categoryId?: string } => {
+    try {
+      const hashClean = window.location.hash.split('?')[0].replace(/^#\/?/, '').toLowerCase().trim();
+      const parts = hashClean.split('/');
+      if (parts[0] === 'store' || parts[0] === 'shop') {
+        const sub = parts[2];
+        if (sub === 'shop') return { view: 'shop' };
+        if (sub === 'cart') return { view: 'cart' };
+        if (sub === 'checkout') return { view: 'checkout' };
+        if (sub === 'account') return { view: 'account' };
+        if (sub === 'track' || sub === 'tracking') return { view: 'tracking' };
+        if (sub === 'about') return { view: 'about' };
+        if (sub === 'contact') return { view: 'contact' };
+        if (sub === 'policies' || sub === 'policy') return { view: 'policies' };
+        if (sub === 'product' && parts[3]) return { view: 'product', productId: parts[3] };
+        if (sub === 'category' && parts[3]) return { view: 'category', categoryId: decodeURIComponent(parts[3]) };
+      }
+    } catch {}
+    return { view: 'home' };
+  };
+
+  const initialParsed = parseHashView();
+  const [activeView, setActiveViewState] = useState<StorefrontView>(initialParsed.view);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(initialParsed.productId || null);
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialParsed.categoryId || 'all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filters, setFilters] = useState<CommerceFilters>({
     sortBy: 'default',
     inStockOnly: false,
   });
+
+  const setActiveView = (view: StorefrontView) => {
+    setActiveViewState(view);
+    const tenantSlug = tenantInfo?.subdomain || tenantInfo?.code || tenantInfo?.id;
+    if (tenantSlug) {
+      const subpath = view === 'home' ? '' : `/${view}`;
+      const baseHash = `#/store/${tenantSlug}${subpath}`;
+      if (window.location.hash.split('?')[0] !== baseHash) {
+        const query = window.location.hash.includes('?') ? '?' + window.location.hash.split('?')[1] : '';
+        try {
+          window.history.replaceState(null, '', `${baseHash}${query}`);
+        } catch {}
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleHash = () => {
+      const parsed = parseHashView();
+      setActiveViewState(parsed.view);
+      if (parsed.productId) setSelectedProductId(parsed.productId);
+      if (parsed.categoryId) setSelectedCategory(parsed.categoryId);
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   // Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -224,13 +275,27 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
   // Quick navigation helpers
   const navigateToProduct = (productId: string) => {
     setSelectedProductId(productId);
-    setActiveView('product');
+    setActiveViewState('product');
+    const tenantSlug = tenantInfo?.subdomain || tenantInfo?.code || tenantInfo?.id;
+    if (tenantSlug) {
+      try {
+        const query = window.location.hash.includes('?') ? '?' + window.location.hash.split('?')[1] : '';
+        window.history.replaceState(null, '', `#/store/${tenantSlug}/product/${productId}${query}`);
+      } catch {}
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateToCategory = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    setActiveView('category');
+    setActiveViewState('category');
+    const tenantSlug = tenantInfo?.subdomain || tenantInfo?.code || tenantInfo?.id;
+    if (tenantSlug) {
+      try {
+        const query = window.location.hash.includes('?') ? '?' + window.location.hash.split('?')[1] : '';
+        window.history.replaceState(null, '', `#/store/${tenantSlug}/category/${encodeURIComponent(categoryId)}${query}`);
+      } catch {}
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

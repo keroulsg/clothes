@@ -329,6 +329,16 @@ class ApiClient {
     },
   };
 
+  public getMediaUrl = (url: string | null | undefined, fallback = ''): string => {
+    if (!url) return fallback;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+      return url;
+    }
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    const base = this.baseUrl.replace(/\/api\/v1\/?$/, '');
+    return `${base}${cleanUrl}`;
+  };
+
   // --- Tenant Profile & Settings ---
   public tenant = {
     getProfile: async (): Promise<{ tenant: ApiTenant; user?: ApiUser }> => {
@@ -2271,6 +2281,25 @@ class ApiClient {
     rollbackDesign: async (): Promise<any> => {
       return this.request('/storefront/design/rollback', {
         method: 'POST',
+      });
+    },
+    uploadMedia: async (file: File, category?: string, title?: string): Promise<{ message: string; media: any }> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (category) formData.append('category', category);
+      if (title) formData.append('title', title);
+      return this.request('/storefront/media/upload', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    listMedia: async (): Promise<{ media: any[] }> => {
+      return this.request('/storefront/media');
+    },
+    deleteMedia: async (pathOrUrl: string): Promise<any> => {
+      return this.request('/storefront/media', {
+        method: 'DELETE',
+        body: JSON.stringify({ path: pathOrUrl, url: pathOrUrl }),
       });
     },
 

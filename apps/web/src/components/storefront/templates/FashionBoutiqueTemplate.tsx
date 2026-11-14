@@ -1,16 +1,12 @@
 import React from 'react';
 import {
   ShoppingBag,
-  Search,
   Sparkles,
   ArrowRight,
   Truck,
   ShieldCheck,
   RotateCcw,
   Eye,
-  Sun,
-  Moon,
-  Globe,
   Tag,
 } from 'lucide-react';
 import type { StorefrontTemplateProps } from './types';
@@ -19,30 +15,15 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  tenantInfo,
   variants,
-  searchQuery,
-  setSearchQuery,
   selectedCategory,
   setSelectedCategory,
-  cartCount,
-  onOpenCart,
   onSelectProduct,
-  onNavigateToTracking,
-  onNavigateToErp,
-  onToggleTheme,
-  onToggleLang,
-  wholesaleUser,
   onOpenWholesaleModal,
-  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#0284c7';
-  const storeName = storeSettings?.store_name || tenantInfo?.name || 'Garment Fashion Direct';
-  const announcementText =
-    themeConfig.announcement_bar_text ||
-    (isAr ? '✨ شحن سريع ومجاني للطلبات فوق 1,000 ج.م في جميع المحافظات' : '✨ Fast & Free shipping on orders over 1,000 EGP nationwide');
 
   // Categories extraction
   const categories = ['all', 'T-Shirts', 'Polos', 'Pants', 'Dresses'];
@@ -54,139 +35,6 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
-      {/* Top Announcement Bar */}
-      {themeConfig.announcement_bar_enabled !== false && (
-        <div
-          style={{ backgroundColor: primaryColor }}
-          className="text-white text-xs sm:text-sm py-2 px-4 text-center font-medium shadow-sm transition-all"
-        >
-          <span>{announcementText}</span>
-        </div>
-      )}
-
-      {/* Header / Nav */}
-      <header
-        className={`sticky top-0 z-30 backdrop-blur-md border-b transition-colors ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          {/* Logo & Store Identity */}
-          <div className="flex items-center gap-3">
-            <div
-              style={{ backgroundColor: primaryColor }}
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-md transform hover:rotate-6 transition-transform"
-            >
-              {themeConfig.logo_url ? (
-                <img src={themeConfig.logo_url} alt="Logo" className="w-8 h-8 object-contain rounded-xl" />
-              ) : (
-                storeName.charAt(0)
-              )}
-            </div>
-            <div>
-              <h1 className="font-extrabold text-lg sm:text-xl tracking-tight leading-none">{storeName}</h1>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                {isAr ? 'المتجر الرسمي للمصنع مباشرة' : 'Direct Factory Boutique'}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-md mx-6">
-            <div className="relative w-full">
-              <Search className={`absolute ${isAr ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
-              <input
-                type="text"
-                placeholder={isAr ? 'ابحث عن الموديل، اللون، أو الكود...' : 'Search designs, colors, or SKU...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full py-2.5 text-sm rounded-full transition-all focus:outline-none focus:ring-2 ${
-                  isAr ? 'pr-10 pl-4' : 'pl-10 pr-4'
-                } ${
-                  isDark
-                    ? 'bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:ring-sky-500'
-                    : 'bg-slate-100 border border-slate-200 text-slate-900 placeholder-slate-400 focus:ring-sky-600'
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Actions & Utilities */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {wholesaleUser?.is_approved ? (
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-bold">
-                <span>✓ {wholesaleUser.company_name}</span>
-                {onLogoutWholesale && (
-                  <button onClick={onLogoutWholesale} className="text-slate-400 hover:text-rose-500 underline text-[10px]">
-                    {isAr ? 'خروج' : 'Logout'}
-                  </button>
-                )}
-              </div>
-            ) : onOpenWholesaleModal ? (
-              <button
-                onClick={onOpenWholesaleModal}
-                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white shadow-xs transition-colors"
-              >
-                {isAr ? 'بوابة الجملة (B2B)' : 'Trade Portal'}
-              </button>
-            ) : null}
-
-            <button
-              onClick={onNavigateToTracking}
-              className={`text-xs font-semibold px-3 py-2 rounded-xl border transition-all ${
-                isDark
-                  ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                  : 'border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              {isAr ? 'تتبع طلبك' : 'Track Order'}
-            </button>
-
-            {onNavigateToErp && (
-              <button
-                onClick={onNavigateToErp}
-                className={`hidden sm:inline-block text-xs font-semibold px-3 py-2 rounded-xl transition-all ${
-                  isDark
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {isAr ? 'لوحة المصنع' : 'ERP Panel'}
-              </button>
-            )}
-
-            <button
-              onClick={onToggleLang}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              title="Change Language"
-            >
-              <Globe className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              title="Toggle Theme"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-
-            {/* Cart Button */}
-            <button
-              onClick={onOpenCart}
-              style={{ backgroundColor: primaryColor }}
-              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-2xl shadow-lg font-bold text-sm transform hover:scale-105 active:scale-95 transition-all"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span className="hidden sm:inline">{isAr ? 'السلة' : 'Cart'}</span>
-              <span className="bg-white/30 backdrop-blur-sm px-2 py-0.5 rounded-full text-xs font-black">
-                {cartCount}
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Editorial Campaign Banner */}
       <section className="relative overflow-hidden py-12 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-sky-500/10 via-transparent to-transparent">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -490,20 +338,6 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="py-8 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} {storeName} — {isAr ? 'مدعوم بنظام GarmentOS Cloud' : 'Powered by GarmentOS Cloud'}</p>
-          <div className="flex items-center gap-4">
-            <button onClick={onNavigateToTracking} className="hover:underline">
-              {isAr ? 'تتبع شحنتك' : 'Track Package'}
-            </button>
-            <span>•</span>
-            <span>{isAr ? 'خدمة العملاء: 01000000000' : 'Support: 01000000000'}</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

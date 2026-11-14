@@ -292,7 +292,9 @@ export function App() {
       return { mode: 'store_track' as const, tenantSlug: slug };
     }
     if (raw.startsWith('store/') || raw.startsWith('shop/')) {
-      const slug = raw.replace(/^(store|shop)\//, '').trim();
+      const rest = raw.replace(/^(store|shop)\//, '').trim();
+      const parts = rest.split('/');
+      const slug = parts[0] || undefined;
       return { mode: 'store' as const, tenantSlug: slug };
     }
     if (raw === 'store' || raw === 'shop') {
@@ -1438,7 +1440,7 @@ export function App() {
               setTrackOrderInitial({ orderNumber, phone });
               window.location.hash = activeTenantSlug ? `#/store/${activeTenantSlug}/track` : '#/store/track';
             }}
-            onNavigateToErp={() => navigateToRoute('erp', 'dashboard')}
+            onNavigateToErp={api.isAuthenticated() ? () => navigateToRoute('erp', 'storefront') : undefined}
           />
         </Suspense>
       </div>

@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentSubmission;
 use App\Models\StoreOrder;
+use App\Models\TenantStoreSetting;
 use App\Services\DomainResolutionService;
 use App\Services\StorefrontService;
 use App\Services\SalesService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -646,6 +649,110 @@ class StorefrontController extends Controller
             ], 422);
         }
     }
+    /**
+     * رفع ملف وسائط (بنر، شعار، صورة قسم) لمكتبة وسائط المتجر
+     */
+    public function uploadMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $request->validate([
+            'file' => 'required_without:image|file|image|mimes:jpeg,png,jpg,webp,svg,gif|max:5120',
+            'image' => 'required_without:file|file|image|mimes:jpeg,png,jpg,webp,svg,gif|max:5120',
+            'title' => 'nullable|string|max:255',
+            'category' => 'nullable|string|in:banner,logo,category,general',
+        ]);
+
+        $file = $request->file('file') ?: $request->file('image');
+        $extension = $file->getClientOriginalExtension() ?: 'webp';
+        $safeName = 'media_' . date('Ymd_His') . '_' . Str::random(8) . '.' . strtolower($extension);
+
+        $path = $file->storeAs("storefront/{$tenantId}", $safeName, 'public');
+        $publicUrl = "/storage/{$path}";
+
+        $mediaItem = [
+            'id' => 'med_' . Str::random(10),
+            'url' => $publicUrl,
+            'path' => $path,
+            'filename' => $safeName,
+            'original_name' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+            'category' => $request->input('category', 'general'),
+            'title' => $request->input('title', $file->getClientOriginalName()),
+            'created_at' => now()->toISOString(),
+        ];
+
+        // حفظ في مكتبة وسائط المتجر داخل إعدادات المستأجر
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings) {
+            $config = $settings->theme_config ?? [];
+            $mediaList = $config['media_library'] ?? [];
+            array_unshift($mediaList, $mediaItem);
+            $config['media_library'] = array_slice($mediaList, 0, 50);
+            $settings->update(['theme_config' => $config]);
+        }
+
+        return response()->json([
+            'message' => 'تم رفع الصورة بنجاح إلى مكتبة وسائط المتجر',
+            'media' => $mediaItem,
+        ], 201);
+    }
+
+    /**
+     * استعراض مكتبة وسائط المتجر
+     */
+    public function listMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        $mediaList = $settings->theme_config['media_library'] ?? [];
+
+        return response()->json([
+            'media' => $mediaList,
+        ]);
+    }
+
+    /**
+     * حذف صورة من مكتبة الوسائط
+     */
+    public function deleteMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $path = $request->input('path');
+        $url = $request->input('url');
+
+        if (!$path && $url) {
+            $path = str_replace('/storage/', '', $url);
+        }
+
+        if (!$path || !str_starts_with($path, "storefront/{$tenantId}/")) {
+            return response()->json([
+                'error' => 'InvalidPath',
+                'message' => 'مسار الملف غير صالح أو لا يتبع هذا المتجر.',
+            ], 422);
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        // حذف من القائمة
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings) {
+            $config = $settings->theme_config ?? [];
+            $mediaList = $config['media_library'] ?? [];
+            $config['media_library'] = array_values(array_filter($mediaList, function ($m) use ($path) {
+                return ($m['path'] ?? '') !== $path;
+            }));
+            $settings->update(['theme_config' => $config]);
+        }
+
+        return response()->json([
+            'message' => 'تم حذف الصورة من مكتبة الوسائط بنجاح',
+        ]);
+    }
+
     private function scopeStoreOrdersToAssignedBranches($query, ?Request $request = null)
     {
         $user = ($request ?? request())->user();

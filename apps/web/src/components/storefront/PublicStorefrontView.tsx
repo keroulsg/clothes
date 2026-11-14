@@ -28,6 +28,7 @@ import { StorefrontCartPage } from './views/StorefrontCartPage';
 import { StorefrontCheckoutPage } from './views/StorefrontCheckoutPage';
 import { StorefrontAccountPage } from './views/StorefrontAccountPage';
 import { StorefrontOrderTrackingPage } from './views/StorefrontOrderTrackingPage';
+import { StorefrontContentPage } from './views/StorefrontContentPage';
 
 // 4 Distinct Presentation Themes
 import { FashionBoutiqueTemplate } from './templates/FashionBoutiqueTemplate';
@@ -327,11 +328,9 @@ export const PublicStorefrontView: React.FC<PublicStorefrontViewProps> = ({
             {isAr ? 'المتجر غير متاح' : 'Store Unavailable'}
           </h2>
           <p className="text-xs text-slate-500 leading-relaxed">{errorMsg}</p>
-          {onNavigateToErp && (
-            <Button variant="primary" className="text-xs rounded-xl" onClick={onNavigateToErp}>
-              {isAr ? 'العودة للوحة التحكم' : 'Return to ERP'}
-            </Button>
-          )}
+          <Button variant="primary" className="text-xs rounded-xl" onClick={() => { window.location.hash = '#/'; }}>
+            {isAr ? 'العودة للصفحة الرئيسية' : 'Return to Home'}
+          </Button>
         </div>
       </div>
     );
@@ -532,6 +531,9 @@ const StorefrontMainContent: React.FC<StorefrontMainContentProps> = ({
         {activeView === 'checkout' && <StorefrontCheckoutPage />}
         {activeView === 'account' && <StorefrontAccountPage />}
         {activeView === 'tracking' && <StorefrontOrderTrackingPage />}
+        {activeView === 'about' && <StorefrontContentPage pageType="about" />}
+        {activeView === 'contact' && <StorefrontContentPage pageType="contact" />}
+        {activeView === 'policies' && <StorefrontContentPage pageType="policies" />}
       </main>
 
       {/* 4. Global Quick Slide-Over Cart Drawer */}

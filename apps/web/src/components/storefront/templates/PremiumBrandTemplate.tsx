@@ -1,14 +1,9 @@
 import React from 'react';
 import {
   Crown,
-  ShoppingBag,
-  Search,
   Sparkles,
   ArrowRight,
   ShieldCheck,
-  Sun,
-  Moon,
-  Globe,
   Award,
   Gem,
 } from 'lucide-react';
@@ -18,25 +13,13 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  tenantInfo,
   variants,
-  searchQuery,
-  setSearchQuery,
-  cartCount,
-  onOpenCart,
   onSelectProduct,
-  onNavigateToTracking,
-  onNavigateToErp,
-  onToggleTheme,
-  onToggleLang,
-  wholesaleUser,
   onOpenWholesaleModal,
-  onLogoutWholesale,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#d97706';
-  const storeName = storeSettings?.store_name || tenantInfo?.name || 'Maison de Couture';
   const currency = storeSettings?.currency || 'EGP';
 
   return (
@@ -46,114 +29,6 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
-      {/* Top Gold Line Announcement */}
-      <div className="bg-gradient-to-r from-amber-700 via-amber-500 to-amber-700 text-stone-950 text-xs py-2 px-4 text-center font-sans font-bold tracking-widest uppercase shadow-sm">
-        <span>
-          {themeConfig.announcement_bar_text ||
-            (isAr
-              ? '⚜️ مجموعة التصاميم الفاخرة — أقمشة إيطالية منسوجة بحرفية مصرية أصيلة ⚜️'
-              : '⚜️ The Haute Couture Edition — Master Craftsmanship in Limited Runs ⚜️')}
-        </span>
-      </div>
-
-      {/* Luxury Navigation Header */}
-      <header
-        className={`sticky top-0 z-30 backdrop-blur-lg border-b transition-colors ${
-          isDark ? 'bg-zinc-950/90 border-amber-900/30' : 'bg-white/90 border-stone-200'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between gap-4 font-sans">
-          {/* Brand Seal */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full border-2 border-amber-600/60 flex items-center justify-center text-amber-500 shadow-md">
-              <Crown className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-serif text-2xl sm:text-3xl tracking-wider uppercase font-normal">{storeName}</h1>
-              <span className="text-[10px] tracking-[0.25em] text-amber-600/80 dark:text-amber-400/80 uppercase font-sans font-semibold block">
-                {isAr ? 'دار الأزياء والأناقة الراقية' : 'Haute Horlogerie & Couture'}
-              </span>
-            </div>
-          </div>
-
-          {/* Minimal Search */}
-          <div className="hidden lg:block flex-1 max-w-sm mx-8">
-            <div className="relative">
-              <Search className={`absolute ${isAr ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400`} />
-              <input
-                type="text"
-                placeholder={isAr ? 'ابحث في التشكيلة الحصرية...' : 'Search bespoke designs...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full py-2 text-xs rounded-none border-b focus:outline-none transition-colors ${
-                  isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'
-                } ${
-                  isDark
-                    ? 'bg-transparent border-zinc-700 text-white placeholder-zinc-500 focus:border-amber-500'
-                    : 'bg-transparent border-stone-300 text-stone-900 placeholder-stone-400 focus:border-amber-600'
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 text-xs">
-            {wholesaleUser?.is_approved ? (
-              <div className="flex items-center gap-2 border border-amber-600/60 bg-amber-950/40 text-amber-300 px-3 py-1 font-sans text-xs">
-                <span className="font-bold">⚜️ {wholesaleUser.company_name}</span>
-                {onLogoutWholesale && (
-                  <button onClick={onLogoutWholesale} className="text-stone-400 hover:text-white underline text-[10px]">
-                    {isAr ? 'خروج' : 'Logout'}
-                  </button>
-                )}
-              </div>
-            ) : onOpenWholesaleModal ? (
-              <button
-                onClick={onOpenWholesaleModal}
-                className="border border-amber-600/70 text-amber-500 hover:bg-amber-600 hover:text-white px-3 py-1.5 font-sans font-bold uppercase tracking-wider text-[11px] transition-colors"
-              >
-                {isAr ? 'حساب تجاري / بوتيك' : 'Trade Account'}
-              </button>
-            ) : null}
-
-            <button
-              onClick={onNavigateToTracking}
-              className="text-stone-400 hover:text-amber-500 transition-colors uppercase tracking-wider hidden sm:inline-block"
-            >
-              {isAr ? 'تتبع طلبك' : 'Track Order'}
-            </button>
-
-            {onNavigateToErp && (
-              <button
-                onClick={onNavigateToErp}
-                className="text-stone-400 hover:text-amber-500 transition-colors uppercase tracking-wider hidden sm:inline-block"
-              >
-                {isAr ? 'المصنع' : 'Atelier'}
-              </button>
-            )}
-
-            <button onClick={onToggleLang} className="p-2 text-stone-400 hover:text-amber-500 transition-colors">
-              <Globe className="w-4 h-4" />
-            </button>
-            <button onClick={onToggleTheme} className="p-2 text-stone-400 hover:text-amber-500 transition-colors">
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            {/* Gold Shopping Bag */}
-            <button
-              onClick={onOpenCart}
-              className="flex items-center gap-2 border border-amber-600 text-amber-500 hover:bg-amber-600 hover:text-white px-4 py-2 rounded-none transition-all uppercase tracking-widest font-sans font-bold"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>{isAr ? 'الحقيبة' : 'Bag'}</span>
-              <span className="bg-amber-600 text-white px-1.5 py-0.2 rounded text-[10px] font-black">
-                {cartCount}
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
-
       {/* Editorial Luxury Hero */}
       <section className="relative py-20 sm:py-28 px-4 text-center border-b border-stone-200 dark:border-zinc-800">
         <div className="max-w-4xl mx-auto space-y-6">
@@ -325,13 +200,6 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="py-12 border-t border-stone-200 dark:border-zinc-800 text-center text-xs text-stone-400 font-sans">
-        <p className="tracking-widest uppercase">
-          © {new Date().getFullYear()} {storeName} — {isAr ? 'جميع الحقوق الملكية محفوظة' : 'All Rights Reserved'}
-        </p>
-      </footer>
     </div>
   );
 };

@@ -30,7 +30,11 @@ export const StorefrontProductDetailPage: React.FC = () => {
     wholesaleUser,
     addToast,
     setIsCartOpen,
+    storeSettings,
   } = useStorefrontCommerce();
+
+  const themeConfig = storeSettings?.theme_config || {};
+  const productPageConfig = themeConfig.product_page || {};
 
   // Find the current product variant
   const product = useMemo(
@@ -248,17 +252,23 @@ export const StorefrontProductDetailPage: React.FC = () => {
               </h1>
 
               {/* Customer Rating Summary */}
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex text-amber-400">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400" />
-                  ))}
+              {productPageConfig.show_ratings !== false && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="flex text-amber-400">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-amber-400" />
+                    ))}
+                  </div>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {productPageConfig.rating_score || '5.0'}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    ({isAr
+                      ? `${productPageConfig.reviews_count || 28} تقييم موثق من المشترين`
+                      : `${productPageConfig.reviews_count || 28} verified reviews`})
+                  </span>
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">5.0</span>
-                <span className="text-xs text-slate-400">
-                  ({isAr ? '28 تقييم موثق من المشترين' : '28 verified reviews'})
-                </span>
-              </div>
+              )}
             </div>
 
             {/* Price Block */}
@@ -454,17 +464,17 @@ export const StorefrontProductDetailPage: React.FC = () => {
                 </button>
                 {openTab === 'details' && (
                   <div className="p-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800 space-y-2">
-                    <p>
-                      {isAr
+                    <p className="whitespace-pre-line">
+                      {product.description || (isAr
                         ? 'تم تصميم هذا المنتج وخياطته في مصانعنا باستخدام أجود خامات القطن المصري طويل التيلة مع مراعاة أعلى معايير ضبط الجودة وثبات الألوان ومقاومة الانكماش بعد الغسيل.'
-                        : 'Expertly tailored at our manufacturing facilities using premium Egyptian combed cotton, engineered for durability, colorfastness, and shrinkage resistance.'}
+                        : 'Expertly tailored at our manufacturing facilities using premium Egyptian combed cotton, engineered for durability, colorfastness, and shrinkage resistance.')}
                     </p>
                     <div className="grid grid-cols-2 gap-2 pt-2 text-[11px]">
                       <div>
                         <strong>{isAr ? 'كود الموديل:' : 'Model Code:'}</strong> {product.sku || 'N/A'}
                       </div>
                       <div>
-                        <strong>{isAr ? 'التصنيف:' : 'Category:'}</strong> Ready-to-Wear
+                        <strong>{isAr ? 'التصنيف:' : 'Category:'}</strong> {typeof product.category === 'string' ? product.category : product.category?.name || (isAr ? 'ملابس جاهزة' : 'Ready-to-Wear')}
                       </div>
                     </div>
                   </div>
@@ -484,10 +494,18 @@ export const StorefrontProductDetailPage: React.FC = () => {
                 </button>
                 {openTab === 'materials' && (
                   <div className="p-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800 space-y-1">
-                    <p>• 95% قطن مصري ممتاز، 5% ليكرا مرنة</p>
-                    <p>• غسيل آلي في ماء بارد (30 درجة مئوية)</p>
-                    <p>• تجنب استخدام مبيضات الكلور للحفاظ على الألوان</p>
-                    <p>• الكي على درجة حرارة متوسطة من الداخل</p>
+                    {productPageConfig.care_instructions_ar && isAr ? (
+                      <p className="whitespace-pre-line">{productPageConfig.care_instructions_ar}</p>
+                    ) : productPageConfig.care_instructions_en && !isAr ? (
+                      <p className="whitespace-pre-line">{productPageConfig.care_instructions_en}</p>
+                    ) : (
+                      <>
+                        <p>• {isAr ? '95% قطن مصري ممتاز، 5% ليكرا مرنة' : '95% Premium Egyptian Cotton, 5% Elastane'}</p>
+                        <p>• {isAr ? 'غسيل آلي في ماء بارد (30 درجة مئوية)' : 'Machine wash cold (30°C)'}</p>
+                        <p>• {isAr ? 'تجنب استخدام مبيضات الكلور للحفاظ على الألوان' : 'Do not bleach'}</p>
+                        <p>• {isAr ? 'الكي على درجة حرارة متوسطة من الداخل' : 'Iron on medium heat inside out'}</p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

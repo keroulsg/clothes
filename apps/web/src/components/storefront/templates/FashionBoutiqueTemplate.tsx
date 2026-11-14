@@ -40,8 +40,28 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#0284c7';
 
+  // Elementor Layout & Styler Config
+  const layoutConfig = themeConfig.layout || {};
+  const categoriesStyle = layoutConfig.categories_style || 'pills';
+  const productsGridCols = layoutConfig.products_grid_cols || 4;
+  const cardImageAspect = layoutConfig.card_image_aspect || 'portrait';
+  const cardImageFit = layoutConfig.card_image_fit || 'cover';
+  const pageBgColor = layoutConfig.page_bg_color || '';
+  const cardBgColor = layoutConfig.card_bg_color || '';
+  const cardBorderColor = layoutConfig.card_border_color || '';
+  const cardBorderRadius = layoutConfig.card_border_radius || 'md';
+  const cardShadow = layoutConfig.card_shadow || 'md';
+
   // Hero Banner Extraction (full ERP control)
   const heroBanner = themeConfig.hero_banner || {};
+
+  // Hero Display Controls
+  const heroHeight = heroBanner?.height || 'standard';
+  const heroFit = heroBanner?.image_fit || 'cover';
+  const heroPosition = heroBanner?.image_position || 'center';
+  const heroOverlayOpacity = typeof heroBanner?.overlay_opacity === 'number' ? heroBanner.overlay_opacity : 30;
+  const heroOverlayColor = heroBanner?.overlay_color || '#000000';
+  const heroTextAlign = heroBanner?.text_align || 'start';
   const isHeroEnabled = heroBanner.enabled !== false;
   const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
   const heroMobileImage = heroBanner.mobile_image || heroImage;
@@ -124,10 +144,27 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   // 1. Hero Section
   const renderHeroSection = () => {
     if (!isHeroEnabled) return null;
+
+    const heroHeightClass =
+      heroHeight === 'compact'
+        ? 'py-8 md:py-12 min-h-[380px]'
+        : heroHeight === 'tall'
+        ? 'py-16 md:py-28 min-h-[620px]'
+        : heroHeight === 'fullscreen'
+        ? 'py-20 md:py-32 min-h-[85vh] flex items-center'
+        : 'py-12 md:py-20 min-h-[480px]';
+
+    const textAlignClass =
+      heroTextAlign === 'center'
+        ? 'text-center items-center mx-auto'
+        : heroTextAlign === 'end'
+        ? 'text-end items-end ms-auto'
+        : 'text-start items-start';
+
     return (
-      <section className="relative overflow-hidden py-12 md:py-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-sky-500/10 via-transparent to-transparent">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-7 space-y-6">
+      <section className={`relative overflow-hidden ${heroHeightClass} px-4 sm:px-6 lg:px-8 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-b from-sky-500/10 via-transparent to-transparent`}>
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
+          <div className={`lg:col-span-7 space-y-6 flex flex-col ${textAlignClass}`}>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
               <Sparkles className="w-3.5 h-3.5" />
               <span>{heroBadge}</span>
@@ -163,18 +200,33 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
                   <img
                     src={api.getMediaUrl(heroImage)}
                     alt={heroTitle}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    style={{
+                      objectFit: heroFit as any,
+                      objectPosition: heroPosition,
+                    }}
+                    className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-700`}
                   />
                 </picture>
               ) : (
                 <img
                   src="https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=1200&q=80"
                   alt={heroTitle}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  style={{
+                    objectFit: heroFit as any,
+                    objectPosition: heroPosition,
+                  }}
+                  className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-700`}
                 />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent z-10 pointer-events-none" />
-              <div className="absolute inset-0 flex flex-col justify-end p-6 z-20 text-white pointer-events-none">
+              {/* Customizable Overlay Layer */}
+              <div
+                style={{
+                  backgroundColor: heroOverlayColor,
+                  opacity: heroOverlayOpacity / 100,
+                }}
+                className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300"
+              />
+              <div className="absolute inset-0 flex flex-col justify-end p-6 z-20 text-white pointer-events-none bg-gradient-to-t from-slate-950/80 via-transparent to-transparent">
                 <span className="text-xs uppercase tracking-widest text-sky-300 font-bold">
                   {heroBadge}
                 </span>
@@ -190,29 +242,109 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
     );
   };
 
-  // 2. Categories Bar Section
-  const renderCategoriesSection = () => (
-    <section className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800">
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`text-xs font-bold px-4 py-2 rounded-full whitespace-nowrap transition-all cursor-pointer ${
-              selectedCategory === cat
-                ? 'text-white shadow-md'
-                : isDark
-                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-            }`}
-            style={selectedCategory === cat ? { backgroundColor: primaryColor } : {}}
-          >
-            {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All Collection') : cat}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
+  // 2. Categories Bar Section (Pills, Circular Stories, or Grid Cards)
+  const renderCategoriesSection = () => {
+    if (categoriesStyle === 'circular_stories') {
+      return (
+        <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-6 overflow-x-auto pb-4 scrollbar-none">
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat;
+              const sampleVariant = variants?.find((v) => getCategoryString(v.category) === cat && (v.image || v.image_url));
+              const sampleImg = sampleVariant?.image || sampleVariant?.image_url;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className="flex flex-col items-center gap-2 group shrink-0 cursor-pointer focus:outline-none"
+                >
+                  <div
+                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full p-1 transition-all duration-300 ${
+                      isSelected
+                        ? 'ring-4 shadow-lg scale-105'
+                        : 'ring-2 ring-slate-200 dark:ring-slate-700 hover:scale-105'
+                    }`}
+                    style={isSelected ? { borderColor: primaryColor, boxShadow: `0 0 0 2px ${primaryColor}` } : {}}
+                  >
+                    <div className="w-full h-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      {sampleImg ? (
+                        <img src={api.getMediaUrl(sampleImg)} alt={cat} className="w-full h-full object-cover" />
+                      ) : (
+                        <Sparkles className="w-6 h-6 text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs font-bold max-w-[80px] text-center truncate ${
+                      isSelected ? 'font-black' : 'text-slate-700 dark:text-slate-300'
+                    }`}
+                    style={isSelected ? { color: primaryColor } : {}}
+                  >
+                    {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All Collection') : cat}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    if (categoriesStyle === 'grid_cards') {
+      return (
+        <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat;
+              const count = cat === 'all' ? (variants?.length || 0) : (variants?.filter(v => getCategoryString(v.category) === cat).length || 0);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`p-3 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between min-h-[85px] ${
+                    isSelected
+                      ? 'shadow-md ring-2 ring-sky-500/20'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 bg-white/50 dark:bg-slate-900/50'
+                  }`}
+                  style={isSelected ? { borderColor: primaryColor } : {}}
+                >
+                  <span className="text-xs font-bold truncate block">{cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">{count} {isAr ? 'موديل' : 'items'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    // Default: Pills style
+    return (
+      <section className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className={`text-xs font-bold px-4 py-2 rounded-full whitespace-nowrap transition-all cursor-pointer ${
+                selectedCategory === cat
+                  ? 'text-white shadow-md'
+                  : isDark
+                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+              }`}
+              style={selectedCategory === cat ? { backgroundColor: primaryColor } : {}}
+            >
+              {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All Collection') : cat}
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   // 3. Promotions Section
   const renderPromotionsSection = () => {
@@ -285,67 +417,102 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   };
 
   // 4. Products Grid Section
-  const renderProductsSection = () => (
-    <section id="products" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{isAr ? 'أحدث المعروضات' : 'Featured Catalog'}</span>
-          </div>
-          <h3 className="text-2xl sm:text-3xl font-black mt-1">
-            {isAr ? 'الموديلات الجاهزة للشحن الفوري' : 'Ready to Dispatch Styles'}
-          </h3>
-        </div>
-        {selectedCategory !== 'all' && (
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('all')}
-            className="text-xs text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>{isAr ? 'عرض كافة التصنيفات' : 'Show all categories'}</span>
-          </button>
-        )}
-      </div>
+  const renderProductsSection = () => {
+    const gridColsClass =
+      productsGridCols === 3
+        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+        : productsGridCols === 5
+        ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
-      {displayedVariants.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 space-y-3 bg-slate-100/50 dark:bg-slate-900/50 rounded-3xl p-8 border border-dashed border-slate-200 dark:border-slate-800">
-          <ShoppingBag className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700" />
-          <p className="text-base font-semibold text-slate-600 dark:text-slate-400">
-            {isAr ? 'لا توجد منتجات مطابقة لهذا التصنيف حالياً' : 'No products found matching this filter'}
-          </p>
+    const cardRadiusClass =
+      cardBorderRadius === 'none'
+        ? 'rounded-none'
+        : cardBorderRadius === 'sm'
+        ? 'rounded-lg'
+        : cardBorderRadius === 'md'
+        ? 'rounded-2xl'
+        : 'rounded-3xl';
+
+    const cardShadowClass =
+      cardShadow === 'none'
+        ? 'shadow-none'
+        : cardShadow === 'sm'
+        ? 'shadow-xs'
+        : cardShadow === 'lg'
+        ? 'shadow-2xl'
+        : 'shadow-md';
+
+    const cardAspectClass =
+      cardImageAspect === 'square'
+        ? 'aspect-square'
+        : cardImageAspect === 'tall'
+        ? 'aspect-[2/3]'
+        : 'aspect-[3/4]';
+
+    return (
+      <section id="products" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isAr ? 'أحدث المعروضات' : 'Featured Catalog'}</span>
+            </div>
+            <h3 className="text-2xl sm:text-3xl font-black mt-1">
+              {isAr ? 'الموديلات الجاهزة للشحن الفوري' : 'Ready to Dispatch Styles'}
+            </h3>
+          </div>
           {selectedCategory !== 'all' && (
             <button
               type="button"
               onClick={() => setSelectedCategory('all')}
-              className="text-xs font-bold text-sky-600 dark:text-sky-400 underline cursor-pointer"
+              className="text-xs text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
             >
-              {isAr ? 'إعادة ضبط التصفية وعرض كل الموديلات' : 'Reset filter & view all models'}
+              <RefreshCw className="w-3 h-3" />
+              <span>{isAr ? 'عرض كافة التصنيفات' : 'Show all categories'}</span>
             </button>
           )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {displayedVariants.map((v) => {
-            const inStock = v.in_stock > 0;
-            return (
-              <div
-                key={v.id}
-                className={`group rounded-3xl overflow-hidden border transition-all duration-300 flex flex-col ${
-                  isDark
-                    ? 'bg-slate-900 border-slate-800 hover:border-slate-700 hover:shadow-2xl'
-                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-xl'
-                }`}
+
+        {displayedVariants.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 space-y-3 bg-slate-100/50 dark:bg-slate-900/50 rounded-3xl p-8 border border-dashed border-slate-200 dark:border-slate-800">
+            <ShoppingBag className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700" />
+            <p className="text-base font-semibold text-slate-600 dark:text-slate-400">
+              {isAr ? 'لا توجد منتجات مطابقة لهذا التصنيف حالياً' : 'No products found matching this filter'}
+            </p>
+            {selectedCategory !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('all')}
+                className="text-xs font-bold text-sky-600 dark:text-sky-400 underline cursor-pointer"
               >
-                {/* Image Card Top with StorefrontImage */}
-                <div className="relative aspect-[3/4] bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <StorefrontImage
-                    src={v.image || v.image_url}
-                    alt={v.model_name || v.name}
-                    aspectRatio="portrait"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+                {isAr ? 'إعادة ضبط التصفية وعرض كل الموديلات' : 'Reset filter & view all models'}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className={`grid ${gridColsClass} gap-6`}>
+            {displayedVariants.map((v) => {
+              const inStock = v.in_stock > 0;
+              return (
+                <div
+                  key={v.id}
+                  style={{
+                    backgroundColor: cardBgColor || undefined,
+                    borderColor: cardBorderColor || undefined,
+                  }}
+                  className={`group ${cardRadiusClass} ${cardShadowClass} overflow-hidden border transition-all duration-300 flex flex-col ${
+                    !cardBgColor ? (isDark ? 'bg-slate-900' : 'bg-white') : ''
+                  } ${!cardBorderColor ? (isDark ? 'border-slate-800 hover:border-slate-700' : 'border-slate-200 hover:border-slate-300') : ''}`}
+                >
+                  {/* Image Card Top with StorefrontImage */}
+                  <div className={`relative ${cardAspectClass} bg-slate-100 dark:bg-slate-800 overflow-hidden`}>
+                    <StorefrontImage
+                      src={v.image || v.image_url}
+                      alt={v.model_name || v.name}
+                      objectFit={cardImageFit as any}
+                      className={`w-full h-full ${cardImageFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-500`}
+                    />
 
                   {v.gallery && v.gallery.length > 1 && (
                     <div className="absolute bottom-2 left-2 z-10">
@@ -468,7 +635,8 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
         </div>
       )}
     </section>
-  );
+    );
+  };
 
   // 5. Brand Heritage & Trust Badges Section
   const renderStorySection = () => (
@@ -614,8 +782,9 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
 
   return (
     <div
+      style={{ backgroundColor: pageBgColor || undefined }}
       className={`min-h-screen transition-colors duration-300 font-sans ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
+        !pageBgColor ? (isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800') : ''
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >

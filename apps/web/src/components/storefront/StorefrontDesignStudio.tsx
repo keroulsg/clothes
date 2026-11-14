@@ -28,6 +28,13 @@ import {
   Compass,
   FileText,
   Link,
+  SlidersHorizontal,
+  Grid,
+  Maximize2,
+  Square,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -174,6 +181,30 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showRollbackModal, setShowRollbackModal] = useState(false);
 
+  // --- Visual Styler / Mini-Elementor State ---
+  // Banner Styling & Image Display
+  const [bannerHeight, setBannerHeight] = useState<'compact' | 'standard' | 'tall' | 'fullscreen'>('standard');
+  const [bannerImageFit, setBannerImageFit] = useState<'cover' | 'contain'>('cover');
+  const [bannerImagePosition, setBannerImagePosition] = useState<'center' | 'top' | 'bottom'>('center');
+  const [bannerOverlayOpacity, setBannerOverlayOpacity] = useState<number>(30);
+  const [bannerOverlayColor, setBannerOverlayColor] = useState<string>('#000000');
+  const [bannerTextAlign, setBannerTextAlign] = useState<'start' | 'center' | 'end'>('start');
+
+  // Layout & Grid Styling
+  const [categoriesStyle, setCategoriesStyle] = useState<'pills' | 'circular_stories' | 'grid_cards'>('pills');
+  const [productsGridCols, setProductsGridCols] = useState<number>(4);
+  const [cardImageAspect, setCardImageAspect] = useState<'portrait' | 'square' | 'tall'>('portrait');
+  const [cardImageFit, setCardImageFit] = useState<'cover' | 'contain'>('cover');
+
+  // Global Colors & Card Styling
+  const [pageBgColor, setPageBgColor] = useState<string>('');
+  const [cardBgColor, setCardBgColor] = useState<string>('');
+  const [cardBorderColor, setCardBorderColor] = useState<string>('');
+  const [cardBorderRadius, setCardBorderRadius] = useState<'none' | 'sm' | 'md' | 'full'>('md');
+  const [cardShadow, setCardShadow] = useState<'none' | 'sm' | 'md' | 'lg'>('md');
+  const [headerBgColor, setHeaderBgColor] = useState<string>('');
+  const [footerBgColor, setFooterBgColor] = useState<string>('');
+
   // Fetch Studio Data
   const fetchStudio = async () => {
     setIsLoading(true);
@@ -196,6 +227,12 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
 
         if (config.hero_banner) {
           setHeroBanner((prev) => ({ ...prev, ...config.hero_banner }));
+          if (config.hero_banner.height) setBannerHeight(config.hero_banner.height);
+          if (config.hero_banner.image_fit) setBannerImageFit(config.hero_banner.image_fit);
+          if (config.hero_banner.image_position) setBannerImagePosition(config.hero_banner.image_position);
+          if (typeof config.hero_banner.overlay_opacity === 'number') setBannerOverlayOpacity(config.hero_banner.overlay_opacity);
+          if (config.hero_banner.overlay_color) setBannerOverlayColor(config.hero_banner.overlay_color);
+          if (config.hero_banner.text_align) setBannerTextAlign(config.hero_banner.text_align);
         } else if (data.store_settings) {
           setHeroBanner((prev) => ({
             ...prev,
@@ -203,6 +240,19 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
             subtitle: data.store_settings.banner_subtitle || prev.subtitle,
           }));
         }
+
+        const layout = config.layout || {};
+        if (layout.categories_style) setCategoriesStyle(layout.categories_style);
+        if (layout.products_grid_cols) setProductsGridCols(layout.products_grid_cols);
+        if (layout.card_image_aspect) setCardImageAspect(layout.card_image_aspect);
+        if (layout.card_image_fit) setCardImageFit(layout.card_image_fit);
+        if (layout.page_bg_color) setPageBgColor(layout.page_bg_color);
+        if (layout.card_bg_color) setCardBgColor(layout.card_bg_color);
+        if (layout.card_border_color) setCardBorderColor(layout.card_border_color);
+        if (layout.card_border_radius) setCardBorderRadius(layout.card_border_radius);
+        if (layout.card_shadow) setCardShadow(layout.card_shadow);
+        if (layout.header_bg_color) setHeaderBgColor(layout.header_bg_color);
+        if (layout.footer_bg_color) setFooterBgColor(layout.footer_bg_color);
 
         if (config.promo_banners && Array.isArray(config.promo_banners)) {
           setPromoBanners(config.promo_banners);
@@ -428,6 +478,25 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
         ...heroBanner,
         desktop_image: heroBanner.desktop_image?.trim() || '',
         mobile_image: heroBanner.mobile_image?.trim() || '',
+        height: bannerHeight,
+        image_fit: bannerImageFit,
+        image_position: bannerImagePosition,
+        overlay_opacity: bannerOverlayOpacity,
+        overlay_color: bannerOverlayColor,
+        text_align: bannerTextAlign,
+      },
+      layout: {
+        categories_style: categoriesStyle,
+        products_grid_cols: productsGridCols,
+        card_image_aspect: cardImageAspect,
+        card_image_fit: cardImageFit,
+        page_bg_color: pageBgColor,
+        card_bg_color: cardBgColor,
+        card_border_color: cardBorderColor,
+        card_border_radius: cardBorderRadius,
+        card_shadow: cardShadow,
+        header_bg_color: headerBgColor,
+        footer_bg_color: footerBgColor,
       },
       promo_banners: promoBanners.map((p: any) => ({
         ...p,
@@ -1073,6 +1142,172 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                   </div>
                 </div>
 
+                {/* Visual Styler / Elementor Controls for Hero Banner */}
+                <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {isAr ? 'التحكم في أبعاد وطريقة عرض صورة البنر (Visual Styler)' : 'Hero Banner Display & Sizing Controls'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-full">
+                      {isAr ? 'تأثير فوري' : 'Live Preview'}
+                    </span>
+                  </div>
+
+                  {/* 1. Banner Height */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'ارتفاع البنر (Banner Height)' : 'Banner Height'}
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'compact', name_ar: 'مدمج (380px)', name_en: 'Compact' },
+                        { id: 'standard', name_ar: 'متوازن (480px)', name_en: 'Standard' },
+                        { id: 'tall', name_ar: 'بارز (620px)', name_en: 'Tall Hero' },
+                        { id: 'fullscreen', name_ar: 'ملء الشاشة (85vh)', name_en: 'Fullscreen' },
+                      ].map((h) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => setBannerHeight(h.id as any)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition ${
+                            bannerHeight === h.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-slate-400'
+                          }`}
+                        >
+                          {isAr ? h.name_ar : h.name_en}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Image Fit & Position */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                        {isAr ? 'طريقة احتواء الصورة (Image Fit)' : 'Image Fit Mode'}
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBannerImageFit('cover')}
+                          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                            bannerImageFit === 'cover'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'تغطية كاملة (Cover)' : 'Cover (Fill)'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBannerImageFit('contain')}
+                          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                            bannerImageFit === 'contain'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <Square className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'عرض كامل دون قص (Contain)' : 'Contain (Full)'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                        {isAr ? 'نقطة تركيز الصورة ومحاذاتها (Position)' : 'Image Position'}
+                      </label>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'top', label_ar: 'أعلى', label_en: 'Top' },
+                          { id: 'center', label_ar: 'وسط', label_en: 'Center' },
+                          { id: 'bottom', label_ar: 'أسفل', label_en: 'Bottom' },
+                        ].map((pos) => (
+                          <button
+                            key={pos.id}
+                            type="button"
+                            onClick={() => setBannerImagePosition(pos.id as any)}
+                            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                              bannerImagePosition === pos.id
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {isAr ? pos.label_ar : pos.label_en}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Text Alignment & Overlay */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                        {isAr ? 'محاذاة نصوص وأزرار البنر' : 'Text Alignment'}
+                      </label>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'start', label_ar: 'يمين', label_en: 'Start', icon: AlignRight },
+                          { id: 'center', label_ar: 'توسيط', label_en: 'Center', icon: AlignCenter },
+                          { id: 'end', label_ar: 'يسار', label_en: 'End', icon: AlignLeft },
+                        ].map((align) => {
+                          const IconComp = align.icon;
+                          return (
+                            <button
+                              key={align.id}
+                              type="button"
+                              onClick={() => setBannerTextAlign(align.id as any)}
+                              className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                                bannerTextAlign === align.id
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              <IconComp className="w-3.5 h-3.5" />
+                              <span>{isAr ? align.label_ar : align.label_en}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          {isAr ? 'تعتيم طبقة الصورة (Overlay)' : 'Overlay Opacity'}
+                        </label>
+                        <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                          {bannerOverlayOpacity}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="80"
+                          step="5"
+                          value={bannerOverlayOpacity}
+                          onChange={(e) => setBannerOverlayOpacity(Number(e.target.value))}
+                          className="flex-1 accent-indigo-600 cursor-pointer"
+                        />
+                        <input
+                          type="color"
+                          value={bannerOverlayColor}
+                          onChange={(e) => setBannerOverlayColor(e.target.value)}
+                          className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700 shrink-0"
+                          title={isAr ? 'لون طبقة التعتيم' : 'Overlay Color'}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Additional Promotional Banners */}
                 <div className="pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
                   <div className="flex items-center justify-between">
@@ -1347,6 +1582,152 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Elementor Layout & Grid Controls */}
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-6">
+                <div>
+                  <h4 className="font-extrabold text-sm mb-1 flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                    <Grid className="w-4 h-4" />
+                    <span>{isAr ? 'تخصيص شبكة العرض ونمط الفئات والكروت (Layout Controls)' : 'Layout & Grid Styler'}</span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    {isAr ? 'التحكم في طريقة استعراض الفئات، عدد أعمدة المنتجات، ونسبة أبعاد الصور' : 'Customize categories appearance and product grid sizing'}
+                  </p>
+                </div>
+
+                {/* 1. Categories Layout Style */}
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {isAr ? 'طريقة عرض شريط الفئات (Categories Style)' : 'Categories Style'}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      {
+                        id: 'circular_stories',
+                        name_ar: 'دوائر عصرية (Stories)',
+                        name_en: 'Circular Stories',
+                        desc_ar: 'دوائر أنيقة تشبه إنستغرام مع صور الأقسام',
+                        desc_en: 'Instagram-like circular stories',
+                      },
+                      {
+                        id: 'grid_cards',
+                        name_ar: 'كروت صور عريضة (Cards)',
+                        name_en: 'Grid Cards',
+                        desc_ar: 'كروت مع خلفيات وعدد الموديلات',
+                        desc_en: 'Wide cards with product count',
+                      },
+                      {
+                        id: 'pills',
+                        name_ar: 'أزرار وشارات (Pills)',
+                        name_en: 'Pills & Badges',
+                        desc_ar: 'شارات أفقية سريعة قابلة للتمرير',
+                        desc_en: 'Clean horizontal pill badges',
+                      },
+                    ].map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        onClick={() => setCategoriesStyle(style.id as any)}
+                        className={`p-3 rounded-xl border text-start transition flex flex-col justify-between ${
+                          categoriesStyle === style.id
+                            ? 'bg-white dark:bg-slate-900 border-indigo-600 ring-2 ring-indigo-500/20 shadow-sm'
+                            : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="font-bold text-xs block text-slate-900 dark:text-slate-100">
+                          {isAr ? style.name_ar : style.name_en}
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                          {isAr ? style.desc_ar : style.desc_en}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Product Grid Columns & Card Sizing */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Grid Columns */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'أعمدة شبكة المنتجات (Grid Columns)' : 'Grid Columns'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { val: 3, label: isAr ? '3 أعمدة (كبير)' : '3 Cols' },
+                        { val: 4, label: isAr ? '4 أعمدة (قياسي)' : '4 Cols' },
+                        { val: 5, label: isAr ? '5 أعمدة (كثيف)' : '5 Cols' },
+                      ].map((col) => (
+                        <button
+                          key={col.val}
+                          type="button"
+                          onClick={() => setProductsGridCols(col.val)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            productsGridCols === col.val
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {col.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Image Aspect Ratio */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'أبعاد صورة الكرت (Aspect Ratio)' : 'Card Image Ratio'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'portrait', label: isAr ? '3:4 عمودي' : 'Portrait' },
+                        { id: 'square', label: isAr ? '1:1 مربع' : 'Square' },
+                        { id: 'tall', label: isAr ? '2:3 طويل' : 'Tall' },
+                      ].map((asp) => (
+                        <button
+                          key={asp.id}
+                          type="button"
+                          onClick={() => setCardImageAspect(asp.id as any)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            cardImageAspect === asp.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {asp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Image Fit */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'طريقة عرض الصورة بالكرت (Fit)' : 'Card Image Fit'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'cover', label: isAr ? 'ملء الكرت (Cover)' : 'Cover' },
+                        { id: 'contain', label: isAr ? 'كاملة (Contain)' : 'Contain' },
+                      ].map((fit) => (
+                        <button
+                          key={fit.id}
+                          type="button"
+                          onClick={() => setCardImageFit(fit.id as any)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            cardImageFit === fit.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {fit.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2062,6 +2443,255 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                       onChange={(e) => setAccentColor(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-xs uppercase"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Elementor Canvas & Card Color Styler */}
+              <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-5">
+                <div>
+                  <h5 className="font-extrabold text-xs mb-1 flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
+                    <Palette className="w-4 h-4" />
+                    <span>{isAr ? 'تخصيص ألوان الخلفيات والكروت (Canvas & Cards Theme)' : 'Canvas & Card Theme Styler'}</span>
+                  </h5>
+                  <p className="text-[11px] text-slate-500">
+                    {isAr ? 'تحكم دقيق في لون خلفية المتجر، ألوان الكروت، حوافها، والظلال' : 'Full control over body background, card containers, and styling'}
+                  </p>
+                </div>
+
+                {/* 1. Page Background Color */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {isAr ? 'لون خلفية المتجر العامة (Canvas / Page Background)' : 'Store Page Background'}
+                    </label>
+                    {pageBgColor && (
+                      <button
+                        type="button"
+                        onClick={() => setPageBgColor('')}
+                        className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                      >
+                        {isAr ? 'إعادة ضبط للافتراضي' : 'Reset to default'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      {[
+                        { val: '#ffffff', label: isAr ? 'أبيض ناصع' : 'White' },
+                        { val: '#f8fafc', label: isAr ? 'رمادي هادئ' : 'Soft Slate' },
+                        { val: '#fafaf9', label: isAr ? 'كريمي دافئ' : 'Warm Stone' },
+                        { val: '#0f172a', label: isAr ? 'داكن كحلي' : 'Dark Navy' },
+                      ].map((bg) => (
+                        <button
+                          key={bg.val}
+                          type="button"
+                          onClick={() => setPageBgColor(bg.val)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border flex items-center gap-1.5 transition ${
+                            pageBgColor === bg.val
+                              ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
+                          }`}
+                        >
+                          <span style={{ backgroundColor: bg.val }} className="w-3 h-3 rounded-full border border-slate-300 inline-block" />
+                          <span>{bg.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="color"
+                      value={pageBgColor || '#f8fafc'}
+                      onChange={(e) => setPageBgColor(e.target.value)}
+                      className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700 shrink-0"
+                      title={isAr ? 'اختر لون مخصص' : 'Custom Color'}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Product Card Styling & Colors */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-indigo-100 dark:border-indigo-900/30">
+                  {/* Card Background Color */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون خلفية كروت المنتجات' : 'Card Background'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={cardBgColor || '#ffffff'}
+                        onChange={(e) => setCardBgColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={cardBgColor}
+                        onChange={(e) => setCardBgColor(e.target.value)}
+                        placeholder="#ffffff (افتراضي)"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {cardBgColor && (
+                        <button
+                          type="button"
+                          onClick={() => setCardBgColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Border Color */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون إطار الكرت' : 'Card Border Color'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={cardBorderColor || '#e2e8f0'}
+                        onChange={(e) => setCardBorderColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={cardBorderColor}
+                        onChange={(e) => setCardBorderColor(e.target.value)}
+                        placeholder="#e2e8f0 (افتراضي)"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {cardBorderColor && (
+                        <button
+                          type="button"
+                          onClick={() => setCardBorderColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Card Radius & Shadow */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Border Radius */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'استدارة حواف الكرت (Radius)' : 'Border Radius'}
+                    </label>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: 'none', label: isAr ? 'حادة' : 'Sharp' },
+                        { id: 'sm', label: isAr ? 'ناعمة' : 'Soft' },
+                        { id: 'md', label: isAr ? 'مستديرة' : 'Rounded' },
+                        { id: 'full', label: isAr ? 'دائرية' : 'Pill' },
+                      ].map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setCardBorderRadius(r.id as any)}
+                          className={`flex-1 py-1.5 text-center rounded-lg text-xs font-bold border transition ${
+                            cardBorderRadius === r.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Shadow */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'ظلال الكروت (Shadow)' : 'Card Shadow'}
+                    </label>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: 'none', label: isAr ? 'مسطح' : 'Flat' },
+                        { id: 'sm', label: isAr ? 'خفيف' : 'Subtle' },
+                        { id: 'md', label: isAr ? 'متوسط' : 'Medium' },
+                        { id: 'lg', label: isAr ? 'مجسم 3D' : 'Elevated' },
+                      ].map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setCardShadow(s.id as any)}
+                          className={`flex-1 py-1.5 text-center rounded-lg text-xs font-bold border transition ${
+                            cardShadow === s.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Header & Footer Background Colors */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-indigo-100 dark:border-indigo-900/30">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون خلفية شريط الهيدر (Header BG)' : 'Header Background'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={headerBgColor || '#ffffff'}
+                        onChange={(e) => setHeaderBgColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={headerBgColor}
+                        onChange={(e) => setHeaderBgColor(e.target.value)}
+                        placeholder={isAr ? 'افتراضي الثيم' : 'Default theme'}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {headerBgColor && (
+                        <button
+                          type="button"
+                          onClick={() => setHeaderBgColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون خلفية الفوتر (Footer BG)' : 'Footer Background'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={footerBgColor || '#020617'}
+                        onChange={(e) => setFooterBgColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={footerBgColor}
+                        onChange={(e) => setFooterBgColor(e.target.value)}
+                        placeholder={isAr ? 'افتراضي داكن' : 'Default dark'}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {footerBgColor && (
+                        <button
+                          type="button"
+                          onClick={() => setFooterBgColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

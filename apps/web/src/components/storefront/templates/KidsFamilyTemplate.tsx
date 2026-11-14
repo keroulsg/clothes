@@ -42,6 +42,24 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   const isHeroEnabled = heroBanner.enabled !== false;
   const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
   const heroMobileImage = heroBanner.mobile_image || heroImage;
+
+  // Elementor Layout & Styler Config
+  const layoutConfig = themeConfig.layout || {};
+  const pageBgColor = layoutConfig.page_bg_color || '';
+  const cardBgColor = layoutConfig.card_bg_color || '';
+  const cardBorderColor = layoutConfig.card_border_color || '';
+  const cardBorderRadius = layoutConfig.card_border_radius || 'full';
+  const cardShadow = layoutConfig.card_shadow || 'md';
+  const cardImageAspect = layoutConfig.card_image_aspect || 'square';
+  const cardImageFit = layoutConfig.card_image_fit || 'cover';
+
+  // Hero Display Controls
+  const heroHeight = heroBanner?.height || 'standard';
+  const heroFit = heroBanner?.image_fit || 'cover';
+  const heroPosition = heroBanner?.image_position || 'center';
+  const heroOverlayOpacity = typeof heroBanner?.overlay_opacity === 'number' ? heroBanner.overlay_opacity : 20;
+  const heroOverlayColor = heroBanner?.overlay_color || '#000000';
+  const heroTextAlign = heroBanner?.text_align || 'start';
   const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'أجمل إطلالات طفلك من المصنع مباشرة' : 'Pure Comfort for Little Smiles');
   const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'ملابس أطفال ومواليد مصممة بخيوط قطنية نقية 100% بدون أي مواد كيميائية ضارة. مقاسات دقيقة وتصاميم مريحة للحركة واللعب.' : 'Gentle, 100% natural cotton garments crafted with non-toxic dyes, tagless labels, and stretchy designs for play and nap time.');
   const heroBadge = heroBanner.badge || (isAr ? 'نعومة فائقة وألوان مبهجة تناسب براءة طفلك' : 'Ultra-soft & Gentle Baby Care');
@@ -124,9 +142,26 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   // 1. Hero Section
   const renderHeroSection = () => {
     if (!isHeroEnabled) return null;
+
+    const heroHeightClass =
+      heroHeight === 'compact'
+        ? 'min-h-[260px]'
+        : heroHeight === 'tall'
+        ? 'min-h-[480px]'
+        : heroHeight === 'fullscreen'
+        ? 'min-h-[75vh]'
+        : 'min-h-[340px]';
+
+    const textAlignClass =
+      heroTextAlign === 'center'
+        ? 'text-center items-center mx-auto'
+        : heroTextAlign === 'end'
+        ? 'text-end items-end ms-auto'
+        : 'text-start items-start';
+
     return (
       <section className="py-8 md:py-14 px-4 max-w-7xl mx-auto">
-        <div className="relative rounded-3xl overflow-hidden shadow-xl min-h-[340px] flex items-center bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-amber-400">
+        <div className={`relative rounded-3xl overflow-hidden shadow-xl ${heroHeightClass} flex items-center bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-amber-400`}>
           {heroImage ? (
             <>
               <picture className="absolute inset-0 w-full h-full block">
@@ -134,23 +169,43 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
                 <img
                   src={api.getMediaUrl(heroImage)}
                   alt={heroTitle}
-                  className="w-full h-full object-cover"
+                  style={{
+                    objectFit: heroFit as any,
+                    objectPosition: heroPosition,
+                  }}
+                  className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                 />
               </picture>
-              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-transparent dark:from-slate-950/95 dark:via-slate-900/90 dark:to-slate-900/50 pointer-events-none" />
+              <div
+                style={{
+                  backgroundColor: heroOverlayColor,
+                  opacity: heroOverlayOpacity / 100,
+                }}
+                className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+              />
             </>
           ) : (
             <>
               <img
                 src="https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=1200&q=80"
                 alt={heroTitle}
-                className="w-full h-full object-cover absolute inset-0"
+                style={{
+                  objectFit: heroFit as any,
+                  objectPosition: heroPosition,
+                }}
+                className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} absolute inset-0`}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-transparent dark:from-slate-950/95 dark:via-slate-900/90 dark:to-slate-900/50 pointer-events-none" />
+              <div
+                style={{
+                  backgroundColor: heroOverlayColor,
+                  opacity: heroOverlayOpacity / 100,
+                }}
+                className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+              />
             </>
           )}
 
-          <div className="relative z-10 p-8 sm:p-12 max-w-2xl space-y-4">
+          <div className={`relative z-10 p-8 sm:p-12 max-w-2xl space-y-4 flex flex-col ${textAlignClass}`}>
             <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-xs font-black text-orange-600 shadow-sm">
               <Smile className="w-4 h-4" />
               <span>{heroBadge}</span>
@@ -319,26 +374,63 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {displayedVariants.map((v: any) => {
             const inStock = v.in_stock > 0;
+            const cardRadiusClass =
+              cardBorderRadius === 'none'
+                ? 'rounded-none'
+                : cardBorderRadius === 'sm'
+                ? 'rounded-lg'
+                : cardBorderRadius === 'md'
+                ? 'rounded-2xl'
+                : 'rounded-3xl';
+
+            const cardShadowClass =
+              cardShadow === 'none'
+                ? 'shadow-none'
+                : cardShadow === 'sm'
+                ? 'shadow-xs'
+                : cardShadow === 'lg'
+                ? 'shadow-2xl'
+                : 'shadow-md';
+
+            const cardAspectClass =
+              cardImageAspect === 'portrait'
+                ? 'aspect-[3/4]'
+                : cardImageAspect === 'tall'
+                ? 'aspect-[2/3]'
+                : 'aspect-square';
+
             return (
               <div
                 key={v.id}
-                className={`rounded-3xl border p-4 transition-all duration-300 flex flex-col justify-between ${
-                  isDark
-                    ? 'bg-slate-900 border-amber-900/30 hover:border-amber-700/60 shadow-md'
-                    : 'bg-white border-amber-100 hover:border-amber-300 shadow-sm hover:shadow-lg'
+                style={{
+                  backgroundColor: cardBgColor || undefined,
+                  borderColor: cardBorderColor || undefined,
+                }}
+                className={`${cardRadiusClass} ${cardShadowClass} border p-4 transition-all duration-300 flex flex-col justify-between ${
+                  !cardBgColor
+                    ? isDark
+                      ? 'bg-slate-900 shadow-md'
+                      : 'bg-white shadow-sm hover:shadow-lg'
+                    : ''
+                } ${
+                  !cardBorderColor
+                    ? isDark
+                      ? 'border-amber-900/30 hover:border-amber-700/60'
+                      : 'border-amber-100 hover:border-amber-300'
+                    : ''
                 }`}
               >
                 <div>
                   {/* Image with StorefrontImage */}
                   <div
                     onClick={() => onSelectProduct(v)}
-                    className="relative aspect-square rounded-2xl overflow-hidden bg-amber-50 dark:bg-slate-800 mb-3 cursor-pointer group"
+                    className={`relative ${cardAspectClass} rounded-2xl overflow-hidden bg-amber-50 dark:bg-slate-800 mb-3 cursor-pointer group`}
                   >
                     <StorefrontImage
-                      src={v.image}
-                      alt={v.model_name}
-                      aspectRatio="square"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      src={v.image || v.image_url}
+                      alt={v.model_name || v.name}
+                      objectFit={cardImageFit as any}
+                      className={`w-full h-full ${cardImageFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-300`}
                     />
 
                     {inStock ? (
@@ -488,8 +580,9 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
 
   return (
     <div
+      style={{ backgroundColor: pageBgColor || undefined }}
       className={`min-h-screen font-sans transition-colors duration-300 ${
-        isDark ? 'bg-amber-950/20 text-slate-100' : 'bg-amber-50/40 text-slate-800'
+        !pageBgColor ? (isDark ? 'bg-amber-950/20 text-slate-100' : 'bg-amber-50/40 text-slate-800') : ''
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >

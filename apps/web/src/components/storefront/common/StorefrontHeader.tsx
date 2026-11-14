@@ -143,16 +143,19 @@ export const StorefrontHeader: React.FC = () => {
 
       {/* 2. MAIN NAVIGATION BAR */}
       <div
+        style={{ backgroundColor: themeConfig.layout?.header_bg_color || undefined }}
         className={`px-4 sm:px-6 lg:px-8 transition-colors duration-200 border-b backdrop-blur-md ${
-          isDark
-            ? normalizedTheme === 'premium_brand'
-              ? 'bg-zinc-950/95 text-zinc-100 border-zinc-800'
-              : 'bg-slate-900/95 text-slate-100 border-slate-800'
-            : normalizedTheme === 'premium_brand'
-            ? 'bg-stone-50/95 text-stone-900 border-stone-200'
-            : normalizedTheme === 'kids_family'
-            ? 'bg-white/95 text-slate-900 border-amber-100'
-            : 'bg-white/95 text-slate-900 border-slate-200'
+          !themeConfig.layout?.header_bg_color
+            ? isDark
+              ? normalizedTheme === 'premium_brand'
+                ? 'bg-zinc-950/95 text-zinc-100 border-zinc-800'
+                : 'bg-slate-900/95 text-slate-100 border-slate-800'
+              : normalizedTheme === 'premium_brand'
+              ? 'bg-stone-50/95 text-stone-900 border-stone-200'
+              : normalizedTheme === 'kids_family'
+              ? 'bg-white/95 text-slate-900 border-amber-100'
+              : 'bg-white/95 text-slate-900 border-slate-200'
+            : ''
         }`}
         dir={isAr ? 'rtl' : 'ltr'}
       >

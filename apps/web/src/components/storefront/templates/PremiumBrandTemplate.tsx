@@ -39,6 +39,24 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   const isHeroEnabled = heroBanner.enabled !== false;
   const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
   const heroMobileImage = heroBanner.mobile_image || heroImage;
+
+  // Elementor Layout & Styler Config
+  const layoutConfig = themeConfig.layout || {};
+  const pageBgColor = layoutConfig.page_bg_color || '';
+  const cardBgColor = layoutConfig.card_bg_color || '';
+  const cardBorderColor = layoutConfig.card_border_color || '';
+  const cardBorderRadius = layoutConfig.card_border_radius || 'none';
+  const cardShadow = layoutConfig.card_shadow || 'none';
+  const cardImageAspect = layoutConfig.card_image_aspect || 'portrait';
+  const cardImageFit = layoutConfig.card_image_fit || 'cover';
+
+  // Hero Display Controls
+  const heroHeight = heroBanner?.height || 'standard';
+  const heroFit = heroBanner?.image_fit || 'cover';
+  const heroPosition = heroBanner?.image_position || 'center';
+  const heroOverlayOpacity = typeof heroBanner?.overlay_opacity === 'number' ? heroBanner.overlay_opacity : 35;
+  const heroOverlayColor = heroBanner?.overlay_color || '#000000';
+  const heroTextAlign = heroBanner?.text_align || 'center';
   const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'فخامة لا تخطئها العين' : 'Timeless Elegance & Prestige');
   const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'قصات دقيقة تعكس روح الفخامة المعاصرة. قطع منسوجة خصيصاً للمناسبات الراقية والإطلالات التي تستحق التميز.' : 'Impeccable silhouettes meeting exquisite textiles. Tailored pieces crafted strictly for those who discern the art of fine dressing.');
   const heroBadge = heroBanner.badge || (isAr ? 'إصدار فاخر محدود' : 'Limited Atelier Edition');
@@ -101,8 +119,18 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
   // 1. Hero Section
   const renderHeroSection = () => {
     if (!isHeroEnabled) return null;
+
+    const heroHeightClass =
+      heroHeight === 'compact'
+        ? 'py-16 md:py-20 min-h-[360px]'
+        : heroHeight === 'tall'
+        ? 'py-28 md:py-44 min-h-[640px]'
+        : heroHeight === 'fullscreen'
+        ? 'py-32 md:py-48 min-h-[85vh] flex items-center justify-center'
+        : 'py-24 sm:py-32 min-h-[480px]';
+
     return (
-      <section className="relative py-24 sm:py-32 px-4 text-center border-b border-stone-200 dark:border-zinc-800 overflow-hidden">
+      <section className={`relative ${heroHeightClass} px-4 text-center border-b border-stone-200 dark:border-zinc-800 overflow-hidden`}>
         <div className="absolute inset-0 z-0">
           {heroImage ? (
             <picture className="w-full h-full block">
@@ -110,20 +138,35 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
               <img
                 src={api.getMediaUrl(heroImage)}
                 alt={heroTitle}
-                className="w-full h-full object-cover filter brightness-[0.35]"
+                style={{
+                  objectFit: heroFit as any,
+                  objectPosition: heroPosition,
+                }}
+                className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} filter brightness-[0.35]`}
               />
             </picture>
           ) : (
             <img
               src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=80"
               alt={heroTitle}
-              className="w-full h-full object-cover filter brightness-[0.35]"
+              style={{
+                objectFit: heroFit as any,
+                objectPosition: heroPosition,
+              }}
+              className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} filter brightness-[0.35]`}
             />
           )}
+          <div
+            style={{
+              backgroundColor: heroOverlayColor,
+              opacity: heroOverlayOpacity / 100,
+            }}
+            className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-stone-950/40 pointer-events-none" />
         </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto space-y-6">
+        <div className={`relative z-10 max-w-4xl mx-auto space-y-6 ${heroTextAlign === 'start' ? 'text-start' : heroTextAlign === 'end' ? 'text-end' : 'text-center'}`}>
           <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] font-sans font-bold" style={{ color: primaryColor }}>
             <Gem className="w-4 h-4" />
             <span>{heroBadge}</span>
@@ -261,22 +304,53 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           {displayedVariants.map((v: any) => {
-          const inStock = v.in_stock > 0;
-          return (
-            <div
-              key={v.id}
-              className="group border border-stone-200 dark:border-zinc-800 hover:border-amber-600/60 transition-all duration-500 bg-white dark:bg-zinc-900/40 flex flex-col justify-between"
-            >
+            const inStock = v.in_stock > 0;
+            const cardRadiusClass =
+              cardBorderRadius === 'none'
+                ? 'rounded-none'
+                : cardBorderRadius === 'sm'
+                ? 'rounded-lg'
+                : cardBorderRadius === 'md'
+                ? 'rounded-2xl'
+                : 'rounded-3xl';
+
+            const cardShadowClass =
+              cardShadow === 'none'
+                ? 'shadow-none'
+                : cardShadow === 'sm'
+                ? 'shadow-xs'
+                : cardShadow === 'lg'
+                ? 'shadow-2xl'
+                : 'shadow-md';
+
+            const cardAspectClass =
+              cardImageAspect === 'square'
+                ? 'aspect-square'
+                : cardImageAspect === 'tall'
+                ? 'aspect-[2/3]'
+                : 'aspect-[3/4]';
+
+            return (
               <div
-                onClick={() => onSelectProduct(v)}
-                className="relative aspect-[3/4] bg-stone-100 dark:bg-zinc-950 overflow-hidden flex items-center justify-center p-0 cursor-pointer group"
+                key={v.id}
+                style={{
+                  backgroundColor: cardBgColor || undefined,
+                  borderColor: cardBorderColor || undefined,
+                }}
+                className={`group ${cardRadiusClass} ${cardShadowClass} border transition-all duration-500 flex flex-col justify-between ${
+                  !cardBgColor ? 'bg-white dark:bg-zinc-900/40' : ''
+                } ${!cardBorderColor ? 'border-stone-200 dark:border-zinc-800 hover:border-amber-600/60' : ''}`}
               >
-                <StorefrontImage
-                  src={v.image}
-                  alt={v.model_name}
-                  aspectRatio="portrait"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
+                <div
+                  onClick={() => onSelectProduct(v)}
+                  className={`relative ${cardAspectClass} bg-stone-100 dark:bg-zinc-950 overflow-hidden flex items-center justify-center p-0 cursor-pointer group`}
+                >
+                  <StorefrontImage
+                    src={v.image}
+                    alt={v.model_name}
+                    objectFit={cardImageFit as any}
+                    className={`w-full h-full ${cardImageFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-700`}
+                  />
 
                 {v.gallery && v.gallery.length > 1 && (
                   <div className="absolute bottom-3 left-3 z-10">
@@ -443,8 +517,9 @@ export const PremiumBrandTemplate: React.FC<StorefrontTemplateProps> = ({
 
   return (
     <div
+      style={{ backgroundColor: pageBgColor || undefined }}
       className={`min-h-screen font-serif transition-colors duration-300 ${
-        isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-stone-50 text-stone-900'
+        !pageBgColor ? (isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-stone-50 text-stone-900') : ''
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >

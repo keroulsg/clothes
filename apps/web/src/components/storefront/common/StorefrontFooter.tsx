@@ -30,7 +30,10 @@ export const StorefrontFooter: React.FC = () => {
 
   return (
     <footer
-      className="bg-slate-950 text-slate-300 border-t border-slate-800 pt-12 pb-8 mt-16 select-none"
+      style={{ backgroundColor: themeConfig.layout?.footer_bg_color || undefined }}
+      className={`text-slate-300 border-t border-slate-800 pt-12 pb-8 mt-16 select-none ${
+        !themeConfig.layout?.footer_bg_color ? 'bg-slate-950' : ''
+      }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

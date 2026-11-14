@@ -44,6 +44,24 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   const isHeroEnabled = heroBanner.enabled !== false;
   const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
   const heroMobileImage = heroBanner.mobile_image || heroImage;
+
+  // Elementor Layout & Styler Config
+  const layoutConfig = themeConfig.layout || {};
+  const pageBgColor = layoutConfig.page_bg_color || '';
+  const cardBgColor = layoutConfig.card_bg_color || '';
+  const cardBorderColor = layoutConfig.card_border_color || '';
+  const cardBorderRadius = layoutConfig.card_border_radius || 'md';
+  const cardShadow = layoutConfig.card_shadow || 'sm';
+  const cardImageAspect = layoutConfig.card_image_aspect || 'wide';
+  const cardImageFit = layoutConfig.card_image_fit || 'cover';
+
+  // Hero Display Controls
+  const heroHeight = heroBanner?.height || 'standard';
+  const heroFit = heroBanner?.image_fit || 'cover';
+  const heroPosition = heroBanner?.image_position || 'center';
+  const heroOverlayOpacity = typeof heroBanner?.overlay_opacity === 'number' ? heroBanner.overlay_opacity : 40;
+  const heroOverlayColor = heroBanner?.overlay_color || '#000000';
+  const heroTextAlign = heroBanner?.text_align || 'start';
   const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'كتالوج المصنع للإنتاج المباشر والتوريدات' : 'Factory Direct Catalog & Supply');
   const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'موديلات جاهزة للشحن بأسعار الجملة والتجزئة من أرض المصنع مع إمكانية التعاقد والتوريد بكميات ضخمة.' : 'Export quality apparel ready for dispatch with tiered wholesale and corporate ordering.');
   const heroBadge = heroBanner.badge || (isAr ? 'توريدات مصانع وشركات — B2B & Retail' : 'Wholesale & Retail Ready');
@@ -123,8 +141,25 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   // 1. Hero Section
   const renderHeroSection = () => {
     if (!isHeroEnabled) return null;
+
+    const heroHeightClass =
+      heroHeight === 'compact'
+        ? 'min-h-[220px]'
+        : heroHeight === 'tall'
+        ? 'min-h-[420px]'
+        : heroHeight === 'fullscreen'
+        ? 'min-h-[75vh]'
+        : 'min-h-[280px]';
+
+    const textAlignClass =
+      heroTextAlign === 'center'
+        ? 'text-center items-center mx-auto'
+        : heroTextAlign === 'end'
+        ? 'text-end items-end ms-auto'
+        : 'text-start items-start';
+
     return (
-      <section className="mb-8 rounded-3xl overflow-hidden relative shadow-lg min-h-[220px] sm:min-h-[280px] flex items-center bg-slate-900 text-white">
+      <section className={`mb-8 rounded-3xl overflow-hidden relative shadow-lg ${heroHeightClass} flex items-center bg-slate-900 text-white`}>
         {heroImage ? (
           <>
             <picture className="absolute inset-0 w-full h-full block">
@@ -132,22 +167,42 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
               <img
                 src={api.getMediaUrl(heroImage)}
                 alt={heroTitle}
-                className="w-full h-full object-cover"
+                style={{
+                  objectFit: heroFit as any,
+                  objectPosition: heroPosition,
+                }}
+                className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'}`}
               />
             </picture>
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-transparent pointer-events-none" />
+            <div
+              style={{
+                backgroundColor: heroOverlayColor,
+                opacity: heroOverlayOpacity / 100,
+              }}
+              className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+            />
           </>
         ) : (
           <>
             <img
               src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80"
               alt={heroTitle}
-              className="w-full h-full object-cover absolute inset-0 filter brightness-[0.4]"
+              style={{
+                objectFit: heroFit as any,
+                objectPosition: heroPosition,
+              }}
+              className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} absolute inset-0`}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-transparent pointer-events-none" />
+            <div
+              style={{
+                backgroundColor: heroOverlayColor,
+                opacity: heroOverlayOpacity / 100,
+              }}
+              className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+            />
           </>
         )}
-        <div className="relative z-10 p-6 sm:p-10 max-w-2xl space-y-3">
+        <div className={`relative z-10 p-6 sm:p-10 max-w-2xl space-y-3 flex flex-col ${textAlignClass}`}>
           {heroBadge && (
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">
               <Sparkles className="w-3.5 h-3.5 text-blue-400" />
@@ -372,14 +427,41 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredVariants.map((v: any) => {
               const inStock = v.in_stock > 0;
+              const cardRadiusClass =
+                cardBorderRadius === 'none'
+                  ? 'rounded-none'
+                  : cardBorderRadius === 'sm'
+                  ? 'rounded-lg'
+                  : cardBorderRadius === 'md'
+                  ? 'rounded-2xl'
+                  : 'rounded-3xl';
+
+              const cardShadowClass =
+                cardShadow === 'none'
+                  ? 'shadow-none'
+                  : cardShadow === 'sm'
+                  ? 'shadow-xs'
+                  : cardShadow === 'lg'
+                  ? 'shadow-2xl'
+                  : 'shadow-sm';
+
+              const cardAspectClass =
+                cardImageAspect === 'square'
+                  ? 'aspect-square'
+                  : cardImageAspect === 'tall'
+                  ? 'aspect-[2/3]'
+                  : 'aspect-[16/10]';
+
               return (
                 <div
                   key={v.id}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                    isDark
-                      ? 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                      : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow'
-                  }`}
+                  style={{
+                    backgroundColor: cardBgColor || undefined,
+                    borderColor: cardBorderColor || undefined,
+                  }}
+                  className={`p-4 ${cardRadiusClass} ${cardShadowClass} border transition-all flex flex-col justify-between gap-3 ${
+                    !cardBgColor ? (isDark ? 'bg-slate-900' : 'bg-white') : ''
+                  } ${!cardBorderColor ? (isDark ? 'border-slate-800 hover:border-slate-700' : 'border-slate-200 hover:border-slate-300') : ''}`}
                 >
                   <div>
                     {/* Top Meta: SKU + Stock */}
@@ -403,13 +485,13 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
                     {/* Product Image with universal fallback */}
                     <div
                       onClick={() => onSelectProduct(v)}
-                      className="relative aspect-[16/10] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 mb-2 cursor-pointer group"
+                      className={`relative ${cardAspectClass} rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 mb-2 cursor-pointer group`}
                     >
                       <StorefrontImage
                         src={v.image}
                         alt={v.model_name}
-                        aspectRatio="wide"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        objectFit={cardImageFit as any}
+                        className={`w-full h-full ${cardImageFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-300`}
                       />
                       {v.gallery && v.gallery.length > 1 && (
                         <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-mono">
@@ -596,8 +678,9 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
 
   return (
     <div
+      style={{ backgroundColor: pageBgColor || undefined }}
       className={`min-h-screen font-sans transition-colors duration-200 ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
+        !pageBgColor ? (isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800') : ''
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >

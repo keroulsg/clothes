@@ -445,9 +445,19 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
 
                   {(storeInfo?.instapay_identifier || storeInfo?.instapay_handle) && (
                     <div className="mb-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 text-xs space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-purple-800 dark:text-purple-300 font-semibold">{isAr ? 'معرف التحويل (InstaPay):' : 'InstaPay Handle:'}</span>
-                        <span className="font-mono font-bold text-purple-900 dark:text-purple-100">{storeInfo.instapay_identifier || storeInfo.instapay_handle}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-purple-800 dark:text-purple-300 font-semibold">{isAr ? 'معرف / رقم التحويل (InstaPay):' : 'InstaPay Handle/Phone:'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-purple-900 dark:text-purple-100">{storeInfo.instapay_identifier || storeInfo.instapay_handle}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(storeInfo.instapay_identifier || storeInfo.instapay_handle)}
+                            className="p-1 rounded text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900 transition"
+                            title={isAr ? 'نسخ الحساب' : 'Copy'}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-purple-800 dark:text-purple-300">{isAr ? 'اسم المستفيد:' : 'Beneficiary:'}</span>

@@ -21,6 +21,7 @@ import {
   Layers,
   Building2,
   Ban,
+  MessageCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -181,18 +182,24 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
         api.storefront.getWholesaleApplications(),
       ]);
 
-      if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
-        setOrders(ordersRes.value.data);
+      if (ordersRes.status === 'fulfilled') {
+        const oVal = ordersRes.value as any;
+        const oList = oVal?.data || oVal?.orders || (Array.isArray(oVal) ? oVal : []);
+        setOrders(oList);
       }
-      if (settingsRes.status === 'fulfilled' && settingsRes.value?.store_settings) {
-        setStoreSettings(settingsRes.value.store_settings);
-        setPreviewThemeId(settingsRes.value.store_settings.theme_id || 'modern_fashion');
+      if (settingsRes.status === 'fulfilled' && (settingsRes.value as any)?.store_settings) {
+        setStoreSettings((settingsRes.value as any).store_settings);
+        setPreviewThemeId((settingsRes.value as any).store_settings.theme_id || 'modern_fashion');
       }
-      if (pendingRes.status === 'fulfilled' && pendingRes.value?.data) {
-        setPendingPayments(pendingRes.value.data);
+      if (pendingRes.status === 'fulfilled') {
+        const pVal = pendingRes.value as any;
+        const pList = pVal?.submissions || pVal?.data || (Array.isArray(pVal) ? pVal : []);
+        setPendingPayments(pList);
       }
-      if (wholesaleRes.status === 'fulfilled' && wholesaleRes.value?.data) {
-        setWholesaleApplications(wholesaleRes.value.data);
+      if (wholesaleRes.status === 'fulfilled') {
+        const wVal = wholesaleRes.value as any;
+        const wList = wVal?.data || wVal?.applications || (Array.isArray(wVal) ? wVal : []);
+        setWholesaleApplications(wList);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المتجر' : 'Failed to load storefront data'));
@@ -263,10 +270,31 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
       } else {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
       }
-      setSuccessMsg(isAr ? `تم تحديث حالة الطلب إلى: ${nextStatus}` : `Order status updated to: ${nextStatus}`);
+      const statusLabels: Record<string, string> = {
+        confirmed: isAr ? 'مؤكد وموافق عليه' : 'Confirmed',
+        preparing: isAr ? 'جاري التجهيز والتعبئة' : 'Preparing',
+        shipped: isAr ? 'تم الشحن مع مندوب التوصيل' : 'Shipped',
+        delivered: isAr ? 'تم التسليم بنجاح للعميل' : 'Delivered',
+        cancelled: isAr ? 'ملغي' : 'Cancelled',
+      };
+      setSuccessMsg(isAr ? `تم تحديث حالة الطلب إلى: ${statusLabels[nextStatus] || nextStatus}` : `Order status updated to: ${nextStatus}`);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تحديث حالة الطلب' : 'Failed to update order status'));
     }
+  };
+
+  const handleSendOrderWhatsApp = (order: StoreOrder) => {
+    const cleanPhone = (order.customer_phone || '').replace(/[^0-9]/g, '');
+    const intlPhone = cleanPhone.startsWith('0') ? `20${cleanPhone.slice(1)}` : cleanPhone;
+    const currentHost = window.location.origin;
+    const tenantSlug = (storeSettings as any)?.tenant_id || (order as any)?.tenant_id || '';
+    const trackingUrl = `${currentHost}/#/store/${tenantSlug}/track?order_number=${encodeURIComponent(order.order_number)}&customer_phone=${encodeURIComponent(order.customer_phone)}`;
+
+    const text = isAr
+      ? `مرحباً بك يا ${order.customer_name} 🌸\n\nنود إعلامك بتفاصيل طلبك من متجر مصنعنا:\n📦 رقم الطلب: ${order.order_number}\n📱 رقم الهاتف المسجل: ${order.customer_phone}\n💰 إجمالي الطلب: ${Number(order.total_amount).toLocaleString()} ج.م\n💳 طريقة الدفع: ${order.payment_method === 'instapay' ? 'إنستاباي (InstaPay)' : 'الدفع عند الاستلام (COD)'}\n\n🔍 يمكنك تتبع خط سير الشحنة ومراحل التجهيز لحظة بلحظة عبر الرابط التالي:\n${trackingUrl}\n\nشكراً لثقتكم بمصنعنا!`
+      : `Hello ${order.customer_name},\n\nYour order details:\n📦 Order #: ${order.order_number}\n📱 Phone: ${order.customer_phone}\n💰 Total: ${order.total_amount} EGP\n\n🔍 Track order status:\n${trackingUrl}`;
+
+    window.open(`https://wa.me/${intlPhone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleVerifyPayment = async (approved: boolean) => {
@@ -290,6 +318,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
       );
       setSelectedOrderForReview(null);
       setRejectionReason('');
+      await loadData();
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل التحقق من التحويل' : 'Failed to verify payment'));
     } finally {
@@ -758,30 +787,29 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                         )}
                       </td>
                       <td className="p-3">
-                        {o.payment_status === 'pending_review' && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 animate-pulse">
-                              {isAr ? 'بانتظار المراجعة' : 'Pending Review'}
+                        {o.payment_method === 'instapay' ? (
+                          o.payment_status === 'verified_paid' ? (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                              {isAr ? 'معتمد ومؤكد ✓' : 'Verified Paid'}
                             </span>
-                            <button
-                              onClick={() => setSelectedOrderForReview(o)}
-                              className="text-xs text-primary underline hover:text-primary/80"
-                            >
-                              {isAr ? 'تدقيق' : 'Review'}
-                            </button>
-                          </div>
-                        )}
-                        {o.payment_status === 'verified_paid' && (
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-                            {isAr ? 'معتمد ومؤكد ✓' : 'Verified Paid'}
-                          </span>
-                        )}
-                        {o.payment_status === 'rejected' && (
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300" title={o.payment_rejection_reason}>
-                            {isAr ? 'مرفوض ✗' : 'Rejected'}
-                          </span>
-                        )}
-                        {o.payment_status === 'cod_pending' && (
+                          ) : o.payment_status === 'rejected' ? (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300" title={o.payment_rejection_reason}>
+                              {isAr ? 'مرفوض ✗' : 'Rejected'}
+                            </span>
+                          ) : (
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 animate-pulse">
+                                {o.payment_status === 'pending_review' ? (isAr ? 'بانتظار المراجعة' : 'Pending Review') : (isAr ? 'بانتظار التحويل' : 'Pending Payment')}
+                              </span>
+                              <button
+                                onClick={() => setSelectedOrderForReview(o)}
+                                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 underline hover:text-amber-700"
+                              >
+                                {isAr ? 'تدقيق واعتماد التحويل' : 'Audit & Approve'}
+                              </button>
+                            </div>
+                          )
+                        ) : (
                           <span className="px-2 py-0.5 rounded text-xs font-medium text-slate-500">
                             {isAr ? 'تحصيل عند التسليم' : 'Collect on Delivery'}
                           </span>
@@ -791,36 +819,91 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                         {Number(o.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3">
-                        {o.status === 'new' && <Badge variant="warning">{isAr ? 'جديد' : 'New'}</Badge>}
-                        {o.status === 'confirmed' && <Badge variant="info">{isAr ? 'مؤكد' : 'Confirmed'}</Badge>}
-                        {o.status === 'shipped' && <Badge variant="brand">{isAr ? 'مشحون' : 'Shipped'}</Badge>}
-                        {o.status === 'delivered' && <Badge variant="success">{isAr ? 'مسلّم' : 'Delivered'}</Badge>}
+                        {o.status === 'new' && <Badge variant="warning">{isAr ? 'طلب جديد' : 'New'}</Badge>}
+                        {o.status === 'confirmed' && <Badge variant="info">{isAr ? 'مؤكد وموافق عليه' : 'Confirmed'}</Badge>}
+                        {o.status === 'preparing' && <Badge variant="brand">{isAr ? 'جاري التجهيز بالمصنع' : 'Preparing'}</Badge>}
+                        {o.status === 'shipped' && <Badge variant="brand">{isAr ? 'تم الشحن' : 'Shipped'}</Badge>}
+                        {o.status === 'delivered' && <Badge variant="success">{isAr ? 'مسلّم للعميل ✓' : 'Delivered'}</Badge>}
                         {o.status === 'cancelled' && <Badge variant="danger">{isAr ? 'ملغي' : 'Cancelled'}</Badge>}
                       </td>
                       <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {o.payment_method === 'instapay' && o.payment_status === 'pending_review' && (
-                            <Button size="sm" variant="outline" onClick={() => setSelectedOrderForReview(o)}>
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* 1. Quick WhatsApp Communication Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleSendOrderWhatsApp(o)}
+                            className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 transition"
+                            title={isAr ? 'إرسال رقم الطلب ورابط التتبع للعميل عبر واتساب' : 'Send Order & Tracking Link via WhatsApp'}
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 2. Direct InstaPay Audit Action */}
+                          {o.payment_method === 'instapay' && o.payment_status !== 'verified_paid' && (
+                            <Button size="sm" variant="outline" className="text-xs h-7 border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-50" onClick={() => setSelectedOrderForReview(o)}>
                               <CheckCircle className="w-3.5 h-3.5 me-1 text-amber-600" />
-                              {isAr ? 'مراجعة التحويل' : 'Verify'}
+                              {isAr ? 'اعتماد الدفع' : 'Verify'}
                             </Button>
                           )}
+
+                          {/* 3. Sequential Status Progression Buttons */}
                           {o.status === 'new' && (
-                            <Button size="sm" onClick={() => handleUpdateOrderStatus(o.id, 'shipped')}>
+                            <>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50" onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}>
+                                <Check className="w-3 h-3 me-1" />
+                                {isAr ? 'موافقة وتأكيد' : 'Confirm'}
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50" onClick={() => handleUpdateOrderStatus(o.id, 'preparing')}>
+                                <Package className="w-3 h-3 me-1" />
+                                {isAr ? 'بدء التجهيز' : 'Prepare'}
+                              </Button>
+                            </>
+                          )}
+
+                          {o.status === 'confirmed' && (
+                            <>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50" onClick={() => handleUpdateOrderStatus(o.id, 'preparing')}>
+                                <Package className="w-3 h-3 me-1" />
+                                {isAr ? 'بدء التجهيز' : 'Prepare'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="text-xs h-7"
+                                disabled={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid'}
+                                title={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid' ? (isAr ? 'يجب اعتماد تحويل إنستاباي أولاً قبل الشحن' : 'Must verify InstaPay before shipping') : undefined}
+                                onClick={() => handleUpdateOrderStatus(o.id, 'shipped')}
+                              >
+                                <Truck className="w-3 h-3 me-1" />
+                                {isAr ? 'شحن' : 'Ship'}
+                              </Button>
+                            </>
+                          )}
+
+                          {o.status === 'preparing' && (
+                            <Button
+                              size="sm"
+                              className="text-xs h-7 bg-blue-600 hover:bg-blue-700 text-white"
+                              disabled={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid'}
+                              title={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid' ? (isAr ? 'يجب اعتماد تحويل إنستاباي أولاً قبل الشحن' : 'Must verify InstaPay before shipping') : undefined}
+                              onClick={() => handleUpdateOrderStatus(o.id, 'shipped')}
+                            >
                               <Truck className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'شحن' : 'Ship'}
+                              {isAr ? 'خروج للشحن' : 'Ship'}
                             </Button>
                           )}
+
                           {o.status === 'shipped' && (
-                            <Button size="sm" variant="outline" onClick={() => handleUpdateOrderStatus(o.id, 'delivered')}>
+                            <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-500 text-emerald-600 hover:bg-emerald-50" onClick={() => handleUpdateOrderStatus(o.id, 'delivered')}>
                               <CheckCircle className="w-3.5 h-3.5 me-1 text-emerald-600" />
                               {isAr ? 'تأكيد التسليم' : 'Deliver'}
                             </Button>
                           )}
+
                           {o.status !== 'cancelled' && o.status !== 'delivered' && (
                             <button
                               onClick={() => handleUpdateOrderStatus(o.id, 'cancelled')}
-                              className="text-xs text-rose-500 hover:text-rose-700 px-2 py-1"
+                              className="text-xs text-rose-500 hover:text-rose-700 px-1.5 py-1"
+                              title={isAr ? 'إلغاء الطلب' : 'Cancel'}
                             >
                               {isAr ? 'إلغاء' : 'Cancel'}
                             </button>
@@ -1574,35 +1657,33 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                     pendingPayments.map((sub: any) => (
                       <tr key={sub.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
                         <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
-                          {sub.customer_name || sub.store_order?.customer_name || (isAr ? 'عميل متجر' : 'Store Customer')}
+                          {sub.customer_name || sub.store_order?.customer_name || sub.storeOrder?.customer_name || (isAr ? 'عميل متجر' : 'Store Customer')}
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">
-                          {sub.customer_phone || sub.store_order?.customer_phone || '-'}
+                          {sub.customer_phone || sub.store_order?.customer_phone || sub.storeOrder?.customer_phone || '-'}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {(Number(sub.amount) || 0).toLocaleString()} {sub.currency || 'EGP'}
+                          {(Number(sub.submitted_amount || sub.expected_amount || sub.amount) || 0).toLocaleString()} {sub.currency || 'EGP'}
                         </td>
                         <td className="py-3 px-4 font-mono text-xs">
                           <span className="font-semibold text-purple-700 dark:text-purple-300">
-                            {sub.transfer_reference || sub.sender_instapay_identifier || '-'}
+                            {sub.transfer_reference || sub.sender_instapay_identifier || (isAr ? 'لم يحدد بعد' : 'Pending')}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-500">
                           {sub.transfer_time || sub.created_at?.slice(0, 16) || '-'}
                         </td>
                         <td className="py-3 px-4">
-                          {sub.receipt_path ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 text-purple-600 border-purple-300"
-                              onClick={() => {
-                                const url = `${api['baseUrl'] || '/api/v1'}/storefront/payments/${sub.id}/receipt`;
-                                window.open(url, '_blank');
-                              }}
+                          {sub.receipt_file_path || sub.receipt_path ? (
+                            <a
+                              href={sub.receipt_file_path || sub.receipt_path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 hover:underline"
                             >
+                              <ExternalLink className="w-3 h-3" />
                               {isAr ? 'عرض الإيصال' : 'View Receipt'}
-                            </Button>
+                            </a>
                           ) : (
                             <span className="text-slate-400">{isAr ? 'لا يوجد ملف' : 'No file'}</span>
                           )}

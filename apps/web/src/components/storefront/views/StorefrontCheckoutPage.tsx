@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Copy,
   Check,
+  MessageCircle,
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
@@ -273,6 +274,29 @@ export const StorefrontCheckoutPage: React.FC = () => {
             >
               <Truck className="w-4 h-4" />
               <span>{isAr ? 'تتبع حالة الشحن والتوصيل' : 'Track Order Status'}</span>
+            </Button>
+
+            {/* Direct WhatsApp Confirmation to Factory */}
+            <Button
+              variant="outline"
+              className="w-full py-2.5 rounded-xl text-xs font-bold border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-center justify-center gap-2"
+              onClick={() => {
+                const factoryPhone = (storeSettings?.contact_whatsapp || storeSettings?.instapay_handle || '01220821706').replace(/[^0-9]/g, '');
+                const intlPhone = factoryPhone.startsWith('0') ? `20${factoryPhone.slice(1)}` : factoryPhone;
+                const currentHost = window.location.origin;
+                const tenantSlug = tenantInfo?.subdomain || tenantInfo?.code || tenantInfo?.id || '';
+                const orderNum = createdOrder.order_number || createdOrder.id;
+                const trackingUrl = `${currentHost}/#/store/${tenantSlug}/track?order_number=${encodeURIComponent(orderNum)}&customer_phone=${encodeURIComponent(formData.customer_phone)}`;
+
+                const text = isAr
+                  ? `مرحباً، قمت بتسجيل طلب شراء جديد من متجر المصنع:\n\n📦 رقم الطلب: ${orderNum}\n👤 اسم المستلم: ${formData.customer_name}\n📱 رقم الهاتف: ${formData.customer_phone}\n💰 إجمالي الطلب: ${total} ${currency}\n💳 طريقة السداد: ${formData.payment_method === 'instapay' ? 'تحويل إنستاباي' : 'الدفع نقداً عند الاستلام'}\n\n🔍 رابط متابعة الطلب والتتبع:\n${trackingUrl}`
+                  : `Hello, I placed an order:\n\n📦 Order #: ${orderNum}\n👤 Name: ${formData.customer_name}\n📱 Phone: ${formData.customer_phone}\n💰 Total: ${total} ${currency}\n\n🔍 Tracking:\n${trackingUrl}`;
+
+                window.open(`https://wa.me/${intlPhone}?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+            >
+              <MessageCircle className="w-4 h-4 text-emerald-500" />
+              <span>{isAr ? 'إرسال تأكيد الطلب للمصنع عبر واتساب' : 'Send Order to Factory WhatsApp'}</span>
             </Button>
 
             <Button

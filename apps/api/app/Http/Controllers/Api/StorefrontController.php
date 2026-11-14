@@ -437,16 +437,18 @@ class StorefrontController extends Controller
     /**
      * استعراض قائمة التحويلات البنكية المعلقة بانتظار المراجعة والتدقيق المالي
      */
-    public function pendingPayments(): JsonResponse
+    public function pendingPayments(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $user = request()->user();
+        $user = $request->user();
         $branchIds = $user && $user->role !== 'company_owner' ? $user->assignedBranchIds() : null;
-        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId, $branchIds);
+        $status = $request->query('status');
+        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId, $branchIds, $status);
 
         return response()->json([
             'submissions' => $submissions,
-            'total_pending' => $submissions->count(),
+            'data' => $submissions,
+            'total_pending' => $submissions->whereIn('status', ['pending_review', 'pending_payment'])->count(),
         ]);
     }
 

@@ -1283,12 +1283,18 @@ class StorefrontService
     /**
      * استرجاع قائمة التحويلات المعلقة بانتظار المراجعة والتدقيق المالي
      */
-    public function getPendingPaymentSubmissions(string $tenantId, ?array $branchIds = null): \Illuminate\Database\Eloquent\Collection
+    public function getPendingPaymentSubmissions(string $tenantId, ?array $branchIds = null, ?string $statusFilter = null): \Illuminate\Database\Eloquent\Collection
     {
         $query = PaymentSubmission::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->where('status', 'pending_review')
             ->with(['storeOrder.salesOrder.warehouse', 'salesOrder.warehouse', 'reviewer']);
+
+        if ($statusFilter && $statusFilter !== 'all') {
+            $query->where('status', $statusFilter);
+        } else {
+            // الافتراضي: كل التحويلات المعلقة بانتظار المراجعة أو بانتظار الإشعار
+            $query->whereIn('status', ['pending_review', 'pending_payment']);
+        }
 
         if ($branchIds !== null) {
             $query

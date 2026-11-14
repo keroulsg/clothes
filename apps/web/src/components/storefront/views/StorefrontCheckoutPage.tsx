@@ -7,6 +7,8 @@ import {
   Building2,
   Lock,
   ArrowLeft,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { Button } from '../../ui/Button';
@@ -72,11 +74,22 @@ export const StorefrontCheckoutPage: React.FC = () => {
     address: '',
     notes: '',
     payment_method: 'cod', // 'cod' | 'instapay'
+    instapay_reference: '',
   });
 
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopyText = (text: string, label: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setIsCopied(true);
+      addToast(isAr ? `تم نسخ ${label} بنجاح!` : `${label} copied!`, 'success');
+      setTimeout(() => setIsCopied(false), 2500);
+    } catch {}
+  };
 
   // Order Success Screen State
   const [createdOrder, setCreatedOrder] = useState<any | null>(null);
@@ -130,8 +143,10 @@ export const StorefrontCheckoutPage: React.FC = () => {
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email || null,
         shipping_address: `${formData.address}, ${formData.city}, ${formData.governorate}`,
+        city: formData.city || formData.governorate || 'Cairo',
         notes: formData.notes || null,
         payment_method: formData.payment_method,
+        instapay_reference: formData.instapay_reference.trim() || null,
         items: cart.map((item) => ({
           variant_id: item.variant_id,
           quantity: item.quantity,
@@ -185,11 +200,21 @@ export const StorefrontCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
-            <div className="flex justify-between">
+            <div className="flex items-center justify-between">
               <span className="text-slate-500">{isAr ? 'رقم الطلب:' : 'Order Number:'}</span>
-              <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                {createdOrder.order_number || createdOrder.id}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                  {createdOrder.order_number || createdOrder.id}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(createdOrder.order_number || createdOrder.id, isAr ? 'رقم الطلب' : 'Order number')}
+                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition"
+                  title={isAr ? 'نسخ رقم الطلب' : 'Copy'}
+                >
+                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">{isAr ? 'اسم المستلم:' : 'Customer Name:'}</span>
@@ -214,19 +239,28 @@ export const StorefrontCheckoutPage: React.FC = () => {
           {/* InstaPay Transfer Instructions Banner if chosen */}
           {formData.payment_method === 'instapay' && (
             <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-200 text-left space-y-2">
-              <div className="flex items-center gap-2 font-bold text-blue-700 dark:text-blue-300">
-                <QrCode className="w-4 h-4" />
-                <span>{isAr ? 'بيانات التحويل عبر إنستاباي:' : 'InstaPay Transfer Details:'}</span>
+              <div className="flex items-center justify-between font-bold text-blue-700 dark:text-blue-300">
+                <div className="flex items-center gap-2">
+                  <QrCode className="w-4 h-4" />
+                  <span>{isAr ? 'بيانات التحويل عبر إنستاباي:' : 'InstaPay Transfer Details:'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(storeSettings?.instapay_handle || '01220821706', isAr ? 'رقم/عنوان إنستاباي' : 'InstaPay Handle')}
+                  className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{isAr ? 'نسخ الحساب' : 'Copy'}</span>
+                </button>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 font-mono text-center font-bold text-blue-600 dark:text-blue-400 text-sm">
+                {storeSettings?.instapay_handle || storeSettings?.instapay_identifier || '01220821706'}
               </div>
               <p className="text-[11px] leading-relaxed">
                 {storeSettings?.instapay_instructions ||
                   (isAr
-                    ? `يرجى إرسال مبلغ ${total} ${currency} إلى الحساب: ${
-                        storeSettings?.instapay_handle || 'garmentos@instapay'
-                      } وتصوير إيصال التحويل لإرفاقه في رابط التتبع.`
-                    : `Please transfer ${total} ${currency} to ${
-                        storeSettings?.instapay_handle || 'garmentos@instapay'
-                      } and submit the payment receipt in the tracker.`)}
+                    ? `يرجى إرسال مبلغ ${total} ${currency} إلى الحساب الموضح أعلاه، ثم الضغط على زر التتبع لإرفاق صورة إيصال التحويل مباشرة.`
+                    : `Please transfer ${total} ${currency} to the handle above, then track order to submit the payment receipt.`)}
               </p>
             </div>
           )}
@@ -470,35 +504,83 @@ export const StorefrontCheckoutPage: React.FC = () => {
 
                 {/* InstaPay Option */}
                 {storeSettings?.allow_instapay && (
-                  <label
-                    className={`flex items-start gap-3.5 p-4 rounded-xl border cursor-pointer transition ${
+                  <div
+                    className={`rounded-xl border transition ${
                       formData.payment_method === 'instapay'
                         ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/30'
                         : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="payment_method"
-                      value="instapay"
-                      checked={formData.payment_method === 'instapay'}
-                      onChange={() => handleInputChange('payment_method', 'instapay')}
-                      className="mt-1 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
-                        <span>{isAr ? 'تحويل لحظي عبر إنستاباي (InstaPay)' : 'InstaPay Bank Transfer'}</span>
-                        <span className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px] px-2 py-0.2 rounded-full font-bold">
-                          {isAr ? 'فوري وآمن' : 'Instant'}
-                        </span>
+                    <label className="flex items-start gap-3.5 p-4 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="payment_method"
+                        value="instapay"
+                        checked={formData.payment_method === 'instapay'}
+                        onChange={() => handleInputChange('payment_method', 'instapay')}
+                        className="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
+                          <span>{isAr ? 'تحويل لحظي عبر إنستاباي (InstaPay)' : 'InstaPay Bank Transfer'}</span>
+                          <span className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px] px-2 py-0.2 rounded-full font-bold">
+                            {isAr ? 'فوري وآمن' : 'Instant'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                          {isAr
+                            ? 'تحويل مباشر لحساب المصنع البنكي عبر تطبيق إنستاباي مع إمكانية إرفاق إيصال التحويل.'
+                            : 'Direct bank transfer via InstaPay app; transfer receipt can be uploaded.'}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                        {isAr
-                          ? 'تحويل مباشر لحساب المصنع البنكي عبر تطبيق إنستاباي مع رفع إيصال التحويل.'
-                          : 'Direct bank transfer via InstaPay app; upload transfer receipt upon checkout.'}
-                      </p>
-                    </div>
-                  </label>
+                    </label>
+
+                    {formData.payment_method === 'instapay' && (
+                      <div className="px-4 pb-4 pt-1 space-y-3 border-t border-blue-100 dark:border-blue-900/60 mt-1">
+                        <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">{isAr ? 'اسم حساب المصنع:' : 'Account Name:'}</span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">
+                              {storeSettings?.instapay_account_name || storeSettings?.instapay_display_name || 'Alpha Factory Operations'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">{isAr ? 'عنوان/رقم التحويل (IPA/Phone):' : 'InstaPay Handle/Phone:'}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                                {storeSettings?.instapay_handle || storeSettings?.instapay_identifier || '01220821706'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyText(storeSettings?.instapay_handle || storeSettings?.instapay_identifier || '01220821706', isAr ? 'رقم الحساب' : 'Account')}
+                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          {storeSettings?.instapay_instructions && (
+                            <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800">
+                              {storeSettings.instapay_instructions}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            {isAr ? 'رقم عملية التحويل أو كود الإشعار (اختياري الآن):' : 'Transaction Reference (Optional):'}
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.instapay_reference}
+                            onChange={(e) => handleInputChange('instapay_reference', e.target.value)}
+                            placeholder={isAr ? 'مثال: TXN-98765432 أو كود التحويل البنكي' : 'e.g. TXN-98765432'}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

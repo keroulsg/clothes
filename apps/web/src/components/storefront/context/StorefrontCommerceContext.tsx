@@ -115,6 +115,8 @@ interface StorefrontCommerceContextType {
   onToggleTheme: () => void;
   onToggleLang: () => void;
   onNavigateToTracking: (orderNumber?: string, phone?: string) => void;
+  trackingPrefill: { orderNumber?: string; phone?: string } | null;
+  setTrackingPrefill: React.Dispatch<React.SetStateAction<{ orderNumber?: string; phone?: string } | null>>;
   onNavigateToErp?: () => void;
   storeSettings: any;
   tenantInfo: any;
@@ -130,6 +132,8 @@ interface StorefrontCommerceProviderProps {
   onToggleTheme: () => void;
   onToggleLang: () => void;
   onNavigateToTracking: (orderNumber?: string, phone?: string) => void;
+  trackingPrefill?: { orderNumber?: string; phone?: string } | null;
+  setTrackingPrefill?: React.Dispatch<React.SetStateAction<{ orderNumber?: string; phone?: string } | null>>;
   onNavigateToErp?: () => void;
   storeSettings: any;
   tenantInfo: any;
@@ -221,6 +225,44 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
     }
   };
 
+  const [internalTrackingPrefill, setInternalTrackingPrefill] = useState<{ orderNumber?: string; phone?: string } | null>(() => {
+    try {
+      const hashStr = window.location.hash;
+      const queryIdx = hashStr.indexOf('?');
+      if (queryIdx !== -1) {
+        const params = new URLSearchParams(hashStr.substring(queryIdx + 1));
+        const order = params.get('order_number') || params.get('order');
+        const phone = params.get('customer_phone') || params.get('phone');
+        if (order || phone) {
+          return { orderNumber: order || undefined, phone: phone || undefined };
+        }
+      }
+    } catch {}
+    return null;
+  });
+
+  const handleNavigateToTracking = (orderNumber?: string, phone?: string) => {
+    if (orderNumber || phone) {
+      setInternalTrackingPrefill({ orderNumber, phone });
+    }
+    const tenantSlug = tenantInfo?.subdomain || tenantInfo?.code || tenantInfo?.id;
+    const queryParts: string[] = [];
+    if (orderNumber) queryParts.push(`order_number=${encodeURIComponent(orderNumber)}`);
+    if (phone) queryParts.push(`customer_phone=${encodeURIComponent(phone)}`);
+    const queryStr = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+
+    if (tenantSlug) {
+      const targetHash = `#/store/${tenantSlug}/track${queryStr}`;
+      try {
+        window.history.pushState(null, '', targetHash);
+      } catch {}
+    }
+    setActiveViewState('tracking');
+    if (onNavigateToTracking) {
+      onNavigateToTracking(orderNumber, phone);
+    }
+  };
+
   useEffect(() => {
     const handleHash = () => {
       const parsed = parseHashView();
@@ -228,6 +270,19 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
       if (parsed.customPageId) setActiveCustomPageId(parsed.customPageId);
       if (parsed.productId) setSelectedProductId(parsed.productId);
       if (parsed.categoryId) setSelectedCategory(parsed.categoryId);
+
+      try {
+        const hashStr = window.location.hash;
+        const queryIdx = hashStr.indexOf('?');
+        if (queryIdx !== -1) {
+          const params = new URLSearchParams(hashStr.substring(queryIdx + 1));
+          const order = params.get('order_number') || params.get('order');
+          const phone = params.get('customer_phone') || params.get('phone');
+          if (order || phone) {
+            setInternalTrackingPrefill({ orderNumber: order || undefined, phone: phone || undefined });
+          }
+        }
+      } catch {}
     };
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
@@ -525,7 +580,9 @@ export const StorefrontCommerceProvider: React.FC<StorefrontCommerceProviderProp
         isDark,
         onToggleTheme,
         onToggleLang,
-        onNavigateToTracking,
+        onNavigateToTracking: handleNavigateToTracking,
+        trackingPrefill: internalTrackingPrefill,
+        setTrackingPrefill: setInternalTrackingPrefill,
         onNavigateToErp,
         storeSettings,
         tenantInfo,

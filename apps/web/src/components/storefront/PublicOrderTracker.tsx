@@ -11,6 +11,8 @@ import {
   MessageCircle,
   RefreshCw,
   XCircle,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -48,9 +50,26 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
   const [isSubmittingReceipt, setIsSubmittingReceipt] = useState(false);
   const [receiptSuccessMsg, setReceiptSuccessMsg] = useState<string | null>(null);
 
-  const handleTrackOrder = async (e?: React.FormEvent) => {
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopyText = (text: string) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2500);
+    } catch {}
+  };
+
+  const handleTrackOrder = async (
+    e?: React.FormEvent,
+    overrideOrder?: string,
+    overridePhone?: string
+  ) => {
     if (e) e.preventDefault();
-    if (!orderNumber.trim() || !phone.trim()) {
+    const queryOrder = (overrideOrder !== undefined ? overrideOrder : orderNumber).trim();
+    const queryPhone = (overridePhone !== undefined ? overridePhone : phone).trim();
+
+    if (!queryOrder || !queryPhone) {
       setErrorMsg(isAr ? 'يرجى إدخال رقم الطلب ورقم الهاتف المسجل' : 'Please enter order number and registered phone');
       return;
     }
@@ -61,8 +80,8 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
 
     try {
       const res = await api.storefront.trackOrder({
-        order_number: orderNumber.trim(),
-        customer_phone: phone.trim(),
+        order_number: queryOrder,
+        customer_phone: queryPhone,
         tenant_id: tenantIdentifier,
       });
 
@@ -84,8 +103,27 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
   };
 
   useEffect(() => {
-    if (initialOrderNumber && initialPhone) {
-      handleTrackOrder();
+    let activeOrder = initialOrderNumber;
+    let activePhone = initialPhone;
+
+    // Fallback: Read query parameters from hash if props are empty
+    if (!activeOrder || !activePhone) {
+      try {
+        const hashStr = window.location.hash;
+        const queryIdx = hashStr.indexOf('?');
+        if (queryIdx !== -1) {
+          const params = new URLSearchParams(hashStr.substring(queryIdx + 1));
+          if (!activeOrder) activeOrder = params.get('order_number') || params.get('order') || '';
+          if (!activePhone) activePhone = params.get('customer_phone') || params.get('phone') || '';
+        }
+      } catch {}
+    }
+
+    if (activeOrder) setOrderNumber(activeOrder);
+    if (activePhone) setPhone(activePhone);
+
+    if (activeOrder && activePhone) {
+      handleTrackOrder(undefined, activeOrder, activePhone);
     }
   }, [initialOrderNumber, initialPhone]);
 
@@ -257,6 +295,14 @@ export const PublicOrderTracker: React.FC<PublicOrderTrackerProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400">{isAr ? 'طلب رقم:' : 'Order #:'}</span>
                     <span className="font-mono font-bold text-base text-primary">{orderData.order_number}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(orderData.order_number)}
+                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition"
+                      title={isAr ? 'نسخ رقم الطلب' : 'Copy Order Number'}
+                    >
+                      {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
                     {isAr ? 'تاريخ الطلب:' : 'Order Date:'} {new Date(orderData.created_at).toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}

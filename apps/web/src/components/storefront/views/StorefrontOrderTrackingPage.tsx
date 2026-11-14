@@ -3,7 +3,7 @@ import { useStorefrontCommerce } from '../context/StorefrontCommerceContext';
 import { PublicOrderTracker } from '../PublicOrderTracker';
 
 export const StorefrontOrderTrackingPage: React.FC = () => {
-  const { lang, setActiveView, tenantInfo } = useStorefrontCommerce();
+  const { lang, setActiveView, tenantInfo, trackingPrefill } = useStorefrontCommerce();
 
   return (
     <div className="min-h-screen py-8">
@@ -11,6 +11,8 @@ export const StorefrontOrderTrackingPage: React.FC = () => {
         lang={lang}
         onNavigateHome={() => setActiveView('home')}
         tenantIdentifier={tenantInfo?.id}
+        initialOrderNumber={trackingPrefill?.orderNumber}
+        initialPhone={trackingPrefill?.phone}
       />
     </div>
   );

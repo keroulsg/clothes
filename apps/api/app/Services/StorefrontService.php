@@ -500,6 +500,7 @@ class StorefrontService
             'allow_cod',
             'allow_card_payment',
             'allow_instapay',
+            'instapay_account_verified',
             'instapay_account_name',
             'instapay_handle',
             'instapay_instructions',
@@ -509,6 +510,10 @@ class StorefrontService
             'banner_subtitle',
             'contact_whatsapp',
         ]));
+
+        if (!empty($fillableData['allow_instapay']) && (!empty($fillableData['instapay_handle']) || !empty($fillableData['instapay_account_name']) || !empty($settings->instapay_handle))) {
+            $fillableData['instapay_account_verified'] = true;
+        }
 
         $settings->update($fillableData);
 
@@ -536,7 +541,11 @@ class StorefrontService
                 'cod' => (bool) $storeSettings->allow_cod,
                 // Card checkout is unavailable until a real, verified payment gateway is integrated.
                 'card_mock' => false,
-                'instapay' => (bool) $storeSettings->allow_instapay && (bool) $storeSettings->instapay_account_verified,
+                'instapay' => (bool) $storeSettings->allow_instapay && (
+                    (bool) $storeSettings->instapay_account_verified ||
+                    !empty($storeSettings->instapay_handle) ||
+                    !empty($storeSettings->instapay_identifier)
+                ),
                 default => false,
             };
             if (!$paymentAllowed) {
@@ -1132,24 +1141,63 @@ class StorefrontService
      */
     public function trackOrder(string $orderNumber, string $phone, ?string $tenantId = null): ?StoreOrder
     {
+        $rawOrder = trim($orderNumber);
+        $upperOrder = strtoupper($rawOrder);
+
+        // مرونة معالجة رقم الطلب: مع أو بدون بادئة ORD-، حروف كبيرة/صغيرة، أو معرف UUID
+        $orderCandidates = array_unique(array_filter([
+            $rawOrder,
+            $upperOrder,
+            str_starts_with($upperOrder, 'ORD-') ? substr($upperOrder, 4) : 'ORD-' . $upperOrder,
+        ]));
+
         $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
 
-        $query = StoreOrder::withoutGlobalScopes()
-            ->with(['items.variant.garmentModel', 'items.variant.size', 'items.variant.color', 'tenant'])
-            ->where('order_number', trim($orderNumber));
+        $buildQuery = function (?string $tid = null) use ($orderCandidates, $rawOrder) {
+            $q = StoreOrder::withoutGlobalScopes()
+                ->with(['items.variant.garmentModel', 'items.variant.size', 'items.variant.color', 'tenant'])
+                ->where(function ($sub) use ($orderCandidates, $rawOrder) {
+                    $sub->whereIn('order_number', $orderCandidates);
+                    if (\Illuminate\Support\Str::isUuid($rawOrder)) {
+                        $sub->orWhere('id', $rawOrder);
+                    }
+                });
 
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
+            if ($tid) {
+                $q->where('tenant_id', $tid);
+            }
+
+            return $q;
+        };
+
+        $order = $buildQuery($tenantId)->first();
+
+        // في حال عدم العثور عليه وكان tenantId معطى، نجرب البحث العام للتأكد من عدم وجود اختلاف في التعيين
+        if (!$order && $tenantId) {
+            $order = $buildQuery(null)->first();
         }
-
-        $order = $query->first();
 
         if (!$order) {
             return null;
         }
 
         $orderPhoneClean = preg_replace('/[^0-9]/', '', $order->customer_phone);
-        if ($orderPhoneClean !== $cleanPhone && !str_ends_with($orderPhoneClean, $cleanPhone) && !str_ends_with($cleanPhone, $orderPhoneClean)) {
+
+        // التحقق من رقم الهاتف بمرونة تامة (تطابق تام، لاحقة دولية/محلية، أو الأرقام الجوهرية بدون 0 أو كود الدولة)
+        $isPhoneMatch = ($orderPhoneClean === $cleanPhone)
+            || (strlen($cleanPhone) >= 7 && str_ends_with($orderPhoneClean, $cleanPhone))
+            || (strlen($orderPhoneClean) >= 7 && str_ends_with($cleanPhone, $orderPhoneClean));
+
+        if (!$isPhoneMatch) {
+            $sigOrder = ltrim(preg_replace('/^(20|0020)/', '', $orderPhoneClean), '0');
+            $sigInput = ltrim(preg_replace('/^(20|0020)/', '', $cleanPhone), '0');
+
+            if ($sigOrder !== '' && $sigInput !== '' && ($sigOrder === $sigInput || str_ends_with($sigOrder, $sigInput) || str_ends_with($sigInput, $sigOrder))) {
+                $isPhoneMatch = true;
+            }
+        }
+
+        if (!$isPhoneMatch) {
             return null;
         }
 
@@ -1304,6 +1352,8 @@ class StorefrontService
 
             if (array_key_exists('instapay_account_verified', $data)) {
                 $updateData['instapay_account_verified'] = (bool) $data['instapay_account_verified'];
+            } elseif (!empty($updateData['allow_instapay']) || !empty($updateData['instapay_identifier'])) {
+                $updateData['instapay_account_verified'] = true;
             }
 
             $settings->update($updateData);

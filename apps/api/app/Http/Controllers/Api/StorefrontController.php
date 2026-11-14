@@ -155,6 +155,7 @@ class StorefrontController extends Controller
             'allow_cod' => 'nullable|boolean',
             'allow_card_payment' => 'nullable|boolean',
             'allow_instapay' => 'nullable|boolean',
+            'instapay_account_verified' => 'nullable|boolean',
             'instapay_account_name' => 'nullable|string|max:255',
             'instapay_handle' => 'nullable|string|max:100',
             'instapay_instructions' => 'nullable|string',

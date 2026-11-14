@@ -37,6 +37,7 @@ import { ModernCatalogTemplate } from './templates/ModernCatalogTemplate';
 import { KidsFamilyTemplate } from './templates/KidsFamilyTemplate';
 import { PremiumBrandTemplate } from './templates/PremiumBrandTemplate';
 import { DEFAULT_HOMEPAGE_SECTIONS, normalizeSectionId } from './common/StorefrontSectionRegistry';
+import { StorefrontErrorBoundary } from './common/StorefrontErrorBoundary';
 import type { Language, StorefrontThemeId, DesignStudioConfig } from '../../types';
 
 interface StorefrontDesignStudioProps {
@@ -250,7 +251,8 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
 
       // Fetch representative store products for the live preview
       try {
-        const storeRes = await api.storefront.getPublicStore(undefined, true);
+        const tenantId = data?.store_settings?.tenant_id;
+        const storeRes = await api.storefront.getPublicStore(tenantId || undefined, true);
         if (storeRes?.products && Array.isArray(storeRes.products)) {
           setPreviewVariants(storeRes.products);
         }
@@ -532,6 +534,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     {
       id: 'demo-1',
       model_name: isAr ? 'تيشيرت قطن مصري فاخر' : '100% Egyptian Cotton Tee',
+      category: isAr ? 'ملابس كاجوال' : 'Casual Wear',
       price: 380,
       in_stock: 45,
       sku: 'TSH-COT-01',
@@ -542,6 +545,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     {
       id: 'demo-2',
       model_name: isAr ? 'قميص بولو كلاسيك' : 'Classic Polo Shirt',
+      category: isAr ? 'بولو وتيشرتات' : 'Polos & Tees',
       price: 520,
       in_stock: 30,
       sku: 'POL-CLS-02',
@@ -552,6 +556,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     {
       id: 'demo-3',
       model_name: isAr ? 'بنطلون جبردين تصدير' : 'Export Gabardine Trousers',
+      category: isAr ? 'بناطيل وجينز' : 'Pants & Denim',
       price: 690,
       in_stock: 18,
       sku: 'PNT-GAB-03',
@@ -593,18 +598,28 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   };
 
   const renderActiveLiveTemplate = () => {
+    let content: React.ReactNode = null;
     switch (selectedTemplate) {
       case 'fashion_boutique':
-        return <FashionBoutiqueTemplate {...commonTemplateProps} />;
+        content = <FashionBoutiqueTemplate {...commonTemplateProps} />;
+        break;
       case 'modern_catalog':
-        return <ModernCatalogTemplate {...commonTemplateProps} />;
+        content = <ModernCatalogTemplate {...commonTemplateProps} />;
+        break;
       case 'kids_family':
-        return <KidsFamilyTemplate {...commonTemplateProps} />;
+        content = <KidsFamilyTemplate {...commonTemplateProps} />;
+        break;
       case 'premium_brand':
-        return <PremiumBrandTemplate {...commonTemplateProps} />;
+        content = <PremiumBrandTemplate {...commonTemplateProps} />;
+        break;
       default:
-        return null;
+        content = null;
     }
+    return (
+      <StorefrontErrorBoundary isAr={isAr}>
+        {content}
+      </StorefrontErrorBoundary>
+    );
   };
 
   return (

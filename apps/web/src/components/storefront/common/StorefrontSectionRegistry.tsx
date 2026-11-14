@@ -121,3 +121,26 @@ export function getActiveSortedSections(
 
   return normalized;
 }
+
+/**
+ * Safely extracts a clean string from any category representation:
+ * string, object ({ name_ar, name, name_en, title, label, id }), number, etc.
+ * Never throws, always returns a clean trimmed string.
+ */
+export function getCategoryString(category: any): string {
+  if (category == null) return '';
+  if (typeof category === 'string') return category.trim();
+  if (typeof category === 'object') {
+    const val =
+      category.name_ar ||
+      category.name ||
+      category.name_en ||
+      category.title ||
+      category.label ||
+      category.id ||
+      '';
+    return typeof val === 'string' ? val.trim() : String(val).trim();
+  }
+  return String(category).trim();
+}
+

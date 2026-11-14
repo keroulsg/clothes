@@ -30,6 +30,8 @@ import { StorefrontAccountPage } from './views/StorefrontAccountPage';
 import { StorefrontOrderTrackingPage } from './views/StorefrontOrderTrackingPage';
 import { StorefrontContentPage } from './views/StorefrontContentPage';
 
+import { StorefrontErrorBoundary } from './common/StorefrontErrorBoundary';
+
 // 4 Distinct Presentation Themes
 import { FashionBoutiqueTemplate } from './templates/FashionBoutiqueTemplate';
 import { ModernCatalogTemplate } from './templates/ModernCatalogTemplate';
@@ -537,7 +539,7 @@ const StorefrontMainContent: React.FC<StorefrontMainContentProps> = ({
       {/* 3. Page Router Container */}
       <main className="flex-1">
         {activeView === 'home' && (
-          <>
+          <StorefrontErrorBoundary isAr={isAr}>
             {normalizedTheme === 'modern_catalog' ? (
               <ModernCatalogTemplate {...templateProps} />
             ) : normalizedTheme === 'kids_family' ? (
@@ -547,7 +549,7 @@ const StorefrontMainContent: React.FC<StorefrontMainContentProps> = ({
             ) : (
               <FashionBoutiqueTemplate {...templateProps} />
             )}
-          </>
+          </StorefrontErrorBoundary>
         )}
 
         {activeView === 'shop' && <StorefrontShopPage />}

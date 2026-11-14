@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
-import { getActiveSortedSections, normalizeSectionId } from '../common/StorefrontSectionRegistry';
+import { getActiveSortedSections, normalizeSectionId, getCategoryString } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
@@ -93,22 +93,27 @@ export const FashionBoutiqueTemplate: React.FC<StorefrontTemplateProps> = ({
   // Dynamic Category Extraction from actual product catalog
   const categories = useMemo(() => {
     const extracted = Array.from(
-      new Set(variants.map((v) => v.category).filter((c): c is string => Boolean(c) && c.trim() !== ''))
+      new Set(
+        (variants || [])
+          .map((v) => getCategoryString(v.category))
+          .filter((c) => Boolean(c) && c.length > 0)
+      )
     );
     return ['all', ...(extracted.length > 0 ? extracted : [])];
   }, [variants]);
 
   // Product Filtering logic
   const displayedVariants = useMemo(() => {
-    return variants.filter((v) => {
+    return (variants || []).filter((v) => {
+      const cat = getCategoryString(v.category);
       const matchesCategory =
-        !selectedCategory || selectedCategory === 'all' || v.category === selectedCategory;
-      const q = searchQuery.trim().toLowerCase();
+        !selectedCategory || selectedCategory === 'all' || cat === selectedCategory;
+      const q = (searchQuery || '').trim().toLowerCase();
       const matchesSearch =
         !q ||
         (v.model_name || v.name || '').toLowerCase().includes(q) ||
         (v.sku || '').toLowerCase().includes(q) ||
-        (v.category || '').toLowerCase().includes(q);
+        cat.toLowerCase().includes(q);
       return matchesCategory && matchesSearch;
     });
   }, [variants, selectedCategory, searchQuery]);

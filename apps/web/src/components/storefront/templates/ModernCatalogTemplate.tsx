@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StorefrontImage } from '../common/StorefrontImage';
-import { getActiveSortedSections, normalizeSectionId } from '../common/StorefrontSectionRegistry';
+import { getActiveSortedSections, normalizeSectionId, getCategoryString } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
@@ -79,7 +79,11 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   // Dynamic Category Extraction from actual product catalog
   const categories = useMemo(() => {
     const extracted = Array.from(
-      new Set(variants.map((v) => v.category).filter((c): c is string => Boolean(c) && c.trim() !== ''))
+      new Set(
+        (variants || [])
+          .map((v) => getCategoryString(v.category))
+          .filter((c) => Boolean(c) && c.length > 0)
+      )
     );
     return [
       { id: 'all', name_ar: 'كافة التصنيفات', name_en: 'All Categories' },
@@ -89,16 +93,17 @@ export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
 
   // Filter & sort logic
   const filteredVariants = useMemo(() => {
-    return variants
+    return (variants || [])
       .filter((v) => {
         if (stockOnlyFilter && v.in_stock <= 0) return false;
-        if (selectedCategory && selectedCategory !== 'all' && v.category !== selectedCategory) return false;
+        const cat = getCategoryString(v.category);
+        if (selectedCategory && selectedCategory !== 'all' && cat !== selectedCategory) return false;
         const q = (searchQuery || '').trim().toLowerCase();
         if (
           q &&
           !(v.model_name || v.name || '').toLowerCase().includes(q) &&
           !(v.sku || '').toLowerCase().includes(q) &&
-          !(v.category || '').toLowerCase().includes(q)
+          !cat.toLowerCase().includes(q)
         ) {
           return false;
         }

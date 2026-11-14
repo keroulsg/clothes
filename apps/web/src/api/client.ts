@@ -2304,6 +2304,12 @@ class ApiClient {
         body: formData,
       });
     },
+    importMediaFromUrl: async (url: string, category?: string, title?: string): Promise<{ message: string; media: any }> => {
+      return this.request('/storefront/media/import-url', {
+        method: 'POST',
+        body: JSON.stringify({ url, category, title }),
+      });
+    },
     listMedia: async (): Promise<{ media: any[] }> => {
       return this.request('/storefront/media');
     },

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShoppingBag,
   Search,
@@ -43,11 +43,16 @@ export const StorefrontHeader: React.FC = () => {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   const themeConfig = storeSettings?.theme_config || {};
   const storeName = storeSettings?.store_name || tenantInfo?.name || (isAr ? 'مصنع الملابس الجاهزة' : 'Apparel Factory');
   const primaryColor = themeConfig.primary_color || '#0284c7';
   const logoUrl = themeConfig.logo_url ? api.getMediaUrl(themeConfig.logo_url) : null;
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [logoUrl]);
 
   const themeId = storeSettings?.theme_id || 'fashion_boutique';
   const normalizedTheme =
@@ -161,10 +166,11 @@ export const StorefrontHeader: React.FC = () => {
               }}
               className="flex items-center gap-2.5 text-start hover:opacity-90 transition group"
             >
-              {logoUrl ? (
+              {logoUrl && !logoError ? (
                 <img
                   src={logoUrl}
                   alt={storeName}
+                  onError={() => setLogoError(true)}
                   className={`h-10 w-auto max-w-[140px] object-contain ${
                     normalizedTheme === 'kids_family' ? 'rounded-2xl' : 'rounded-lg'
                   }`}

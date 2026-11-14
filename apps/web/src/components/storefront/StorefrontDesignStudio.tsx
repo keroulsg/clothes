@@ -166,6 +166,9 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const [importUrlInput, setImportUrlInput] = useState('');
+  const [isImportingUrl, setIsImportingUrl] = useState(false);
 
   // Modals
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -351,6 +354,53 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
       } else {
         setErrorMsg(err?.message || (isAr ? 'فشل حذف الصورة' : 'Failed to delete image'));
       }
+    }
+  };
+
+  // Import Media from URL (supports Pinterest, direct image URLs, etc.)
+  const handleImportMediaUrl = async (url: string, category = 'general', asLogo = false) => {
+    if (!url || !url.trim()) return;
+    setIsImportingUrl(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.storefront.importMediaFromUrl(url.trim(), category, asLogo ? 'Store Logo' : undefined);
+      if (res?.media) {
+        setMediaList((prev) => [res.media, ...prev]);
+        if (asLogo) {
+          setLogoUrl(res.media.url);
+          setSuccessMsg(isAr ? 'تم استيراد الصورة وتعيينها كشعار رسمي للمتجر بنجاح!' : 'Logo imported and updated successfully!');
+        } else {
+          setSuccessMsg(isAr ? 'تم استيراد الصورة وحفظها في مكتبة الوسائط بنجاح!' : 'Media imported successfully!');
+        }
+        setImportUrlInput('');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل استيراد الصورة من الرابط' : 'Failed to import media from URL'));
+    } finally {
+      setIsImportingUrl(false);
+    }
+  };
+
+  // Upload Logo directly from local file
+  const handleUploadLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingMedia(true);
+    setUploadProgress(isAr ? 'جاري رفع ملف الشعار...' : 'Uploading logo...');
+    setErrorMsg(null);
+    try {
+      const res = await api.storefront.uploadMedia(file, 'logo', 'Store Logo');
+      if (res?.media) {
+        setMediaList((prev) => [res.media, ...prev]);
+        setLogoUrl(res.media.url);
+        setSuccessMsg(isAr ? 'تم رفع الشعار وتعيينه للمتجر بنجاح!' : 'Logo uploaded successfully!');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل رفع ملف الشعار' : 'Failed to upload logo'));
+    } finally {
+      setIsUploadingMedia(false);
+      setUploadProgress(null);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -1364,6 +1414,59 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                 </p>
               </div>
 
+              {/* Import from Web URL or Pinterest */}
+              <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {isAr ? 'استيراد صورة من رابط ويب أو Pinterest' : 'Import from Web URL or Pinterest'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded-full">
+                    {isAr ? 'يدعم روابط Pinterest الذكية' : 'Pinterest Smart Resolver'}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={importUrlInput}
+                    onChange={(e) => setImportUrlInput(e.target.value)}
+                    placeholder={
+                      isAr
+                        ? 'ضع رابط Pinterest (مثل: https://pin.it/...) أو رابط صورة مباشر (.jpg, .png, .webp)'
+                        : 'Paste Pinterest link (e.g. https://pin.it/...) or direct image URL'
+                    }
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={isImportingUrl || !importUrlInput.trim()}
+                    onClick={() => handleImportMediaUrl(importUrlInput, 'general')}
+                    className="text-xs shrink-0 flex items-center gap-1.5"
+                  >
+                    {isImportingUrl ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>{isAr ? 'جاري الاستيراد...' : 'Importing...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'استيراد وحفظ' : 'Import & Save'}</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  {isAr
+                    ? '💡 نصيحة: عند وضع رابط من Pinterest، يقوم النظام تلقائياً بفك الرابط وتحميل الصورة الأصلية بأعلى جودة وحفظها في خادمك.'
+                    : '💡 Tip: Pasting a Pinterest link will automatically resolve and download the original high-res image.'}
+                </p>
+              </div>
+
               {/* Upload Progress Alert */}
               {uploadProgress && (
                 <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center gap-2">
@@ -1485,6 +1588,13 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
 
               {/* Logo URL */}
               <div className="space-y-3 text-xs p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <input
+                  ref={logoFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={handleUploadLogoFile}
+                />
                 <div className="flex items-center justify-between">
                   <label className="block font-bold">{isAr ? 'شعار المتجر الرسمي (Official Store Logo)' : 'Official Store Logo'}</label>
                   {logoUrl && (
@@ -1498,14 +1608,54 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Direct Upload Button */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingMedia}
+                    onClick={() => logoFileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1.5 border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingMedia ? (isAr ? 'جاري رفع الشعار...' : 'Uploading...') : (isAr ? 'رفع ملف شعار من جهازك' : 'Upload Logo from PC')}</span>
+                  </Button>
+                  <span className="text-[10px] text-slate-400">{isAr ? 'أو ضع رابط صورة أو Pinterest أدناه:' : 'Or enter URL below:'}</span>
+                </div>
+
                 <div className="flex gap-2">
                   <input
                     type="url"
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
-                    placeholder="https://.../logo.png أو رابط من مكتبة الوسائط"
+                    placeholder="https://.../logo.png أو رابط من Pinterest أو مكتبة الوسائط"
                     className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
                   />
+                  {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com') || logoUrl.startsWith('http')) && !logoUrl.startsWith('/storage') && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={isImportingUrl}
+                      onClick={() => handleImportMediaUrl(logoUrl, 'logo', true)}
+                      className="text-xs shrink-0 flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+                      title={isAr ? 'تحميل وحفظ الصورة في الخادم وتعيينها كشعار' : 'Download and save as logo'}
+                    >
+                      {isImportingUrl ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>{isAr ? 'جاري الاستيراد...' : 'Importing...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'استيراد وحفظ كشعار' : 'Import as Logo'}</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
                   {logoUrl && (
                     <button
                       type="button"
@@ -1516,6 +1666,13 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Pinterest Detection Tip */}
+                {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com')) && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] flex items-center justify-between">
+                    <span>{isAr ? '💡 تم اكتشاف رابط Pinterest! اضغط على زر "استيراد وحفظ كشعار" لتحميل الصورة الأصلية فوراً.' : '💡 Pinterest link detected! Click "Import as Logo" to download.'}</span>
+                  </div>
+                )}
 
                 {logoUrl && (
                   <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
@@ -1721,14 +1878,54 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Direct Upload Button */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingMedia}
+                    onClick={() => logoFileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1.5 border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingMedia ? (isAr ? 'جاري رفع الشعار...' : 'Uploading...') : (isAr ? 'رفع ملف شعار من جهازك' : 'Upload Logo from PC')}</span>
+                  </Button>
+                  <span className="text-[10px] text-slate-400">{isAr ? 'أو ضع رابط صورة أو Pinterest أدناه:' : 'Or enter URL below:'}</span>
+                </div>
+
                 <div className="flex gap-2">
                   <input
                     type="url"
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
-                    placeholder="https://.../logo.png أو رابط من مكتبة الوسائط"
+                    placeholder="https://.../logo.png أو رابط من Pinterest أو مكتبة الوسائط"
                     className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
                   />
+                  {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com') || logoUrl.startsWith('http')) && !logoUrl.startsWith('/storage') && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={isImportingUrl}
+                      onClick={() => handleImportMediaUrl(logoUrl, 'logo', true)}
+                      className="text-xs shrink-0 flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+                      title={isAr ? 'تحميل وحفظ الصورة في الخادم وتعيينها كشعار' : 'Download and save as logo'}
+                    >
+                      {isImportingUrl ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>{isAr ? 'جاري الاستيراد...' : 'Importing...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'استيراد وحفظ كشعار' : 'Import as Logo'}</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
                   {logoUrl && (
                     <button
                       type="button"
@@ -1739,6 +1936,13 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Pinterest Detection Tip */}
+                {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com')) && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] flex items-center justify-between">
+                    <span>{isAr ? '💡 تم اكتشاف رابط Pinterest! اضغط على زر "استيراد وحفظ كشعار" لتحميل الصورة الأصلية فوراً.' : '💡 Pinterest link detected! Click "Import as Logo" to download.'}</span>
+                  </div>
+                )}
 
                 {logoUrl && (
                   <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">

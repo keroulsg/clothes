@@ -764,6 +764,129 @@ class StorefrontController extends Controller
     }
 
     /**
+     * استيراد صورة من رابط خارجي أو Pinterest وحفظها في مكتبة الوسائط
+     */
+    public function importMediaFromUrl(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $request->validate([
+            'url' => 'required|string|url|max:2048',
+            'title' => 'nullable|string|max:255',
+            'category' => 'nullable|string|in:banner,logo,category,general',
+        ]);
+
+        $url = trim($request->input('url'));
+        $targetImageUrl = $url;
+
+        // إذا كان الرابط من Pinterest (رابط مختصر أو صفحة دبوس)، استخراج رابط الصورة الأصلي
+        if (str_contains($url, 'pin.it') || str_contains($url, 'pinterest.com/pin/')) {
+            try {
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                ])->get($url);
+
+                $html = $response->body();
+                preg_match_all('/https:\/\/i\.pinimg\.com\/(originals|736x)\/([a-zA-Z0-9_\-\.\/]+\.(jpg|jpeg|png|webp))/i', $html, $matches);
+
+                if (!empty($matches[0])) {
+                    $candidates = array_filter($matches[0], function ($link) {
+                        return !str_contains($link, 'd5/3b/01') && !str_contains($link, 'button') && !str_contains($link, 'icon');
+                    });
+                    if (empty($candidates)) $candidates = $matches[0];
+                    $counts = array_count_values($candidates);
+                    arsort($counts);
+                    $bestImage = array_key_first($counts);
+                    $origImage = str_replace('/736x/', '/originals/', $bestImage);
+                    $origCheck = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5)->head($origImage);
+                    $targetImageUrl = $origCheck->successful() ? $origImage : $bestImage;
+                }
+            } catch (\Throwable $e) {
+                // المتابعة بالرابط الأصلي في حال تعذر التتبع
+            }
+        }
+
+        try {
+            $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(20)->withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            ])->get($targetImageUrl);
+
+            if (!$imageResponse->successful()) {
+                return response()->json([
+                    'message' => 'تعذر تحميل الصورة من الرابط المقدم (رمز الاستجابة: ' . $imageResponse->status() . ')',
+                ], 422);
+            }
+
+            $content = $imageResponse->body();
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->buffer($content);
+
+            $allowedMimes = [
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'image/gif' => 'gif',
+                'image/svg+xml' => 'svg',
+            ];
+
+            if (!isset($allowedMimes[$mime])) {
+                return response()->json([
+                    'message' => 'الرابط المطلوب لا يشير إلى ملف صورة صالح. نوع الملف المكتشف: ' . $mime,
+                ], 422);
+            }
+
+            $ext = $allowedMimes[$mime];
+            $safeName = 'media_' . date('Ymd_His') . '_' . \Illuminate\Support\Str::random(8) . '.' . $ext;
+            $path = "storefront/{$tenantId}/{$safeName}";
+
+            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $content);
+            $publicUrl = "/storage/{$path}";
+
+            $dimensions = @getimagesizefromstring($content);
+            $width = $dimensions ? (int) $dimensions[0] : null;
+            $height = $dimensions ? (int) $dimensions[1] : null;
+
+            $defaultTitle = $request->input('title') ?: pathinfo(parse_url($targetImageUrl, PHP_URL_PATH) ?? '', PATHINFO_FILENAME);
+            if (empty($defaultTitle) || strlen($defaultTitle) > 100) {
+                $defaultTitle = 'Imported Media ' . date('Y-m-d H:i');
+            }
+
+            $mediaItem = [
+                'id' => 'med_' . \Illuminate\Support\Str::random(10),
+                'url' => $publicUrl,
+                'path' => $path,
+                'filename' => $safeName,
+                'original_name' => basename(parse_url($targetImageUrl, PHP_URL_PATH) ?? '') ?: $safeName,
+                'size' => strlen($content),
+                'mime_type' => $mime,
+                'width' => $width,
+                'height' => $height,
+                'category' => $request->input('category', 'general'),
+                'title' => $defaultTitle,
+                'created_at' => now()->toISOString(),
+            ];
+
+            $settings = \App\Models\TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+            if ($settings) {
+                $config = $settings->theme_config ?? [];
+                $mediaList = $config['media_library'] ?? [];
+                array_unshift($mediaList, $mediaItem);
+                $config['media_library'] = array_slice($mediaList, 0, 100);
+                $settings->update(['theme_config' => $config]);
+            }
+
+            return response()->json([
+                'message' => 'تم استيراد الصورة بنجاح وتخزينها في مكتبة الوسائط',
+                'media' => $mediaItem,
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'حدث خطأ أثناء تحميل واستيراد الصورة: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * استعراض مكتبة وسائط المتجر
      */
     public function listMedia(Request $request): JsonResponse

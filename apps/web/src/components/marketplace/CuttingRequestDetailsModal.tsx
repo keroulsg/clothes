@@ -537,7 +537,7 @@ export const CuttingRequestDetailsModal: React.FC<CuttingRequestDetailsModalProp
             {isOwner && (
               <>
                 {(() => {
-                  const publishedDate = rfq.published_at ? new Date(rfq.published_at) : (rfq.created_at ? new Date(rfq.created_at) : null);
+                  const publishedDate = rfq.published_at ? new Date(rfq.published_at) : null;
                   const offerWindowEnd = publishedDate ? new Date(publishedDate.getTime() + 60 * 60 * 1000) : null;
                   const isOfferWindowActive = (rfq.status === 'open' || rfq.status === 'published') && offerWindowEnd ? (new Date().getTime() < offerWindowEnd.getTime()) : false;
                   const remainingMinutes = offerWindowEnd ? Math.max(1, Math.ceil((offerWindowEnd.getTime() - new Date().getTime()) / 60000)) : 0;

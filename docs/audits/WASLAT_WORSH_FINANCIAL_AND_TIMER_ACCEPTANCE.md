@@ -30,25 +30,27 @@ This audit report provides concrete verification and automated test proof for th
 
 ### 2.2 Server-Side Implementation (`WaslatWorshService.php`)
 ```php
-// Enforce 60-minute offer window from published_at before awarding
-$publishedAt = $request->published_at ?? $request->created_at;
-if ($publishedAt) {
-    $windowEndsAt = Carbon::parse($publishedAt)->addMinutes(60);
-    if (Carbon::now()->lt($windowEndsAt)) {
-        $minutesRemaining = (int) ceil(Carbon::now()->diffInSeconds($windowEndsAt) / 60);
-        throw new \InvalidArgumentException(
-            "Cannot accept offers during the 60-minute competitive offer window. " .
-            "Remaining time: {$minutesRemaining} minute(s)."
-        );
+// Enforce 60-minute offer window exclusively from official published_at
+if ($enforceOfferWindow) {
+    if (empty($rfq->published_at)) {
+        throw new \InvalidArgumentException('لا يمكن قبول العرض على طلب لم يتم نشره رسمياً أو تنقصه بيانات تاريخ النشر.');
+    }
+    $publishedAt = Carbon::parse($rfq->published_at);
+    if (now()->lt($publishedAt->copy()->addMinutes(60))) {
+        $remainingSeconds = now()->diffInSeconds($publishedAt->copy()->addMinutes(60), false);
+        throw new \InvalidArgumentException("نافذة استقبال العروض مستمرة لمدة 60 دقيقة من نشر الطلب لضمان تكافؤ الفرص وعدالة المنافسة. يتبقى {$remainingSeconds} ثانية قبل فتح باب الترسية.");
     }
 }
 ```
+> [!IMPORTANT]
+> **No Fallback to `created_at`:** The system strictly rejects any un-published RFQ or any RFQ missing a `published_at` timestamp. There is zero silent fallback to `created_at`.
 
 ### 2.3 Boundary Timeline Verification
 $$\begin{array}{|l|c|l|c|}
 \hline
 \textbf{Time Relative to Published} & \textbf{Minutes Elapsed} & \textbf{Direct API Result} & \textbf{HTTP Status} \\
 \hline
+\text{Missing published\_at} & \text{N/A} & \text{REJECTED: RFQ unpublished or lacks publication date} & \text{422 Unprocessable} \\
 \text{T + 0 min (Immediate)} & 0 & \text{REJECTED: Window active (60 mins left)} & \text{422 Unprocessable} \\
 \text{T + 30 min (Mid-window)} & 30 & \text{REJECTED: Window active (30 mins left)} & \text{422 Unprocessable} \\
 \text{T + 59 min (1 min before)} & 59 & \text{REJECTED: Window active (1 min left)} & \text{422 Unprocessable} \\
@@ -98,14 +100,20 @@ Because `MarketplaceCommission` implements the `BelongsToTenant` scope:
 - The workshop querying under their tenant receives **only 1 record** ($450.00$ EGP as provider).
 - Neither party can view or access the other party's fee balance or ledger entry.
 
-### 3.4 Payment & Escrow Modes: InstaPay vs. Cash vs. Escrow
-1. **InstaPay / Bank Transfer Receipt Review (Current Production Flow):**
-   - Requester transfers the initial payment or deposit to the factory's verified InstaPay address / bank account.
-   - Requester uploads the transaction reference and receipt image.
-   - Workshop reviews and verifies the receipt before starting production spread.
-2. **Platform Escrow Mode (Configurable Enterprise Option):**
-   - For managed enterprise contracts, platform collects total funds plus commission into escrow prior to cutting release.
-   - Funds are disbursed to the workshop following quality sign-off and delivery note confirmation.
+### 3.4 Commission Lifecycle States & Financial Clarity
+To avoid conflating potential or pending fees with earned cash, commission states are segregated across 5 distinct lifecycle stages:
+
+1. **Commission Calculated:** Computed dynamically during bid award as $\text{unit\_rate} \times \text{target\_quantity} \times 3.00\%$, rounded to 4 decimal places in compliance with Egyptian currency ledger standards.
+2. **Commission Recorded:** Persisted atomically in `marketplace_commissions` with initial status `pending`, linked directly to `rfq_id`, `rfq_bid_id`, and `job_order_id`. Two distinct records are created (one for requester tenant, one for workshop provider tenant).
+3. **Commission Due:** The commission balance remains open/due while the physical cutting contract and goods inspection are ongoing.  
+   > [!WARNING]
+   > **Pending Commission is NOT Collected Revenue:** A `pending` commission record represents an accrued receivable, not cleared cash or liquid platform balance.
+4. **Commission Paid:** Transitioned to `collected` upon verified settlement (e.g. platform admin verification of offline bank/InstaPay transfer or debit from enterprise prepaid deposit).
+5. **Commission Settled / Waived:** Formally reconciled. If an RFQ or contract is cancelled or refunded due to non-delivery, the commission status transitions to `waived` or `cancelled`.
+
+### 3.5 Classification of Escrow Implementation
+- **Current Operational Reality:** Peer-to-peer direct settlement with verified receipt upload. Requesters pay cutting workshops directly via InstaPay / bank transfer and upload receipt proofs for verification.
+- **Automated Escrow Classification:** **NOT IMPLEMENTED / FUTURE CAPABILITY**. There is no automated third-party escrow fund custody, programmatic multi-sig holding, or automated release engine in the current backend. Managed enterprise escrow workflows remain a roadmap item pending Central Bank of Egypt (CBE) payment aggregator licensing.
 
 ---
 
@@ -126,14 +134,16 @@ To protect the marketplace from off-platform circumvention before a contract is 
 All rules documented in this audit are continuously enforced and verified by automated feature test suites in `apps/api/tests/Feature/`:
 
 ### 5.1 Test Suite Breakdown
-1. **`WaslatWorshTimerAndFinancialAcceptanceTest.php` (7 tests, 37 assertions):**
-   - `test_cannot_accept_bid_before_60_minute_window_expires`: Verifies HTTP 422 rejection when attempted immediately.
-   - `test_direct_api_call_cannot_bypass_timer_even_with_tampered_browser_clock`: Verifies server time authority regardless of client payloads.
-   - `test_rejection_at_59_minute_boundary`: Proves rejection at minute 59.
-   - `test_success_at_exact_60_minute_boundary`: Proves successful acceptance and order generation at minute 60.
-   - `test_two_sided_three_percent_commission_records_created_with_tenant_isolation`: Confirms generation of separate 3% requester and 3% provider commissions and proves tenant isolation.
-   - `test_cannot_accept_already_accepted_bid`: Verifies idempotency and duplicate prevention.
-   - `test_requester_cannot_accept_cancelled_or_closed_request`: Verifies state machine enforcement.
+1. **`WaslatWorshTimerAndFinancialAcceptanceTest.php` (9 tests, 41 assertions):**
+   - `test_cannot_accept_bid_before_60_minute_window_via_api`: Verifies HTTP 422 rejection when attempted immediately.
+   - `test_browser_clock_manipulation_fails_because_server_time_is_authoritative`: Verifies server time authority regardless of client payloads/headers.
+   - `test_cannot_accept_bid_at_30_minutes`: Proves rejection at minute 30 (mid-window).
+   - `test_cannot_accept_bid_at_59_minutes`: Proves rejection at minute 59 (boundary before threshold).
+   - `test_cannot_accept_bid_when_published_at_is_missing`: Proves safe rejection (HTTP 422) when `published_at` is null, confirming zero fallback to `created_at`.
+   - `test_can_accept_bid_at_or_after_60_minute_boundary`: Proves successful acceptance and order generation at minute 60 and later.
+   - `test_duplicate_award_calls_are_rejected`: Verifies atomic locking prevents duplicate JobOrders and duplicate commissions.
+   - `test_two_sided_commission_records_created_separately`: Confirms generation of separate 3% requester and 3% provider commissions and proves tenant isolation.
+   - `test_privacy_masking_protects_contact_details`: Verifies phone and private address masking until award.
 
 2. **`WaslatWorshCommercialAcceptanceTest.php` (6 tests, 36 assertions):**
    - End-to-end commercial lifecycle, subscription quotas, and bidding limits.
@@ -141,7 +151,7 @@ All rules documented in this audit are continuously enforced and verified by aut
 3. **`WaslatWorshIntegrationTest.php` (4 tests, 20 assertions):**
    - Complete RFQ lifecycle, bidding, delivery note generation, and completion.
 
-**Total Marketplace Verification:** **17 tests passed, 93 assertions, 0 failures**.
+**Total Marketplace Verification:** **19 tests passed, 97 assertions, 0 failures**.
 
 ---
 

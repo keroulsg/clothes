@@ -146,7 +146,35 @@ class WaslatWorshTimerAndFinancialAcceptanceTest extends TestCase
     }
 
     /**
-     * 3. At 59 minutes (boundary before threshold): Fails
+     * 3. At 30 minutes (mid-window): Fails
+     */
+    public function test_cannot_accept_bid_at_30_minutes(): void
+    {
+        $rfq = $this->wwService->createRfq($this->seekerTenant->id, [
+            'title' => 'قص 600 قطعة جاكيت',
+            'service_type' => 'cutting',
+            'target_quantity' => 600,
+            'expected_delivery_date' => now()->addDays(8)->toDateString(),
+            'publish' => true,
+        ]);
+
+        // Set published_at to 30 minutes ago
+        $rfq->update(['published_at' => now()->subMinutes(30)]);
+
+        $bid = $this->wwService->submitBid($rfq->id, $this->workshop->id, [
+            'unit_rate' => 35.00,
+            'promised_lead_days' => 5,
+        ]);
+
+        $res = $this->actingAs($this->seekerUser, 'sanctum')
+            ->postJson("/api/v1/waslat-worsh/rfqs/{$rfq->id}/bids/{$bid->id}/accept");
+
+        $res->assertStatus(422);
+        $this->assertStringContainsString('نافذة استقبال العروض مستمرة', $res->json('message'));
+    }
+
+    /**
+     * 4. At 59 minutes (boundary before threshold): Fails
      */
     public function test_cannot_accept_bid_at_59_minutes(): void
     {
@@ -174,7 +202,39 @@ class WaslatWorshTimerAndFinancialAcceptanceTest extends TestCase
     }
 
     /**
-     * 4. At Exact 60-Minute Boundary and After: Succeeds
+     * 5. Missing published_at timestamp fails safely without fallback to created_at
+     */
+    public function test_cannot_accept_bid_when_published_at_is_missing(): void
+    {
+        $rfq = $this->wwService->createRfq($this->seekerTenant->id, [
+            'title' => 'قص 400 قطعة بدون تاريخ نشر',
+            'service_type' => 'cutting',
+            'target_quantity' => 400,
+            'expected_delivery_date' => now()->addDays(5)->toDateString(),
+            'publish' => false,
+        ]);
+
+        // Force status open but keep published_at null
+        $rfq->update([
+            'status' => 'open',
+            'published_at' => null,
+            'created_at' => now()->subHours(2), // created_at was 2 hours ago
+        ]);
+
+        $bid = $this->wwService->submitBid($rfq->id, $this->workshop->id, [
+            'unit_rate' => 20.00,
+            'promised_lead_days' => 3,
+        ]);
+
+        $res = $this->actingAs($this->seekerUser, 'sanctum')
+            ->postJson("/api/v1/waslat-worsh/rfqs/{$rfq->id}/bids/{$bid->id}/accept");
+
+        $res->assertStatus(422);
+        $this->assertStringContainsString('لم يتم نشره رسمياً أو تنقصه بيانات تاريخ النشر', $res->json('message'));
+    }
+
+    /**
+     * 6. At Exact 60-Minute Boundary and After: Succeeds
      */
     public function test_can_accept_bid_at_or_after_60_minute_boundary(): void
     {

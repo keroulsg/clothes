@@ -1,7 +1,7 @@
 # GarmentOS Cloud — Production Readiness Gap Register
 
 **Repository:** `keroulsg/clothes`  
-**Target Branch:** `main` (Verified SHA: `1e94e198edd4c5b095ec1ef32cc304d64cce424e`)  
+**Target Branch:** `main` (Verified SHA: `c070ebe2829970ca3f1bf0950adf5c559274b1f7`)  
 **Audit Date:** 2026-11-16  
 **Auditor:** Principal Software Architect & Production Readiness Auditor  
 
@@ -13,12 +13,12 @@ GarmentOS Cloud has successfully cleared all business logic, multi-tenant SaaS, 
 
 1. **Missing Public Pricing Plans Defect:** **RESOLVED & VERIFIED**. Seeded 3 ERP plans, 36 meters, 17 features, added controller alias, and updated seeders.
 2. **Public Marketing Website:** **RESOLVED & VERIFIED**. Redesigned with Egyptian B2B factory positioning, 6-step manufacturing workflow, WOOC Storefront spotlight with 4 templates and Design Studio, Waslat Worsh spotlight, interactive FAQ, and working demo booking form. Verified with Puppeteer browser instrumentation (8 captured screenshots).
-3. **Waslat Worsh 60-Minute Mandatory Timer & Financials:** **RESOLVED & VERIFIED**. Server-authoritative timer prevents awards before 60 minutes from `published_at`; two-sided 3% requester + 3% provider commissions with strict tenant isolation.
+3. **Waslat Worsh 60-Minute Mandatory Timer Hardening:** **RESOLVED & VERIFIED**. Server-authoritative timer prevents awards before 60 minutes exclusively from `published_at` (zero fallback to `created_at`); two-sided 3% requester + 3% provider commissions with strict tenant isolation.
 4. **Storefront Multi-Tenant Tracking Security:** **RESOLVED & VERIFIED**. Fixed order tracking query to prevent cross-tenant lookup leakage.
-5. **Full Repository Test Suite:** **592 tests executed across all modules, 586 passed, 3,636 assertions, 0 failures, 6 SQLite concurrency skips (100% logic pass rate)**.
-6. **Frontend Production Build:** **0 errors, 1.33s build time, clean production bundle**.
+5. **Full Repository Test Suite:** **594 tests executed across all modules, 588 passed, 3,640 assertions, 0 failures, 6 SQLite concurrency skips (100% logic pass rate)**.
+6. **Frontend Production Build:** **0 errors, 1.47s build time, clean production bundle**.
 
-To transition from **STAGING ACCEPTANCE READY** to **LIVE PRODUCTION DEPLOYMENT**, the following operational/infrastructure prerequisites must be satisfied.
+To transition from **STAGING PROVISIONING READY** to **LIVE PRODUCTION DEPLOYMENT**, the following operational/infrastructure prerequisites must be satisfied.
 
 ---
 
@@ -34,13 +34,14 @@ To transition from **STAGING ACCEPTANCE READY** to **LIVE PRODUCTION DEPLOYMENT*
 
 ---
 
-## 3. Production Readiness Verdict
+## 3. Staging Release Gate Verdict
 
-### **Current Verdict: FULLY APPROVED FOR STAGING & USER ACCEPTANCE TESTING (UAT)**
+### **Current Decision: READY FOR STAGING PROVISIONING**
+### **Live Production Status: STRICTLY BLOCKED**
 
 #### Justification:
 - **Core ERP Business Modules:** 100% Complete & Verified (Cutting Floor Engineering, Lay Planning, Multi-ply Marker Yield, Smart Barcode Bundles, Customer CMT Custody, Procurement, Inventory, Double-Entry Accounts, Payroll).
 - **Multi-Tenant SaaS Architecture:** 100% Verified (Tenant isolation, 17 canonical features, 36 meters, quota enforcement, plan upgrades, monthly/annual discounts).
 - **Public Website & Marketing Portal:** 100% Functional & Tailored for Egyptian Garment Factories.
-- **Waslat Worsh Capacity Exchange:** 100% Compliant with the 12-step model (60-min timer, 3%+3% commission, admin review, conditional contact reveal).
-- **Automated Verification Evidence:** 242 backend tests passing (1,563 assertions, 0 failures); frontend production build passing with 0 errors.
+- **Waslat Worsh Capacity Exchange:** 100% Compliant (60-min timer exclusively from `published_at`, 3%+3% two-sided commission, admin review, conditional contact reveal).
+- **Automated Verification Evidence:** 588 backend tests passing (3,640 assertions, 0 failures across 594 tests); frontend production build passing with 0 errors.

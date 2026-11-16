@@ -636,16 +636,28 @@ class WaslatWorshService
                 throw new InvalidArgumentException('لا يمكن قبول عرض على طلب غير مفتوح.');
             }
 
-            // إنفاذ نافذة العروض الإجبارية (60 دقيقة من نشر الطلب) لحماية تكافؤ الفرص وعدالة المنافسة
+            if (!empty($rfq->awarded_bid_id) || $rfq->status === 'offer_selected') {
+                throw new InvalidArgumentException('تمت ترسية هذا الطلب بالفعل ولا يمكن إعادة قبوله.');
+            }
+
+            // إنفاذ نافذة العروض الإجبارية (60 دقيقة من تاريخ النشر الرسمي حصراً published_at)
             if ($enforceOfferWindow) {
-                $publishedAt = $rfq->published_at ? Carbon::parse($rfq->published_at) : ($rfq->created_at ? Carbon::parse($rfq->created_at) : null);
-                if ($publishedAt && now()->lt($publishedAt->copy()->addMinutes(60))) {
+                if (empty($rfq->published_at)) {
+                    throw new InvalidArgumentException('لا يمكن قبول العرض على طلب لم يتم نشره رسمياً أو تنقصه بيانات تاريخ النشر.');
+                }
+                $publishedAt = Carbon::parse($rfq->published_at);
+                if (now()->lt($publishedAt->copy()->addMinutes(60))) {
                     $remainingSeconds = now()->diffInSeconds($publishedAt->copy()->addMinutes(60), false);
                     throw new InvalidArgumentException("نافذة استقبال العروض مستمرة لمدة 60 دقيقة من نشر الطلب لضمان تكافؤ الفرص وعدالة المنافسة. يتبقى {$remainingSeconds} ثانية قبل فتح باب الترسية.");
                 }
             }
 
-            $bid = RfqBid::where('rfq_id', $rfq->id)->findOrFail($bidId);
+            $bid = RfqBid::where('rfq_id', $rfq->id)->lockForUpdate()->findOrFail($bidId);
+
+            if ($bid->status !== 'submitted') {
+                throw new InvalidArgumentException('لا يمكن قبول عرض غير متاح للترسية أو تمت معالجته مسبقاً.');
+            }
+
             $workshop = WorkshopProfile::findOrFail($bid->workshop_profile_id);
 
             // ترقية العرض الفائز ورفض العروض الأخرى وتعيين حالة اختيار العرض (P3: Offer Selected Lifecycle)

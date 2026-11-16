@@ -2,10 +2,10 @@
 
 **Repository:** `keroulsg/clothes`  
 **Primary Source of Truth Branch:** `main`  
-**Consolidation & Verification Commit:** `38be3b9d53924c38a1f8c285df56910600587d28` (Final Audit Acceptance)  
+**Consolidation & Verification Commit:** `c070ebe2829970ca3f1bf0950adf5c559274b1f7` (Final Baseline Reconciliation & Staging Release Gate)  
 **Verification Date:** 2026-11-16  
-**Status:** Unified, Consolidated, Hardened & Final Acceptance Verified  
-**Readiness Verdict:** **FULLY APPROVED FOR STAGING & USER ACCEPTANCE TESTING (UAT)**  
+**Status:** Unified, Consolidated, Hardened & Reconciled  
+**Staging Release Gate Verdict:** **READY FOR STAGING PROVISIONING**  
 
 ---
 
@@ -20,7 +20,7 @@
     5. `garmentos/storefront-bom-development` (Commit: `f33589f`)
   - Commit `1e94e19` sits directly atop merge commit `f33589f` with 100% linear reachability.
   - Zero missing commits; zero unresolved merge conflicts; zero destructive operations.
-  - Immutable recovery branches preserved under `refs/heads/backup/audit_*`.
+  - Local recovery branches preserved under `refs/heads/backup/audit_*` (local-only branches; not server-side branch protected on remote).
 
 ---
 
@@ -62,12 +62,13 @@
 
 ## 3. Automated Test Verification Summary
 
-- **Frontend Production Build:** `tsc -b && vite build` $\rightarrow$ **0 Errors, 2,295 modules transformed in 1.33s**.
-- **Full Backend Test Suite (PHPUnit):** **592 tests total across entire repository, 586 passed, 3,636 assertions, 0 failures, 6 SQLite concurrency skips (100% logic pass rate)**:
+- **Frontend Production Build:** `tsc -b && vite build` $\rightarrow$ **0 Errors, 2,295 modules transformed in 1.47s**.
+- **Full Backend Test Suite (PHPUnit on Current HEAD):** **594 tests total across entire repository, 588 passed, 3,640 assertions, 0 failures, 6 SQLite concurrency skips (100% logic pass rate)**:
   - Full ERP Modules (Inventory, Production, Cutting, Accounting, Costing, Payroll, Purchasing, Sales, Subcontracting): 100% pass rate.
   - SaaS Subscription, 17 Features, 36 Meters, and Quota Limits: 100% pass rate.
-  - Waslat Worsh 60-Minute Mandatory Timer, Two-Sided 3%+3% Commission, and Privacy Masking: 100% pass rate.
+  - Waslat Worsh 60-Minute Mandatory Timer (Exclusive published_at authority), Two-Sided 3%+3% Commission, and Privacy Masking: 100% pass rate.
   - Storefront Multi-Tenant Tracking Isolation & Customer Journey: 100% pass rate.
+  - Skipped Tests: 6 tests in `PostgresConcurrencyIntegrationTest.php` require a live PostgreSQL 15 instance on 127.0.0.1:5432 (to be executed in Staging environment).
 - **Master Final Acceptance Audit Deliverables:** Available in `docs/audits/`:
   - `FINAL_ACCEPTANCE_AUDIT.md` (Master Final Acceptance Audit & Business Flow Proof)
   - `SAAS_COMMERCIAL_ACCEPTANCE_EVIDENCE.md` (SaaS Subscription Commercial Acceptance)

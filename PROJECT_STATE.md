@@ -81,3 +81,9 @@
   - `WASLAT_WORSH_BUSINESS_FLOW_VERIFICATION.md`
   - `END_TO_END_TEST_EVIDENCE.md`
   - `PRODUCTION_READINESS_GAP_REGISTER.md`
+- **Staging Infrastructure & Deployment Runbooks:** Available in `docs/deployment/`:
+  - `STAGING_ARCHITECTURE.md` (Isolated Staging Architecture & Container Topology)
+  - `STAGING_ENVIRONMENT_MATRIX.md` (Complete .env Classification & Variable Matrix)
+  - `STAGING_DEPLOYMENT_RUNBOOK.md` (Production-Grade Staging Deployment Runbook)
+  - `STAGING_ROLLBACK_PLAN.md` (Emergency Rollback & Point-in-Time Recovery Plan)
+  - `STAGING_ACCEPTANCE_CHECKLIST.md` (10-Gate Pre-UAT Verification Matrix)

@@ -1,419 +1,775 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Search,
   ShoppingBag,
   SlidersHorizontal,
   Package,
   CheckCircle2,
   AlertTriangle,
-  Building2,
   FileSpreadsheet,
-  Globe,
-  Sun,
-  Moon,
+  ArrowRight,
+  Sparkles,
+  Copy,
+  Check,
+  Phone,
+  Mail,
+  MapPin,
+  Award,
+  Building2,
+  Scissors,
+  Layers,
 } from 'lucide-react';
+import { api } from '../../../api/client';
+import { StorefrontImage } from '../common/StorefrontImage';
+import { getActiveSortedSections, normalizeSectionId, getCategoryString } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const ModernCatalogTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  tenantInfo,
-  variants,
-  searchQuery,
-  setSearchQuery,
-  selectedCategory,
+  variants = [],
+  searchQuery = '',
+  selectedCategory = 'all',
   setSelectedCategory,
-  cartCount,
-  onOpenCart,
   onSelectProduct,
-  onNavigateToTracking,
-  onNavigateToErp,
-  onToggleTheme,
-  onToggleLang,
+  onNavigateToShop,
+  onNavigateToCategories,
+  onNavigateToAbout,
+  onNavigateToContact,
+  onNavigateToPolicies,
+  onOpenWholesaleModal,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#2563eb';
-  const storeName = storeSettings?.store_name || tenantInfo?.name || 'Modern Apparel Catalog';
   const currency = storeSettings?.currency || 'EGP';
+
+  const heroBanner = themeConfig.hero_banner || {};
+  const isHeroEnabled = heroBanner.enabled !== false;
+  const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
+  const heroMobileImage = heroBanner.mobile_image || heroImage;
+
+  // Elementor Layout & Styler Config
+  const layoutConfig = themeConfig.layout || {};
+  const pageBgColor = layoutConfig.page_bg_color || '';
+  const cardBgColor = layoutConfig.card_bg_color || '';
+  const cardBorderColor = layoutConfig.card_border_color || '';
+  const cardBorderRadius = layoutConfig.card_border_radius || 'md';
+  const cardShadow = layoutConfig.card_shadow || 'sm';
+  const cardImageAspect = layoutConfig.card_image_aspect || 'wide';
+  const cardImageFit = layoutConfig.card_image_fit || 'cover';
+  const categoriesStyle = layoutConfig.categories_style || 'pills';
+  const containerWidth = layoutConfig.container_width || 'boxed_standard';
+  const containerWidthClass =
+    containerWidth === 'boxed_compact'
+      ? 'max-w-5xl mx-auto px-4 sm:px-6'
+      : containerWidth === 'wide'
+      ? 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10'
+      : containerWidth === 'full_width'
+      ? 'w-full px-4 sm:px-8 lg:px-12'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
+
+  // Hero Display Controls
+  const heroHeight = heroBanner?.height || 'standard';
+  const heroFit = heroBanner?.image_fit || 'cover';
+  const heroPosition = heroBanner?.image_position || 'center';
+  const heroOverlayOpacity = typeof heroBanner?.overlay_opacity === 'number' ? heroBanner.overlay_opacity : 40;
+  const heroOverlayColor = heroBanner?.overlay_color || '#000000';
+  const heroTextAlign = heroBanner?.text_align || 'start';
+  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'كتالوج المصنع للإنتاج المباشر والتوريدات' : 'Factory Direct Catalog & Supply');
+  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'موديلات جاهزة للشحن بأسعار الجملة والتجزئة من أرض المصنع مع إمكانية التعاقد والتوريد بكميات ضخمة.' : 'Export quality apparel ready for dispatch with tiered wholesale and corporate ordering.');
+  const heroBadge = heroBanner.badge || (isAr ? 'توريدات مصانع وشركات — B2B & Retail' : 'Wholesale & Retail Ready');
+  const heroCtaText = heroBanner.cta_text || (isAr ? 'تصفح كافة المعروضات' : 'Explore Full Catalog');
+  const heroCtaDestination = heroBanner.cta_destination || 'shop';
+
+  const handleHeroCtaClick = () => {
+    if (heroCtaDestination === 'categories' && onNavigateToCategories) onNavigateToCategories();
+    else if (heroCtaDestination === 'contact' && onNavigateToContact) onNavigateToContact();
+    else if (heroCtaDestination === 'about' && onNavigateToAbout) onNavigateToAbout();
+    else if (heroCtaDestination === 'policies' && onNavigateToPolicies) onNavigateToPolicies();
+    else if (onNavigateToShop) onNavigateToShop();
+    else {
+      const el = document.getElementById('catalog-grid');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {}
+  };
 
   const [stockOnlyFilter, setStockOnlyFilter] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'price_asc' | 'price_desc' | 'stock'>('default');
 
-  // Filter & sort logic
-  const filteredVariants = variants
-    .filter((v) => {
-      if (stockOnlyFilter && v.in_stock <= 0) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'price_asc') return a.price - b.price;
-      if (sortBy === 'price_desc') return b.price - a.price;
-      if (sortBy === 'stock') return b.in_stock - a.in_stock;
-      return 0;
-    });
+  // Dynamic Category Extraction from actual product catalog
+  const categories = useMemo(() => {
+    const extracted = Array.from(
+      new Set(
+        (variants || [])
+          .map((v) => getCategoryString(v.category))
+          .filter((c) => Boolean(c) && c.length > 0)
+      )
+    );
+    return [
+      { id: 'all', name_ar: 'كافة التصنيفات', name_en: 'All Categories' },
+      ...extracted.map((c) => ({ id: c, name_ar: c, name_en: c })),
+    ];
+  }, [variants]);
 
-  const categories = [
-    { id: 'all', name_ar: 'كافة التصنيفات', name_en: 'All Categories' },
-    { id: 'casual', name_ar: 'ملابس كاجوال', name_en: 'Casual Wear' },
-    { id: 'uniform', name_ar: 'زي موحد ويونيفورم', name_en: 'Uniform & Corporate' },
-    { id: 'polo', name_ar: 'بولو وقمصان رجالي', name_en: 'Polos & Shirts' },
-    { id: 'workwear', name_ar: 'ملابس عمال ومصانع', name_en: 'Industrial Workwear' },
-  ];
+  // Filter & sort logic
+  const filteredVariants = useMemo(() => {
+    return (variants || [])
+      .filter((v) => {
+        if (stockOnlyFilter && v.in_stock <= 0) return false;
+        const cat = getCategoryString(v.category);
+        if (selectedCategory && selectedCategory !== 'all' && cat !== selectedCategory) return false;
+        const q = (searchQuery || '').trim().toLowerCase();
+        if (
+          q &&
+          !(v.model_name || v.name || '').toLowerCase().includes(q) &&
+          !(v.sku || '').toLowerCase().includes(q) &&
+          !cat.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'price_asc') return Number(a.price) - Number(b.price);
+        if (sortBy === 'price_desc') return Number(b.price) - Number(a.price);
+        if (sortBy === 'stock') return Number(b.in_stock) - Number(a.in_stock);
+        return 0;
+      });
+  }, [variants, stockOnlyFilter, selectedCategory, searchQuery, sortBy]);
+
+  // Dynamic Section Registry Rendering
+  const activeSections = getActiveSortedSections(themeConfig?.sections);
+
+  // 1. Hero Section
+  const renderHeroSection = () => {
+    if (!isHeroEnabled) return null;
+
+    const heroHeightClass =
+      heroHeight === 'compact'
+        ? 'min-h-[220px]'
+        : heroHeight === 'tall'
+        ? 'min-h-[420px]'
+        : heroHeight === 'fullscreen'
+        ? 'min-h-[75vh]'
+        : 'min-h-[280px]';
+
+    const textAlignClass =
+      heroTextAlign === 'center'
+        ? 'text-center items-center mx-auto'
+        : heroTextAlign === 'end'
+        ? 'text-end items-end ms-auto'
+        : 'text-start items-start';
+
+    return (
+      <section className={`mb-8 rounded-3xl overflow-hidden relative shadow-lg ${heroHeightClass} flex items-center bg-slate-900 text-white`}>
+        {heroImage ? (
+          <>
+            <picture className="absolute inset-0 w-full h-full block">
+              {heroMobileImage && <source media="(max-width: 640px)" srcSet={api.getMediaUrl(heroMobileImage)} />}
+              <img
+                src={api.getMediaUrl(heroImage)}
+                alt={heroTitle}
+                style={{
+                  objectFit: heroFit as any,
+                  objectPosition: heroPosition,
+                }}
+                className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+              />
+            </picture>
+            <div
+              style={{
+                backgroundColor: heroOverlayColor,
+                opacity: heroOverlayOpacity / 100,
+              }}
+              className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+            />
+          </>
+        ) : (
+          <>
+            <img
+              src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80"
+              alt={heroTitle}
+              style={{
+                objectFit: heroFit as any,
+                objectPosition: heroPosition,
+              }}
+              className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} absolute inset-0`}
+            />
+            <div
+              style={{
+                backgroundColor: heroOverlayColor,
+                opacity: heroOverlayOpacity / 100,
+              }}
+              className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+            />
+          </>
+        )}
+        <div className={`relative z-10 p-6 sm:p-10 max-w-2xl space-y-3 flex flex-col ${textAlignClass}`}>
+          {heroBadge && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span>{heroBadge}</span>
+            </div>
+          )}
+          <h2 className="text-2xl sm:text-4xl font-black leading-tight">{heroTitle}</h2>
+          <p className="text-xs sm:text-sm text-slate-200 line-clamp-2">{heroSubtitle}</p>
+          <div className="pt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleHeroCtaClick}
+              style={{ backgroundColor: primaryColor }}
+              className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white shadow-md hover:brightness-110 transition cursor-pointer inline-flex items-center gap-2"
+            >
+              <span>{heroCtaText}</span>
+              <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  // 2. Categories Bar Section
+  const renderCategoriesSection = () => {
+    if (categoriesStyle === 'factory_icon_cards') {
+      return (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              {isAr ? 'خطوط التوريد والتصنيع' : 'Production Lines & Supply'}
+            </span>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {categories.length} {isAr ? 'أقسام' : 'categories'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {categories.map((c: any) => {
+              const isSelected = selectedCategory === c.id;
+              const count = c.id === 'all'
+                ? (variants?.length || 0)
+                : (variants?.filter(v => getCategoryString(v.category) === c.id).length || 0);
+
+              let CategoryIcon = Layers;
+              const nameLower = (c.name_ar + ' ' + c.name_en).toLowerCase();
+              if (c.id === 'all') CategoryIcon = Award;
+              else if (nameLower.includes('رجال') || nameLower.includes('men')) CategoryIcon = Scissors;
+              else if (nameLower.includes('حريم') || nameLower.includes('نسائ') || nameLower.includes('women')) CategoryIcon = Sparkles;
+              else if (nameLower.includes('يونيفورم') || nameLower.includes('uniform') || nameLower.includes('عمل')) CategoryIcon = Building2;
+              else if (nameLower.includes('جملة') || nameLower.includes('wholesale')) CategoryIcon = Package;
+
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(c.id)}
+                  className={`p-3.5 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between min-h-[100px] group ${
+                    isSelected
+                      ? 'shadow-md ring-2 ring-blue-500/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 bg-white dark:bg-slate-900'
+                  }`}
+                  style={isSelected ? { borderColor: primaryColor } : {}}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      }`}
+                      style={isSelected ? { backgroundColor: primaryColor } : {}}
+                    >
+                      <CategoryIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                      {count}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-xs font-bold truncate block">{isAr ? c.name_ar : c.name_en}</span>
+                    <span className="text-[9px] text-slate-400 block truncate mt-0.5">{isAr ? 'توريد مصنع' : 'Factory supply'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="mb-6 flex flex-wrap items-center gap-2">
+        {categories.map((c: any) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setSelectedCategory(c.id)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              selectedCategory === c.id
+                ? 'text-white shadow-sm'
+                : isDark
+                ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+            style={selectedCategory === c.id ? { backgroundColor: primaryColor } : {}}
+          >
+            {isAr ? c.name_ar : c.name_en}
+          </button>
+        ))}
+      </section>
+    );
+  };
+
+  // 3. Promotional Banners Section
+  const renderPromotionsSection = () => {
+    if (promoBanners.length === 0) return null;
+    return (
+      <section className="my-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {promoBanners.map((promo: any) => (
+            <div
+              key={promo.id}
+              style={{ backgroundColor: promo.bg_color || undefined }}
+              className="relative rounded-3xl overflow-hidden p-6 sm:p-8 flex flex-col justify-between min-h-[220px] shadow-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-900 to-indigo-900 text-white"
+            >
+              {(promo.image_url || promo.image) && (
+                <StorefrontImage
+                  src={promo.image_url || promo.image}
+                  alt={promo.title}
+                  className="absolute inset-0 w-full h-full object-cover opacity-30 filter brightness-75"
+                />
+              )}
+              <div className="relative z-10 space-y-2">
+                {(promo.badge_text || promo.discount_code) && (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-400 text-slate-950 shadow-sm">
+                    {promo.badge_text || `CODE: ${promo.discount_code}`}
+                  </span>
+                )}
+                <h4 className="text-2xl font-black">{promo.title}</h4>
+                <p className="text-xs sm:text-sm text-blue-100 max-w-md">{promo.subtitle}</p>
+              </div>
+              <div className="relative z-10 pt-4 flex items-center justify-between gap-4">
+                {(promo.discount_code || promo.badge_text) && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ الكود' : 'Copy Code')}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('catalog-grid');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-white text-blue-900 shadow-md hover:bg-blue-50 transition flex items-center gap-1.5 cursor-pointer ms-auto"
+                >
+                  <span>{isAr ? 'تصفح العرض' : 'Browse Offer'}</span>
+                  <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  // 4. Featured Catalog Products Grid Section
+  const renderProductsSection = () => (
+    <div id="catalog-grid" className="grid grid-cols-1 lg:grid-cols-4 gap-8 my-6">
+      {/* Sidebar Filters */}
+      <aside className="lg:col-span-1 space-y-6">
+        <div
+          className={`p-5 rounded-2xl border ${
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center gap-2 font-bold text-sm mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+            <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+            <span>{isAr ? 'تصفية المنتجات والأقسام' : 'Filter Categories'}</span>
+          </div>
+
+          {/* Categories in sidebar */}
+          <div className="space-y-1.5 mb-6">
+            {categories.map((c: any) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCategory(c.id)}
+                className={`w-full text-start px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                  selectedCategory === c.id
+                    ? 'text-white shadow-sm'
+                    : isDark
+                    ? 'text-slate-300 hover:bg-slate-800'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+                style={selectedCategory === c.id ? { backgroundColor: primaryColor } : {}}
+              >
+                <span>{isAr ? c.name_ar : c.name_en}</span>
+                <span className="text-[10px] opacity-70">
+                  {c.id === 'all' ? variants.length : Math.ceil(variants.length / 3)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Stock Filter Toggle */}
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold select-none">
+              <input
+                type="checkbox"
+                checked={stockOnlyFilter}
+                onChange={(e) => setStockOnlyFilter(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+              />
+              <span>{isAr ? 'عرض المتوفر بالمخازن فقط' : 'In-Stock items only'}</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Bulk RFQ Quick Box */}
+        <div
+          className={`p-5 rounded-2xl border ${
+            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-blue-50/60 border-blue-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-extrabold text-sm mb-2">
+            <FileSpreadsheet className="w-5 h-5" />
+            <span>{isAr ? 'طلب عروض أسعار الجملة' : 'Request Wholesale Quote'}</span>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
+            {isAr
+              ? 'للكميات التي تتجاوز 100 قطعة للشركات والمصانع، نقدم أسعاراً تفضيلية وخدمة تطريز وطباعة اللوجو.'
+              : 'For orders exceeding 100 pcs, get special tiered pricing and custom logo embroidery.'}
+          </p>
+          <a
+            href={storeSettings?.contact_whatsapp ? `https://wa.me/${storeSettings.contact_whatsapp}` : '#'}
+            target="_blank"
+            rel="noreferrer"
+            className="w-full text-center block bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
+          >
+            {isAr ? 'تواصل مع إدارة المبيعات' : 'Contact Sales Representative'}
+          </a>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <section className="lg:col-span-3 space-y-6">
+        {/* Sorting & Stats Bar */}
+        <div
+          className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+          }`}
+        >
+          <div className="text-xs font-bold text-slate-500">
+            {isAr
+              ? `عرض ${filteredVariants.length} من أصل ${variants.length} صنف ومقاس`
+              : `Showing ${filteredVariants.length} of ${variants.length} items`}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400 font-medium">{isAr ? 'ترتيب حسب:' : 'Sort by:'}</span>
+            <select
+              value={sortBy}
+              onChange={(e: any) => setSortBy(e.target.value)}
+              className={`text-xs font-bold rounded-lg px-2.5 py-1.5 border ${
+                isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+              }`}
+            >
+              <option value="default">{isAr ? 'الترتيب الافتراضي' : 'Default'}</option>
+              <option value="price_asc">{isAr ? 'السعر: من الأقل للأعلى' : 'Price: Low to High'}</option>
+              <option value="price_desc">{isAr ? 'السعر: من الأعلى للأقل' : 'Price: High to Low'}</option>
+              <option value="stock">{isAr ? 'الرصيد المتوفر' : 'Available Stock'}</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Catalog Grid */}
+        {filteredVariants.length === 0 ? (
+          <div className="py-20 text-center text-slate-400">
+            <Package className="w-12 h-12 mx-auto mb-2 opacity-30" />
+            <p className="text-sm font-bold">{isAr ? 'لا توجد أصناف مطابقة للبحث' : 'No catalog items match'}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {filteredVariants.map((v: any) => {
+              const inStock = v.in_stock > 0;
+              const cardRadiusClass =
+                cardBorderRadius === 'none'
+                  ? 'rounded-none'
+                  : cardBorderRadius === 'sm'
+                  ? 'rounded-lg'
+                  : cardBorderRadius === 'md'
+                  ? 'rounded-2xl'
+                  : 'rounded-3xl';
+
+              const cardShadowClass =
+                cardShadow === 'none'
+                  ? 'shadow-none'
+                  : cardShadow === 'sm'
+                  ? 'shadow-xs'
+                  : cardShadow === 'lg'
+                  ? 'shadow-2xl'
+                  : 'shadow-sm';
+
+              const cardAspectClass =
+                cardImageAspect === 'square'
+                  ? 'aspect-square'
+                  : cardImageAspect === 'tall'
+                  ? 'aspect-[2/3]'
+                  : 'aspect-[16/10]';
+
+              return (
+                <div
+                  key={v.id}
+                  style={{
+                    backgroundColor: cardBgColor || undefined,
+                    borderColor: cardBorderColor || undefined,
+                  }}
+                  className={`p-4 ${cardRadiusClass} ${cardShadowClass} border transition-all flex flex-col justify-between gap-3 ${
+                    !cardBgColor ? (isDark ? 'bg-slate-900' : 'bg-white') : ''
+                  } ${!cardBorderColor ? (isDark ? 'border-slate-800 hover:border-slate-700' : 'border-slate-200 hover:border-slate-300') : ''}`}
+                >
+                  <div>
+                    {/* Top Meta: SKU + Stock */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        {v.sku}
+                      </span>
+                      {inStock ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{isAr ? `متاح (${v.in_stock})` : `In Stock (${v.in_stock})`}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-500">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'غير متوفر' : 'Out of stock'}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Product Image with universal fallback */}
+                    <div
+                      onClick={() => onSelectProduct(v)}
+                      className={`relative ${cardAspectClass} rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 mb-2 cursor-pointer group`}
+                    >
+                      <StorefrontImage
+                        src={v.image}
+                        alt={v.model_name}
+                        objectFit={cardImageFit as any}
+                        className={`w-full h-full ${cardImageFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-300`}
+                      />
+                      {v.gallery && v.gallery.length > 1 && (
+                        <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-mono">
+                          +{v.gallery.length}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Product Title */}
+                    <h4
+                      onClick={() => onSelectProduct(v)}
+                      className="font-extrabold text-sm sm:text-base leading-snug cursor-pointer hover:text-blue-600 transition-colors line-clamp-1"
+                    >
+                      {v.model_name}
+                    </h4>
+
+                    {/* Specs Grid */}
+                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block text-[9px]">{isAr ? 'المقاس' : 'Size'}</span>
+                        <span className="font-bold">{v.size || 'Standard'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px]">{isAr ? 'اللون' : 'Color'}</span>
+                        <span className="font-bold">{v.color || 'Standard'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px]">{isAr ? 'الحد الأدنى (MOQ)' : 'MOQ'}</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                          {v.moq && v.moq > 1 ? `${v.moq} ${isAr ? 'قطعة' : 'Pcs'}` : (isAr ? '1 قطعة' : '1 Piece')}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px]">{isAr ? 'كود الموديل' : 'Model Code'}</span>
+                        <span className="font-mono text-[10px] font-bold">{v.model_code || '---'}</span>
+                      </div>
+                    </div>
+
+                    {/* Wholesale Volume Tiers Preview */}
+                    {v.is_wholesale && v.wholesale_tiers && v.wholesale_tiers.length > 0 && (
+                      <div className="mt-2 p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-[10px]">
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300 block mb-0.5">
+                          {isAr ? 'شرائح خصم الجملة:' : 'Volume Tiers:'}
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {v.wholesale_tiers.map((t: any, idx: number) => (
+                            <span key={idx} className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 font-mono text-[9px] font-bold text-emerald-700 dark:text-emerald-300">
+                              +{t.min_quantity}: {Number(t.unit_price).toFixed(0)} {currency}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!v.is_wholesale && v.is_wholesale_eligible && onOpenWholesaleModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenWholesaleModal}
+                        className="mt-2 w-full text-start p-1.5 rounded-lg bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-[10px] text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors font-medium flex items-center justify-between"
+                      >
+                        <span>{isAr ? '🏷️ أسعار خاصة للشركات والجملة' : '🏷️ B2B Trade Pricing'}</span>
+                        <span className="underline font-bold">{isAr ? 'سجل هنا' : 'Apply'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Pricing & Order Action */}
+                  <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[9px] font-bold uppercase text-slate-400 block">
+                        {v.is_wholesale
+                          ? (isAr ? 'سعر الجملة' : 'Wholesale')
+                          : (isAr ? 'سعر القطعة' : 'Unit Price')}
+                      </span>
+                      <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                        {v.price.toFixed(2)}{' '}
+                        <span className="text-[10px] font-semibold text-slate-400">{currency}</span>
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => onSelectProduct(v)}
+                      disabled={!inStock}
+                      style={{ backgroundColor: inStock ? primaryColor : undefined }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
+                        inStock
+                          ? 'text-white hover:brightness-110 active:scale-95'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>{isAr ? 'إضافة للطلب' : 'Add to Order'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+
+  // 5. Factory Story & Contract Capabilities Section
+  const renderStorySection = () => {
+    const storyText = themeConfig.pages?.about_story || (isAr
+      ? 'مصنع رائد في تصنيع وتوريد الملابس الجاهزة والزي الموحد بأعلى معايير الجودة العالمية، وتوفير خطوط إنتاج حديثة تخدم كبرى الشركات والمتاجر.'
+      : 'Leading garment manufacturing facility specializing in corporate workwear, uniforms, and export-grade ready-made apparel with modern high-capacity production lines.');
+    return (
+      <section className="my-10 p-6 sm:p-8 rounded-3xl bg-slate-900 text-white border border-slate-800">
+        <div className="max-w-3xl space-y-3">
+          <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">{isAr ? 'عن المصنع وإمكانياتنا' : 'About Our Facility'}</span>
+          <h3 className="text-2xl font-black">{storeSettings?.store_name || (isAr ? 'مصنع الملابس المتطور' : 'Garment Factory')}</h3>
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{storyText}</p>
+        </div>
+      </section>
+    );
+  };
+
+  // 6. Contact Info Section
+  const renderContactSection = () => {
+    const contact = themeConfig.contact || {};
+    return (
+      <section className="my-8 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <h4 className="font-extrabold text-sm mb-4 text-slate-900 dark:text-white">{isAr ? 'بيانات التواصل مع المصنع' : 'Contact Manufacturing Team'}</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <Phone className="w-4 h-4 text-blue-500" />
+            <span>{contact.phone || storeSettings?.contact_whatsapp || '+201000000000'}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <Mail className="w-4 h-4 text-blue-500" />
+            <span>{contact.email || 'sales@garmentos.com'}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <MapPin className="w-4 h-4 text-blue-500" />
+            <span>{contact.address || (isAr ? 'جمهورية مصر العربية' : 'Egypt')}</span>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderSectionById = (rawId: string) => {
+    const id = normalizeSectionId(rawId);
+    switch (id) {
+      case 'hero':
+        return renderHeroSection();
+      case 'categories':
+        return renderCategoriesSection();
+      case 'promotions':
+        return renderPromotionsSection();
+      case 'featured_products':
+      case 'new_arrivals':
+        return renderProductsSection();
+      case 'trust_badges':
+      case 'story':
+        return renderStorySection();
+      case 'contact_info':
+        return renderContactSection();
+      case 'wholesale_cta':
+        return (
+          <section className="my-8 p-6 rounded-3xl bg-gradient-to-r from-blue-900 to-indigo-950 text-white shadow flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-mono font-bold text-blue-300 uppercase tracking-widest block">{isAr ? 'عقود التوريد وتجارة الجملة' : 'B2B Wholesale Procurement'}</span>
+              <h4 className="text-xl font-black mt-0.5">{isAr ? 'طلب عروض أسعار وتوريد زي موحد للمؤسسات' : 'Request Corporate Quote & Uniform Supply'}</h4>
+              <p className="text-xs text-blue-100 max-w-xl mt-1">{isAr ? 'نوفر كميات إنتاجية ضخمة بمواصفات مطابقة لكراسات الشروط مع شحن مباشر من خطوط الحياكة.' : 'Volume supply contracts with batch certification and direct delivery.'}</p>
+            </div>
+            {onOpenWholesaleModal && (
+              <button
+                type="button"
+                onClick={onOpenWholesaleModal}
+                className="px-5 py-2.5 rounded-xl bg-white text-blue-950 font-bold text-xs shadow hover:bg-blue-50 transition cursor-pointer shrink-0"
+              >
+                {isAr ? 'تقديم طلب توريد' : 'Submit Wholesale Application'}
+              </button>
+            )}
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div
+      style={{ backgroundColor: pageBgColor || undefined }}
       className={`min-h-screen font-sans transition-colors duration-200 ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
+        !pageBgColor ? (isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800') : ''
       }`}
       dir={isAr ? 'rtl' : 'ltr'}
     >
-      {/* Top B2B / Wholesale Notice Banner */}
-      <div className="bg-slate-900 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">B2B & WHOLESALE</span>
-            <span>
-              {isAr
-                ? 'كتالوج المصنع المباشر: أسعار تجارية خاصة للمحلات والشركات وتوريدات الملابس الموحدة'
-                : 'Direct Factory Catalog: Special trade pricing for retail chains, corporate uniforms & bulk supply'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-[11px]">
-            <button onClick={onNavigateToTracking} className="hover:text-white underline">
-              {isAr ? 'تتبع طلبيات التوريد' : 'Track Shipments'}
-            </button>
-            {onNavigateToErp && (
-              <button onClick={onNavigateToErp} className="hover:text-white font-bold">
-                {isAr ? 'بوابة إدارة المصنع' : 'ERP Portal'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Catalog Header */}
-      <header
-        className={`sticky top-0 z-30 border-b backdrop-blur-md transition-colors ${
-          isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-sm'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              style={{ backgroundColor: primaryColor }}
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow font-black text-xl"
-            >
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-black text-xl tracking-tight leading-none">{storeName}</h1>
-              <span className="text-xs font-semibold text-slate-400">
-                {isAr ? 'كتالوج التوريدات والملابس الجاهزة' : 'Commercial Catalog & Ready-wear'}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Search */}
-          <div className="flex-1 max-w-xl mx-4 hidden md:block">
-            <div className="relative">
-              <Search className={`absolute ${isAr ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
-              <input
-                type="text"
-                placeholder={isAr ? 'ابحث برقم الكود SKU، اسم الموديل، اللون، أو الباركود...' : 'Search by SKU, Model name, Color or Barcode...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full py-2.5 text-sm rounded-xl transition-all focus:outline-none focus:ring-2 ${
-                  isAr ? 'pr-10 pl-4' : 'pl-10 pr-4'
-                } ${
-                  isDark
-                    ? 'bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:ring-blue-500'
-                    : 'bg-slate-100 border border-slate-300 text-slate-900 placeholder-slate-400 focus:ring-blue-600'
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Header Controls */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onToggleLang}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-            >
-              <Globe className="w-5 h-5" />
-            </button>
-            <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button
-              onClick={onOpenCart}
-              style={{ backgroundColor: primaryColor }}
-              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl shadow-md font-bold text-sm hover:brightness-110 active:scale-95 transition-all"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>{isAr ? 'أمر الشراء' : 'Purchase Order'}</span>
-              <span className="bg-white/20 px-2 py-0.5 rounded text-xs font-black">{cartCount}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Catalog Body: Sidebar + Main Grid */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar Filters */}
-          <aside className="lg:col-span-1 space-y-6">
-            <div
-              className={`p-5 rounded-2xl border ${
-                isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-              }`}
-            >
-              <div className="flex items-center gap-2 font-bold text-sm mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
-                <SlidersHorizontal className="w-4 h-4 text-blue-500" />
-                <span>{isAr ? 'تصفية المنتجات والأقسام' : 'Filter Categories'}</span>
-              </div>
-
-              {/* Categories */}
-              <div className="space-y-1.5 mb-6">
-                {categories.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedCategory(c.id)}
-                    className={`w-full text-start px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
-                      selectedCategory === c.id
-                        ? 'text-white shadow-sm'
-                        : isDark
-                        ? 'text-slate-300 hover:bg-slate-800'
-                        : 'text-slate-700 hover:bg-slate-100'
-                    }`}
-                    style={selectedCategory === c.id ? { backgroundColor: primaryColor } : {}}
-                  >
-                    <span>{isAr ? c.name_ar : c.name_en}</span>
-                    <span className="text-[10px] opacity-70">
-                      {c.id === 'all' ? variants.length : Math.ceil(variants.length / 3)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Stock Filter Toggle */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold select-none">
-                  <input
-                    type="checkbox"
-                    checked={stockOnlyFilter}
-                    onChange={(e) => setStockOnlyFilter(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>{isAr ? 'عرض المتوفر بالمخازن فقط' : 'In-Stock items only'}</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Bulk RFQ Quick Box */}
-            <div
-              className={`p-5 rounded-2xl border ${
-                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-blue-50/60 border-blue-200'
-              }`}
-            >
-              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-extrabold text-sm mb-2">
-                <FileSpreadsheet className="w-5 h-5" />
-                <span>{isAr ? 'طلب عروض أسعار الجملة' : 'Request Wholesale Quote'}</span>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
-                {isAr
-                  ? 'للكميات التي تتجاوز 100 قطعة للشركات والمصانع، نقدم أسعاراً تفضيلية وخدمة تطريز وطباعة اللوجو.'
-                  : 'For orders exceeding 100 pcs, get special tiered pricing and custom logo embroidery.'}
-              </p>
-              <a
-                href={storeSettings?.contact_whatsapp ? `https://wa.me/${storeSettings.contact_whatsapp}` : '#'}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full text-center block bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
-              >
-                {isAr ? 'تواصل مع إدارة المبيعات' : 'Contact Sales Representative'}
-              </a>
-            </div>
-          </aside>
-
-          {/* Main Content Area */}
-          <section className="lg:col-span-3 space-y-6">
-            {/* Sorting & Stats Bar */}
-            <div
-              className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
-                isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-              }`}
-            >
-              <div className="text-xs font-bold text-slate-500">
-                {isAr
-                  ? `عرض ${filteredVariants.length} من أصل ${variants.length} صنف ومقاس`
-                  : `Showing ${filteredVariants.length} of ${variants.length} items`}
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-400 font-medium">{isAr ? 'ترتيب حسب:' : 'Sort by:'}</span>
-                <select
-                  value={sortBy}
-                  onChange={(e: any) => setSortBy(e.target.value)}
-                  className={`text-xs font-bold rounded-lg px-2.5 py-1.5 border ${
-                    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-                  }`}
-                >
-                  <option value="default">{isAr ? 'الترتيب الافتراضي' : 'Default'}</option>
-                  <option value="price_asc">{isAr ? 'السعر: من الأقل للأعلى' : 'Price: Low to High'}</option>
-                  <option value="price_desc">{isAr ? 'السعر: من الأعلى للأقل' : 'Price: High to Low'}</option>
-                  <option value="stock">{isAr ? 'الرصيد المتوفر' : 'Available Stock'}</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Catalog Grid */}
-            {filteredVariants.length === 0 ? (
-              <div className="py-20 text-center text-slate-400">
-                <Package className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                <p className="text-sm font-bold">{isAr ? 'لا توجد أصناف مطابقة للبحث' : 'No catalog items match'}</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {filteredVariants.map((v) => {
-                  const inStock = v.in_stock > 0;
-                  return (
-                    <div
-                      key={v.id}
-                      className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-4 ${
-                        isDark
-                          ? 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                          : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow'
-                      }`}
-                    >
-                      <div>
-                        {/* Top Meta: SKU + Stock */}
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            {v.sku}
-                          </span>
-                          {inStock ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>{isAr ? `متاح (${v.in_stock})` : `In Stock (${v.in_stock})`}</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-500">
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                              <span>{isAr ? 'غير متوفر' : 'Out of stock'}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Product Image */}
-                        <div
-                          onClick={() => onSelectProduct(v)}
-                          className="relative aspect-[16/10] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 mb-2.5 cursor-pointer group"
-                        >
-                          {v.image ? (
-                            <img
-                              src={v.image}
-                              alt={v.model_name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-600">
-                              <Package className="w-10 h-10" />
-                            </div>
-                          )}
-                          {v.gallery && v.gallery.length > 1 && (
-                            <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-mono">
-                              +{v.gallery.length}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Product Title */}
-                        <h4
-                          onClick={() => onSelectProduct(v)}
-                          className="font-extrabold text-base leading-snug cursor-pointer hover:text-blue-600 transition-colors"
-                        >
-                          {v.model_name}
-                        </h4>
-
-                        {/* Specs Grid */}
-                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-                          <div>
-                            <span className="text-slate-400 block text-[10px]">{isAr ? 'المقاس' : 'Size'}</span>
-                            <span className="font-bold">{v.size || 'Standard'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px]">{isAr ? 'اللون' : 'Color'}</span>
-                            <span className="font-bold">{v.color || 'Standard'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px]">{isAr ? 'الحد الأدنى (MOQ)' : 'MOQ'}</span>
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {isAr ? '1 قطعة' : '1 Piece'}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px]">{isAr ? 'كود الموديل' : 'Model Code'}</span>
-                            <span className="font-mono text-[11px] font-bold">{v.model_code || '---'}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Pricing & Order Action */}
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                            {isAr ? 'سعر الجملة والتجزئة' : 'Unit Price'}
-                          </span>
-                          <span className="text-lg font-black text-blue-600 dark:text-blue-400">
-                            {v.price.toFixed(2)}{' '}
-                            <span className="text-xs font-semibold text-slate-400">{currency}</span>
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => onSelectProduct(v)}
-                          disabled={!inStock}
-                          style={{ backgroundColor: inStock ? primaryColor : undefined }}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
-                            inStock
-                              ? 'text-white hover:brightness-110 active:scale-95'
-                              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <ShoppingBag className="w-3.5 h-3.5" />
-                          <span>{isAr ? 'إضافة للطلب' : 'Add to Order'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+      <main className={`${containerWidthClass} py-8`}>
+        {activeSections.map((sec) => (
+          <React.Fragment key={sec.id}>
+            {renderSectionById(sec.id)}
+          </React.Fragment>
+        ))}
       </main>
-
-      {/* Footer */}
-      <footer className="py-8 mt-12 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 text-center sm:text-start flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} {storeName} — {isAr ? 'نظام توريدات المصانع GarmentOS' : 'GarmentOS Factory Procurement'}</p>
-          <div className="flex items-center gap-4">
-            <button onClick={onNavigateToTracking} className="hover:underline">
-              {isAr ? 'الاستعلام عن شحنة' : 'Track Order'}
-            </button>
-            <span>•</span>
-            <span>{isAr ? 'الرقم الضريبي وتراخيص التشغيل مسجلة' : 'Registered Commercial Factory'}</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

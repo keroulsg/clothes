@@ -290,6 +290,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/production-orders/{id}/approve', [\App\Http\Controllers\Api\ProductionOrderController::class, 'approve'])->middleware('role:production_manager');
         Route::post('/production-orders/{id}/complete', [\App\Http\Controllers\Api\ProductionOrderController::class, 'complete'])->middleware('role:company_owner,production_manager');
         Route::post('/production-orders/{id}/cancel', [\App\Http\Controllers\Api\ProductionOrderController::class, 'cancel']);
+        Route::post('/production-orders/{id}/issue-bom-materials', [\App\Http\Controllers\Api\ProductionOrderController::class, 'issueBomMaterials'])->middleware('role:production_manager,company_owner');
+        Route::post('/production-orders/{id}/receive-finished-goods', [\App\Http\Controllers\Api\ProductionOrderController::class, 'receiveFinishedGoods'])->middleware('role:production_manager,company_owner');
         Route::get('/production-orders/{id}/metrics', [\App\Http\Controllers\Api\ProductionOrderController::class, 'metrics']);
 
         Route::get('/cutting-orders', [\App\Http\Controllers\Api\CuttingOrderController::class, 'index']);
@@ -490,6 +492,11 @@ Route::prefix('v1')->group(function () {
             Route::post('/storefront/design/draft', [\App\Http\Controllers\Api\StorefrontController::class, 'saveDraft']);
             Route::post('/storefront/design/publish', [\App\Http\Controllers\Api\StorefrontController::class, 'publishDraft'])->middleware('role:company_owner,production_manager');
             Route::post('/storefront/design/rollback', [\App\Http\Controllers\Api\StorefrontController::class, 'rollback'])->middleware('role:company_owner,production_manager');
+            Route::post('/storefront/media/upload', [\App\Http\Controllers\Api\StorefrontController::class, 'uploadMedia'])->middleware('role:company_owner,production_manager,sales_manager');
+            Route::post('/storefront/media/upload-multiple', [\App\Http\Controllers\Api\StorefrontController::class, 'uploadMultipleMedia'])->middleware('role:company_owner,production_manager,sales_manager');
+            Route::post('/storefront/media/import-url', [\App\Http\Controllers\Api\StorefrontController::class, 'importMediaFromUrl'])->middleware('role:company_owner,production_manager,sales_manager');
+            Route::get('/storefront/media', [\App\Http\Controllers\Api\StorefrontController::class, 'listMedia']);
+            Route::delete('/storefront/media', [\App\Http\Controllers\Api\StorefrontController::class, 'deleteMedia'])->middleware('role:company_owner,production_manager,sales_manager');
             Route::post('/storefront/instapay-settings', [\App\Http\Controllers\Api\StorefrontController::class, 'updateInstaPaySettings'])->middleware('role:company_owner,accountant');
             Route::get('/storefront/orders', [\App\Http\Controllers\Api\StorefrontController::class, 'orders']);
             Route::patch('/storefront/orders/{id}/status', [\App\Http\Controllers\Api\StorefrontController::class, 'updateStatus'])->middleware('role:company_owner,production_manager,accountant,sales_manager');
@@ -498,6 +505,17 @@ Route::prefix('v1')->group(function () {
             Route::post('/storefront/payments/{id}/approve', [\App\Http\Controllers\Api\StorefrontController::class, 'verifyPayment'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');
             Route::post('/storefront/payments/{id}/reject', [\App\Http\Controllers\Api\StorefrontController::class, 'verifyPayment'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');
             Route::get('/storefront/payments/{id}/receipt', [\App\Http\Controllers\Api\StorefrontController::class, 'viewReceiptFile'])->middleware('role:company_owner,accountant,financial_accountant,production_manager');
+
+            // إدارة حسابات وطلبات تجار الجملة (Wholesale Customer Management)
+            Route::get('/storefront/wholesale/applications', [\App\Http\Controllers\Api\WholesaleController::class, 'indexApplications'])->middleware('role:company_owner,sales_manager');
+            Route::post('/storefront/wholesale/applications/{id}/approve', [\App\Http\Controllers\Api\WholesaleController::class, 'approveApplication'])->middleware('role:company_owner,sales_manager');
+            Route::post('/storefront/wholesale/applications/{id}/reject', [\App\Http\Controllers\Api\WholesaleController::class, 'rejectApplication'])->middleware('role:company_owner,sales_manager');
+            Route::post('/storefront/wholesale/applications/{id}/suspend', [\App\Http\Controllers\Api\WholesaleController::class, 'suspendApplication'])->middleware('role:company_owner,sales_manager');
+            Route::post('/storefront/wholesale/applications/{id}/reactivate', [\App\Http\Controllers\Api\WholesaleController::class, 'reactivateApplication'])->middleware('role:company_owner,sales_manager');
+
+            // إدارة شرائح أسعار الجملة والحد الأدنى للطلب (Wholesale Tiers & MOQ)
+            Route::get('/catalog/variants/{id}/wholesale-tiers', [\App\Http\Controllers\Api\WholesaleController::class, 'getTiers'])->middleware('role:company_owner,production_manager,sales_manager');
+            Route::post('/catalog/variants/{id}/wholesale-tiers', [\App\Http\Controllers\Api\WholesaleController::class, 'saveTiers'])->middleware('role:company_owner,production_manager,sales_manager');
         });
 
         // إدارة الماكينات وصيانة الأصول وبلاغات الأعطال (Phase 12: Machine & Asset Maintenance)
@@ -563,6 +581,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/storefront/track/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'trackOrder']);
         Route::post('/storefront/receipt/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'submitReceipt']);
         Route::post('/storefront/upload-receipt/{tenantId?}', [\App\Http\Controllers\Api\StorefrontController::class, 'uploadReceipt']);
+
+        // بوابة عملاء الجملة العامة للمتجر (Wholesale Portal Endpoints)
+        Route::post('/storefront/wholesale/register/{tenantId?}', [\App\Http\Controllers\Api\WholesaleController::class, 'register']);
+        Route::post('/storefront/wholesale/login/{tenantId?}', [\App\Http\Controllers\Api\WholesaleController::class, 'login']);
+        Route::get('/storefront/wholesale/profile/{tenantId?}', [\App\Http\Controllers\Api\WholesaleController::class, 'myProfile']);
 
         // واجهة سوق وصلة ورش العامة لزوار الموقع والمؤشرات الحية (Stage C.1: Public Waslat Worsh Marketplace)
         Route::get('/waslat-worsh/public/rfqs', [\App\Http\Controllers\Api\WaslatWorshPublicController::class, 'index']);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Palette,
   Layout,
@@ -10,7 +10,6 @@ import {
   Smartphone,
   Tablet,
   Monitor,
-  ExternalLink,
   Sparkles,
   Save,
   Send,
@@ -21,11 +20,32 @@ import {
   Crown,
   Baby,
   Building2,
-  ShoppingBag,
+  Upload,
+  Trash2,
+  Copy,
+  Store,
+  Plus,
+  Compass,
+  FileText,
+  Link,
+  SlidersHorizontal,
+  Grid,
+  Maximize2,
+  Square,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Edit3,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { api } from '../../api/client';
+import { FashionBoutiqueTemplate } from './templates/FashionBoutiqueTemplate';
+import { ModernCatalogTemplate } from './templates/ModernCatalogTemplate';
+import { KidsFamilyTemplate } from './templates/KidsFamilyTemplate';
+import { PremiumBrandTemplate } from './templates/PremiumBrandTemplate';
+import { DEFAULT_HOMEPAGE_SECTIONS, normalizeSectionId } from './common/StorefrontSectionRegistry';
+import { StorefrontErrorBoundary } from './common/StorefrontErrorBoundary';
 import type { Language, StorefrontThemeId, DesignStudioConfig } from '../../types';
 
 interface StorefrontDesignStudioProps {
@@ -52,7 +72,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const [studioConfig, setStudioConfig] = useState<DesignStudioConfig | null>(null);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'templates' | 'branding' | 'sections' | 'banners'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'banners' | 'sections' | 'media' | 'navigation' | 'content' | 'branding'>('templates');
 
   // Preview Viewport Device
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
@@ -65,24 +85,195 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const [fontFamily, setFontFamily] = useState('Cairo, sans-serif');
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
   const [announcementText, setAnnouncementText] = useState('شحن سريع لجميع المحافظات خلال 48 ساعة 🚚');
-  const [bannerTitle, setBannerTitle] = useState('أرقى منتجات الملابس من المصنع مباشرة');
-  const [bannerSubtitle, setBannerSubtitle] = useState('جودة تصدير وخامات قطنية 100% مباشرة من خط الإنتاج.');
-  const [ctaText, setCtaText] = useState('تسوق الآن');
   const [logoUrl, setLogoUrl] = useState('');
 
-  // Sections toggle
-  const [sections, setSections] = useState<Array<{ id: string; name_ar: string; name_en: string; enabled: boolean }>>([
-    { id: 'hero_banner', name_ar: 'البنر الرئيسي الترويجي', name_en: 'Hero Promotional Banner', enabled: true },
-    { id: 'trust_badges', name_ar: 'شريط ثقة وجودة المصنع', name_en: 'Trust & Quality Badges', enabled: true },
-    { id: 'categories', name_ar: 'تصفية الأقسام والتصنيفات', name_en: 'Category Filters', enabled: true },
-    { id: 'catalog_grid', name_ar: 'شبكة المنتجات المعروضة', name_en: 'Product Catalog Grid', enabled: true },
-    { id: 'brand_story', name_ar: 'قصة المصنع والحرفية المصرية', name_en: 'Brand Heritage & Craftsmanship', enabled: true },
+  // Hero Banner State
+  const [heroBanner, setHeroBanner] = useState({
+    title: 'أرقى منتجات الملابس من المصنع مباشرة',
+    subtitle: 'جودة تصدير وخامات قطنية 100% مباشرة من خط الإنتاج.',
+    cta_text: 'تسوق الآن',
+    cta_destination: 'shop',
+    desktop_image: '',
+    mobile_image: '',
+    start_date: '',
+    end_date: '',
+    enabled: true,
+  });
+
+  // Multiple Promotional Banners
+  const [promoBanners, setPromoBanners] = useState<Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    image_url: string;
+    link_url: string;
+    badge_text: string;
+    enabled: boolean;
+  }>>([
+    {
+      id: 'promo-1',
+      title: 'خصم خاص 20% على تشكيلة الصيف',
+      subtitle: 'استخدم كود FACTORY20 عند إتمام الطلب',
+      image_url: '',
+      link_url: 'shop',
+      badge_text: 'عرض محدود',
+      enabled: true,
+    },
   ]);
+
+  // Homepage Sections toggle & order
+  const [sections, setSections] = useState<Array<{
+    id: string;
+    name_ar?: string;
+    name_en?: string;
+    enabled: boolean;
+    alignment?: 'start' | 'center' | 'end';
+  }>>(() =>
+    DEFAULT_HOMEPAGE_SECTIONS.map((s) => ({
+      id: s.id,
+      name_ar: s.name_ar,
+      name_en: s.name_en,
+      enabled: s.enabled,
+      alignment: 'start',
+    }))
+  );
+
+  // Navigation Links
+  const [headerLinks, setHeaderLinks] = useState<Array<{
+    label_ar: string;
+    label_en: string;
+    view: string;
+    enabled: boolean;
+  }>>([
+    { label_ar: 'الرئيسية', label_en: 'Home', view: 'home', enabled: true },
+    { label_ar: 'جميع الموديلات', label_en: 'Shop All', view: 'shop', enabled: true },
+    { label_ar: 'الأقسام', label_en: 'Categories', view: 'category', enabled: true },
+    { label_ar: 'عن المصنع', label_en: 'About Us', view: 'about', enabled: true },
+    { label_ar: 'تواصل معنا', label_en: 'Contact', view: 'contact', enabled: true },
+    { label_ar: 'سياسات المتجر', label_en: 'Policies', view: 'policies', enabled: true },
+  ]);
+
+  // Content Pages & Factory Contact Info
+  const [contactInfo, setContactInfo] = useState({
+    phone: '+20 100 000 0000',
+    whatsapp: '+20 100 000 0000',
+    email: 'support@delta-garments.com',
+    address: 'المنطقة الصناعية، جمهورية مصر العربية',
+    working_hours: 'السبت - الخميس: من 9:00 صباحاً حتى 6:00 مساءً',
+    facebook: 'https://facebook.com',
+    instagram: 'https://instagram.com',
+    tiktok: 'https://tiktok.com',
+  });
+
+  const [aboutStory, setAboutStory] = useState(
+    'نحن صرح صناعي متكامل متخصص في تصميم وتصنيع الملابس الجاهزة واليونيفورم والمنسوجات القطنية عالية الجودة. نوفر منتجاتنا مباشرة للمستهلكين والشركات دون وسطاء لضمان أعلى معايير الجودة وأفضل قيمة سعرية.'
+  );
+
+  // Media Library
+  const [mediaList, setMediaList] = useState<any[]>([]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const [importUrlInput, setImportUrlInput] = useState('');
+  const [isImportingUrl, setIsImportingUrl] = useState(false);
 
   // Modals
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showRollbackModal, setShowRollbackModal] = useState(false);
 
+  // --- Visual Styler / Mini-Elementor State ---
+  // Banner Styling & Image Display
+  const [bannerHeight, setBannerHeight] = useState<'compact' | 'standard' | 'tall' | 'fullscreen'>('standard');
+  const [bannerImageFit, setBannerImageFit] = useState<'cover' | 'contain'>('cover');
+  const [bannerImagePosition, setBannerImagePosition] = useState<'center' | 'top' | 'bottom'>('center');
+  const [bannerOverlayOpacity, setBannerOverlayOpacity] = useState<number>(30);
+  const [bannerOverlayColor, setBannerOverlayColor] = useState<string>('#000000');
+  const [bannerTextAlign, setBannerTextAlign] = useState<'start' | 'center' | 'end'>('start');
+
+  // Layout & Grid Styling
+  const [categoriesStyle, setCategoriesStyle] = useState<'pills' | 'circular_stories' | 'grid_cards' | 'factory_icon_cards'>('pills');
+  const [productsGridCols, setProductsGridCols] = useState<number>(4);
+  const [cardImageAspect, setCardImageAspect] = useState<'portrait' | 'square' | 'tall'>('portrait');
+  const [cardImageFit, setCardImageFit] = useState<'cover' | 'contain'>('cover');
+  const [containerWidth, setContainerWidth] = useState<'boxed_compact' | 'boxed_standard' | 'wide' | 'full_width'>('boxed_standard');
+  const [containerSpacing, setContainerSpacing] = useState<'compact' | 'standard' | 'relaxed'>('standard');
+
+  // Custom Pages State
+  const [customPages, setCustomPages] = useState<any[]>([
+    {
+      id: 'factory-tour',
+      slug: 'factory-tour',
+      title_ar: 'جولة داخل خطوط إنتاج المصنع',
+      title_en: 'Factory Production Tour',
+      subtitle_ar: 'تعرف على مراحل تصنيع الأقمشة والقص والخياطة والفحص الآلي بدقة متناهية',
+      subtitle_en: 'Explore our automated cutting, precision tailoring and triple QA inspection lines',
+      content_ar: '## صرح صناعي بمواصفات عالمية\n\nيمتد مصنعنا على مساحة إنتاجية متطورة مجهزة بأحدث خطوط الحياكة والقص بالليزر من كبرى الشركات العالمية.\n\n### مراحل التصنيع المعتمدة:\n- استلام واختبار خيوط القطن المصري طويل التيلة\n- فحص ثبات الألوان ومعالجة الانكماش المسبق\n- القص الآلي بأعلى درجات الدقة لتطابق المقاسات\n- الحياكة المتطورة بواسطة فنيين ذوي خبرة تتجاوز 15 عاماً\n- الفحص المجهري النهائي والتعبئة المعقمة للشحن\n\nنحن فخورون بتقديم منتجات وطنية تنافس المعايير العالمية وتلبي احتياجات الأفراد والمؤسسات الكبرى.',
+      content_en: '## World-Class Apparel Production\n\nOur modern facility encompasses advanced automated cutting and precision tailoring lines.\n\n### Certified Manufacturing Stages:\n- Inspection of premium long-staple Egyptian cotton\n- Pre-shrinkage and color-fastness treatment\n- Laser cutting for millimeter sizing accuracy\n- Master sewing by veteran technicians\n- Triple QC verification and sealed packaging\n\nWe take pride in manufacturing Egyptian excellence for retail clients and corporate partners nationwide.',
+      featured_image: '',
+      show_in_header: true,
+      show_in_footer: true,
+    }
+  ]);
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [pageForm, setPageForm] = useState({
+    slug: '',
+    title_ar: '',
+    title_en: '',
+    subtitle_ar: '',
+    subtitle_en: '',
+    content_ar: '',
+    content_en: '',
+    featured_image: '',
+    show_in_header: true,
+    show_in_footer: true,
+  });
+  const [isPageFormOpen, setIsPageFormOpen] = useState(false);
+
+  // Footer Full Customizer State
+  const [footerShowLogo, setFooterShowLogo] = useState(true);
+  const [footerDescAr, setFooterDescAr] = useState('');
+  const [footerDescEn, setFooterDescEn] = useState('');
+  const [footerShowBadges, setFooterShowBadges] = useState(true);
+  const [footerBadges, setFooterBadges] = useState<any[]>([
+    {
+      icon: 'truck',
+      title_ar: 'شحن سريع لجميع المحافظات',
+      title_en: 'Nationwide Express Delivery',
+      desc_ar: 'توصيل لباب المنزل في القاهرة الكبرى وكافة المحافظات',
+      desc_en: 'Doorstep delivery to Cairo, Alex, and all governorates',
+      color: 'blue',
+    },
+    {
+      icon: 'rotate',
+      title_ar: 'ضمان استبدال واسترجاع',
+      title_en: 'Hassle-Free Returns & Exchange',
+      desc_ar: 'حق استبدال خلال 14 يوماً وفق قانون حماية المستهلك',
+      desc_en: '14-day exchange according to consumer protection laws',
+      color: 'emerald',
+    },
+    {
+      icon: 'shield',
+      title_ar: 'جودة وتصنيع مصري 100%',
+      title_en: '100% Egyptian Apparel Quality',
+      desc_ar: 'منتجات جاهزة مصنعة بأعلى مواصفات الغزل والنسيج',
+      desc_en: 'Factory-direct finished garments with premium textiles',
+      color: 'amber',
+    },
+  ]);
+  const [footerCopyrightAr, setFooterCopyrightAr] = useState('');
+  const [footerCopyrightEn, setFooterCopyrightEn] = useState('');
+
+  // Global Colors & Card Styling
+  const [pageBgColor, setPageBgColor] = useState<string>('');
+  const [cardBgColor, setCardBgColor] = useState<string>('');
+  const [cardBorderColor, setCardBorderColor] = useState<string>('');
+  const [cardBorderRadius, setCardBorderRadius] = useState<'none' | 'sm' | 'md' | 'full'>('md');
+  const [cardShadow, setCardShadow] = useState<'none' | 'sm' | 'md' | 'lg'>('md');
+  const [headerBgColor, setHeaderBgColor] = useState<string>('');
+  const [footerBgColor, setFooterBgColor] = useState<string>('');
+
+  // Fetch Studio Data
   const fetchStudio = async () => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -102,61 +293,402 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
         setAnnouncementText(config.announcement_bar_text || 'شحن سريع لجميع المحافظات خلال 48 ساعة 🚚');
         setLogoUrl(config.logo_url || '');
 
-        if (data.store_settings) {
-          setBannerTitle(data.store_settings.banner_title || 'أرقى منتجات الملابس من المصنع مباشرة');
-          setBannerSubtitle(data.store_settings.banner_subtitle || 'جودة تصدير وخامات قطنية 100% مباشرة من خط الإنتاج.');
+        if (config.hero_banner) {
+          setHeroBanner((prev) => ({ ...prev, ...config.hero_banner }));
+          if (config.hero_banner.height) setBannerHeight(config.hero_banner.height);
+          if (config.hero_banner.image_fit) setBannerImageFit(config.hero_banner.image_fit);
+          if (config.hero_banner.image_position) setBannerImagePosition(config.hero_banner.image_position);
+          if (typeof config.hero_banner.overlay_opacity === 'number') setBannerOverlayOpacity(config.hero_banner.overlay_opacity);
+          if (config.hero_banner.overlay_color) setBannerOverlayColor(config.hero_banner.overlay_color);
+          if (config.hero_banner.text_align) setBannerTextAlign(config.hero_banner.text_align);
+        } else if (data.store_settings) {
+          setHeroBanner((prev) => ({
+            ...prev,
+            title: data.store_settings.banner_title || prev.title,
+            subtitle: data.store_settings.banner_subtitle || prev.subtitle,
+          }));
+        }
+
+        const layout = config.layout || {};
+        if (layout.categories_style) setCategoriesStyle(layout.categories_style);
+        if (layout.products_grid_cols) setProductsGridCols(layout.products_grid_cols);
+        if (layout.card_image_aspect) setCardImageAspect(layout.card_image_aspect);
+        if (layout.card_image_fit) setCardImageFit(layout.card_image_fit);
+        if (layout.page_bg_color) setPageBgColor(layout.page_bg_color);
+        if (layout.card_bg_color) setCardBgColor(layout.card_bg_color);
+        if (layout.card_border_color) setCardBorderColor(layout.card_border_color);
+        if (layout.card_border_radius) setCardBorderRadius(layout.card_border_radius);
+        if (layout.card_shadow) setCardShadow(layout.card_shadow);
+        if (layout.header_bg_color) setHeaderBgColor(layout.header_bg_color);
+        if (layout.footer_bg_color) setFooterBgColor(layout.footer_bg_color);
+        if (layout.container_width) setContainerWidth(layout.container_width);
+        if (layout.container_spacing) setContainerSpacing(layout.container_spacing);
+
+        if (config.custom_pages && Array.isArray(config.custom_pages) && config.custom_pages.length > 0) {
+          setCustomPages(config.custom_pages);
+        }
+
+        const footer = config.footer || {};
+        setFooterShowLogo(footer.show_logo !== false);
+        if (footer.desc_ar) setFooterDescAr(footer.desc_ar);
+        if (footer.desc_en) setFooterDescEn(footer.desc_en);
+        setFooterShowBadges(footer.show_badges !== false);
+        if (Array.isArray(footer.badges) && footer.badges.length > 0) {
+          setFooterBadges(footer.badges);
+        }
+        if (footer.copyright_ar) setFooterCopyrightAr(footer.copyright_ar);
+        if (footer.copyright_en) setFooterCopyrightEn(footer.copyright_en);
+
+        if (config.promo_banners && Array.isArray(config.promo_banners)) {
+          setPromoBanners(config.promo_banners);
+        }
+
+        if (config.sections && Array.isArray(config.sections) && config.sections.length > 0) {
+          const seen = new Set<string>();
+          const normalized = config.sections
+            .map((sec: any, idx: number) => {
+              const canonicalId = normalizeSectionId(sec.id);
+              const defaultRef = DEFAULT_HOMEPAGE_SECTIONS.find((d) => d.id === canonicalId);
+              return {
+                ...sec,
+                id: canonicalId,
+                name_ar: sec.name_ar || sec.name || defaultRef?.name_ar || canonicalId,
+                name_en: sec.name_en || sec.name || defaultRef?.name_en || canonicalId,
+                enabled: sec.enabled !== false,
+                alignment: sec.alignment || 'start',
+                order: sec.order ?? idx + 1,
+              };
+            })
+            .filter((sec: any) => {
+              if (seen.has(sec.id)) return false;
+              seen.add(sec.id);
+              return true;
+            })
+            .sort((a: any, b: any) => a.order - b.order);
+          setSections(normalized);
+        } else {
+          setSections(DEFAULT_HOMEPAGE_SECTIONS as any);
+        }
+
+        if (config.navigation?.header_links && Array.isArray(config.navigation.header_links)) {
+          setHeaderLinks(config.navigation.header_links);
+        }
+
+        if (config.contact) {
+          setContactInfo((prev) => ({ ...prev, ...config.contact }));
+        }
+
+        if (config.pages?.about_story) {
+          setAboutStory(config.pages.about_story);
+        }
+
+        if (config.media_library && Array.isArray(config.media_library)) {
+          setMediaList(config.media_library);
         }
       }
+
+      // Fetch representative store products for the live preview
+      try {
+        const tenantId = data?.store_settings?.tenant_id;
+        const storeRes = await api.storefront.getPublicStore(tenantId || undefined, true);
+        if (storeRes?.products && Array.isArray(storeRes.products)) {
+          setPreviewVariants(storeRes.products);
+        }
+      } catch {}
     } catch (err: any) {
-      if (window.location.search.includes('mock_audit=1') || window.location.hash.includes('mock_audit=1')) {
-        setStudioConfig({
-          tenant_id: 'mock-tenant-1',
-          published: {
-            theme_id: 'fashion_boutique',
-            theme_config: { primary_color: '#0284c7' },
-            published_at: new Date().toISOString(),
-          },
-          draft: {
-            theme_id: 'fashion_boutique',
-            theme_config: { primary_color: '#0284c7' },
-          },
-          has_draft_changes: true,
-          can_rollback: true,
-          available_templates: [] as any,
-          store_settings: {
-            id: 'mock-setting-1',
-            store_name: isAr ? 'مصنع الدلتا للملابس الجاهزة' : 'Delta Apparel Factory',
-            theme_id: 'fashion_boutique',
-            is_store_enabled: true,
-            allow_cod: true,
-            allow_card_payment: false,
-            allow_instapay: true,
-            currency: 'EGP',
-            banner_title: isAr ? 'أرقى منتجات الملابس من المصنع مباشرة' : 'Direct Factory Apparel',
-            banner_subtitle: isAr ? 'خامات قطنية 100% مباشرة من خط الإنتاج.' : '100% Egyptian Cotton.',
-          },
-        });
-        setErrorMsg(null);
-        return;
-      }
       setErrorMsg(err?.message || (isAr ? 'فشل تحميل بيانات استوديو التصميم' : 'Failed to load design studio'));
     } finally {
       setIsLoading(false);
     }
   };
 
+  const [previewVariants, setPreviewVariants] = useState<any[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [deleteInUseData, setDeleteInUseData] = useState<{ path: string; message: string; used_in: string[] } | null>(null);
+
   useEffect(() => {
     fetchStudio();
   }, []);
 
+  // Fetch Media List
+  const loadMedia = async () => {
+    try {
+      const res = await api.storefront.listMedia();
+      if (res?.media) {
+        setMediaList(res.media);
+      }
+    } catch {}
+  };
+
+  // Upload Single or Multiple Media Files Handler
+  const handleUploadFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    // Validate size & type for all files
+    const validFiles: File[] = [];
+    for (const file of fileArray) {
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorMsg(isAr ? `الملف "${file.name}" يتجاوز الحد المسموح به (5 ميجابايت)` : `File "${file.name}" exceeds 5MB size limit`);
+        return;
+      }
+      if (!file.type.match(/^image\/(jpeg|png|webp|jpg)$/i)) {
+        setErrorMsg(isAr ? `نوع الملف "${file.name}" غير مدعوم. يرجى رفع صور JPG أو PNG أو WebP` : `Unsupported file type for "${file.name}"`);
+        return;
+      }
+      validFiles.push(file);
+    }
+
+    setIsUploadingMedia(true);
+    setUploadProgress(isAr ? `جاري رفع ${validFiles.length} صورة إلى الخادم...` : `Uploading ${validFiles.length} images...`);
+    setErrorMsg(null);
+
+    try {
+      if (validFiles.length === 1) {
+        const res = await api.storefront.uploadMedia(validFiles[0], 'general', validFiles[0].name);
+        if (res?.media) {
+          setSuccessMsg(isAr ? `تم رفع "${validFiles[0].name}" بنجاح إلى مكتبة الوسائط!` : 'File uploaded successfully!');
+          setMediaList((prev) => [res.media, ...prev]);
+        }
+      } else {
+        const res = await api.storefront.uploadMultipleMedia(validFiles, 'general');
+        if (res?.media && Array.isArray(res.media)) {
+          setSuccessMsg(isAr ? `تم رفع ${res.media.length} صور بنجاح إلى مكتبة الوسائط!` : `${res.media.length} images uploaded successfully!`);
+          setMediaList((prev) => [...res.media, ...prev]);
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل رفع الملفات إلى الخادم' : 'Failed to upload images'));
+    } finally {
+      setIsUploadingMedia(false);
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleUploadFiles(e.target.files);
+    }
+  };
+
+  // Delete Media Handler with In-Use Reference Verification
+  const handleDeleteMedia = async (pathOrUrl: string, force = false) => {
+    try {
+      await api.storefront.deleteMedia(pathOrUrl, force);
+      setMediaList((prev) => prev.filter((m) => m.path !== pathOrUrl && m.url !== pathOrUrl));
+      setSuccessMsg(isAr ? 'تم حذف الصورة من مكتبة الوسائط بنجاح.' : 'Media deleted successfully.');
+      setDeleteInUseData(null);
+    } catch (err: any) {
+      if (err?.error === 'MediaInUse' || err?.data?.error === 'MediaInUse') {
+        setDeleteInUseData({
+          path: pathOrUrl,
+          message: err?.message || err?.data?.message || (isAr ? 'هذه الصورة قيد الاستخدام حالياً' : 'This media is currently in use'),
+          used_in: err?.used_in || err?.data?.used_in || [],
+        });
+      } else {
+        setErrorMsg(err?.message || (isAr ? 'فشل حذف الصورة' : 'Failed to delete image'));
+      }
+    }
+  };
+
+  // Import Media from URL (supports Pinterest, direct image URLs, etc.)
+  const handleImportMediaUrl = async (url: string, category = 'general', asLogo = false) => {
+    if (!url || !url.trim()) return;
+    setIsImportingUrl(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.storefront.importMediaFromUrl(url.trim(), category, asLogo ? 'Store Logo' : undefined);
+      if (res?.media) {
+        setMediaList((prev) => [res.media, ...prev]);
+        if (asLogo) {
+          setLogoUrl(res.media.url);
+          setSuccessMsg(isAr ? 'تم استيراد الصورة وتعيينها كشعار رسمي للمتجر بنجاح!' : 'Logo imported and updated successfully!');
+        } else {
+          setSuccessMsg(isAr ? 'تم استيراد الصورة وحفظها في مكتبة الوسائط بنجاح!' : 'Media imported successfully!');
+        }
+        setImportUrlInput('');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل استيراد الصورة من الرابط' : 'Failed to import media from URL'));
+    } finally {
+      setIsImportingUrl(false);
+    }
+  };
+
+  // Upload Logo directly from local file
+  const handleUploadLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingMedia(true);
+    setUploadProgress(isAr ? 'جاري رفع ملف الشعار...' : 'Uploading logo...');
+    setErrorMsg(null);
+    try {
+      const res = await api.storefront.uploadMedia(file, 'logo', 'Store Logo');
+      if (res?.media) {
+        setMediaList((prev) => [res.media, ...prev]);
+        setLogoUrl(res.media.url);
+        setSuccessMsg(isAr ? 'تم رفع الشعار وتعيينه للمتجر بنجاح!' : 'Logo uploaded successfully!');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل رفع ملف الشعار' : 'Failed to upload logo'));
+    } finally {
+      setIsUploadingMedia(false);
+      setUploadProgress(null);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  // Custom Pages Handlers
+  const handleOpenNewPageForm = () => {
+    setEditingPageId(null);
+    setPageForm({
+      slug: '',
+      title_ar: '',
+      title_en: '',
+      subtitle_ar: '',
+      subtitle_en: '',
+      content_ar: '',
+      content_en: '',
+      featured_image: '',
+      show_in_header: true,
+      show_in_footer: true,
+    });
+    setIsPageFormOpen(true);
+  };
+
+  const handleEditPage = (page: any) => {
+    setEditingPageId(page.id);
+    setPageForm({
+      slug: page.slug || page.id,
+      title_ar: page.title_ar || page.title || '',
+      title_en: page.title_en || '',
+      subtitle_ar: page.subtitle_ar || '',
+      subtitle_en: page.subtitle_en || '',
+      content_ar: page.content_ar || page.content || '',
+      content_en: page.content_en || '',
+      featured_image: page.featured_image || '',
+      show_in_header: page.show_in_header !== false,
+      show_in_footer: page.show_in_footer !== false,
+    });
+    setIsPageFormOpen(true);
+  };
+
+  const handleSavePageForm = () => {
+    if (!pageForm.title_ar.trim() && !pageForm.title_en.trim()) {
+      setErrorMsg(isAr ? 'يرجى إدخال عنوان الصفحة' : 'Please provide a page title');
+      return;
+    }
+    const cleanSlug = (pageForm.slug.trim() || pageForm.title_en.trim() || pageForm.title_ar.trim())
+      .toLowerCase()
+      .replace(/[^a-z0-9\u0621-\u064A]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (editingPageId) {
+      setCustomPages((prev) =>
+        prev.map((p) =>
+          p.id === editingPageId
+            ? { ...p, ...pageForm, slug: cleanSlug || p.slug }
+            : p
+        )
+      );
+      setSuccessMsg(isAr ? 'تم تحديث الصفحة بنجاح' : 'Page updated successfully');
+    } else {
+      const newPage = {
+        id: cleanSlug || `page-${Date.now()}`,
+        ...pageForm,
+        slug: cleanSlug || `page-${Date.now()}`,
+      };
+      setCustomPages((prev) => [...prev, newPage]);
+      setSuccessMsg(isAr ? 'تم إنشاء الصفحة المخصصة بنجاح' : 'Custom page created successfully');
+    }
+    setIsPageFormOpen(false);
+    setEditingPageId(null);
+  };
+
+  const handleDeletePage = (pageId: string) => {
+    setCustomPages((prev) => prev.filter((p) => p.id !== pageId));
+    setSuccessMsg(isAr ? 'تم حذف الصفحة' : 'Page deleted');
+  };
+
   // Preset Palettes
   const presetPalettes = [
     { name: 'Sky Fashion', primary: '#0284c7', secondary: '#0f172a', accent: '#f43f5e' },
-    { name: 'Corporate Blue', primary: '#2563eb', secondary: '#1e293b', accent: '#059669' },
+    { name: 'Corporate Blue (B2B)', primary: '#2563eb', secondary: '#1e293b', accent: '#059669' },
     { name: 'Warm Sunset (Kids)', primary: '#f97316', secondary: '#fed7aa', accent: '#10b981' },
     { name: 'Haute Noir (Luxury)', primary: '#d97706', secondary: '#18181b', accent: '#b45309' },
     { name: 'Emerald Weave', primary: '#059669', secondary: '#064e3b', accent: '#d97706' },
   ];
+
+  // Build Payload
+  const getFullPayload = () => ({
+    theme_id: selectedTemplate,
+    theme_config: {
+      primary_color: primaryColor,
+      secondary_color: secondaryColor,
+      accent_color: accentColor,
+      font_family: fontFamily,
+      logo_url: logoUrl?.trim() || '',
+      announcement_bar_enabled: announcementEnabled,
+      announcement_bar_text: announcementText,
+      hero_banner: {
+        ...heroBanner,
+        desktop_image: heroBanner.desktop_image?.trim() || '',
+        mobile_image: heroBanner.mobile_image?.trim() || '',
+        height: bannerHeight,
+        image_fit: bannerImageFit,
+        image_position: bannerImagePosition,
+        overlay_opacity: bannerOverlayOpacity,
+        overlay_color: bannerOverlayColor,
+        text_align: bannerTextAlign,
+      },
+      layout: {
+        categories_style: categoriesStyle,
+        products_grid_cols: productsGridCols,
+        card_image_aspect: cardImageAspect,
+        card_image_fit: cardImageFit,
+        page_bg_color: pageBgColor,
+        card_bg_color: cardBgColor,
+        card_border_color: cardBorderColor,
+        card_border_radius: cardBorderRadius,
+        card_shadow: cardShadow,
+        header_bg_color: headerBgColor,
+        footer_bg_color: footerBgColor,
+        container_width: containerWidth,
+        container_spacing: containerSpacing,
+      },
+      promo_banners: promoBanners.map((p: any) => ({
+        ...p,
+        image_url: (p.image_url || p.image || '')?.trim(),
+      })),
+      sections: sections.map((s: any, idx: number) => ({
+        id: normalizeSectionId(s.id),
+        name_ar: s.name_ar,
+        name_en: s.name_en,
+        enabled: s.enabled !== false,
+        order: idx + 1,
+        alignment: s.alignment || 'start',
+      })),
+      navigation: {
+        header_links: headerLinks,
+      },
+      contact: contactInfo,
+      pages: {
+        about_story: aboutStory,
+      },
+      custom_pages: customPages,
+      footer: {
+        show_logo: footerShowLogo,
+        desc_ar: footerDescAr,
+        desc_en: footerDescEn,
+        show_badges: footerShowBadges,
+        badges: footerBadges,
+        copyright_ar: footerCopyrightAr,
+        copyright_en: footerCopyrightEn,
+      },
+      media_library: mediaList,
+    },
+  });
 
   // Save Draft
   const handleSaveDraft = async () => {
@@ -164,21 +696,8 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
-      const payload = {
-        theme_id: selectedTemplate,
-        theme_config: {
-          primary_color: primaryColor,
-          secondary_color: secondaryColor,
-          accent_color: accentColor,
-          font_family: fontFamily,
-          logo_url: logoUrl,
-          announcement_bar_enabled: announcementEnabled,
-          announcement_bar_text: announcementText,
-          sections,
-        },
-      };
-      await api.storefront.saveDesignDraft(payload);
-      setSuccessMsg(isAr ? 'تم حفظ مسودة التصميم بنجاح! يمكنك معاينتها الآن.' : 'Design draft saved successfully!');
+      await api.storefront.saveDesignDraft(getFullPayload());
+      setSuccessMsg(isAr ? 'تم حفظ مسودة التصميم بنجاح! يمكنك معاينتها في أي وقت.' : 'Design draft saved successfully!');
       await fetchStudio();
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل حفظ المسودة' : 'Failed to save draft'));
@@ -193,27 +712,34 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
-      // Ensure draft is saved first
-      await api.storefront.saveDesignDraft({
-        theme_id: selectedTemplate,
-        theme_config: {
-          primary_color: primaryColor,
-          secondary_color: secondaryColor,
-          accent_color: accentColor,
-          font_family: fontFamily,
-          logo_url: logoUrl,
-          announcement_bar_enabled: announcementEnabled,
-          announcement_bar_text: announcementText,
-          sections,
-        },
-      });
-
+      await api.storefront.saveDesignDraft(getFullPayload());
       await api.storefront.publishDesign();
-      setSuccessMsg(isAr ? 'تم نشر التعديلات بنجاح إلى المتجر الحي!' : 'Published successfully to live store!');
+      setSuccessMsg(isAr ? 'تم نشر التعديلات بنجاح إلى المتجر الإلكتروني الحي!' : 'Published successfully to live store!');
       setShowPublishModal(false);
       await fetchStudio();
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل نشر التعديلات' : 'Failed to publish changes'));
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Direct 1-Click Save & Publish Live
+  const handleSaveAndPublishDirect = async () => {
+    setIsPublishing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await api.storefront.saveDesignDraft(getFullPayload());
+      await api.storefront.publishDesign();
+      setSuccessMsg(
+        isAr
+          ? 'تم حفظ ونشر التعديلات بنجاح إلى المتجر الإلكتروني الحي! الصور والروابط معروضة الآن.'
+          : 'Successfully saved and published to live store! Images and banners are now live.'
+      );
+      await fetchStudio();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل حفظ ونشر التعديلات' : 'Failed to publish changes'));
     } finally {
       setIsPublishing(false);
     }
@@ -226,7 +752,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     setSuccessMsg(null);
     try {
       await api.storefront.rollbackDesign();
-      setSuccessMsg(isAr ? 'تم استرجاع النسخة السابقة بنجاح!' : 'Rolled back to previous version successfully!');
+      setSuccessMsg(isAr ? 'تم استرجاع النسخة المنشورة السابقة بنجاح!' : 'Rolled back to previous version successfully!');
       setShowRollbackModal(false);
       await fetchStudio();
     } catch (err: any) {
@@ -239,17 +765,17 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const templatesList = [
     {
       id: 'fashion_boutique' as StorefrontThemeId,
-      name_ar: 'بوتيك الأزياء العصرية',
+      name_ar: 'بوتيك الأزياء العصرية (Fashion Boutique)',
       name_en: 'Fashion Boutique',
       type_badge: isAr ? 'أزياء شبابية وكاجوال' : 'Fashion & Casual',
-      desc_ar: 'تصميم تحريري عصري للملابس الجاهزة مع بنرات عريضة وشبكة منتجات متجاوبة وقصة علامة المصنع.',
+      desc_ar: 'تصميم تحريري عصري للملابس الجاهزة مع بنرات عريضة وشبكة منتجات أنيقة وقصة علامة المصنع.',
       desc_en: 'High-fashion editorial layout with wide hero banners, interactive product cards, and brand storytelling.',
       palette: ['#0284c7', '#0f172a', '#f43f5e'],
       icon: <Sparkles className="w-5 h-5 text-sky-500" />,
     },
     {
       id: 'modern_catalog' as StorefrontThemeId,
-      name_ar: 'الكتالوج الحديث والتوريدات',
+      name_ar: 'الكتالوج الحديث والتوريدات (Modern Catalog)',
       name_en: 'Modern Catalog & Wholesale',
       type_badge: isAr ? 'جملة وتوريدات ويونيفورم' : 'B2B Wholesale & Uniform',
       desc_ar: 'تصميم بحثي للكتالوجات الكبيرة وتجارة الجملة والزي الموحد مع شريط تصفية متقدم وأسعار الجملة وMOQ.',
@@ -259,7 +785,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     },
     {
       id: 'kids_family' as StorefrontThemeId,
-      name_ar: 'أطفال وعائلة',
+      name_ar: 'أطفال وعائلة (Kids & Family Haven)',
       name_en: 'Kids & Family Haven',
       type_badge: isAr ? 'أطفال ومواليد وعائلة' : 'Kids, Baby & Toddler',
       desc_ar: 'ألوان مبهجة دافئة، تصفح حسب الفئات العمرية ومقاسات الأطفال، ووسوم السلامة والقطن المصري 100%.',
@@ -269,10 +795,10 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
     },
     {
       id: 'premium_brand' as StorefrontThemeId,
-      name_ar: 'علامة تجارية فاخرة',
+      name_ar: 'علامة تجارية فاخرة (Premium Luxury)',
       name_en: 'Premium Luxury Atelier',
-      type_badge: isAr ? 'بدل وفساتين وأزياء فاخرة' : 'Haute Couture & Formal',
-      desc_ar: 'بساطة فاخرة داكنة مع لمسات ذهبية وبرونزية، مساحات أنيقة وهوية راقية للأزياء الرسمية والبدل.',
+      type_badge: isAr ? 'بدل وفساتين وأزياء راقية' : 'Haute Couture & Formal',
+      desc_ar: 'بساطة فاخرة مع لمسات ذهبية وبرونزية، مساحات أنيقة وهوية راقية للأزياء الرسمية والبدل.',
       desc_en: 'Luxury minimalism, gold and bronze accents, refined spacing and heritage typography for exclusive couture.',
       palette: ['#d97706', '#18181b', '#b45309'],
       icon: <Crown className="w-5 h-5 text-amber-500" />,
@@ -291,6 +817,98 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
   const hasDraftChanges = studioConfig?.has_draft_changes;
   const canRollback = studioConfig?.can_rollback;
   const publishedTheme = studioConfig?.published?.theme_id || 'fashion_boutique';
+
+  const displayVariants = previewVariants.length > 0 ? previewVariants : [
+    {
+      id: 'demo-1',
+      model_name: isAr ? 'تيشيرت قطن مصري فاخر' : '100% Egyptian Cotton Tee',
+      category: isAr ? 'ملابس كاجوال' : 'Casual Wear',
+      price: 380,
+      in_stock: 45,
+      sku: 'TSH-COT-01',
+      size: 'L',
+      color: isAr ? 'كحلي داكن' : 'Navy',
+      image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      id: 'demo-2',
+      model_name: isAr ? 'قميص بولو كلاسيك' : 'Classic Polo Shirt',
+      category: isAr ? 'بولو وتيشرتات' : 'Polos & Tees',
+      price: 520,
+      in_stock: 30,
+      sku: 'POL-CLS-02',
+      size: 'XL',
+      color: isAr ? 'أبيض' : 'White',
+      image: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      id: 'demo-3',
+      model_name: isAr ? 'بنطلون جبردين تصدير' : 'Export Gabardine Trousers',
+      category: isAr ? 'بناطيل وجينز' : 'Pants & Denim',
+      price: 690,
+      in_stock: 18,
+      sku: 'PNT-GAB-03',
+      size: '34',
+      color: isAr ? 'بيج' : 'Beige',
+      image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=600&q=80',
+    },
+  ];
+
+  const currentDraftSettings = {
+    ...studioConfig?.store_settings,
+    store_name: studioConfig?.store_settings?.store_name || (isAr ? 'مصنع الملابس' : 'Store'),
+    theme_id: selectedTemplate,
+    theme_config: getFullPayload().theme_config,
+  };
+
+  const commonTemplateProps = {
+    lang,
+    isDark: false,
+    storeSettings: currentDraftSettings,
+    tenantInfo: { name: currentDraftSettings.store_name },
+    variants: displayVariants,
+    searchQuery: '',
+    setSearchQuery: () => {},
+    selectedCategory: 'all',
+    setSelectedCategory: () => {},
+    cartCount: 0,
+    onOpenCart: () => {},
+    onSelectProduct: () => {},
+    onNavigateToTracking: () => {},
+    onNavigateToShop: () => {},
+    onNavigateToCategories: () => {},
+    onNavigateToAbout: () => {},
+    onNavigateToContact: () => {},
+    onNavigateToPolicies: () => {},
+    onToggleTheme: () => {},
+    onToggleLang: () => {},
+    isPreview: true,
+  };
+
+  const renderActiveLiveTemplate = () => {
+    let content: React.ReactNode = null;
+    switch (selectedTemplate) {
+      case 'fashion_boutique':
+        content = <FashionBoutiqueTemplate {...commonTemplateProps} />;
+        break;
+      case 'modern_catalog':
+        content = <ModernCatalogTemplate {...commonTemplateProps} />;
+        break;
+      case 'kids_family':
+        content = <KidsFamilyTemplate {...commonTemplateProps} />;
+        break;
+      case 'premium_brand':
+        content = <PremiumBrandTemplate {...commonTemplateProps} />;
+        break;
+      default:
+        content = null;
+    }
+    return (
+      <StorefrontErrorBoundary isAr={isAr}>
+        {content}
+      </StorefrontErrorBoundary>
+    );
+  };
 
   return (
     <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -324,12 +942,12 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                {isAr ? 'استوديو تصميم وتخصيص المتجر' : 'Storefront Design Studio'}
+                {isAr ? 'استوديو التحكم وإدارة المتجر الإلكتروني' : 'Storefront Control & Design Studio'}
               </h2>
               <p className="text-xs text-slate-500">
                 {isAr
-                  ? 'اختر من بين 4 قوالب احترافية مختلفة تماماً وخصص هويتك، بنراتك، وألوانك دون برمجة'
-                  : 'Customize your storefront with 4 distinct templates, custom branding, and drag-and-drop sections'}
+                  ? 'إدارة كاملة للبنرات، الصور، الأقسام، الهوية، والقوائم مع حفظ سحابي آمن وتحديث فوري للمتجر'
+                  : 'Manage banners, media, sections, branding & navigation with safe versioning'}
               </p>
             </div>
           </div>
@@ -338,12 +956,12 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
             {hasDraftChanges ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border border-amber-300 dark:border-amber-800">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                {isAr ? 'توجد تعديلات محفوظة كمسودة (غير منشورة)' : 'Draft Changes Pending Publish'}
+                {isAr ? 'توجد تعديلات مسودة غير منشورة' : 'Unpublished Draft Changes'}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-300 dark:border-emerald-800">
                 <Check className="w-3.5 h-3.5" />
-                {isAr ? 'المتجر متطابق تماماً مع النسخة الحية المنشورة' : 'Live & In Sync with Published Store'}
+                {isAr ? 'المتجر الحي متطابق مع التعديلات' : 'Live Store in Sync'}
               </span>
             )}
 
@@ -375,15 +993,27 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
             size="sm"
             onClick={() => onNavigateToLiveStore(true)}
             className="text-xs bg-slate-50 dark:bg-slate-800"
+            title={isAr ? 'معاينة التعديلات غير المنشورة' : 'Preview draft changes'}
           >
             <Eye className="w-3.5 h-3.5 me-1.5 text-amber-500" />
-            {isAr ? 'معاينة المسودة (Preview)' : 'Live Preview'}
+            {isAr ? 'معاينة المسودة' : 'Live Preview'}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateToLiveStore(false)}
+            className="text-xs bg-slate-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400"
+            title={isAr ? 'زيارة المتجر الإلكتروني المنشور حالياً' : 'Visit live published store'}
+          >
+            <Store className="w-3.5 h-3.5 me-1.5" />
+            {isAr ? 'زيارة المتجر الحي' : 'Live Store'}
           </Button>
 
           <Button
             variant="secondary"
             size="sm"
-            disabled={isSaving}
+            disabled={isSaving || isPublishing}
             onClick={handleSaveDraft}
             className="text-xs"
           >
@@ -394,12 +1024,13 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
           <Button
             variant="primary"
             size="sm"
-            disabled={isPublishing}
-            onClick={() => setShowPublishModal(true)}
-            className="text-xs"
+            disabled={isPublishing || isSaving}
+            onClick={handleSaveAndPublishDirect}
+            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-bold"
+            title={isAr ? 'حفظ ونشر التعديلات فوراً على المتجر ليراها العملاء' : 'Save & publish directly to live store'}
           >
             <Send className="w-3.5 h-3.5 me-1.5" />
-            {isAr ? 'نشر المتجر الحي' : 'Publish to Live'}
+            {isPublishing ? (isAr ? 'جاري النشر...' : 'Publishing...') : (isAr ? 'حفظ ونشر فوري للمتجر' : 'Save & Publish Live')}
           </Button>
 
           {onBackToOrders && (
@@ -410,62 +1041,44 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
         </div>
       </div>
 
-      {/* Main Studio Workspace: Settings Panel + Live Viewport Switcher */}
+      {/* Main Studio Workspace: 7-Tab Panel + Live Mockup */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Navigation Tabs & Editors */}
+        {/* Left Column: Customizer Tabs & Editors */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Customizer Tabs */}
-          <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2">
-            <button
-              onClick={() => setActiveTab('templates')}
-              className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-                activeTab === 'templates'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Layout className="w-4 h-4" />
-              <span>{isAr ? 'مكتبة القوالب (4 قوالب)' : 'Template Library'}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('branding')}
-              className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-                activeTab === 'branding'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Palette className="w-4 h-4" />
-              <span>{isAr ? 'الهوية والألوان' : 'Branding & Colors'}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('sections')}
-              className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-                activeTab === 'sections'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>{isAr ? 'أقسام الصفحة الرئيسية' : 'Homepage Sections'}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('banners')}
-              className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-                activeTab === 'banners'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <ImageIcon className="w-4 h-4" />
-              <span>{isAr ? 'البنرات الترويجية' : 'Banners & Text'}</span>
-            </button>
+          {/* Navigation Tabs Header */}
+          <div className="flex flex-wrap border-b border-slate-200 dark:border-slate-800 gap-1 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-xs">
+            {[
+              { id: 'templates', label: isAr ? 'القوالب (4)' : 'Templates', icon: Layout },
+              { id: 'banners', label: isAr ? 'البنرات والعروض' : 'Hero & Banners', icon: ImageIcon },
+              { id: 'sections', label: isAr ? 'ترتيب الأقسام' : 'Sections', icon: Layers },
+              { id: 'media', label: isAr ? 'مكتبة الوسائط' : 'Media Library', icon: Upload },
+              { id: 'navigation', label: isAr ? 'القوائم والشعار' : 'Navigation', icon: Compass },
+              { id: 'content', label: isAr ? 'المحتوى والتواصل' : 'Pages & Contact', icon: FileText },
+              { id: 'branding', label: isAr ? 'الألوان والخطوط' : 'Branding', icon: Palette },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    if (tab.id === 'media') loadMedia();
+                  }}
+                  className={`py-2 px-3 sm:px-4 text-xs font-bold transition-all rounded-xl flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* TAB 1: TEMPLATE LIBRARY */}
+          {/* ==================== TAB 1: TEMPLATES ==================== */}
           {activeTab === 'templates' && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 text-xs text-blue-800 dark:text-blue-300">
@@ -485,7 +1098,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                       onClick={() => setSelectedTemplate(tpl.id)}
                       className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-4 ${
                         isSelected
-                          ? 'border-primary ring-2 ring-primary/20 bg-primary/5 dark:bg-primary/10 shadow-md'
+                          ? 'border-blue-600 ring-2 ring-blue-600/20 bg-blue-50/10 dark:bg-blue-950/20 shadow-md'
                           : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
                       }`}
                     >
@@ -500,62 +1113,27 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                               <span className="text-[10px] font-bold text-slate-400">{tpl.type_badge}</span>
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-1.5">
-                            {isPublished && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                                {isAr ? 'المنشور حالياً' : 'Live'}
-                              </span>
-                            )}
-                            {isSelected && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-white">
-                                {isAr ? 'المحدد بالمسودة' : 'Selected'}
-                              </span>
-                            )}
-                          </div>
+                          {isPublished && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              {isAr ? 'المنشور حالياً' : 'Live'}
+                            </span>
+                          )}
                         </div>
 
-                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        <p className="text-xs text-slate-500 leading-relaxed">
                           {isAr ? tpl.desc_ar : tpl.desc_en}
                         </p>
-
-                        {/* Palette Previews */}
-                        <div className="flex items-center gap-2 pt-2">
-                          <span className="text-[10px] font-semibold text-slate-400">{isAr ? 'الألوان الافتراضية:' : 'Palette:'}</span>
-                          <div className="flex items-center gap-1">
-                            {tpl.palette.map((c, idx) => (
-                              <div
-                                key={idx}
-                                style={{ backgroundColor: c }}
-                                className="w-4 h-4 rounded-full border border-white dark:border-slate-800 shadow-xs"
-                              />
-                            ))}
-                          </div>
-                        </div>
                       </div>
 
                       <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTemplate(tpl.id);
-                            onNavigateToLiveStore(true);
-                          }}
-                          className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{isAr ? 'معاينة القالب' : 'Preview'}</span>
-                        </button>
-
-                        <Button
-                          size="sm"
-                          variant={isSelected ? 'primary' : 'outline'}
-                          onClick={() => setSelectedTemplate(tpl.id)}
-                          className="text-xs"
-                        >
-                          {isSelected ? (isAr ? 'القالب المختار' : 'Active') : (isAr ? 'اختيار القالب' : 'Use Template')}
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          {tpl.palette.map((c, i) => (
+                            <span key={i} style={{ backgroundColor: c }} className="w-4 h-4 rounded-full inline-block border border-white shadow-xs" />
+                          ))}
+                        </div>
+                        <span className={`text-xs font-bold ${isSelected ? 'text-blue-600' : 'text-slate-400'}`}>
+                          {isSelected ? (isAr ? '✓ القالب المختار' : '✓ Selected') : (isAr ? 'اختيار القالب' : 'Select')}
+                        </span>
                       </div>
                     </div>
                   );
@@ -564,168 +1142,532 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
             </div>
           )}
 
-          {/* TAB 2: BRANDING & COLORS */}
-          {activeTab === 'branding' && (
+          {/* ==================== TAB 2: BANNERS & HERO ==================== */}
+          {activeTab === 'banners' && (
             <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-              {/* Color Pickers */}
               <div>
-                <h4 className="font-extrabold text-sm mb-1">{isAr ? 'لوحة الألوان الأساسية' : 'Color Palette'}</h4>
-                <p className="text-xs text-slate-500 mb-4">
-                  {isAr
-                    ? 'اختر لوحة جاهزة أو حدد الألوان التي تطابق الهوية البصرية لمصنعك'
-                    : 'Choose a preset palette or define custom brand hex codes'}
+                <h4 className="font-extrabold text-base mb-1">{isAr ? 'إدارة البنر الرئيسي الترويجي (Hero Banner)' : 'Main Hero Banner Manager'}</h4>
+                <p className="text-xs text-slate-500">
+                  {isAr ? 'البنر الأكبر الذي يظهر في صدارة متجرك لجميع زوار المتجر مع دعم صور الديسكتوب والموبايل' : 'Key promotional banner displayed at the top of the storefront with mobile & desktop variants'}
                 </p>
-
-                {/* Preset Chips */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  {presetPalettes.map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setPrimaryColor(p.primary);
-                        setSecondaryColor(p.secondary);
-                        setAccentColor(p.accent);
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <div className="flex items-center gap-0.5">
-                        <span style={{ backgroundColor: p.primary }} className="w-3 h-3 rounded-full" />
-                        <span style={{ backgroundColor: p.secondary }} className="w-3 h-3 rounded-full" />
-                        <span style={{ backgroundColor: p.accent }} className="w-3 h-3 rounded-full" />
-                      </div>
-                      <span>{p.name}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold mb-1.5">{isAr ? 'اللون الرئيسي (Primary)' : 'Primary Color'}</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={primaryColor}
-                        onChange={(e) => setPrimaryColor(e.target.value)}
-                        className="w-10 h-10 rounded-xl cursor-pointer border border-slate-300 dark:border-slate-700"
-                      />
-                      <input
-                        type="text"
-                        value={primaryColor}
-                        onChange={(e) => setPrimaryColor(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold mb-1.5">{isAr ? 'اللون الثانوي (Secondary)' : 'Secondary Color'}</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={secondaryColor}
-                        onChange={(e) => setSecondaryColor(e.target.value)}
-                        className="w-10 h-10 rounded-xl cursor-pointer border border-slate-300 dark:border-slate-700"
-                      />
-                      <input
-                        type="text"
-                        value={secondaryColor}
-                        onChange={(e) => setSecondaryColor(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold mb-1.5">{isAr ? 'لون اللمسات التمييزية (Accent)' : 'Accent Color'}</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={accentColor}
-                        onChange={(e) => setAccentColor(e.target.value)}
-                        className="w-10 h-10 rounded-xl cursor-pointer border border-slate-300 dark:border-slate-700"
-                      />
-                      <input
-                        type="text"
-                        value={accentColor}
-                        onChange={(e) => setAccentColor(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs uppercase"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
 
-              {/* Typography & Fonts */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <h4 className="font-extrabold text-sm mb-1">{isAr ? 'الخطوط والطباعة' : 'Typography'}</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+              {/* Main Banner Inputs */}
+              <div className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold mb-1">{isAr ? 'عائلة الخط العربي' : 'Font Family'}</label>
+                    <label className="block font-bold mb-1.5">{isAr ? 'عنوان البنر الرئيسي' : 'Banner Headline'} *</label>
+                    <input
+                      type="text"
+                      value={heroBanner.title}
+                      onChange={(e) => setHeroBanner({ ...heroBanner, title: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold mb-1.5">{isAr ? 'نص زر الشراء (CTA Button)' : 'Button CTA Text'} *</label>
+                    <input
+                      type="text"
+                      value={heroBanner.cta_text}
+                      onChange={(e) => setHeroBanner({ ...heroBanner, cta_text: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1.5">{isAr ? 'النص التوضيحي للبنر' : 'Banner Subtitle'}</label>
+                  <textarea
+                    rows={2}
+                    value={heroBanner.subtitle}
+                    onChange={(e) => setHeroBanner({ ...heroBanner, subtitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold mb-1.5">{isAr ? 'وجهة زر البنر (Destination)' : 'CTA Destination'}</label>
                     <select
-                      value={fontFamily}
-                      onChange={(e) => setFontFamily(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                      value={heroBanner.cta_destination}
+                      onChange={(e) => setHeroBanner({ ...heroBanner, cta_destination: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
                     >
-                      <option value="Cairo, sans-serif">Cairo (عصري ومقروء - الافتراضي)</option>
-                      <option value="Tajawal, sans-serif">Tajawal (ناعم للأزياء)</option>
-                      <option value="Almarai, sans-serif">Almarai (رسمي وتجاري)</option>
-                      <option value="serif">Serif (كلاسيكي فاخر للبراندات)</option>
+                      <option value="shop">{isAr ? 'صفحة جميع المنتجات (Shop)' : 'Shop Page'}</option>
+                      <option value="category">{isAr ? 'صفحة الأقسام (Categories)' : 'Categories'}</option>
+                      <option value="contact">{isAr ? 'صفحة التواصل (Contact)' : 'Contact Page'}</option>
                     </select>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold mb-1">{isAr ? 'رابط شعار المصنع (Logo URL)' : 'Logo Image URL'}</label>
-                    <input
-                      type="url"
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="https://example.com/logo.png"
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                    />
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+                    <div>
+                      <span className="font-bold block">{isAr ? 'تفعيل ظهور البنر' : 'Banner Visibility'}</span>
+                      <span className="text-[10px] text-slate-400">{isAr ? 'إظهار البنر لزوار المتجر' : 'Show to visitors'}</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={heroBanner.enabled}
+                        onChange={(e) => setHeroBanner({ ...heroBanner, enabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
                   </div>
                 </div>
-              </div>
 
-              {/* Announcement Bar */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h4 className="font-extrabold text-sm">{isAr ? 'شريط الإعلانات العلوي' : 'Top Announcement Bar'}</h4>
-                    <p className="text-xs text-slate-500">{isAr ? 'يظهر في أعلى كل صفحات المتجر' : 'Visible at top of storefront'}</p>
+                {/* Desktop & Mobile Banner Images */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                  <h5 className="font-bold text-xs">{isAr ? 'صور البنر المخصصة (Desktop & Mobile)' : 'Banner Media Images'}</h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">{isAr ? 'صورة الشاشات الكبيرة (Desktop Image URL)' : 'Desktop Image URL'}</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={heroBanner.desktop_image}
+                          onChange={(e) => setHeroBanner({ ...heroBanner, desktop_image: e.target.value })}
+                          placeholder="https://.../banner-desktop.jpg"
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                        />
+                        {heroBanner.desktop_image && (
+                          <button
+                            type="button"
+                            onClick={() => setHeroBanner({ ...heroBanner, desktop_image: '' })}
+                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      {heroBanner.desktop_image && (
+                        <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 h-24 bg-slate-100 flex items-center justify-center">
+                          <img src={api.getMediaUrl(heroBanner.desktop_image)} alt="Desktop Preview" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      {mediaList.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر من مكتبة الوسائط المرفوعة:' : 'Or pick from uploaded media:'}</span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {mediaList.slice(0, 6).map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setHeroBanner({ ...heroBanner, desktop_image: m.url })}
+                                className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-blue-500 transition cursor-pointer"
+                                title={m.title || m.filename}
+                              >
+                                <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">{isAr ? 'صورة الموبايل (Mobile Image URL)' : 'Mobile Image URL'}</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={heroBanner.mobile_image}
+                          onChange={(e) => setHeroBanner({ ...heroBanner, mobile_image: e.target.value })}
+                          placeholder="https://.../banner-mobile.jpg"
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                        />
+                        {heroBanner.mobile_image && (
+                          <button
+                            type="button"
+                            onClick={() => setHeroBanner({ ...heroBanner, mobile_image: '' })}
+                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      {heroBanner.mobile_image && (
+                        <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 h-24 bg-slate-100 flex items-center justify-center">
+                          <img src={api.getMediaUrl(heroBanner.mobile_image)} alt="Mobile Preview" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      {mediaList.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر من مكتبة الوسائط المرفوعة:' : 'Or pick from uploaded media:'}</span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {mediaList.slice(0, 6).map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setHeroBanner({ ...heroBanner, mobile_image: m.url })}
+                                className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-amber-500 transition cursor-pointer"
+                                title={m.title || m.filename}
+                              >
+                                <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={announcementEnabled}
-                      onChange={(e) => setAnnouncementEnabled(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                  </label>
                 </div>
 
-                {announcementEnabled && (
-                  <input
-                    type="text"
-                    value={announcementText}
-                    onChange={(e) => setAnnouncementText(e.target.value)}
-                    placeholder={isAr ? 'نص الإعلان أو العرض الخاص...' : 'Announcement text...'}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                  />
-                )}
+                {/* Visual Styler / Elementor Controls for Hero Banner */}
+                <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {isAr ? 'التحكم في أبعاد وطريقة عرض صورة البنر (Visual Styler)' : 'Hero Banner Display & Sizing Controls'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-full">
+                      {isAr ? 'تأثير فوري' : 'Live Preview'}
+                    </span>
+                  </div>
+
+                  {/* 1. Banner Height */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'ارتفاع البنر (Banner Height)' : 'Banner Height'}
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'compact', name_ar: 'مدمج (380px)', name_en: 'Compact' },
+                        { id: 'standard', name_ar: 'متوازن (480px)', name_en: 'Standard' },
+                        { id: 'tall', name_ar: 'بارز (620px)', name_en: 'Tall Hero' },
+                        { id: 'fullscreen', name_ar: 'ملء الشاشة (85vh)', name_en: 'Fullscreen' },
+                      ].map((h) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => setBannerHeight(h.id as any)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition ${
+                            bannerHeight === h.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-slate-400'
+                          }`}
+                        >
+                          {isAr ? h.name_ar : h.name_en}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Image Fit & Position */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                        {isAr ? 'طريقة احتواء الصورة (Image Fit)' : 'Image Fit Mode'}
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBannerImageFit('cover')}
+                          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                            bannerImageFit === 'cover'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'تغطية كاملة (Cover)' : 'Cover (Fill)'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBannerImageFit('contain')}
+                          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                            bannerImageFit === 'contain'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <Square className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'عرض كامل دون قص (Contain)' : 'Contain (Full)'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                        {isAr ? 'نقطة تركيز الصورة ومحاذاتها (Position)' : 'Image Position'}
+                      </label>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'top', label_ar: 'أعلى', label_en: 'Top' },
+                          { id: 'center', label_ar: 'وسط', label_en: 'Center' },
+                          { id: 'bottom', label_ar: 'أسفل', label_en: 'Bottom' },
+                        ].map((pos) => (
+                          <button
+                            key={pos.id}
+                            type="button"
+                            onClick={() => setBannerImagePosition(pos.id as any)}
+                            className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                              bannerImagePosition === pos.id
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {isAr ? pos.label_ar : pos.label_en}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Text Alignment & Overlay */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                        {isAr ? 'محاذاة نصوص وأزرار البنر' : 'Text Alignment'}
+                      </label>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'start', label_ar: 'يمين', label_en: 'Start', icon: AlignRight },
+                          { id: 'center', label_ar: 'توسيط', label_en: 'Center', icon: AlignCenter },
+                          { id: 'end', label_ar: 'يسار', label_en: 'End', icon: AlignLeft },
+                        ].map((align) => {
+                          const IconComp = align.icon;
+                          return (
+                            <button
+                              key={align.id}
+                              type="button"
+                              onClick={() => setBannerTextAlign(align.id as any)}
+                              className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                                bannerTextAlign === align.id
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              <IconComp className="w-3.5 h-3.5" />
+                              <span>{isAr ? align.label_ar : align.label_en}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          {isAr ? 'تعتيم طبقة الصورة (Overlay)' : 'Overlay Opacity'}
+                        </label>
+                        <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                          {bannerOverlayOpacity}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="80"
+                          step="5"
+                          value={bannerOverlayOpacity}
+                          onChange={(e) => setBannerOverlayOpacity(Number(e.target.value))}
+                          className="flex-1 accent-indigo-600 cursor-pointer"
+                        />
+                        <input
+                          type="color"
+                          value={bannerOverlayColor}
+                          onChange={(e) => setBannerOverlayColor(e.target.value)}
+                          className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700 shrink-0"
+                          title={isAr ? 'لون طبقة التعتيم' : 'Overlay Color'}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Promotional Banners */}
+                <div className="pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="font-bold text-xs">{isAr ? 'بنرات العروض والخصومات الإضافية' : 'Promotional Sale Banners'}</h5>
+                      <p className="text-[10px] text-slate-400">{isAr ? 'تظهر كبطاقات عروض تفاعلية أسفل الصفحة' : 'Secondary promotional cards'}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => {
+                        const newId = 'promo-' + Date.now();
+                        setPromoBanners([
+                          ...promoBanners,
+                          {
+                            id: newId,
+                            title: isAr ? 'عرض موسمي جديد' : 'New Seasonal Offer',
+                            subtitle: isAr ? 'خصم فوري عند الشراء المباشر' : 'Direct factory discount',
+                            image_url: '',
+                            link_url: 'shop',
+                            badge_text: isAr ? 'خصم خاص' : 'SPECIAL',
+                            enabled: true,
+                          },
+                        ]);
+                      }}
+                    >
+                      <Plus className="w-3.5 h-3.5 me-1" />
+                      <span>{isAr ? 'إضافة بنر عرض' : 'Add Banner'}</span>
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {promoBanners.map((promo, idx) => (
+                      <div
+                        key={promo.id}
+                        className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs">{isAr ? `بنر إعلاني #${idx + 1}` : `Banner #${idx + 1}`}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPromoBanners(promoBanners.filter((p) => p.id !== promo.id))}
+                            className="text-rose-500 hover:text-rose-700 text-xs flex items-center gap-1 font-semibold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{isAr ? 'حذف' : 'Remove'}</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'عنوان العرض' : 'Offer Title'}</label>
+                            <input
+                              type="text"
+                              placeholder={isAr ? 'عنوان العرض...' : 'Offer title...'}
+                              value={promo.title}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, title: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'كود الخصم أو نص الشارة (Badge)' : 'Coupon Code / Badge'}</label>
+                            <input
+                              type="text"
+                              placeholder={isAr ? 'مثال: FACTORY20 أو خصم 20%...' : 'e.g. FACTORY20 or 20% OFF...'}
+                              value={promo.badge_text}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, badge_text: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'تفاصيل العرض' : 'Details / Subtitle'}</label>
+                            <input
+                              type="text"
+                              placeholder={isAr ? 'تفاصيل العرض...' : 'Offer details...'}
+                              value={promo.subtitle || ''}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, subtitle: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold mb-1">{isAr ? 'وجهة الرابط' : 'Link Destination'}</label>
+                            <input
+                              type="text"
+                              placeholder="shop, categories, https://..."
+                              value={promo.link_url || 'shop'}
+                              onChange={(e) => {
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, link_url: e.target.value } : p));
+                                setPromoBanners(updated);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Promo Banner Image URL with Live Preview & Quick Picker */}
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            {isAr ? 'رابط صورة العرض (Promo Image URL)' : 'Promo Image URL'}
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              value={promo.image_url || (promo as any).image || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, image_url: val, image: val } : p));
+                                setPromoBanners(updated);
+                              }}
+                              placeholder="https://... أو /storage/..."
+                              className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-slate-900 font-mono"
+                            />
+                            {(promo.image_url || (promo as any).image) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, image_url: '', image: '' } : p));
+                                  setPromoBanners(updated);
+                                }}
+                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
+                                title={isAr ? 'مسح الصورة' : 'Clear Image'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {(promo.image_url || (promo as any).image) && (
+                            <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 h-20 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                              <img
+                                src={api.getMediaUrl(promo.image_url || (promo as any).image)}
+                                alt="Promo Preview"
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          )}
+
+                          {mediaList.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] text-slate-400 block">
+                                {isAr ? 'أو اختر صورة للبنر من مكتبة الوسائط:' : 'Or pick an image from media library:'}
+                              </span>
+                              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                                {mediaList.slice(0, 6).map((m) => (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = promoBanners.map((p) => (p.id === promo.id ? { ...p, image_url: m.url, image: m.url } : p));
+                                      setPromoBanners(updated);
+                                    }}
+                                    className="w-9 h-9 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-emerald-500 transition cursor-pointer"
+                                    title={m.title || m.filename}
+                                  >
+                                    <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-cover" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 3: HOMEPAGE SECTIONS */}
+          {/* ==================== TAB 3: SECTIONS ==================== */}
           {activeTab === 'sections' && (
             <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
               <div>
-                <h4 className="font-extrabold text-sm mb-1">{isAr ? 'ترتيب وتفعيل أقسام الصفحة الرئيسية' : 'Homepage Section Blocks'}</h4>
+                <h4 className="font-extrabold text-base mb-1">{isAr ? 'ترتيب وتفعيل أقسام الصفحة الرئيسية' : 'Homepage Section Blocks'}</h4>
                 <p className="text-xs text-slate-500 mb-4">
                   {isAr
-                    ? 'يمكنك تفعيل أو إخفاء أي قسم وإعادة ترتيب ظهوره لزوار المتجر'
+                    ? 'يمكنك تفعيل أو إخفاء أي قسم وإعادة ترتيب ترتيب ظهوره بالأسهم لزوار المتجر'
                     : 'Toggle and arrange visible modules for store visitors'}
                 </p>
               </div>
@@ -773,81 +1715,1639 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                       </div>
 
                       <div>
-                        <h5 className="font-bold text-xs">{isAr ? sec.name_ar : sec.name_en}</h5>
+                        <h5 className="font-bold text-xs">{isAr ? sec.name_ar || sec.name_en || sec.id : sec.name_en || sec.name_ar || sec.id}</h5>
                         <span className="font-mono text-[10px] text-slate-400">Block ID: #{sec.id}</span>
                       </div>
                     </div>
 
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={sec.enabled}
+                    <div className="flex items-center gap-4">
+                      {/* Alignment Selector */}
+                      <select
+                        value={sec.alignment || 'start'}
                         onChange={(e) => {
-                          const updated = sections.map((s) => (s.id === sec.id ? { ...s, enabled: e.target.checked } : s));
+                          const updated = sections.map((s) => (s.id === sec.id ? { ...s, alignment: e.target.value as any } : s));
                           setSections(updated);
                         }}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
+                        className="text-[11px] px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                      >
+                        <option value="start">{isAr ? 'محاذاة البداية' : 'Start'}</option>
+                        <option value="center">{isAr ? 'توسيط' : 'Center'}</option>
+                        <option value="end">{isAr ? 'محاذاة النهاية' : 'End'}</option>
+                      </select>
+
+                      {/* Enable Switch */}
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sec.enabled}
+                          onChange={(e) => {
+                            const updated = sections.map((s) => (s.id === sec.id ? { ...s, enabled: e.target.checked } : s));
+                            setSections(updated);
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Elementor Layout & Grid Controls */}
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-6">
+                <div>
+                  <h4 className="font-extrabold text-sm mb-1 flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                    <Grid className="w-4 h-4" />
+                    <span>{isAr ? 'تخصيص شبكة العرض ونمط الفئات والكروت (Layout Controls)' : 'Layout & Grid Styler'}</span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    {isAr ? 'التحكم في طريقة استعراض الفئات، عدد أعمدة المنتجات، ونسبة أبعاد الصور' : 'Customize categories appearance and product grid sizing'}
+                  </p>
+                </div>
+
+                {/* 1. Categories Layout Style */}
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {isAr ? 'طريقة عرض شريط الفئات (Categories Style)' : 'Categories Style'}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      {
+                        id: 'factory_icon_cards',
+                        name_ar: '🏭 كروت أيقونات المصنع',
+                        name_en: 'Industrial Factory Cards',
+                        desc_ar: 'كروت بهوية تصنيعية وأيقونات ماكينات وتطريز وعداد موديلات',
+                        desc_en: 'Authentic manufacturing cards with industrial icons',
+                      },
+                      {
+                        id: 'circular_stories',
+                        name_ar: 'دوائر عصرية (Stories)',
+                        name_en: 'Circular Stories',
+                        desc_ar: 'دوائر أنيقة تشبه إنستغرام مع صور الأقسام',
+                        desc_en: 'Instagram-like circular stories',
+                      },
+                      {
+                        id: 'grid_cards',
+                        name_ar: 'كروت صور عريضة (Cards)',
+                        name_en: 'Grid Cards',
+                        desc_ar: 'كروت مع خلفيات وعدد الموديلات',
+                        desc_en: 'Wide cards with product count',
+                      },
+                      {
+                        id: 'pills',
+                        name_ar: 'أزرار وشارات (Pills)',
+                        name_en: 'Pills & Badges',
+                        desc_ar: 'شارات أفقية سريعة قابلة للتمرير',
+                        desc_en: 'Clean horizontal pill badges',
+                      },
+                    ].map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        onClick={() => setCategoriesStyle(style.id as any)}
+                        className={`p-3 rounded-xl border text-start transition flex flex-col justify-between ${
+                          categoriesStyle === style.id
+                            ? 'bg-white dark:bg-slate-900 border-indigo-600 ring-2 ring-indigo-500/20 shadow-sm'
+                            : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="font-bold text-xs block text-slate-900 dark:text-slate-100">
+                          {isAr ? style.name_ar : style.name_en}
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                          {isAr ? style.desc_ar : style.desc_en}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Product Grid Columns & Card Sizing */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Grid Columns */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'أعمدة شبكة المنتجات (Grid Columns)' : 'Grid Columns'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { val: 3, label: isAr ? '3 أعمدة (كبير)' : '3 Cols' },
+                        { val: 4, label: isAr ? '4 أعمدة (قياسي)' : '4 Cols' },
+                        { val: 5, label: isAr ? '5 أعمدة (كثيف)' : '5 Cols' },
+                      ].map((col) => (
+                        <button
+                          key={col.val}
+                          type="button"
+                          onClick={() => setProductsGridCols(col.val)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            productsGridCols === col.val
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {col.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Image Aspect Ratio */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'أبعاد صورة الكرت (Aspect Ratio)' : 'Card Image Ratio'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'portrait', label: isAr ? '3:4 عمودي' : 'Portrait' },
+                        { id: 'square', label: isAr ? '1:1 مربع' : 'Square' },
+                        { id: 'tall', label: isAr ? '2:3 طويل' : 'Tall' },
+                      ].map((asp) => (
+                        <button
+                          key={asp.id}
+                          type="button"
+                          onClick={() => setCardImageAspect(asp.id as any)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            cardImageAspect === asp.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {asp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Image Fit */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'طريقة عرض الصورة بالكرت (Fit)' : 'Card Image Fit'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'cover', label: isAr ? 'ملء الكرت (Cover)' : 'Cover' },
+                        { id: 'contain', label: isAr ? 'كاملة (Contain)' : 'Contain' },
+                      ].map((fit) => (
+                        <button
+                          key={fit.id}
+                          type="button"
+                          onClick={() => setCardImageFit(fit.id as any)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            cardImageFit === fit.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {fit.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Container Width & Spacing Customizer */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'أبعاد الحاوية الرئيسية (Container Width)' : 'Container Width'}
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'boxed_compact', label: isAr ? 'ملموم (1024px)' : 'Compact' },
+                        { id: 'boxed_standard', label: isAr ? 'قياسي (1280px)' : 'Standard' },
+                        { id: 'wide', label: isAr ? 'عريض (1440px)' : 'Wide' },
+                        { id: 'full_width', label: isAr ? 'ملء الشاشة (100%)' : 'Full Width' },
+                      ].map((w) => (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => setContainerWidth(w.id as any)}
+                          className={`py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            containerWidth === w.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {w.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'المسافات الرأسية بين الأقسام (Section Spacing)' : 'Section Spacing'}
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'compact', label: isAr ? 'مضغوط' : 'Compact' },
+                        { id: 'standard', label: isAr ? 'متوازن' : 'Standard' },
+                        { id: 'relaxed', label: isAr ? 'متباعد' : 'Relaxed' },
+                      ].map((sp) => (
+                        <button
+                          key={sp.id}
+                          type="button"
+                          onClick={() => setContainerSpacing(sp.id as any)}
+                          className={`flex-1 py-2 px-1 text-center rounded-xl text-xs font-bold border transition ${
+                            containerSpacing === sp.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {sp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* TAB 4: BANNERS & TEXT */}
-          {activeTab === 'banners' && (
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div>
-                <h4 className="font-extrabold text-sm mb-1">{isAr ? 'عناوين ونصوص البنر الرئيسي' : 'Hero Banner Texts'}</h4>
-                <p className="text-xs text-slate-500 mb-4">
-                  {isAr ? 'العنوان الجذاب الذي يظهر في صدارة متجرك لجميع الزوار' : 'The key headline visitors see first'}
+          {/* ==================== TAB 4: MEDIA LIBRARY ==================== */}
+          {activeTab === 'media' && (
+            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-extrabold text-base mb-1">{isAr ? 'مكتبة وسائط المتجر والصور' : 'Storefront Media Library'}</h4>
+                  <p className="text-xs text-slate-500">
+                    {isAr ? 'رفع صور البنرات، الشعار، والمنتجات وتخزينها سحابياً بأمان مع ربطها المباشر بالقوالب' : 'Upload and manage banner, logo & catalog assets securely'}
+                  </p>
+                </div>
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    className="hidden"
+                    onChange={handleUploadFile}
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={isUploadingMedia}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingMedia ? (isAr ? 'جاري الرفع...' : 'Uploading...') : (isAr ? 'رفع صور جديدة' : 'Upload Images')}</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingOver(true);
+                }}
+                onDragLeave={() => setIsDraggingOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingOver(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    handleUploadFiles(e.dataTransfer.files);
+                  }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-6 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all ${
+                  isDraggingOver
+                    ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-inner'
+                    : 'border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 hover:border-blue-400'
+                }`}
+              >
+                <Upload className="w-8 h-8 text-blue-500 mx-auto mb-2 opacity-80" />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  {isAr ? 'اضغط لاختيار الصور أو اسحبها وأفلتها هنا مباشرة' : 'Click to select or drag and drop images here'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {isAr ? 'يدعم JPG, PNG, WebP حتى 5 ميجابايت لكل صورة — إمكانية رفع عدة صور دفعة واحدة' : 'Supports JPG, PNG, WebP up to 5MB each — multi-file upload ready'}
                 </p>
               </div>
 
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-bold mb-1">{isAr ? 'عنوان البنر الترويجي' : 'Banner Title'}</label>
+              {/* Import from Web URL or Pinterest */}
+              <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {isAr ? 'استيراد صورة من رابط ويب أو Pinterest' : 'Import from Web URL or Pinterest'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-semibold px-2 py-0.5 rounded-full">
+                    {isAr ? 'يدعم روابط Pinterest الذكية' : 'Pinterest Smart Resolver'}
+                  </span>
+                </div>
+                <div className="flex gap-2">
                   <input
-                    type="text"
-                    value={bannerTitle}
-                    onChange={(e) => setBannerTitle(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    type="url"
+                    value={importUrlInput}
+                    onChange={(e) => setImportUrlInput(e.target.value)}
+                    placeholder={
+                      isAr
+                        ? 'ضع رابط Pinterest (مثل: https://pin.it/...) أو رابط صورة مباشر (.jpg, .png, .webp)'
+                        : 'Paste Pinterest link (e.g. https://pin.it/...) or direct image URL'
+                    }
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono"
                   />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={isImportingUrl || !importUrlInput.trim()}
+                    onClick={() => handleImportMediaUrl(importUrlInput, 'general')}
+                    className="text-xs shrink-0 flex items-center gap-1.5"
+                  >
+                    {isImportingUrl ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>{isAr ? 'جاري الاستيراد...' : 'Importing...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'استيراد وحفظ' : 'Import & Save'}</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  {isAr
+                    ? '💡 نصيحة: عند وضع رابط من Pinterest، يقوم النظام تلقائياً بفك الرابط وتحميل الصورة الأصلية بأعلى جودة وحفظها في خادمك.'
+                    : '💡 Tip: Pasting a Pinterest link will automatically resolve and download the original high-res image.'}
+                </p>
+              </div>
+
+              {/* Upload Progress Alert */}
+              {uploadProgress && (
+                <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span>{uploadProgress}</span>
+                </div>
+              )}
+
+              {/* Media Grid */}
+              {mediaList.length === 0 ? (
+                <div className="py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-3">
+                  <ImageIcon className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="text-xs text-slate-500">{isAr ? 'لا توجد صور مرفوعة في مكتبة الوسائط حتى الآن' : 'No media uploaded yet'}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs"
+                  >
+                    {isAr ? 'اضغط لرفع أول صورة' : 'Click to upload first image'}
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {mediaList.map((media, idx) => (
+                    <div
+                      key={media.id || idx}
+                      className="group relative rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between"
+                    >
+                      <div className="h-28 w-full bg-slate-200 dark:bg-slate-700 relative overflow-hidden">
+                        <img
+                          src={api.getMediaUrl(media.url)}
+                          alt={media.filename || 'Media'}
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        {media.width && media.height && (
+                          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white font-mono text-[9px] backdrop-blur-xs">
+                            {media.width}x{media.height}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-2.5 space-y-2">
+                        <p className="text-[10px] font-bold truncate">{media.original_name || media.filename}</p>
+                        <div className="flex items-center justify-between text-[9px] text-slate-400">
+                          <span>{media.size ? `${Math.round(media.size / 1024)} KB` : 'Image'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(api.getMediaUrl(media.url));
+                              setSuccessMsg(isAr ? 'تم نسخ رابط الصورة إلى الحافظة' : 'Image URL copied!');
+                            }}
+                            className="hover:text-blue-500 flex items-center gap-1"
+                            title="Copy URL"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>{isAr ? 'نسخ' : 'Copy'}</span>
+                          </button>
+                        </div>
+
+                        {/* Quick Assign Buttons */}
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-wrap gap-1 text-[9px]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHeroBanner({ ...heroBanner, desktop_image: media.url });
+                              setSuccessMsg(isAr ? 'تم تعيين الصورة كبنر رئيسي للديسكتوب' : 'Set as Desktop Banner');
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-600 font-bold hover:bg-blue-100"
+                          >
+                            {isAr ? 'بنر رئيسي' : 'Hero'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHeroBanner({ ...heroBanner, mobile_image: media.url });
+                              setSuccessMsg(isAr ? 'تم تعيين الصورة كبنر للموبايل' : 'Set as Mobile Banner');
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950 text-amber-600 font-bold hover:bg-amber-100"
+                          >
+                            {isAr ? 'موبايل' : 'Mobile'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLogoUrl(media.url);
+                              setSuccessMsg(isAr ? 'تم تعيين الصورة كشعار المتجر' : 'Set as Logo');
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950 text-emerald-600 font-bold hover:bg-emerald-100"
+                          >
+                            {isAr ? 'شعار' : 'Logo'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMedia(media.path || media.url)}
+                            className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950 text-rose-600 hover:bg-rose-100 ms-auto"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ==================== TAB 5: NAVIGATION & LOGO ==================== */}
+          {activeTab === 'navigation' && (
+            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              <div>
+                <h4 className="font-extrabold text-base mb-1">{isAr ? 'إدارة القوائم والشعار والهيدر' : 'Navigation & Header Configuration'}</h4>
+                <p className="text-xs text-slate-500">
+                  {isAr ? 'التحكم في روابط القائمة الرئيسية، شريط الإعلانات، والشعار الرسمي' : 'Manage navigation menus, links and top announcement'}
+                </p>
+              </div>
+
+              {/* Logo URL */}
+              <div className="space-y-3 text-xs p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <input
+                  ref={logoFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={handleUploadLogoFile}
+                />
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold">{isAr ? 'شعار المتجر الرسمي (Official Store Logo)' : 'Official Store Logo'}</label>
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="text-rose-500 hover:text-rose-700 text-xs flex items-center gap-1 font-semibold"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isAr ? 'حذف الشعار' : 'Remove'}</span>
+                    </button>
+                  )}
                 </div>
 
+                {/* Direct Upload Button */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingMedia}
+                    onClick={() => logoFileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1.5 border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingMedia ? (isAr ? 'جاري رفع الشعار...' : 'Uploading...') : (isAr ? 'رفع ملف شعار من جهازك' : 'Upload Logo from PC')}</span>
+                  </Button>
+                  <span className="text-[10px] text-slate-400">{isAr ? 'أو ضع رابط صورة أو Pinterest أدناه:' : 'Or enter URL below:'}</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    placeholder="https://.../logo.png أو رابط من Pinterest أو مكتبة الوسائط"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                  />
+                  {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com') || logoUrl.startsWith('http')) && !logoUrl.startsWith('/storage') && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={isImportingUrl}
+                      onClick={() => handleImportMediaUrl(logoUrl, 'logo', true)}
+                      className="text-xs shrink-0 flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+                      title={isAr ? 'تحميل وحفظ الصورة في الخادم وتعيينها كشعار' : 'Download and save as logo'}
+                    >
+                      {isImportingUrl ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>{isAr ? 'جاري الاستيراد...' : 'Importing...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'استيراد وحفظ كشعار' : 'Import as Logo'}</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="p-2.5 text-rose-500 hover:bg-rose-50 rounded-xl"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Pinterest Detection Tip */}
+                {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com')) && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] flex items-center justify-between">
+                    <span>{isAr ? '💡 تم اكتشاف رابط Pinterest! اضغط على زر "استيراد وحفظ كشعار" لتحميل الصورة الأصلية فوراً.' : '💡 Pinterest link detected! Click "Import as Logo" to download.'}</span>
+                  </div>
+                )}
+
+                {logoUrl && (
+                  <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="h-12 w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-1 overflow-hidden">
+                      <img
+                        src={api.getMediaUrl(logoUrl)}
+                        alt="Logo Preview"
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+                        }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">{isAr ? 'معاينة الشعار الحالي' : 'Current Logo Preview'}</p>
+                      <p className="text-[10px] text-slate-400">{isAr ? 'يظهر في أعلى الهيدر بجميع صفحات المتجر' : 'Displays in header across all storefront pages'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {mediaList.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر الشعار من مكتبة الوسائط المرفوعة:' : 'Or pick logo from uploaded media:'}</span>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {mediaList.slice(0, 6).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setLogoUrl(m.url)}
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-blue-500 transition cursor-pointer p-0.5 bg-white dark:bg-slate-900"
+                          title={m.title || m.filename}
+                        >
+                          <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Announcement Bar */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="font-bold text-xs">{isAr ? 'شريط الإعلانات العلوي' : 'Top Announcement Bar'}</h5>
+                    <p className="text-[10px] text-slate-400">{isAr ? 'يظهر في أعلى صفحات المتجر' : 'Top bar across storefront'}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={announcementEnabled}
+                      onChange={(e) => setAnnouncementEnabled(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
+                {announcementEnabled && (
+                  <input
+                    type="text"
+                    value={announcementText}
+                    onChange={(e) => setAnnouncementText(e.target.value)}
+                    placeholder={isAr ? 'نص الإعلان أو العرض...' : 'Announcement text...'}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                  />
+                )}
+              </div>
+
+              {/* Navigation Links List */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                <h5 className="font-bold text-xs">{isAr ? 'روابط القائمة الرئيسية (Main Menu)' : 'Header Navigation Links'}</h5>
+                <div className="space-y-2">
+                  {headerLinks.map((link, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Link className="w-4 h-4 text-slate-400" />
+                        <span className="font-bold">{isAr ? link.label_ar : link.label_en}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">({link.view})</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={link.enabled}
+                          onChange={(e) => {
+                            const updated = headerLinks.map((l, i) => (i === idx ? { ...l, enabled: e.target.checked } : l));
+                            setHeaderLinks(updated);
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== TAB 6: CONTENT & PAGES ==================== */}
+          {activeTab === 'content' && (
+            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-8">
+              <div>
+                <h4 className="font-extrabold text-base mb-1">{isAr ? 'الصفحات المخصصة، الفوتر، وبيانات المصنع' : 'Custom Pages, Footer Studio & Contact'}</h4>
+                <p className="text-xs text-slate-500">
+                  {isAr ? 'إنشاء صفحات جديدة غير محدودة، التحكم الكامل في الفوتر، وتحديث بيانات التواصل الرسمية' : 'Create custom pages, customize footer elements, and manage contact channels'}
+                </p>
+              </div>
+
+              {/* ----------------- 1. CUSTOM PAGES BUILDER ----------------- */}
+              <div className="p-5 rounded-2xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/30 dark:bg-blue-950/20 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h5 className="font-extrabold text-sm flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                      <FileText className="w-4 h-4" />
+                      <span>{isAr ? 'مدير الصفحات المخصصة (Custom Pages Builder)' : 'Custom Pages Builder'}</span>
+                    </h5>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {isAr ? 'أضف صفحات غير محدودة (عن خطوط الإنتاج، دليل الأقمشة، مواصفات التوريد، إلخ)' : 'Add independent custom content pages to your storefront'}
+                    </p>
+                  </div>
+
+                  {!isPageFormOpen && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={handleOpenNewPageForm}
+                      className="text-xs rounded-xl self-start sm:self-auto"
+                    >
+                      <Plus className="w-3.5 h-3.5 me-1" />
+                      <span>{isAr ? 'إضافة صفحة جديدة' : 'Add New Page'}</span>
+                    </Button>
+                  )}
+                </div>
+
+                {/* Inline Page Editor Form */}
+                {isPageFormOpen && (
+                  <div className="p-4 rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 shadow-sm space-y-4 text-xs">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                      <span className="font-bold text-sm text-blue-600 dark:text-blue-400">
+                        {editingPageId ? (isAr ? 'تعديل الصفحة' : 'Edit Page') : (isAr ? 'إنشاء صفحة جديدة' : 'Create New Page')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setIsPageFormOpen(false); setEditingPageId(null); }}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold mb-1">{isAr ? 'عنوان الصفحة (عربي) *' : 'Page Title (Arabic) *'}</label>
+                        <input
+                          type="text"
+                          value={pageForm.title_ar}
+                          onChange={(e) => setPageForm({ ...pageForm, title_ar: e.target.value })}
+                          placeholder={isAr ? 'مثال: جولة داخل المصنع' : 'Arabic title...'}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">{isAr ? 'عنوان الصفحة (English)' : 'Page Title (English)'}</label>
+                        <input
+                          type="text"
+                          value={pageForm.title_en}
+                          onChange={(e) => setPageForm({ ...pageForm, title_en: e.target.value })}
+                          placeholder="e.g. Factory Tour"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold mb-1">{isAr ? 'الرابط التعريفي (Slug) *' : 'URL Slug *'}</label>
+                        <input
+                          type="text"
+                          value={pageForm.slug}
+                          onChange={(e) => setPageForm({ ...pageForm, slug: e.target.value })}
+                          placeholder="e.g. factory-tour"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[11px]"
+                        />
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          {isAr ? 'الرابط: #/store/:tenant/page/SLUG' : 'URL will be: #/store/:tenant/page/SLUG'}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">{isAr ? 'رابط صورة الغلاف (Featured Image)' : 'Featured Image'}</label>
+                        <input
+                          type="text"
+                          value={pageForm.featured_image}
+                          onChange={(e) => setPageForm({ ...pageForm, featured_image: e.target.value })}
+                          placeholder="https://... or media path"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold mb-1">{isAr ? 'وصف فرعي / مقدمة (عربي)' : 'Subtitle (Arabic)'}</label>
+                        <input
+                          type="text"
+                          value={pageForm.subtitle_ar}
+                          onChange={(e) => setPageForm({ ...pageForm, subtitle_ar: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">{isAr ? 'وصف فرعي / مقدمة (English)' : 'Subtitle (English)'}</label>
+                        <input
+                          type="text"
+                          value={pageForm.subtitle_en}
+                          onChange={(e) => setPageForm({ ...pageForm, subtitle_en: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold">{isAr ? 'نص المحتوى (عربي)' : 'Body Content (Arabic)'}</label>
+                        <span className="text-[10px] text-slate-400">
+                          {isAr ? 'يدعم العناوين بالـ (#) والنقاط بالـ (-)' : 'Supports # headers and - bullets'}
+                        </span>
+                      </div>
+                      <textarea
+                        rows={5}
+                        value={pageForm.content_ar}
+                        onChange={(e) => setPageForm({ ...pageForm, content_ar: e.target.value })}
+                        placeholder={isAr ? 'اكتب محتوى الصفحة هنا...' : 'Write page content...'}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-6 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={pageForm.show_in_header}
+                          onChange={(e) => setPageForm({ ...pageForm, show_in_header: e.target.checked })}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {isAr ? 'إظهار رابط الصفحة في قائمة الهيدر' : 'Show in Header Menu'}
+                        </span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={pageForm.show_in_footer}
+                          onChange={(e) => setPageForm({ ...pageForm, show_in_footer: e.target.checked })}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {isAr ? 'إظهار رابط الصفحة في الفوتر' : 'Show in Footer Links'}
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button size="sm" variant="primary" onClick={handleSavePageForm} className="text-xs rounded-xl">
+                        <Check className="w-3.5 h-3.5 me-1" />
+                        <span>{editingPageId ? (isAr ? 'تحديث الصفحة' : 'Update Page') : (isAr ? 'حفظ الصفحة' : 'Save Page')}</span>
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setIsPageFormOpen(false); setEditingPageId(null); }} className="text-xs">
+                        <span>{isAr ? 'إلغاء' : 'Cancel'}</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* List of Created Custom Pages */}
+                {customPages.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 bg-white/60 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-300 dark:border-slate-800">
+                    {isAr ? 'لا توجد صفحات مخصصة حالياً. اضغط على "إضافة صفحة جديدة" للبدء.' : 'No custom pages yet. Click Add New Page to create one.'}
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {customPages.map((page) => (
+                      <div
+                        key={page.id}
+                        className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-900 dark:text-white">
+                              {isAr ? page.title_ar || page.title : page.title_en || page.title_ar || page.title}
+                            </span>
+                            <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
+                              /page/{page.slug || page.id}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            {page.show_in_header && <span className="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 px-1.5 py-0.2 rounded font-semibold">{isAr ? 'الهيدر' : 'Header'}</span>}
+                            {page.show_in_footer && <span className="bg-sky-50 dark:bg-sky-950 text-sky-600 px-1.5 py-0.2 rounded font-semibold">{isAr ? 'الفوتر' : 'Footer'}</span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => handleEditPage(page)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+                            title={isAr ? 'تعديل الصفحة' : 'Edit Page'}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePage(page.id)}
+                            className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-500"
+                            title={isAr ? 'حذف الصفحة' : 'Delete Page'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ----------------- 2. FOOTER FULL CUSTOMIZER ----------------- */}
+              <div className="p-5 rounded-2xl border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/20 dark:bg-indigo-950/20 space-y-4">
                 <div>
-                  <label className="block font-bold mb-1">{isAr ? 'النص التوضيحي للبنر' : 'Banner Subtitle'}</label>
+                  <h5 className="font-extrabold text-sm flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
+                    <Layout className="w-4 h-4" />
+                    <span>{isAr ? 'استوديو تخصيص الفوتر بالكامل (Footer Customizer)' : 'Footer Full Customizer'}</span>
+                  </h5>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {isAr ? 'التحكم في ظهور الشعار، نصوص الوصف، شارات القيمة والضمان، وحقوق النشر' : 'Control logo, description, value badges and copyright in footer'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  {/* Show Logo in Footer */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold block">{isAr ? 'عرض الشعار الرسمي في الفوتر' : 'Display Logo in Footer'}</span>
+                      <span className="text-[10px] text-slate-400">{isAr ? 'إظهار شعار المصنع بجوار الوصف' : 'Show factory logo above footer description'}</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={footerShowLogo}
+                        onChange={(e) => setFooterShowLogo(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Show Badges in Footer */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold block">{isAr ? 'عرض شريط شارات القيمة والضمان' : 'Display Value Badges Bar'}</span>
+                      <span className="text-[10px] text-slate-400">{isAr ? 'الشريط العلوي في الفوتر (شحن، استبدال، جودة)' : 'Top row with trust icons in footer'}</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={footerShowBadges}
+                        onChange={(e) => setFooterShowBadges(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Footer Custom Description */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block font-bold mb-1">{isAr ? 'وصف الفوتر المخصص (عربي)' : 'Footer Description (Arabic)'}</label>
+                    <textarea
+                      rows={2}
+                      value={footerDescAr}
+                      onChange={(e) => setFooterDescAr(e.target.value)}
+                      placeholder={isAr ? 'منصة بيع مباشرة متصلة بخطوط إنتاج مصنعنا...' : 'Arabic description...'}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold mb-1">{isAr ? 'وصف الفوتر المخصص (English)' : 'Footer Description (English)'}</label>
+                    <textarea
+                      rows={2}
+                      value={footerDescEn}
+                      onChange={(e) => setFooterDescEn(e.target.value)}
+                      placeholder="Direct-to-consumer & B2B storefront..."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Badges Customizer */}
+                {footerShowBadges && (
+                  <div className="space-y-3 pt-2">
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {isAr ? 'شارات القيمة والضمان (3 شارات)' : 'Value Badges (3 Badges)'}
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {footerBadges.map((badge, bIdx) => (
+                        <div key={bIdx} className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-700 dark:text-slate-300">#{bIdx + 1}</span>
+                            <div className="flex items-center gap-1.5">
+                              {/* Icon Select */}
+                              <select
+                                value={badge.icon || 'truck'}
+                                onChange={(e) => {
+                                  const updated = [...footerBadges];
+                                  updated[bIdx] = { ...updated[bIdx], icon: e.target.value };
+                                  setFooterBadges(updated);
+                                }}
+                                className="text-[10px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                              >
+                                <option value="truck">🚚 {isAr ? 'شحن' : 'Truck'}</option>
+                                <option value="rotate">🔄 {isAr ? 'استبدال' : 'Exchange'}</option>
+                                <option value="shield">🛡️ {isAr ? 'أمان وضمان' : 'Shield'}</option>
+                                <option value="factory">🏭 {isAr ? 'مصنع' : 'Factory'}</option>
+                                <option value="award">🏆 {isAr ? 'جودة وتصدير' : 'Award'}</option>
+                                <option value="package">📦 {isAr ? 'تغليف وتوريد' : 'Package'}</option>
+                              </select>
+
+                              {/* Color Select */}
+                              <select
+                                value={badge.color || 'blue'}
+                                onChange={(e) => {
+                                  const updated = [...footerBadges];
+                                  updated[bIdx] = { ...updated[bIdx], color: e.target.value };
+                                  setFooterBadges(updated);
+                                }}
+                                className="text-[10px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                              >
+                                <option value="blue">Blue</option>
+                                <option value="emerald">Emerald</option>
+                                <option value="amber">Amber</option>
+                                <option value="indigo">Indigo</option>
+                                <option value="rose">Rose</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <input
+                            type="text"
+                            value={badge.title_ar}
+                            onChange={(e) => {
+                              const updated = [...footerBadges];
+                              updated[bIdx] = { ...updated[bIdx], title_ar: e.target.value };
+                              setFooterBadges(updated);
+                            }}
+                            placeholder={isAr ? 'العنوان بالعربي' : 'Title Ar'}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px]"
+                          />
+                          <input
+                            type="text"
+                            value={badge.desc_ar}
+                            onChange={(e) => {
+                              const updated = [...footerBadges];
+                              updated[bIdx] = { ...updated[bIdx], desc_ar: e.target.value };
+                              setFooterBadges(updated);
+                            }}
+                            placeholder={isAr ? 'الوصف بالعربي' : 'Desc Ar'}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Copyright */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2">
+                  <div>
+                    <label className="block font-bold mb-1">{isAr ? 'نص حقوق النشر (عربي)' : 'Copyright Text (Arabic)'}</label>
+                    <input
+                      type="text"
+                      value={footerCopyrightAr}
+                      onChange={(e) => setFooterCopyrightAr(e.target.value)}
+                      placeholder="© {year} اسم المصنع. جميع الحقوق محفوظة."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold mb-1">{isAr ? 'نص حقوق النشر (English)' : 'Copyright Text (English)'}</label>
+                    <input
+                      type="text"
+                      value={footerCopyrightEn}
+                      onChange={(e) => setFooterCopyrightEn(e.target.value)}
+                      placeholder="© {year} Factory Name. All rights reserved."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ----------------- 3. FACTORY STORY & CONTACT ----------------- */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                <h5 className="font-extrabold text-sm">{isAr ? 'قصة المصنع وبيانات التواصل' : 'Factory Story & Direct Lines'}</h5>
+
+                {/* About Us Story */}
+                <div className="space-y-2 text-xs">
+                  <label className="block font-bold">{isAr ? 'قصة ورسالة المصنع (About Page Story)' : 'Factory Story'}</label>
                   <textarea
-                    rows={3}
-                    value={bannerSubtitle}
-                    onChange={(e) => setBannerSubtitle(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    rows={4}
+                    value={aboutStory}
+                    onChange={(e) => setAboutStory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold mb-1">{isAr ? 'نص زر الشراء الرئيسي (CTA Button)' : 'CTA Button Text'}</label>
-                  <input
-                    type="text"
-                    value={ctaText}
-                    onChange={(e) => setCtaText(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-                  />
+                {/* Direct Contact Numbers */}
+                <div className="space-y-4 text-xs pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold mb-1">{isAr ? 'رقم الواتساب السريع' : 'WhatsApp Number'}</label>
+                      <input
+                        type="text"
+                        value={contactInfo.whatsapp}
+                        onChange={(e) => setContactInfo({ ...contactInfo, whatsapp: e.target.value })}
+                        placeholder="+201XXXXXXXXX"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">{isAr ? 'هاتف خدمة العملاء' : 'Customer Phone'}</label>
+                      <input
+                        type="text"
+                        value={contactInfo.phone}
+                        onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                        placeholder="+201XXXXXXXXX"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">{isAr ? 'البريد الإلكتروني' : 'Support Email'}</label>
+                      <input
+                        type="email"
+                        value={contactInfo.email}
+                        onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">{isAr ? 'مواعيد العمل الرسمية' : 'Working Hours'}</label>
+                      <input
+                        type="text"
+                        value={contactInfo.working_hours}
+                        onChange={(e) => setContactInfo({ ...contactInfo, working_hours: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold mb-1">{isAr ? 'عنوان المصنع والمقر الرئيسي' : 'Factory Physical Address'}</label>
+                    <input
+                      type="text"
+                      value={contactInfo.address}
+                      onChange={(e) => setContactInfo({ ...contactInfo, address: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    />
+                  </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== TAB 7: BRANDING & FONTS ==================== */}
+          {activeTab === 'branding' && (
+            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              <div>
+                <h4 className="font-extrabold text-base mb-1">{isAr ? 'الألوان والخطوط وهوية المتجر' : 'Branding & Color Palettes'}</h4>
+                <p className="text-xs text-slate-500">
+                  {isAr ? 'تخصيص الألوان الأساسية، الشعار الرسمي، ونوع الخط العربي للمتجر' : 'Select color theme, official logo, and typography'}
+                </p>
+              </div>
+
+              {/* Official Store Logo */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold">{isAr ? 'شعار المتجر الرسمي (Official Store Logo)' : 'Official Store Logo'}</label>
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="text-rose-500 hover:text-rose-700 text-xs flex items-center gap-1 font-semibold"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isAr ? 'حذف الشعار' : 'Remove'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Direct Upload Button */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingMedia}
+                    onClick={() => logoFileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1.5 border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-50"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingMedia ? (isAr ? 'جاري رفع الشعار...' : 'Uploading...') : (isAr ? 'رفع ملف شعار من جهازك' : 'Upload Logo from PC')}</span>
+                  </Button>
+                  <span className="text-[10px] text-slate-400">{isAr ? 'أو ضع رابط صورة أو Pinterest أدناه:' : 'Or enter URL below:'}</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    placeholder="https://.../logo.png أو رابط من Pinterest أو مكتبة الوسائط"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                  />
+                  {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com') || logoUrl.startsWith('http')) && !logoUrl.startsWith('/storage') && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={isImportingUrl}
+                      onClick={() => handleImportMediaUrl(logoUrl, 'logo', true)}
+                      className="text-xs shrink-0 flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+                      title={isAr ? 'تحميل وحفظ الصورة في الخادم وتعيينها كشعار' : 'Download and save as logo'}
+                    >
+                      {isImportingUrl ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>{isAr ? 'جاري الاستيراد...' : 'Importing...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'استيراد وحفظ كشعار' : 'Import as Logo'}</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl('')}
+                      className="p-2.5 text-rose-500 hover:bg-rose-50 rounded-xl"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Pinterest Detection Tip */}
+                {logoUrl && (logoUrl.includes('pin.it') || logoUrl.includes('pinterest.com')) && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[11px] flex items-center justify-between">
+                    <span>{isAr ? '💡 تم اكتشاف رابط Pinterest! اضغط على زر "استيراد وحفظ كشعار" لتحميل الصورة الأصلية فوراً.' : '💡 Pinterest link detected! Click "Import as Logo" to download.'}</span>
+                  </div>
+                )}
+
+                {logoUrl && (
+                  <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="h-12 w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-1 overflow-hidden">
+                      <img
+                        src={api.getMediaUrl(logoUrl)}
+                        alt="Logo Preview"
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+                        }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">{isAr ? 'معاينة الشعار الحالي' : 'Current Logo Preview'}</p>
+                      <p className="text-[10px] text-slate-400">{isAr ? 'يظهر في أعلى الهيدر بجميع صفحات المتجر' : 'Displays in header across all storefront pages'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {mediaList.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-slate-400 block">{isAr ? 'أو اختر الشعار من مكتبة الوسائط المرفوعة:' : 'Or pick logo from uploaded media:'}</span>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {mediaList.slice(0, 6).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setLogoUrl(m.url)}
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0 hover:ring-2 hover:ring-blue-500 transition cursor-pointer p-0.5 bg-white dark:bg-slate-900"
+                          title={m.title || m.filename}
+                        >
+                          <img src={api.getMediaUrl(m.url)} alt="thumb" className="w-full h-full object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Preset Color Schemes */}
+              <div>
+                <label className="block text-xs font-bold mb-2">{isAr ? 'أنظمة الألوان الجاهزة (Quick Presets)' : 'Preset Palettes'}</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {presetPalettes.map((p, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setPrimaryColor(p.primary);
+                        setSecondaryColor(p.secondary);
+                        setAccentColor(p.accent);
+                      }}
+                      className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-400 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-[11px] truncate">{p.name}</span>
+                      <div className="flex gap-1 shrink-0">
+                        <span style={{ backgroundColor: p.primary }} className="w-3.5 h-3.5 rounded-full inline-block border border-white" />
+                        <span style={{ backgroundColor: p.secondary }} className="w-3.5 h-3.5 rounded-full inline-block border border-white" />
+                        <span style={{ backgroundColor: p.accent }} className="w-3.5 h-3.5 rounded-full inline-block border border-white" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Color Pickers */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs">
+                <div>
+                  <label className="block font-bold mb-1.5">{isAr ? 'اللون الرئيسي (Primary)' : 'Primary Color'}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="w-10 h-10 rounded-xl cursor-pointer border border-slate-300 dark:border-slate-700"
+                    />
+                    <input
+                      type="text"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1.5">{isAr ? 'اللون الثانوي (Secondary)' : 'Secondary Color'}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={secondaryColor}
+                      onChange={(e) => setSecondaryColor(e.target.value)}
+                      className="w-10 h-10 rounded-xl cursor-pointer border border-slate-300 dark:border-slate-700"
+                    />
+                    <input
+                      type="text"
+                      value={secondaryColor}
+                      onChange={(e) => setSecondaryColor(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1.5">{isAr ? 'لون اللمسات التمييزية (Accent)' : 'Accent Color'}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={accentColor}
+                      onChange={(e) => setAccentColor(e.target.value)}
+                      className="w-10 h-10 rounded-xl cursor-pointer border border-slate-300 dark:border-slate-700"
+                    />
+                    <input
+                      type="text"
+                      value={accentColor}
+                      onChange={(e) => setAccentColor(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Elementor Canvas & Card Color Styler */}
+              <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-5">
+                <div>
+                  <h5 className="font-extrabold text-xs mb-1 flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
+                    <Palette className="w-4 h-4" />
+                    <span>{isAr ? 'تخصيص ألوان الخلفيات والكروت (Canvas & Cards Theme)' : 'Canvas & Card Theme Styler'}</span>
+                  </h5>
+                  <p className="text-[11px] text-slate-500">
+                    {isAr ? 'تحكم دقيق في لون خلفية المتجر، ألوان الكروت، حوافها، والظلال' : 'Full control over body background, card containers, and styling'}
+                  </p>
+                </div>
+
+                {/* 1. Page Background Color */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {isAr ? 'لون خلفية المتجر العامة (Canvas / Page Background)' : 'Store Page Background'}
+                    </label>
+                    {pageBgColor && (
+                      <button
+                        type="button"
+                        onClick={() => setPageBgColor('')}
+                        className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                      >
+                        {isAr ? 'إعادة ضبط للافتراضي' : 'Reset to default'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      {[
+                        { val: '#ffffff', label: isAr ? 'أبيض ناصع' : 'White' },
+                        { val: '#f8fafc', label: isAr ? 'رمادي هادئ' : 'Soft Slate' },
+                        { val: '#fafaf9', label: isAr ? 'كريمي دافئ' : 'Warm Stone' },
+                        { val: '#0f172a', label: isAr ? 'داكن كحلي' : 'Dark Navy' },
+                      ].map((bg) => (
+                        <button
+                          key={bg.val}
+                          type="button"
+                          onClick={() => setPageBgColor(bg.val)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border flex items-center gap-1.5 transition ${
+                            pageBgColor === bg.val
+                              ? 'border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
+                          }`}
+                        >
+                          <span style={{ backgroundColor: bg.val }} className="w-3 h-3 rounded-full border border-slate-300 inline-block" />
+                          <span>{bg.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="color"
+                      value={pageBgColor || '#f8fafc'}
+                      onChange={(e) => setPageBgColor(e.target.value)}
+                      className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700 shrink-0"
+                      title={isAr ? 'اختر لون مخصص' : 'Custom Color'}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Product Card Styling & Colors */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-indigo-100 dark:border-indigo-900/30">
+                  {/* Card Background Color */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون خلفية كروت المنتجات' : 'Card Background'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={cardBgColor || '#ffffff'}
+                        onChange={(e) => setCardBgColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={cardBgColor}
+                        onChange={(e) => setCardBgColor(e.target.value)}
+                        placeholder="#ffffff (افتراضي)"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {cardBgColor && (
+                        <button
+                          type="button"
+                          onClick={() => setCardBgColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Border Color */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون إطار الكرت' : 'Card Border Color'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={cardBorderColor || '#e2e8f0'}
+                        onChange={(e) => setCardBorderColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={cardBorderColor}
+                        onChange={(e) => setCardBorderColor(e.target.value)}
+                        placeholder="#e2e8f0 (افتراضي)"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {cardBorderColor && (
+                        <button
+                          type="button"
+                          onClick={() => setCardBorderColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Card Radius & Shadow */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Border Radius */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'استدارة حواف الكرت (Radius)' : 'Border Radius'}
+                    </label>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: 'none', label: isAr ? 'حادة' : 'Sharp' },
+                        { id: 'sm', label: isAr ? 'ناعمة' : 'Soft' },
+                        { id: 'md', label: isAr ? 'مستديرة' : 'Rounded' },
+                        { id: 'full', label: isAr ? 'دائرية' : 'Pill' },
+                      ].map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setCardBorderRadius(r.id as any)}
+                          className={`flex-1 py-1.5 text-center rounded-lg text-xs font-bold border transition ${
+                            cardBorderRadius === r.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card Shadow */}
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'ظلال الكروت (Shadow)' : 'Card Shadow'}
+                    </label>
+                    <div className="flex gap-1.5">
+                      {[
+                        { id: 'none', label: isAr ? 'مسطح' : 'Flat' },
+                        { id: 'sm', label: isAr ? 'خفيف' : 'Subtle' },
+                        { id: 'md', label: isAr ? 'متوسط' : 'Medium' },
+                        { id: 'lg', label: isAr ? 'مجسم 3D' : 'Elevated' },
+                      ].map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setCardShadow(s.id as any)}
+                          className={`flex-1 py-1.5 text-center rounded-lg text-xs font-bold border transition ${
+                            cardShadow === s.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Header & Footer Background Colors */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-indigo-100 dark:border-indigo-900/30">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون خلفية شريط الهيدر (Header BG)' : 'Header Background'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={headerBgColor || '#ffffff'}
+                        onChange={(e) => setHeaderBgColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={headerBgColor}
+                        onChange={(e) => setHeaderBgColor(e.target.value)}
+                        placeholder={isAr ? 'افتراضي الثيم' : 'Default theme'}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {headerBgColor && (
+                        <button
+                          type="button"
+                          onClick={() => setHeaderBgColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1 text-slate-700 dark:text-slate-300">
+                      {isAr ? 'لون خلفية الفوتر (Footer BG)' : 'Footer Background'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={footerBgColor || '#020617'}
+                        onChange={(e) => setFooterBgColor(e.target.value)}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={footerBgColor}
+                        onChange={(e) => setFooterBgColor(e.target.value)}
+                        placeholder={isAr ? 'افتراضي داكن' : 'Default dark'}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs"
+                      />
+                      {footerBgColor && (
+                        <button
+                          type="button"
+                          onClick={() => setFooterBgColor('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isAr ? 'إلغاء' : 'Clear'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Typography */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                <label className="block text-xs font-bold mb-1.5">{isAr ? 'عائلة الخط العربي (Font Family)' : 'Arabic Font Family'}</label>
+                <select
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                >
+                  <option value="Cairo, sans-serif">Cairo (عصري ومقروء - الافتراضي للمصانع)</option>
+                  <option value="Tajawal, sans-serif">Tajawal (ناعم وأنيق للأزياء)</option>
+                  <option value="Almarai, sans-serif">Almarai (رسمي وجريء للكتالوجات)</option>
+                  <option value="serif">Playfair / Serif (فاخر وكلاسيكي للبراندات)</option>
+                </select>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Column: Live Mockup Viewport */}
+        {/* ==================== RIGHT COLUMN: LIVE MOCKUP VIEWPORT ==================== */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm sticky top-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <span className="font-bold text-xs flex items-center gap-1.5">
-                <Eye className="w-4 h-4 text-primary" />
-                <span>{isAr ? 'المعاينة اللحظية للمسودة' : 'Live Mockup'}</span>
+                <Eye className="w-4 h-4 text-blue-600" />
+                <span>{isAr ? 'المعاينة اللحظية للمسودة' : 'Live Mockup Viewport'}</span>
               </span>
 
               {/* Viewport device toggler */}
@@ -856,6 +3356,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                   type="button"
                   onClick={() => setPreviewDevice('desktop')}
                   className={`p-1 rounded ${previewDevice === 'desktop' ? 'bg-white dark:bg-slate-700 shadow-xs' : 'text-slate-400'}`}
+                  title="Desktop View"
                 >
                   <Monitor className="w-3.5 h-3.5" />
                 </button>
@@ -863,6 +3364,7 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                   type="button"
                   onClick={() => setPreviewDevice('tablet')}
                   className={`p-1 rounded ${previewDevice === 'tablet' ? 'bg-white dark:bg-slate-700 shadow-xs' : 'text-slate-400'}`}
+                  title="Tablet View"
                 >
                   <Tablet className="w-3.5 h-3.5" />
                 </button>
@@ -870,155 +3372,173 @@ export const StorefrontDesignStudio: React.FC<StorefrontDesignStudioProps> = ({
                   type="button"
                   onClick={() => setPreviewDevice('mobile')}
                   className={`p-1 rounded ${previewDevice === 'mobile' ? 'bg-white dark:bg-slate-700 shadow-xs' : 'text-slate-400'}`}
+                  title="Mobile View"
                 >
                   <Smartphone className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            {/* Interactive Mockup Container */}
+            {/* Interactive Real Live Template Container */}
             <div
-              className={`mx-auto rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 shadow-inner bg-slate-100 dark:bg-slate-950 transition-all ${
-                previewDevice === 'mobile' ? 'max-w-[280px]' : previewDevice === 'tablet' ? 'max-w-[360px]' : 'w-full'
+              className={`mx-auto rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 shadow-2xl bg-white dark:bg-slate-950 transition-all ${
+                previewDevice === 'mobile' ? 'max-w-[320px]' : previewDevice === 'tablet' ? 'max-w-[480px]' : 'w-full'
               }`}
             >
-              {/* Fake Browser Top Bar */}
-              <div className="bg-slate-200 dark:bg-slate-800 px-3 py-1.5 flex items-center gap-1.5 text-[9px] font-mono text-slate-500">
+              {/* Browser Address Bar with Live Route & Device indicator */}
+              <div className="bg-slate-200 dark:bg-slate-800 px-3 py-1.5 flex items-center justify-between text-[10px] font-mono text-slate-600 dark:text-slate-300 border-b border-slate-300 dark:border-slate-700">
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-rose-400 inline-block" />
                   <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
                   <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                 </div>
-                <span className="truncate flex-1 text-center bg-white dark:bg-slate-900 rounded px-1.5 py-0.5">
-                  store.garmentos.com?preview=1
+                <span className="truncate flex-1 text-center bg-white dark:bg-slate-900 rounded px-1.5 py-0.5 mx-2 text-[9px]">
+                  store.garmentos.com/#/store?preview=1
+                </span>
+                <span className="text-[9px] font-sans font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  {previewDevice}
                 </span>
               </div>
 
-              {/* Mockup Preview Content */}
-              <div className="p-3 text-[10px] space-y-3">
-                {/* Mock Announcement */}
-                {announcementEnabled && (
-                  <div style={{ backgroundColor: primaryColor }} className="text-white p-1 rounded text-center truncate font-bold">
-                    {announcementText}
-                  </div>
-                )}
-
-                {/* Mock Header */}
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-                  <div className="flex items-center gap-1.5">
-                    <div style={{ backgroundColor: primaryColor }} className="w-5 h-5 rounded-md flex items-center justify-center text-white font-black text-[9px]">
-                      G
-                    </div>
-                    <span className="font-extrabold truncate max-w-[120px]">{studioConfig?.store_settings?.store_name || 'My Store'}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="p-1 rounded bg-slate-200 dark:bg-slate-800"><ShoppingBag className="w-3 h-3" /></span>
-                  </div>
+              {/* Announcement Bar if enabled */}
+              {announcementEnabled && (
+                <div
+                  style={{ backgroundColor: primaryColor }}
+                  className="text-white text-[10px] py-1 px-2 text-center font-bold"
+                >
+                  {announcementText}
                 </div>
+              )}
 
-                {/* Mock Hero */}
-                <div className="p-3 rounded-xl bg-gradient-to-r from-slate-200 to-slate-100 dark:from-slate-900 dark:to-slate-800 space-y-1.5">
-                  <span className="px-1.5 py-0.5 rounded text-[8px] font-bold text-white uppercase" style={{ backgroundColor: primaryColor }}>
-                    {selectedTemplate.replace('_', ' ')}
-                  </span>
-                  <div className="font-extrabold text-[11px] leading-tight line-clamp-2">{bannerTitle}</div>
-                  <div className="text-[9px] text-slate-500 line-clamp-2">{bannerSubtitle}</div>
-                  <button
-                    style={{ backgroundColor: primaryColor }}
-                    className="text-white text-[8px] font-bold px-2.5 py-1 rounded-md"
-                  >
-                    {ctaText}
-                  </button>
-                </div>
-
-                {/* Mock Products Grid */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-1">
-                      <div className="aspect-square bg-slate-100 dark:bg-slate-800 rounded flex items-center justify-center text-lg">👕</div>
-                      <div className="font-bold truncate text-[9px]">Egyptian Polo {i}</div>
-                      <div className="font-black text-[9px]" style={{ color: primaryColor }}>350 EGP</div>
-                    </div>
-                  ))}
-                </div>
+              {/* Scrollable Live Template Render Canvas */}
+              <div className="max-h-[620px] overflow-y-auto overflow-x-hidden text-start">
+                {renderActiveLiveTemplate()}
               </div>
-            </div>
 
-            <div className="mt-4">
-              <Button
-                variant="outline"
-                className="w-full text-xs"
-                onClick={() => onNavigateToLiveStore(true)}
-              >
-                <ExternalLink className="w-3.5 h-3.5 me-1.5" />
-                {isAr ? 'فتح المعاينة الحية في نافذة جديدة' : 'Open Full Live Preview'}
-              </Button>
+              {/* Viewport Footer Bar */}
+              <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>{isAr ? 'معاينة حية متزامنة فورياً مع التعديلات' : 'Live Connected Preview'}</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] py-1 px-2 h-auto"
+                  onClick={() => onNavigateToLiveStore(true)}
+                >
+                  <Eye className="w-3 h-3 me-1 text-amber-500" />
+                  <span>{isAr ? 'فتح بنافذة كاملة' : 'Full Window'}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* CONFIRM PUBLISH MODAL */}
-      <Modal
-        isOpen={showPublishModal}
-        onClose={() => setShowPublishModal(false)}
-        title={isAr ? 'تأكيد نشر المتجر الإلكتروني' : 'Confirm Storefront Publishing'}
-      >
-        <div className="space-y-4 text-xs">
-          <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200 leading-relaxed">
-            {isAr
-              ? 'أنت على وشك نشر تعديلات المسودة لتصبح الواجهة الرسمية المنشورة لمتجر المصنع. سيتم أرشفة النسخة المنشورة الحالية تلقائياً بحيث يمكنك التراجع عنها في أي وقت بنقرة واحدة.'
-              : 'You are about to publish draft changes to the public store. The current live configuration will be archived automatically for instant rollback.'}
-          </div>
-
-          <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1.5">
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? 'القالب المنشور:' : 'Target Template:'}</span>
-              <span className="font-bold uppercase text-primary">{selectedTemplate}</span>
+      {/* Media In Use Warning Modal */}
+      {deleteInUseData && (
+        <Modal
+          isOpen={!!deleteInUseData}
+          onClose={() => setDeleteInUseData(null)}
+          title={isAr ? 'تنبيه: الصورة قيد الاستخدام حالياً' : 'Warning: Media in Active Use'}
+          maxWidth="sm"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200">
+              <span className="font-bold block mb-1">
+                {isAr ? 'هذه الصورة مستخدمة في الأماكن التالية:' : 'This image is currently used in:'}
+              </span>
+              <ul className="list-disc list-inside space-y-0.5 font-semibold">
+                {deleteInUseData.used_in.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? 'اللون الرئيسي:' : 'Primary Color:'}</span>
-              <div className="flex items-center gap-1 font-mono font-bold">
-                <span style={{ backgroundColor: primaryColor }} className="w-3 h-3 rounded-full inline-block" />
-                <span>{primaryColor}</span>
-              </div>
+            <p className="text-slate-600 dark:text-slate-300">
+              {isAr
+                ? 'إذا قمت بالحذف، قد تظهر أماكن استخدام الصورة فارغة في المتجر. يمكنك تأكيد الحذف القسري أو استبدالها أولاً.'
+                : 'Deleting will remove the image from the store. You may force delete or replace it first.'}
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setDeleteInUseData(null)}>
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={() => handleDeleteMedia(deleteInUseData.path, true)}
+              >
+                {isAr ? 'حذف قسري على أي حال' : 'Force Delete Anyway'}
+              </Button>
             </div>
           </div>
+        </Modal>
+      )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowPublishModal(false)}>
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button variant="primary" disabled={isPublishing} onClick={handlePublish}>
-              {isPublishing ? (isAr ? 'جاري النشر...' : 'Publishing...') : (isAr ? 'تأكيد النشر الفوري' : 'Confirm Publish')}
-            </Button>
+      {/* Publish Confirmation Modal */}
+      {showPublishModal && (
+        <Modal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          title={isAr ? 'تأكيد نشر المتجر الإلكتروني الحي' : 'Confirm Live Publish'}
+          maxWidth="sm"
+        >
+          <div className="space-y-4 text-xs">
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              {isAr
+                ? 'سيتم تطبيق كافة التعديلات المحفوظة كمسودة (القالب، البنرات، الأقسام، الشعار، الألوان) ذرياً على المتجر الإلكتروني العام ليراها جميع الزوار فوراً.'
+                : 'All draft modifications will be atomically applied to the live public store.'}
+            </p>
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200">
+              <span className="font-bold block mb-1">
+                {isAr ? 'حماية النسخ السابقة:' : 'Safe Rollback Guarantee:'}
+              </span>
+              <span>
+                {isAr
+                  ? 'يتم أرشفة النسخة الحالية تلقائياً، ويمكنك استرجاعها بضغطة زر واحدة في أي وقت.'
+                  : 'The current published version is automatically archived and can be restored anytime.'}
+              </span>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowPublishModal(false)}>
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button variant="primary" size="sm" disabled={isPublishing} onClick={handlePublish}>
+                {isPublishing ? (isAr ? 'جاري النشر...' : 'Publishing...') : (isAr ? 'نشر الآن للمتجر الحي' : 'Publish Live Now')}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
-      {/* CONFIRM ROLLBACK MODAL */}
-      <Modal
-        isOpen={showRollbackModal}
-        onClose={() => setShowRollbackModal(false)}
-        title={isAr ? 'استرجاع النسخة السابقة' : 'Rollback to Previous Version'}
-      >
-        <div className="space-y-4 text-xs">
-          <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-            {isAr
-              ? 'هل أنت متأكد من رغبتك في استرجاع النسخة المنشورة السابقة المؤرشفة؟ سيتم تطبيق القالب والإعدادات القديمة فوراً.'
-              : 'Are you sure you want to rollback to the previous published state?'}
-          </p>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowRollbackModal(false)}>
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button variant="danger" disabled={isRollingBack} onClick={handleRollback}>
-              {isRollingBack ? (isAr ? 'جاري الاسترجاع...' : 'Rolling back...') : (isAr ? 'نعم، استرجع النسخة' : 'Yes, Rollback')}
-            </Button>
+      {/* Rollback Confirmation Modal */}
+      {showRollbackModal && (
+        <Modal
+          isOpen={showRollbackModal}
+          onClose={() => setShowRollbackModal(false)}
+          title={isAr ? 'استرجاع النسخة المنشورة السابقة' : 'Rollback to Previous Version'}
+          maxWidth="sm"
+        >
+          <div className="space-y-4 text-xs">
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              {isAr
+                ? 'هل تريد بالتأكيد التراجع عن آخر نسخة منشورة واستعادة التكوين السابق للمتجر؟'
+                : 'Are you sure you want to rollback to the previously archived version?'}
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowRollbackModal(false)}>
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button variant="outline" size="sm" disabled={isRollingBack} onClick={handleRollback}>
+                {isRollingBack ? (isAr ? 'جاري الاسترجاع...' : 'Rolling back...') : (isAr ? 'تأكيد الاسترجاع' : 'Confirm Rollback')}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 };

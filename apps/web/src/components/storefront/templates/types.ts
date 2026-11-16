@@ -12,9 +12,22 @@ export interface StorefrontTemplateProps {
   onOpenCart: () => void;
   onSelectProduct: (product: any) => void;
   onNavigateToTracking: () => void;
+  onNavigateToShop?: () => void;
+  onNavigateToCategories?: () => void;
+  onNavigateToAbout?: () => void;
+  onNavigateToContact?: () => void;
+  onNavigateToPolicies?: () => void;
   onNavigateToErp?: () => void;
   onToggleTheme: () => void;
   onToggleLang: () => void;
   isPreview?: boolean;
+  wholesaleUser?: {
+    id: string;
+    company_name: string;
+    contact_person: string;
+    is_approved: boolean;
+  } | null;
+  onOpenWholesaleModal?: () => void;
+  onLogoutWholesale?: () => void;
 }
 

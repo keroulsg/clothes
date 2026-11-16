@@ -19,6 +19,7 @@ use App\Models\ProductionOrder;
 use App\Models\ProductionCostSheet;
 use App\Models\ProductionOrderItem;
 use App\Models\ProductionStage;
+use App\Models\ProductVariant;
 use App\Models\QualityDefect;
 use App\Models\QualityInspection;
 use App\Models\Warehouse;
@@ -392,10 +393,466 @@ class ProductionService
                 throw new Exception("أمر الإنتاج في حالة [{$order->status}] ولا يمكن اعتماده.");
             }
 
+            // إذا كان أمر الإنتاج مرتبطاً بشجرة خامات (BOM)، يتم التحقق من المخزون وحجز الخامات إلكترونياً
+            if (!empty($order->bill_of_material_id)) {
+                $this->reserveBomMaterials($order->id);
+            }
+
             $order->status = 'approved';
             $order->save();
 
-            return $order;
+            return $order->fresh(['items', 'garmentModel', 'billOfMaterial']);
+        });
+    }
+
+    /**
+     * احتساب متطلبات المواد الخام ومستلزمات الإنتاج من شجرة الـ BOM بدقة بحسب تفصيل الألوان والمقاسات
+     */
+    public function calculateBomRequirements(ProductionOrder $order): array
+    {
+        $tenantId = $order->tenant_id;
+        if (empty($order->bill_of_material_id)) {
+            return [];
+        }
+
+        $bom = BillOfMaterial::where('tenant_id', $tenantId)
+            ->where('id', $order->bill_of_material_id)
+            ->where('status', 'approved')
+            ->where('is_active', true)
+            ->with(['items.inventoryItem'])
+            ->first();
+
+        if (!$bom) {
+            throw new InvalidArgumentException('شجرة الخامات (BOM) المرتبطة بأمر الإنتاج غير معتمدة أو غير نشطة.');
+        }
+
+        $orderItems = $order->items ?? ProductionOrderItem::where('production_order_id', $order->id)->get();
+        $requirements = [];
+
+        foreach ($bom->items as $bomItem) {
+            $invItem = $bomItem->inventoryItem;
+            if (!$invItem) {
+                $invItem = InventoryItem::where('tenant_id', $tenantId)->find($bomItem->inventory_item_id);
+            }
+            if (!$invItem) {
+                throw new InvalidArgumentException("صنف المخزون المرتبط بمكون BOM غير موجود أو غير تابع للشركة: {$bomItem->id}");
+            }
+
+            // احتساب إجمالي القطع المطلوبة المطابقة لقيد اللون والمقاس في الـ BOM
+            $matchingQty = 0;
+            foreach ($orderItems as $orderItem) {
+                $colorMatch = empty($bomItem->color_id) || (string)$bomItem->color_id === (string)$orderItem->color_id;
+                $sizeMatch = empty($bomItem->size_id) || (string)$bomItem->size_id === (string)$orderItem->size_id;
+                if ($colorMatch && $sizeMatch) {
+                    $matchingQty += (int)$orderItem->planned_quantity;
+                }
+            }
+
+            if ($matchingQty <= 0) {
+                continue;
+            }
+
+            $wasteFactor = 1.0 + ((float)($bomItem->waste_tolerance_percent ?? 0.0) / 100.0);
+            $requiredQty = round($matchingQty * (float)$bomItem->consumption_per_unit * $wasteFactor, 4);
+
+            $currentBalance = (float)$invItem->current_balance;
+            $reservedBalance = (float)($invItem->reserved_balance ?? 0.0);
+            $availableBalance = max(0.0, round($currentBalance - $reservedBalance, 4));
+
+            $requirements[] = [
+                'bom_item_id' => $bomItem->id,
+                'inventory_item_id' => $invItem->id,
+                'warehouse_id' => $invItem->warehouse_id,
+                'item_code' => $invItem->code ?? $invItem->sku ?? $invItem->name,
+                'item_name' => $invItem->name,
+                'component_type' => $bomItem->component_type,
+                'unit_of_measure' => $bomItem->unit_of_measure ?? $invItem->unit_of_measure,
+                'matching_pieces' => $matchingQty,
+                'consumption_per_unit' => (float)$bomItem->consumption_per_unit,
+                'required_quantity' => $requiredQty,
+                'current_balance' => $currentBalance,
+                'reserved_balance' => $reservedBalance,
+                'available_balance' => $availableBalance,
+                'is_shortage' => $availableBalance < $requiredQty,
+                'shortage_quantity' => $availableBalance < $requiredQty ? round($requiredQty - $availableBalance, 4) : 0.0,
+                'is_fabric' => strtolower($bomItem->component_type ?? '') === 'fabric',
+            ];
+        }
+
+        return $requirements;
+    }
+
+    /**
+     * حجز مستلزمات الـ BOM إلكترونياً عند اعتماد أمر الإنتاج ومنع العجز (STRICT BLOCK)
+     */
+    public function reserveBomMaterials(string $productionOrderId): array
+    {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($productionOrderId, $contextTenantId) {
+            $order = ProductionOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $productionOrderId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (empty($order->bill_of_material_id)) {
+                return [];
+            }
+
+            $requirements = $this->calculateBomRequirements($order);
+
+            // التحقق الصارم من عدم وجود عجز في أي صنف (STRICT BLOCK)
+            $shortages = array_filter($requirements, fn($r) => $r['is_shortage']);
+            if (!empty($shortages)) {
+                $shortageMessages = array_map(function ($s) {
+                    return "الصنف {$s['item_code']} ({$s['item_name']}): المطلوب {$s['required_quantity']} {$s['unit_of_measure']}، المتاح حالياً بالمخزن {$s['available_balance']} (عجز: {$s['shortage_quantity']})";
+                }, $shortages);
+
+                throw new InvalidArgumentException(
+                    "لا يمكن اعتماد أمر الإنتاج أو حجز الخامات لوجود عجز في مخزون مستلزمات الـ BOM:\n" . implode("\n", $shortageMessages)
+                );
+            }
+
+            $reservedItems = [];
+            foreach ($requirements as $req) {
+                $invItem = InventoryItem::where('tenant_id', $contextTenantId)
+                    ->where('id', $req['inventory_item_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $invItem->increment('reserved_balance', $req['required_quantity']);
+                $reservedItems[] = [
+                    'inventory_item_id' => $invItem->id,
+                    'reserved_quantity' => $req['required_quantity'],
+                ];
+            }
+
+            return $reservedItems;
+        });
+    }
+
+    /**
+     * صرف مستلزمات وإكسسوارات الـ BOM للتشغيل مع حماية عدم التكرار واستبعاد القماش المنصرف في القص
+     */
+    public function issueBomMaterials(string $productionOrderId, array $options = []): array
+    {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        $idempotencyKey = $options['idempotency_key'] ?? "BOM-ISSUE-{$productionOrderId}";
+        $partialRatio = isset($options['partial_ratio']) ? max(0.01, min(1.0, (float)$options['partial_ratio'])) : 1.0;
+
+        return DB::transaction(function () use ($productionOrderId, $contextTenantId, $idempotencyKey, $partialRatio, $options) {
+            $order = ProductionOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $productionOrderId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (!in_array($order->status, ['approved', 'cutting', 'in_progress'], true)) {
+                throw new InvalidArgumentException("لا يمكن صرف مستلزمات BOM لأمر إنتاج بحالة [{$order->status}].");
+            }
+
+            if (empty($order->bill_of_material_id)) {
+                throw new InvalidArgumentException('أمر الإنتاج غير مرتبط بشجرة خامات (BOM) معتمدة.');
+            }
+
+            // التحقق من مفتاح عدم التكرار (Idempotency)
+            $existingTxn = InventoryTransaction::where('tenant_id', $contextTenantId)
+                ->where(function ($q) use ($idempotencyKey) {
+                    $q->where('idempotency_key', $idempotencyKey)
+                      ->orWhere('idempotency_key', 'like', "{$idempotencyKey}-%");
+                })
+                ->first();
+            if ($existingTxn) {
+                return [
+                    'already_issued' => true,
+                    'idempotency_key' => $idempotencyKey,
+                    'message' => 'تم صرف مستلزمات هذا الأمر مسبقاً بنفس المفتاح.',
+                ];
+            }
+
+            $requirements = $this->calculateBomRequirements($order);
+            $issuedTransactions = [];
+
+            foreach ($requirements as $req) {
+                // قاعدة حرجة: القماش المنصرف في صالة القص لا يتم صرفه مرة ثانية عبر الـ BOM العام
+                if ($req['is_fabric']) {
+                    continue;
+                }
+
+                if (!empty($options['warehouse_id']) && (string)$req['warehouse_id'] !== (string)$options['warehouse_id']) {
+                    continue;
+                }
+
+                $issueQty = round($req['required_quantity'] * $partialRatio, 4);
+                if ($issueQty <= 0) {
+                    continue;
+                }
+
+                $invItem = InventoryItem::where('tenant_id', $contextTenantId)
+                    ->where('id', $req['inventory_item_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                // فك الحجز المسبق ليحل محله الخصم الفعلي
+                $releaseReservedQty = min((float)$invItem->reserved_balance, $issueQty);
+                if ($releaseReservedQty > 0) {
+                    $invItem->decrement('reserved_balance', $releaseReservedQty);
+                }
+
+                // تسجيل الخصم المخزني الفعلي بحركة صرف إنتاج (production_issue)
+                $itemTxnKey = "{$idempotencyKey}-{$req['bom_item_id']}";
+                $txn = $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
+                    'inventory_item_id' => $invItem->id,
+                    'warehouse_id' => $invItem->warehouse_id,
+                    'quantity' => $issueQty,
+                    'direction' => 'OUT',
+                    'transaction_type' => 'production_issue',
+                    'unit_cost' => (float)$invItem->average_cost,
+                    'reference_type' => 'production_order',
+                    'reference_id' => $order->id,
+                    'reference_number' => $order->order_number,
+                    'idempotency_key' => $itemTxnKey,
+                    'notes' => "صرف مستلزمات تصنيع BOM [{$req['component_type']}] لأمر الإنتاج [{$order->order_number}]",
+                ]);
+
+                $issuedTransactions[] = [
+                    'inventory_item_id' => $invItem->id,
+                    'component_type' => $req['component_type'],
+                    'quantity' => $issueQty,
+                    'transaction_id' => $txn->id,
+                ];
+            }
+
+            if ($order->status === 'approved') {
+                $order->status = 'in_progress';
+                if (empty($order->actual_start_date)) {
+                    $order->actual_start_date = now()->toDateString();
+                }
+                $order->save();
+            }
+
+            return [
+                'success' => true,
+                'idempotency_key' => $idempotencyKey,
+                'issued_items' => $issuedTransactions,
+            ];
+        });
+    }
+
+    /**
+     * استلام المنتجات التامة بالمخزن عند اكتمال الإنتاج وتغذية أصناف الـ ProductVariant المعنية
+     */
+    public function receiveFinishedGoodsFromProduction(string $productionOrderId, array $completionData = []): array
+    {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($productionOrderId, $completionData, $contextTenantId) {
+            $order = ProductionOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $productionOrderId)
+                ->with(['items.color', 'items.size', 'garmentModel', 'billOfMaterial'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (in_array($order->status, ['completed', 'cancelled'], true)) {
+                throw new InvalidArgumentException("أمر الإنتاج في حالة [{$order->status}] ولا يمكن استلام منتجات تامة له.");
+            }
+
+            // مستودع المنتجات التامة المعتمد
+            $warehouseId = $completionData['warehouse_id'] ?? null;
+            $fgWarehouse = $warehouseId
+                ? Warehouse::where('tenant_id', $contextTenantId)->where('id', $warehouseId)->where('type', 'finished_goods')->where('is_active', true)->first()
+                : Warehouse::where('tenant_id', $contextTenantId)->where('type', 'finished_goods')->where('is_active', true)->orderBy('id')->first();
+
+            if (!$fgWarehouse) {
+                throw new InvalidArgumentException('لا يوجد مخزن منتجات تامة نشط لاستلام بضاعة الإنتاج.');
+            }
+
+            // احتساب تكلفة القطعة الصناعية المعتمدة
+            $costSheet = ProductionCostSheet::where('tenant_id', $contextTenantId)
+                ->where('production_order_id', $order->id)
+                ->where('status', 'approved')
+                ->first();
+
+            $unitCost = $costSheet && (float)$costSheet->cost_per_piece > 0
+                ? (float)$costSheet->cost_per_piece
+                : ($order->billOfMaterial ? (float)$order->billOfMaterial->total_estimated_cost_per_piece : 0.0);
+
+            $receiptItems = [];
+            $totalReceived = 0;
+
+            foreach ($order->items as $orderItem) {
+                $variant = null;
+                if ($orderItem->product_variant_id) {
+                    $variant = ProductVariant::where('tenant_id', $contextTenantId)->find($orderItem->product_variant_id);
+                }
+                if (!$variant && $order->garment_model_id) {
+                    $variant = ProductVariant::where('tenant_id', $contextTenantId)
+                        ->where('garment_model_id', $order->garment_model_id)
+                        ->where('color_id', $orderItem->color_id)
+                        ->where('size_id', $orderItem->size_id)
+                        ->first();
+                }
+
+                if (!$variant) {
+                    continue;
+                }
+
+                // ربط أو إنشاء صنف المنتج التام في مستودع المنتجات التامة
+                $fgItem = InventoryItem::firstOrCreate(
+                    [
+                        'tenant_id' => $contextTenantId,
+                        'warehouse_id' => $fgWarehouse->id,
+                        'variant_id' => $variant->id,
+                        'is_customer_owned' => false,
+                    ],
+                    [
+                        'name' => ($order->garmentModel?->name ?? 'منتج') . ' - ' . ($orderItem->color?->name ?? '') . ' / ' . ($orderItem->size?->name ?? ''),
+                        'code' => $variant->sku ?? ('FG-' . strtoupper(substr(uniqid(), -6))),
+                        'barcode' => $variant->barcode,
+                        'item_type' => 'finished_goods',
+                        'unit_of_measure' => 'piece',
+                        'current_balance' => 0,
+                        'reserved_balance' => 0,
+                        'average_cost' => $unitCost,
+                        'is_active' => true,
+                    ]
+                );
+
+                $qtyToReceive = isset($completionData['items'][$orderItem->id])
+                    ? (int)$completionData['items'][$orderItem->id]
+                    : max(0, (int)$orderItem->planned_quantity - (int)$orderItem->completed_quantity);
+
+                if ($qtyToReceive <= 0) {
+                    continue;
+                }
+
+                $idempotencyKey = "FG-REC-{$order->id}-{$orderItem->id}-" . ($orderItem->completed_quantity + $qtyToReceive);
+                $txn = $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
+                    'inventory_item_id' => $fgItem->id,
+                    'warehouse_id' => $fgWarehouse->id,
+                    'quantity' => $qtyToReceive,
+                    'direction' => 'IN',
+                    'transaction_type' => 'production_receipt',
+                    'unit_cost' => $unitCost,
+                    'reference_type' => 'production_order',
+                    'reference_id' => $order->id,
+                    'reference_number' => $order->order_number,
+                    'idempotency_key' => $idempotencyKey,
+                    'notes' => "استلام منتج تام بالمخزن لأمر الإنتاج [{$order->order_number}]",
+                ]);
+
+                $orderItem->increment('completed_quantity', $qtyToReceive);
+                $totalReceived += $qtyToReceive;
+
+                $receiptItems[] = [
+                    'order_item_id' => $orderItem->id,
+                    'variant_id' => $variant->id,
+                    'inventory_item_id' => $fgItem->id,
+                    'quantity' => $qtyToReceive,
+                    'transaction_id' => $txn->id,
+                ];
+            }
+
+            $order->increment('total_completed_quantity', $totalReceived);
+            if ($order->total_completed_quantity >= $order->total_planned_quantity) {
+                $order->status = 'completed';
+                $order->actual_completion_date = now()->toDateString();
+            } else {
+                $order->status = 'in_progress';
+            }
+            $order->save();
+
+            return [
+                'success' => true,
+                'total_received' => $totalReceived,
+                'production_order_status' => $order->status,
+                'items' => $receiptItems,
+            ];
+        });
+    }
+
+    /**
+     * إلغاء أمر الإنتاج مع فك حجز خامات الـ BOM وقيد حركات تسوية عكسية للخامات المنصرفة
+     */
+    public function cancelProductionOrder(string $productionOrderId, string $reason): ProductionOrder
+    {
+        $contextTenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
+        if (empty($contextTenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
+
+        return DB::transaction(function () use ($productionOrderId, $reason, $contextTenantId) {
+            $order = ProductionOrder::where('tenant_id', $contextTenantId)
+                ->where('id', $productionOrderId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($order->status === 'cancelled') {
+                return $order;
+            }
+
+            if ($order->status === 'completed') {
+                throw new InvalidArgumentException('لا يمكن إلغاء أمر إنتاج مكتمل بالفعل وتم استلام بضاعته.');
+            }
+
+            // 1. فك حجز خامات الـ BOM غير المنصرفة
+            if (!empty($order->bill_of_material_id)) {
+                $requirements = $this->calculateBomRequirements($order);
+                foreach ($requirements as $req) {
+                    $invItem = InventoryItem::where('tenant_id', $contextTenantId)
+                        ->where('id', $req['inventory_item_id'])
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($invItem && (float)$invItem->reserved_balance > 0) {
+                        $releaseQty = min((float)$invItem->reserved_balance, (float)$req['required_quantity']);
+                        $invItem->decrement('reserved_balance', $releaseQty);
+                    }
+                }
+            }
+
+            // 2. قيد حركات مخزنية عكسية تعويضية للخامات والمستلزمات التي تم صرفها مسبقاً
+            $issuedTxns = InventoryTransaction::where('tenant_id', $contextTenantId)
+                ->where('reference_type', 'production_order')
+                ->where('reference_id', $order->id)
+                ->where('direction', 'OUT')
+                ->where('transaction_type', 'production_issue')
+                ->get();
+
+            foreach ($issuedTxns as $issuedTxn) {
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
+                    'inventory_item_id' => $issuedTxn->inventory_item_id,
+                    'warehouse_id' => $issuedTxn->warehouse_id,
+                    'quantity' => (float)$issuedTxn->quantity,
+                    'direction' => 'IN',
+                    'transaction_type' => 'production_issue_reversal',
+                    'unit_cost' => (float)$issuedTxn->unit_cost,
+                    'reference_type' => 'production_order_cancellation',
+                    'reference_id' => $order->id,
+                    'reference_number' => $order->order_number,
+                    'idempotency_key' => "PROD-REV-{$issuedTxn->id}",
+                    'notes' => "إرجاع خامات بالمخزن لإلغاء أمر الإنتاج [{$order->order_number}]",
+                ]);
+            }
+
+            $order->status = 'cancelled';
+            $order->cancelled_at = now();
+            $order->cancellation_reason = $reason;
+            $order->save();
+
+            return $order->fresh(['items', 'garmentModel']);
         });
     }
 

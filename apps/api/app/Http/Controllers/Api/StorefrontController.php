@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentSubmission;
 use App\Models\StoreOrder;
+use App\Models\TenantStoreSetting;
 use App\Services\DomainResolutionService;
 use App\Services\StorefrontService;
 use App\Services\SalesService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -46,7 +49,8 @@ class StorefrontController extends Controller
         app()->instance('current_tenant_id', $tenant->id);
 
         $preview = $request->boolean('preview') || $request->query('preview') === '1';
-        $details = $this->storefrontService->getStoreDetails($tenant->id, $preview);
+        $wholesaleToken = $request->bearerToken() ?: $request->header('X-Wholesale-Token') ?: $request->query('wholesale_token');
+        $details = $this->storefrontService->getStoreDetails($tenant->id, $preview, $wholesaleToken);
 
         if (isset($details['store_settings']) && !$details['store_settings']->is_store_enabled) {
             return response()->json([
@@ -100,6 +104,8 @@ class StorefrontController extends Controller
             'instapay_reference' => 'nullable|string|max:100',
             'instapay_receipt_url' => 'nullable|string',
             'shipping_fee' => 'nullable|numeric|min:0',
+            'channel' => 'nullable|string|in:retail,wholesale',
+            'wholesale_token' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.variant_id' => 'required|uuid',
             'items.*.product_name' => 'nullable|string',
@@ -149,6 +155,7 @@ class StorefrontController extends Controller
             'allow_cod' => 'nullable|boolean',
             'allow_card_payment' => 'nullable|boolean',
             'allow_instapay' => 'nullable|boolean',
+            'instapay_account_verified' => 'nullable|boolean',
             'instapay_account_name' => 'nullable|string|max:255',
             'instapay_handle' => 'nullable|string|max:100',
             'instapay_instructions' => 'nullable|string',
@@ -430,16 +437,18 @@ class StorefrontController extends Controller
     /**
      * استعراض قائمة التحويلات البنكية المعلقة بانتظار المراجعة والتدقيق المالي
      */
-    public function pendingPayments(): JsonResponse
+    public function pendingPayments(Request $request): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $user = request()->user();
+        $user = $request->user();
         $branchIds = $user && $user->role !== 'company_owner' ? $user->assignedBranchIds() : null;
-        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId, $branchIds);
+        $status = $request->query('status');
+        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId, $branchIds, $status);
 
         return response()->json([
             'submissions' => $submissions,
-            'total_pending' => $submissions->count(),
+            'data' => $submissions,
+            'total_pending' => $submissions->whereIn('status', ['pending_review', 'pending_payment'])->count(),
         ]);
     }
 
@@ -643,6 +652,341 @@ class StorefrontController extends Controller
             ], 422);
         }
     }
+    /**
+     * رفع ملف وسائط (بنر، شعار، صورة قسم) لمكتبة وسائط المتجر
+     */
+    public function uploadMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $request->validate([
+            'file' => 'required_without:image|file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'image' => 'required_without:file|file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'title' => 'nullable|string|max:255',
+            'category' => 'nullable|string|in:banner,logo,category,general',
+        ]);
+
+        $file = $request->file('file') ?: $request->file('image');
+        $extension = $file->getClientOriginalExtension() ?: 'webp';
+        $safeName = 'media_' . date('Ymd_His') . '_' . Str::random(8) . '.' . strtolower($extension);
+
+        $path = $file->storeAs("storefront/{$tenantId}", $safeName, 'public');
+        $publicUrl = "/storage/{$path}";
+
+        $dimensions = @getimagesize($file->getRealPath());
+        $width = $dimensions ? (int) $dimensions[0] : null;
+        $height = $dimensions ? (int) $dimensions[1] : null;
+
+        $mediaItem = [
+            'id' => 'med_' . Str::random(10),
+            'url' => $publicUrl,
+            'path' => $path,
+            'filename' => $safeName,
+            'original_name' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+            'width' => $width,
+            'height' => $height,
+            'category' => $request->input('category', 'general'),
+            'title' => $request->input('title', pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)),
+            'created_at' => now()->toISOString(),
+        ];
+
+        // حفظ في مكتبة وسائط المتجر داخل إعدادات المستأجر
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings) {
+            $config = $settings->theme_config ?? [];
+            $mediaList = $config['media_library'] ?? [];
+            array_unshift($mediaList, $mediaItem);
+            $config['media_library'] = array_slice($mediaList, 0, 100);
+            $settings->update(['theme_config' => $config]);
+        }
+
+        return response()->json([
+            'message' => 'تم رفع الصورة بنجاح إلى مكتبة وسائط المتجر',
+            'media' => $mediaItem,
+        ], 201);
+    }
+
+    /**
+     * رفع ملفات متعددة دفعة واحدة إلى مكتبة الوسائط
+     */
+    public function uploadMultipleMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $request->validate([
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => 'file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'category' => 'nullable|string|in:banner,logo,category,general',
+        ]);
+
+        $category = $request->input('category', 'general');
+        $uploaded = [];
+
+        foreach ($request->file('files') as $file) {
+            $extension = $file->getClientOriginalExtension() ?: 'webp';
+            $safeName = 'media_' . date('Ymd_His') . '_' . Str::random(8) . '.' . strtolower($extension);
+
+            $path = $file->storeAs("storefront/{$tenantId}", $safeName, 'public');
+            $publicUrl = "/storage/{$path}";
+
+            $dimensions = @getimagesize($file->getRealPath());
+            $width = $dimensions ? (int) $dimensions[0] : null;
+            $height = $dimensions ? (int) $dimensions[1] : null;
+
+            $uploaded[] = [
+                'id' => 'med_' . Str::random(10),
+                'url' => $publicUrl,
+                'path' => $path,
+                'filename' => $safeName,
+                'original_name' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'width' => $width,
+                'height' => $height,
+                'category' => $category,
+                'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
+                'created_at' => now()->toISOString(),
+            ];
+        }
+
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings) {
+            $config = $settings->theme_config ?? [];
+            $mediaList = $config['media_library'] ?? [];
+            $mediaList = array_merge($uploaded, $mediaList);
+            $config['media_library'] = array_slice($mediaList, 0, 100);
+            $settings->update(['theme_config' => $config]);
+        }
+
+        return response()->json([
+            'message' => 'تم رفع ' . count($uploaded) . ' صورة بنجاح إلى مكتبة وسائط المتجر',
+            'media' => $uploaded,
+        ], 201);
+    }
+
+    /**
+     * استيراد صورة من رابط خارجي أو Pinterest وحفظها في مكتبة الوسائط
+     */
+    public function importMediaFromUrl(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+
+        $request->validate([
+            'url' => 'required|string|url|max:2048',
+            'title' => 'nullable|string|max:255',
+            'category' => 'nullable|string|in:banner,logo,category,general',
+        ]);
+
+        $url = trim($request->input('url'));
+        $targetImageUrl = $url;
+
+        // إذا كان الرابط من Pinterest (رابط مختصر أو صفحة دبوس)، استخراج رابط الصورة الأصلي
+        if (str_contains($url, 'pin.it') || str_contains($url, 'pinterest.com/pin/')) {
+            try {
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                ])->get($url);
+
+                $html = $response->body();
+                preg_match_all('/https:\/\/i\.pinimg\.com\/(originals|736x)\/([a-zA-Z0-9_\-\.\/]+\.(jpg|jpeg|png|webp))/i', $html, $matches);
+
+                if (!empty($matches[0])) {
+                    $candidates = array_filter($matches[0], function ($link) {
+                        return !str_contains($link, 'd5/3b/01') && !str_contains($link, 'button') && !str_contains($link, 'icon');
+                    });
+                    if (empty($candidates)) $candidates = $matches[0];
+                    $counts = array_count_values($candidates);
+                    arsort($counts);
+                    $bestImage = array_key_first($counts);
+                    $origImage = str_replace('/736x/', '/originals/', $bestImage);
+                    $origCheck = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5)->head($origImage);
+                    $targetImageUrl = $origCheck->successful() ? $origImage : $bestImage;
+                }
+            } catch (\Throwable $e) {
+                // المتابعة بالرابط الأصلي في حال تعذر التتبع
+            }
+        }
+
+        try {
+            $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(20)->withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            ])->get($targetImageUrl);
+
+            if (!$imageResponse->successful()) {
+                return response()->json([
+                    'message' => 'تعذر تحميل الصورة من الرابط المقدم (رمز الاستجابة: ' . $imageResponse->status() . ')',
+                ], 422);
+            }
+
+            $content = $imageResponse->body();
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->buffer($content);
+
+            $allowedMimes = [
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'image/gif' => 'gif',
+                'image/svg+xml' => 'svg',
+            ];
+
+            if (!isset($allowedMimes[$mime])) {
+                return response()->json([
+                    'message' => 'الرابط المطلوب لا يشير إلى ملف صورة صالح. نوع الملف المكتشف: ' . $mime,
+                ], 422);
+            }
+
+            $ext = $allowedMimes[$mime];
+            $safeName = 'media_' . date('Ymd_His') . '_' . \Illuminate\Support\Str::random(8) . '.' . $ext;
+            $path = "storefront/{$tenantId}/{$safeName}";
+
+            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $content);
+            $publicUrl = "/storage/{$path}";
+
+            $dimensions = @getimagesizefromstring($content);
+            $width = $dimensions ? (int) $dimensions[0] : null;
+            $height = $dimensions ? (int) $dimensions[1] : null;
+
+            $defaultTitle = $request->input('title') ?: pathinfo(parse_url($targetImageUrl, PHP_URL_PATH) ?? '', PATHINFO_FILENAME);
+            if (empty($defaultTitle) || strlen($defaultTitle) > 100) {
+                $defaultTitle = 'Imported Media ' . date('Y-m-d H:i');
+            }
+
+            $mediaItem = [
+                'id' => 'med_' . \Illuminate\Support\Str::random(10),
+                'url' => $publicUrl,
+                'path' => $path,
+                'filename' => $safeName,
+                'original_name' => basename(parse_url($targetImageUrl, PHP_URL_PATH) ?? '') ?: $safeName,
+                'size' => strlen($content),
+                'mime_type' => $mime,
+                'width' => $width,
+                'height' => $height,
+                'category' => $request->input('category', 'general'),
+                'title' => $defaultTitle,
+                'created_at' => now()->toISOString(),
+            ];
+
+            $settings = \App\Models\TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+            if ($settings) {
+                $config = $settings->theme_config ?? [];
+                $mediaList = $config['media_library'] ?? [];
+                array_unshift($mediaList, $mediaItem);
+                $config['media_library'] = array_slice($mediaList, 0, 100);
+                $settings->update(['theme_config' => $config]);
+            }
+
+            return response()->json([
+                'message' => 'تم استيراد الصورة بنجاح وتخزينها في مكتبة الوسائط',
+                'media' => $mediaItem,
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'حدث خطأ أثناء تحميل واستيراد الصورة: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * استعراض مكتبة وسائط المتجر
+     */
+    public function listMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        $mediaList = $settings->theme_config['media_library'] ?? [];
+
+        return response()->json([
+            'media' => $mediaList,
+        ]);
+    }
+
+    /**
+     * حذف صورة من مكتبة الوسائط مع التحقق من عدم استخدامها
+     */
+    public function deleteMedia(Request $request): JsonResponse
+    {
+        $tenantId = app('current_tenant_id');
+        $path = $request->input('path');
+        $url = $request->input('url');
+
+        if (!$path && $url) {
+            $path = str_replace('/storage/', '', $url);
+        }
+
+        if (!$path || !str_starts_with($path, "storefront/{$tenantId}/")) {
+            return response()->json([
+                'error' => 'InvalidPath',
+                'message' => 'مسار الملف غير صالح أو لا يتبع هذا المتجر.',
+            ], 422);
+        }
+
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+
+        // التحقق من الاستخدام إذا لم يتم طلب الحذف القسري (force)
+        if ($settings && !$request->boolean('force')) {
+            $configsToCheck = array_filter([$settings->theme_config, $settings->draft_theme_config]);
+            $isUsed = false;
+            $usedIn = [];
+
+            foreach ($configsToCheck as $cfg) {
+                if (empty($cfg)) continue;
+                $logo = $cfg['logo_url'] ?? '';
+                $heroDesk = $cfg['hero_banner']['desktop_image'] ?? '';
+                $heroMob = $cfg['hero_banner']['mobile_image'] ?? '';
+                $promos = $cfg['promo_banners'] ?? [];
+
+                if ((!empty($logo) && str_contains($logo, $path)) || ($url && !empty($logo) && str_contains($logo, $url))) {
+                    $isUsed = true;
+                    $usedIn[] = 'شعار المتجر (Store Logo)';
+                }
+                if ((!empty($heroDesk) && str_contains($heroDesk, $path)) || ($url && !empty($heroDesk) && str_contains($heroDesk, $url))) {
+                    $isUsed = true;
+                    $usedIn[] = 'بانر المتجر للديسكتوب (Desktop Hero)';
+                }
+                if ((!empty($heroMob) && str_contains($heroMob, $path)) || ($url && !empty($heroMob) && str_contains($heroMob, $url))) {
+                    $isUsed = true;
+                    $usedIn[] = 'بانر المتجر للموبايل (Mobile Hero)';
+                }
+                foreach ($promos as $promo) {
+                    $pImg = $promo['image_url'] ?? $promo['image'] ?? '';
+                    if ((!empty($pImg) && str_contains($pImg, $path)) || ($url && !empty($pImg) && str_contains($pImg, $url))) {
+                        $isUsed = true;
+                        $usedIn[] = 'بانر ترويجي: ' . ($promo['title'] ?? 'عرض');
+                    }
+                }
+            }
+
+            if ($isUsed) {
+                return response()->json([
+                    'error' => 'MediaInUse',
+                    'message' => 'هذه الصورة قيد الاستخدام حالياً في: ' . implode('، ', array_unique($usedIn)) . '. يرجى استبدالها أولاً أو تأكيد الحذف القسري.',
+                    'used_in' => array_values(array_unique($usedIn)),
+                ], 422);
+            }
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        // حذف من القائمة
+        if ($settings) {
+            $config = $settings->theme_config ?? [];
+            $mediaList = $config['media_library'] ?? [];
+            $config['media_library'] = array_values(array_filter($mediaList, function ($m) use ($path) {
+                return ($m['path'] ?? '') !== $path;
+            }));
+            $settings->update(['theme_config' => $config]);
+        }
+
+        return response()->json([
+            'message' => 'تم حذف الصورة من مكتبة الوسائط بنجاح',
+        ]);
+    }
+
     private function scopeStoreOrdersToAssignedBranches($query, ?Request $request = null)
     {
         $user = ($request ?? request())->user();

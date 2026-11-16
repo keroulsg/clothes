@@ -1,41 +1,106 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Baby,
   Heart,
-  ShoppingBag,
   Sparkles,
   ShieldCheck,
-  Sun,
-  Moon,
-  Globe,
-  Search,
   ArrowRight,
   Smile,
   Award,
+  Copy,
+  Check,
+  ShoppingBag,
+  Phone,
+  Mail,
+  MapPin,
+  Building2,
+  Scissors,
+  Layers,
 } from 'lucide-react';
+import { api } from '../../../api/client';
+import { StorefrontImage } from '../common/StorefrontImage';
+import { getActiveSortedSections, normalizeSectionId, getCategoryString } from '../common/StorefrontSectionRegistry';
 import type { StorefrontTemplateProps } from './types';
 
 export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
   lang,
   isDark,
   storeSettings,
-  tenantInfo,
-  variants,
-  searchQuery,
-  setSearchQuery,
-  cartCount,
-  onOpenCart,
+  variants = [],
+  searchQuery = '',
+  selectedCategory = 'all',
+  setSelectedCategory,
   onSelectProduct,
-  onNavigateToTracking,
-  onNavigateToErp,
-  onToggleTheme,
-  onToggleLang,
+  onNavigateToShop,
+  onNavigateToCategories,
+  onNavigateToAbout,
+  onNavigateToContact,
+  onNavigateToPolicies,
 }) => {
   const isAr = lang === 'ar';
   const themeConfig = storeSettings?.theme_config || {};
   const primaryColor = themeConfig.primary_color || '#f97316';
-  const storeName = storeSettings?.store_name || tenantInfo?.name || 'Kids & Baby Haven';
   const currency = storeSettings?.currency || 'EGP';
+
+  const heroBanner = themeConfig.hero_banner || {};
+  const isHeroEnabled = heroBanner.enabled !== false;
+  const heroImage = heroBanner.desktop_image || storeSettings?.banner_image || '';
+  const heroMobileImage = heroBanner.mobile_image || heroImage;
+
+  // Elementor Layout & Styler Config
+  const layoutConfig = themeConfig.layout || {};
+  const pageBgColor = layoutConfig.page_bg_color || '';
+  const cardBgColor = layoutConfig.card_bg_color || '';
+  const cardBorderColor = layoutConfig.card_border_color || '';
+  const cardBorderRadius = layoutConfig.card_border_radius || 'full';
+  const cardShadow = layoutConfig.card_shadow || 'md';
+  const cardImageAspect = layoutConfig.card_image_aspect || 'square';
+  const cardImageFit = layoutConfig.card_image_fit || 'cover';
+  const categoriesStyle = layoutConfig.categories_style || 'pills';
+  const containerWidth = layoutConfig.container_width || 'boxed_standard';
+  const containerWidthClass =
+    containerWidth === 'boxed_compact'
+      ? 'max-w-5xl mx-auto px-4 sm:px-6'
+      : containerWidth === 'wide'
+      ? 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10'
+      : containerWidth === 'full_width'
+      ? 'w-full px-4 sm:px-8 lg:px-12'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
+
+  // Hero Display Controls
+  const heroHeight = heroBanner?.height || 'standard';
+  const heroFit = heroBanner?.image_fit || 'cover';
+  const heroPosition = heroBanner?.image_position || 'center';
+  const heroOverlayOpacity = typeof heroBanner?.overlay_opacity === 'number' ? heroBanner.overlay_opacity : 20;
+  const heroOverlayColor = heroBanner?.overlay_color || '#000000';
+  const heroTextAlign = heroBanner?.text_align || 'start';
+  const heroTitle = heroBanner.title || storeSettings?.banner_title || (isAr ? 'أجمل إطلالات طفلك من المصنع مباشرة' : 'Pure Comfort for Little Smiles');
+  const heroSubtitle = heroBanner.subtitle || storeSettings?.banner_subtitle || (isAr ? 'ملابس أطفال ومواليد مصممة بخيوط قطنية نقية 100% بدون أي مواد كيميائية ضارة. مقاسات دقيقة وتصاميم مريحة للحركة واللعب.' : 'Gentle, 100% natural cotton garments crafted with non-toxic dyes, tagless labels, and stretchy designs for play and nap time.');
+  const heroBadge = heroBanner.badge || (isAr ? 'نعومة فائقة وألوان مبهجة تناسب براءة طفلك' : 'Ultra-soft & Gentle Baby Care');
+  const heroCtaText = heroBanner.cta_text || (isAr ? 'تصفح ملابس الأطفال' : 'Explore Outfits');
+  const heroCtaDestination = heroBanner.cta_destination || 'shop';
+
+  const handleHeroCtaClick = () => {
+    if (heroCtaDestination === 'categories' && onNavigateToCategories) onNavigateToCategories();
+    else if (heroCtaDestination === 'contact' && onNavigateToContact) onNavigateToContact();
+    else if (heroCtaDestination === 'about' && onNavigateToAbout) onNavigateToAbout();
+    else if (heroCtaDestination === 'policies' && onNavigateToPolicies) onNavigateToPolicies();
+    else if (onNavigateToShop) onNavigateToShop();
+    else {
+      const el = document.getElementById('products');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const promoBanners: any[] = Array.isArray(themeConfig.promo_banners) ? themeConfig.promo_banners.filter((b: any) => b.enabled !== false) : [];
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {}
+  };
 
   const [selectedAge, setSelectedAge] = useState<string>('all');
 
@@ -47,294 +112,566 @@ export const KidsFamilyTemplate: React.FC<StorefrontTemplateProps> = ({
     { id: '10-14y', label_ar: 'ناشئين 10-14 سنة 🎒', label_en: 'Junior 10-14Y 🎒' },
   ];
 
-  return (
-    <div
-      className={`min-h-screen font-sans transition-colors duration-300 ${
-        isDark ? 'bg-amber-950/20 text-slate-100' : 'bg-amber-50/40 text-slate-800'
-      }`}
-      dir={isAr ? 'rtl' : 'ltr'}
-    >
-      {/* Top Friendly Announcement Bar */}
-      <div className="bg-gradient-to-r from-orange-400 via-amber-400 to-rose-400 text-white text-xs sm:text-sm py-2 px-4 text-center font-bold shadow-sm">
-        <span>
-          {themeConfig.announcement_bar_text ||
-            (isAr
-              ? '🍼 قطن مصري 100% طبيعي آمن على بشرة طفلك — شحن سريع وتوصيل آمن لجميع المحافظات 🧸'
-              : '🍼 100% Gentle Egyptian cotton safe for baby skin — fast nationwide home delivery 🧸')}
-        </span>
-      </div>
+  // Dynamic Category Extraction from actual product catalog
+  const categories = useMemo(() => {
+    const extracted = Array.from(
+      new Set(
+        (variants || [])
+          .map((v) => getCategoryString(v.category))
+          .filter((c) => Boolean(c) && c.length > 0)
+      )
+    );
+    return ['all', ...(extracted.length > 0 ? extracted : [])];
+  }, [variants]);
 
-      {/* Playful Header */}
-      <header
-        className={`sticky top-0 z-30 backdrop-blur-md border-b transition-colors ${
-          isDark ? 'bg-slate-900/90 border-amber-900/40' : 'bg-white/90 border-amber-100 shadow-sm'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          {/* Logo with Baby Icon */}
-          <div className="flex items-center gap-3">
-            <div
-              style={{ backgroundColor: primaryColor }}
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg transform -rotate-3 hover:rotate-3 transition-transform"
-            >
-              <Baby className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-black text-xl sm:text-2xl tracking-tight leading-none text-orange-600 dark:text-orange-400">
-                {storeName}
-              </h1>
-              <span className="text-[11px] font-bold text-amber-700/70 dark:text-amber-400/70">
-                {isAr ? 'ملابس الأطفال والمواليد بأعلى معايير الأمان' : 'Kids & Baby Safe Comfort Wear'}
-              </span>
-            </div>
-          </div>
+  // Product Filtering logic
+  const displayedVariants = useMemo(() => {
+    return (variants || []).filter((v) => {
+      const cat = getCategoryString(v.category);
+      const matchCat = !selectedCategory || selectedCategory === 'all' || cat === selectedCategory;
+      const q = (searchQuery || '').trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (v.model_name || v.name || '').toLowerCase().includes(q) ||
+        (v.sku || '').toLowerCase().includes(q) ||
+        cat.toLowerCase().includes(q);
 
-          {/* Search Bar */}
-          <div className="flex-1 max-w-md mx-4 hidden md:block">
-            <div className="relative">
-              <Search className={`absolute ${isAr ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500`} />
-              <input
-                type="text"
-                placeholder={isAr ? 'ابحث عن سالوبيت، بيجامات، فساتين، أطقم خروج...' : 'Search bodysuits, pajamas, dresses...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full py-2.5 text-sm rounded-full transition-all focus:outline-none focus:ring-2 ${
-                  isAr ? 'pr-10 pl-4' : 'pl-10 pr-4'
-                } ${
-                  isDark
-                    ? 'bg-slate-800 border border-slate-700 text-white placeholder-slate-400 focus:ring-orange-500'
-                    : 'bg-amber-50 border border-amber-200 text-slate-800 placeholder-amber-400 focus:ring-orange-400'
-                }`}
+      let matchAge = true;
+      if (selectedAge && selectedAge !== 'all') {
+        const text = `${v.size || ''} ${v.model_name || ''} ${v.name || ''} ${cat}`.toLowerCase();
+        if (selectedAge === '0-12m') {
+          matchAge = text.includes('0-3') || text.includes('0-12') || text.includes('ولادة') || text.includes('baby') || text.includes('رضيع') || text.includes('3-6');
+        } else if (selectedAge === '1-4y') {
+          matchAge = text.includes('1y') || text.includes('2y') || text.includes('3y') || text.includes('4y') || text.includes('سنة') || text.includes('سنتين');
+        }
+      }
+      return matchCat && matchSearch && matchAge;
+    });
+  }, [variants, selectedCategory, searchQuery, selectedAge]);
+
+  // Dynamic Section Registry Rendering
+  const activeSections = getActiveSortedSections(themeConfig?.sections);
+
+  // 1. Hero Section
+  const renderHeroSection = () => {
+    if (!isHeroEnabled) return null;
+
+    const heroHeightClass =
+      heroHeight === 'compact'
+        ? 'min-h-[260px]'
+        : heroHeight === 'tall'
+        ? 'min-h-[480px]'
+        : heroHeight === 'fullscreen'
+        ? 'min-h-[75vh]'
+        : 'min-h-[340px]';
+
+    const textAlignClass =
+      heroTextAlign === 'center'
+        ? 'text-center items-center mx-auto'
+        : heroTextAlign === 'end'
+        ? 'text-end items-end ms-auto'
+        : 'text-start items-start';
+
+    return (
+      <section className="py-8 md:py-14 px-4 max-w-7xl mx-auto">
+        <div className={`relative rounded-3xl overflow-hidden shadow-xl ${heroHeightClass} flex items-center bg-gradient-to-r from-amber-500/95 via-orange-400/90 to-amber-400`}>
+          {heroImage ? (
+            <>
+              <picture className="absolute inset-0 w-full h-full block">
+                {heroMobileImage && <source media="(max-width: 640px)" srcSet={api.getMediaUrl(heroMobileImage)} />}
+                <img
+                  src={api.getMediaUrl(heroImage)}
+                  alt={heroTitle}
+                  style={{
+                    objectFit: heroFit as any,
+                    objectPosition: heroPosition,
+                  }}
+                  className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                />
+              </picture>
+              <div
+                style={{
+                  backgroundColor: heroOverlayColor,
+                  opacity: heroOverlayOpacity / 100,
+                }}
+                className="absolute inset-0 pointer-events-none transition-opacity duration-300"
               />
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              <img
+                src="https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&w=1200&q=80"
+                alt={heroTitle}
+                style={{
+                  objectFit: heroFit as any,
+                  objectPosition: heroPosition,
+                }}
+                className={`w-full h-full ${heroFit === 'contain' ? 'object-contain' : 'object-cover'} absolute inset-0`}
+              />
+              <div
+                style={{
+                  backgroundColor: heroOverlayColor,
+                  opacity: heroOverlayOpacity / 100,
+                }}
+                className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+              />
+            </>
+          )}
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={onNavigateToTracking}
-              className={`text-xs font-bold px-3 py-2 rounded-full border transition-all ${
-                isDark
-                  ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                  : 'border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100'
-              }`}
-            >
-              {isAr ? 'أين طلبي؟ 🚚' : 'Where is my order?'}
-            </button>
-
-            {onNavigateToErp && (
-              <button
-                onClick={onNavigateToErp}
-                className="hidden sm:inline-block text-xs font-bold px-3 py-2 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300"
-              >
-                {isAr ? 'المصنع' : 'ERP'}
-              </button>
-            )}
-
-            <button onClick={onToggleLang} className="p-2 rounded-full text-slate-400 hover:text-slate-600">
-              <Globe className="w-5 h-5" />
-            </button>
-            <button onClick={onToggleTheme} className="p-2 rounded-full text-slate-400 hover:text-slate-600">
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-
-            <button
-              onClick={onOpenCart}
-              style={{ backgroundColor: primaryColor }}
-              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-full shadow-lg font-black text-sm hover:scale-105 active:scale-95 transition-all"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>{isAr ? 'سلة التسوق' : 'Cart'}</span>
-              <span className="bg-white/30 px-2 py-0.5 rounded-full text-xs">{cartCount}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Warm Hero Banner */}
-      <section className="py-10 md:py-16 px-4 max-w-7xl mx-auto">
-        <div className="relative rounded-3xl overflow-hidden p-8 sm:p-12 bg-gradient-to-r from-orange-400 via-amber-300 to-rose-300 text-slate-900 shadow-xl">
-          <div className="max-w-2xl space-y-4">
+          <div className={`relative z-10 p-8 sm:p-12 max-w-2xl space-y-4 flex flex-col ${textAlignClass}`}>
             <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-xs font-black text-orange-600 shadow-sm">
               <Smile className="w-4 h-4" />
-              <span>{isAr ? 'نعومة فائقة وألوان مبهجة تناسب براءة طفلك' : 'Ultra-soft & Gentle Baby Care'}</span>
+              <span>{heroBadge}</span>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-black leading-tight text-slate-950">
-              {storeSettings?.banner_title || (isAr ? 'أجمل إطلالات طفلك من المصنع مباشرة' : 'Pure Comfort for Little Smiles')}
+            <h2 className="text-3xl sm:text-5xl font-black leading-tight text-slate-950 dark:text-white">
+              {heroTitle}
             </h2>
-            <p className="text-sm sm:text-base font-medium text-slate-800 leading-relaxed">
-              {storeSettings?.banner_subtitle ||
-                (isAr
-                  ? 'ملابس أطفال ومواليد مصممة بخيوط قطنية نقية 100% بدون أي مواد كيميائية ضارة. مقاسات دقيقة وتصاميم مريحة للحركة واللعب.'
-                  : 'Gentle, 100% natural cotton garments crafted with non-toxic dyes, tagless labels, and stretchy designs for play and nap time.')}
+            <p className="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-200 leading-relaxed">
+              {heroSubtitle}
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
-              <a
-                href="#products"
-                className="bg-slate-950 text-white font-black text-xs sm:text-sm px-6 py-3 rounded-full shadow-lg hover:bg-slate-800 transition-all inline-flex items-center gap-2"
+              <button
+                type="button"
+                onClick={handleHeroCtaClick}
+                className="bg-slate-950 text-white font-black text-xs sm:text-sm px-6 py-3 rounded-full shadow-lg hover:bg-slate-800 transition-all inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>{isAr ? 'تصفح ملابس الأطفال' : 'Explore Outfits'}</span>
+                <span>{heroCtaText}</span>
                 <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
-              </a>
-              <span className="text-xs font-bold text-slate-800 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
+              </button>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
                 {isAr ? '✨ دفع عند الاستلام أو InstaPay' : '✨ COD or InstaPay'}
               </span>
             </div>
           </div>
         </div>
       </section>
+    );
+  };
 
-      {/* Safety & Quality Badges */}
-      <section className="py-6 max-w-7xl mx-auto px-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
-            <Award className="w-6 h-6 mx-auto mb-2 text-orange-500" />
-            <h4 className="font-black text-xs sm:text-sm">{isAr ? 'قطن مصري 100%' : '100% Egyptian Cotton'}</h4>
-            <p className="text-[11px] text-slate-500">{isAr ? 'أعلى درجات النعومة' : 'Supreme softness'}</p>
+  // 2. Categories & Age Brackets Section
+  const renderCategoriesSection = () => {
+    if (categoriesStyle === 'factory_icon_cards') {
+      return (
+        <section className={`py-6 ${containerWidthClass} space-y-4`}>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                {isAr ? 'خطوط إنتاج الأطفال والمواليد' : 'Kids & Baby Production Lines'}
+              </span>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {isAr ? 'تصفح أقسام المصنع المعتمدة' : 'Factory Certified Categories'}
+              </h3>
+            </div>
+            <span className="text-xs text-slate-400 font-mono">
+              {categories.length} {isAr ? 'أقسام' : 'divisions'}
+            </span>
           </div>
-          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
-            <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-emerald-500" />
-            <h4 className="font-black text-xs sm:text-sm">{isAr ? 'آمن للبشرة الحساسة' : 'Hypoallergenic'}</h4>
-            <p className="text-[11px] text-slate-500">{isAr ? 'صبغات طبيعية خالية من الرصاص' : 'Non-toxic natural dyes'}</p>
-          </div>
-          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
-            <Sparkles className="w-6 h-6 mx-auto mb-2 text-amber-500" />
-            <h4 className="font-black text-xs sm:text-sm">{isAr ? 'خياطة مسطحة مريحة' : 'Flat Seamless Stitch'}</h4>
-            <p className="text-[11px] text-slate-500">{isAr ? 'لا تسبب أي حكة للطفل' : 'No itch, tagless design'}</p>
-          </div>
-          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
-            <Heart className="w-6 h-6 mx-auto mb-2 text-rose-500" />
-            <h4 className="font-black text-xs sm:text-sm">{isAr ? 'استبدال مقاسات سهل' : 'Easy Size Exchange'}</h4>
-            <p className="text-[11px] text-slate-500">{isAr ? 'خلال 14 يوماً مع المعاينة' : '14 days hassle-free'}</p>
-          </div>
-        </div>
-      </section>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {categories.map((cat: string) => {
+              const isSelected = selectedCategory === cat;
+              const count = cat === 'all'
+                ? (variants?.length || 0)
+                : (variants?.filter(v => getCategoryString(v.category) === cat).length || 0);
 
-      {/* Age Bracket Selector & Products */}
-      <section id="products" className="py-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-8">
-          <span className="text-xs font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">
-            {isAr ? 'اختر حسب عمر طفلك' : 'Shop by Age Bracket'}
-          </span>
-          <h3 className="text-2xl sm:text-4xl font-black mt-1">
-            {isAr ? 'تشكيلة المواليد والأطفال الجاهزة للشحن' : 'Ready to Ship Kids Outfits'}
-          </h3>
+              let CategoryIcon = Layers;
+              const catLower = cat.toLowerCase();
+              if (cat === 'all') CategoryIcon = Award;
+              else if (catLower.includes('مواليد') || catLower.includes('baby') || catLower.includes('رضع')) CategoryIcon = Sparkles;
+              else if (catLower.includes('بنات') || catLower.includes('girls')) CategoryIcon = Heart;
+              else if (catLower.includes('أولاد') || catLower.includes('boys')) CategoryIcon = Scissors;
+              else if (catLower.includes('يونيفورم') || catLower.includes('مدرسي')) CategoryIcon = Building2;
 
-          {/* Age Bracket Pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-            {ageBrackets.map((bracket) => (
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory?.(cat)}
+                  className={`p-3.5 rounded-2xl border text-start transition-all cursor-pointer flex flex-col justify-between min-h-[100px] group ${
+                    isSelected
+                      ? 'shadow-md ring-2 ring-amber-500/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-amber-400 bg-white dark:bg-slate-900'
+                  }`}
+                  style={isSelected ? { borderColor: primaryColor } : {}}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                        isSelected ? 'bg-amber-600 text-white' : 'bg-amber-50 dark:bg-slate-800 text-amber-700 dark:text-amber-400'
+                      }`}
+                      style={isSelected ? { backgroundColor: primaryColor } : {}}
+                    >
+                      <CategoryIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                      {count}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-xs font-bold truncate block">{cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}</span>
+                    <span className="text-[9px] text-slate-400 block truncate mt-0.5">{isAr ? 'قطن مصري 100%' : '100% Egyptian Cotton'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className={`py-6 ${containerWidthClass} space-y-4`}>
+        {categories.length > 1 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {categories.map((cat: string) => (
               <button
-                key={bracket.id}
-                onClick={() => setSelectedAge(bracket.id)}
-                className={`px-4 py-2.5 rounded-full text-xs font-bold transition-all shadow-sm ${
-                  selectedAge === bracket.id
-                    ? 'bg-orange-500 text-white shadow-md transform scale-105'
-                    : isDark
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    : 'bg-white text-slate-700 hover:bg-amber-100 border border-amber-200'
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory?.(cat)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                    : 'bg-amber-100/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-200/60'
                 }`}
               >
-                {isAr ? bracket.label_ar : bracket.label_en}
+                {cat === 'all' ? (isAr ? 'كافة التشكيلة' : 'All') : cat}
               </button>
             ))}
           </div>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+            <span>{isAr ? 'تسوق حسب الفئة العمرية' : 'Shop by Age Range'}</span>
+          </h3>
         </div>
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+          {ageBrackets.map((age) => (
+            <button
+              key={age.id}
+              type="button"
+              onClick={() => setSelectedAge(age.id)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all shadow-xs cursor-pointer ${
+                selectedAge === age.id
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              <span>{isAr ? age.label_ar : age.label_en}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
-        {/* Product Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {variants.map((v) => {
+  // 3. Promotions Section
+  const renderPromotionsSection = () => {
+    if (promoBanners.length === 0) return null;
+    return (
+      <section className={`py-6 ${containerWidthClass}`}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {promoBanners.map((promo: any) => (
+            <div
+              key={promo.id}
+              style={{ backgroundColor: promo.bg_color || undefined }}
+              className="relative rounded-3xl overflow-hidden p-6 sm:p-8 flex flex-col justify-between min-h-[200px] shadow-md border border-orange-200 dark:border-slate-800 bg-gradient-to-r from-orange-500 to-amber-500 text-white"
+            >
+              {(promo.image_url || promo.image) && (
+                <StorefrontImage
+                  src={promo.image_url || promo.image}
+                  alt={promo.title}
+                  className="absolute inset-0 w-full h-full object-cover opacity-20 filter brightness-90"
+                />
+              )}
+              <div className="relative z-10 space-y-2">
+                {(promo.badge_text || promo.discount_code) && (
+                  <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold bg-white text-orange-600 shadow-sm">
+                    {promo.badge_text || `CODE: ${promo.discount_code}`}
+                  </span>
+                )}
+                <h4 className="text-2xl font-black">{promo.title}</h4>
+                <p className="text-xs sm:text-sm text-orange-100 max-w-md">{promo.subtitle}</p>
+              </div>
+              <div className="relative z-10 pt-4 flex items-center justify-between gap-4">
+                {(promo.discount_code || promo.badge_text) && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(promo.discount_code || promo.badge_text)}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedCode === (promo.discount_code || promo.badge_text) ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode === (promo.discount_code || promo.badge_text) ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ الرمز' : 'Copy Code')}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('products');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-4 py-2 rounded-full text-xs font-bold bg-white text-orange-600 shadow hover:bg-orange-50 transition flex items-center gap-1.5 cursor-pointer ms-auto"
+                >
+                  <span>{isAr ? 'تسوق العرض' : 'Shop Deal'}</span>
+                  <ArrowRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  // 4. Products Grid Section
+  const renderProductsSection = () => (
+    <section id="products" className={`py-8 ${containerWidthClass}`}>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <span className="text-xs font-extrabold uppercase tracking-wider text-orange-600 dark:text-orange-400">
+            {isAr ? 'ملابس مريحة وآمنة' : 'Gentle & Soft Outfits'}
+          </span>
+          <h3 className="text-2xl font-black mt-0.5 text-slate-900 dark:text-white">
+            {isAr ? 'تشكيلة الأطفال المحبوبة' : 'Playful Kids Collection'}
+          </h3>
+        </div>
+      </div>
+
+      {displayedVariants.length === 0 ? (
+        <div className="py-16 text-center text-slate-400 bg-white/40 dark:bg-slate-900/40 rounded-3xl p-8 border border-dashed border-amber-200 dark:border-amber-900/40">
+          <p className="text-base font-semibold">{isAr ? 'لا توجد منتجات مطابقة لهذا الاختيار حالياً' : 'No products match this filter'}</p>
+          {(selectedCategory !== 'all' || selectedAge !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory?.('all');
+                setSelectedAge('all');
+              }}
+              className="mt-2 text-xs font-bold text-orange-600 dark:text-orange-400 underline cursor-pointer"
+            >
+              {isAr ? 'عرض كافة منتجات الأطفال' : 'View all kids products'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {displayedVariants.map((v: any) => {
             const inStock = v.in_stock > 0;
+            const cardRadiusClass =
+              cardBorderRadius === 'none'
+                ? 'rounded-none'
+                : cardBorderRadius === 'sm'
+                ? 'rounded-lg'
+                : cardBorderRadius === 'md'
+                ? 'rounded-2xl'
+                : 'rounded-3xl';
+
+            const cardShadowClass =
+              cardShadow === 'none'
+                ? 'shadow-none'
+                : cardShadow === 'sm'
+                ? 'shadow-xs'
+                : cardShadow === 'lg'
+                ? 'shadow-2xl'
+                : 'shadow-md';
+
+            const cardAspectClass =
+              cardImageAspect === 'portrait'
+                ? 'aspect-[3/4]'
+                : cardImageAspect === 'tall'
+                ? 'aspect-[2/3]'
+                : 'aspect-square';
+
             return (
               <div
                 key={v.id}
-                className={`rounded-3xl overflow-hidden border transition-all duration-300 flex flex-col justify-between ${
-                  isDark
-                    ? 'bg-slate-900 border-amber-900/30 hover:border-orange-500/50 shadow-md'
-                    : 'bg-white border-amber-200/80 hover:border-orange-300 hover:shadow-xl shadow-sm'
+                style={{
+                  backgroundColor: cardBgColor || undefined,
+                  borderColor: cardBorderColor || undefined,
+                }}
+                className={`${cardRadiusClass} ${cardShadowClass} border p-4 transition-all duration-300 flex flex-col justify-between ${
+                  !cardBgColor
+                    ? isDark
+                      ? 'bg-slate-900 shadow-md'
+                      : 'bg-white shadow-sm hover:shadow-lg'
+                    : ''
+                } ${
+                  !cardBorderColor
+                    ? isDark
+                      ? 'border-amber-900/30 hover:border-amber-700/60'
+                      : 'border-amber-100 hover:border-amber-300'
+                    : ''
                 }`}
               >
-                {/* Visual Area */}
-                <div
-                  onClick={() => onSelectProduct(v)}
-                  className="relative aspect-square bg-amber-50/60 dark:bg-slate-800/80 flex items-center justify-center p-0 overflow-hidden cursor-pointer group"
-                >
-                  {v.image ? (
-                    <img
-                      src={v.image}
-                      alt={v.model_name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
+                <div>
+                  {/* Image with StorefrontImage */}
+                  <div
+                    onClick={() => onSelectProduct(v)}
+                    className={`relative ${cardAspectClass} rounded-2xl overflow-hidden bg-amber-50 dark:bg-slate-800 mb-3 cursor-pointer group`}
+                  >
+                    <StorefrontImage
+                      src={v.image || v.image_url}
+                      alt={v.model_name || v.name}
+                      objectFit={cardImageFit as any}
+                      className={`w-full h-full ${cardImageFit === 'contain' ? 'object-contain' : 'object-cover'} group-hover:scale-105 transition-transform duration-300`}
                     />
-                  ) : (
-                    <span className="text-6xl select-none transform hover:scale-110 transition-transform">🧸</span>
-                  )}
 
-                  {v.gallery && v.gallery.length > 1 && (
-                    <div className="absolute bottom-2 left-2 z-10">
-                      <span className="px-2 py-0.5 rounded-full bg-slate-950/70 text-white text-[10px] font-mono backdrop-blur-xs">
-                        +{v.gallery.length}
+                    {inStock ? (
+                      <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                        {isAr ? 'متوفر' : 'In Stock'}
                       </span>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="absolute top-2 right-2 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                        {isAr ? 'نفد' : 'Out of Stock'}
+                      </span>
+                    )}
 
-                  <div className="absolute top-3 right-3 z-10">
-                    <span className="bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 text-[10px] font-black px-2.5 py-1 rounded-full border border-orange-200 dark:border-orange-800">
-                      {isAr ? 'قطن 100%' : '100% Cotton'}
+                    <span className="absolute bottom-2 left-2 bg-amber-500/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-xs">
+                      100% Cotton ☁️
                     </span>
+                  </div>
+
+                  <span className="text-[10px] font-mono font-bold text-slate-400 block mb-0.5">{v.sku}</span>
+                  <h4
+                    onClick={() => onSelectProduct(v)}
+                    className="font-extrabold text-sm sm:text-base cursor-pointer hover:text-orange-600 transition-colors line-clamp-1"
+                  >
+                    {v.model_name}
+                  </h4>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                    <span>{isAr ? 'المقاس:' : 'Size:'}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{v.size || 'Baby'}</span>
+                    {v.color && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span>{v.color}</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* Details */}
-                <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
+                <div className="pt-3 border-t border-amber-100 dark:border-slate-800 mt-3 flex items-center justify-between gap-2">
                   <div>
-                    <span className="text-[11px] font-mono text-slate-400 block">{v.sku}</span>
-                    <h4 className="font-extrabold text-base leading-snug">{v.model_name}</h4>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-                      <span>{isAr ? 'المقاس:' : 'Size:'}</span>
-                      <span className="font-black text-orange-600 dark:text-orange-400">{v.size || '0-6M'}</span>
-                      {v.color && <span>• {v.color}</span>}
-                    </div>
+                    <span className="text-[10px] text-slate-400 block">{isAr ? 'السعر' : 'Price'}</span>
+                    <span className="text-lg font-black text-orange-600 dark:text-orange-400">
+                      {v.price.toFixed(2)}{' '}
+                      <span className="text-xs font-bold text-slate-400">{currency}</span>
+                    </span>
                   </div>
 
-                  <div className="pt-3 border-t border-amber-100 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">{isAr ? 'السعر' : 'Price'}</span>
-                      <span className="text-lg font-black text-orange-600 dark:text-orange-400">
-                        {v.price.toFixed(2)} <span className="text-xs font-bold text-slate-500">{currency}</span>
-                      </span>
-                    </div>
-
-                    <button
-                      onClick={() => onSelectProduct(v)}
-                      disabled={!inStock}
-                      style={{ backgroundColor: inStock ? primaryColor : undefined }}
-                      className={`px-4 py-2.5 rounded-full text-xs font-black shadow-md transition-all ${
-                        inStock
-                          ? 'text-white hover:scale-105 active:scale-95'
-                          : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {isAr ? 'اختيار 🍼' : 'Choose'}
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => onSelectProduct(v)}
+                    disabled={!inStock}
+                    style={{ backgroundColor: inStock ? primaryColor : undefined }}
+                    className={`px-4 py-2 rounded-full font-black text-xs flex items-center gap-1.5 shadow transition-all ${
+                      inStock
+                        ? 'text-white hover:brightness-110 active:scale-95 cursor-pointer'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'طلب' : 'Order'}</span>
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
-      </section>
+      )}
+    </section>
+  );
 
-      {/* Footer */}
-      <footer className="py-8 mt-12 border-t border-amber-200 dark:border-slate-800 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} {storeName} — {isAr ? 'صنع بكل حب للأطفال' : 'Crafted with Love for Kids'}</p>
-          <button onClick={onNavigateToTracking} className="hover:underline font-bold text-orange-600 dark:text-orange-400">
-            {isAr ? 'تتبع شحنة طفلك 🚚' : 'Track Baby Delivery 🚚'}
-          </button>
+  // 5. Safety Badges & Story Section
+  const renderStorySection = () => (
+    <section className="py-10 max-w-7xl mx-auto px-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
+          <Award className="w-6 h-6 mx-auto mb-2 text-orange-500" />
+          <h4 className="font-black text-xs sm:text-sm">{isAr ? 'قطن مصري 100%' : '100% Egyptian Cotton'}</h4>
+          <p className="text-[11px] text-slate-500">{isAr ? 'أعلى درجات النعومة' : 'Supreme softness'}</p>
         </div>
-      </footer>
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
+          <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-emerald-500" />
+          <h4 className="font-black text-xs sm:text-sm">{isAr ? 'آمن للبشرة الحساسة' : 'Hypoallergenic'}</h4>
+          <p className="text-[11px] text-slate-500">{isAr ? 'صبغات طبيعية خالية من الرصاص' : 'Non-toxic natural dyes'}</p>
+        </div>
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
+          <Sparkles className="w-6 h-6 mx-auto mb-2 text-amber-500" />
+          <h4 className="font-black text-xs sm:text-sm">{isAr ? 'خياطة مسطحة مريحة' : 'Flat Seamless Stitch'}</h4>
+          <p className="text-[11px] text-slate-500">{isAr ? 'لا تسبب أي حكة للطفل' : 'No itch, tagless design'}</p>
+        </div>
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 text-center shadow-sm">
+          <Heart className="w-6 h-6 mx-auto mb-2 text-rose-500" />
+          <h4 className="font-black text-xs sm:text-sm">{isAr ? 'استبدال مقاسات سهل' : 'Easy Size Exchange'}</h4>
+          <p className="text-[11px] text-slate-500">{isAr ? 'خلال 14 يوماً مع المعاينة' : '14 days hassle-free'}</p>
+        </div>
+      </div>
+    </section>
+  );
+
+  // 6. Contact Info Section
+  const renderContactSection = () => {
+    const contact = themeConfig.contact || {};
+    return (
+      <section className={`py-8 ${containerWidthClass}`}>
+        <div className="p-6 rounded-3xl bg-amber-500 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h4 className="font-black text-xl">{isAr ? 'خدمة أولياء الأمور والأطفال' : 'Parents Care Support'}</h4>
+            <p className="text-xs text-amber-100">{isAr ? 'متواجدون دائماً لمساعدتكم في اختيار المقاس الأنسب' : 'Always here to assist with accurate baby sizing'}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full">
+              <Phone className="w-3.5 h-3.5" />
+              <span>{contact.phone || storeSettings?.contact_whatsapp || '+201000000000'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full">
+              <Mail className="w-3.5 h-3.5" />
+              <span>{contact.email || 'kids@garmentos.com'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full">
+              <MapPin className="w-3.5 h-3.5" />
+              <span>{contact.address || (isAr ? 'مصر' : 'Egypt')}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderSectionById = (rawId: string) => {
+    const id = normalizeSectionId(rawId);
+    switch (id) {
+      case 'hero':
+        return renderHeroSection();
+      case 'trust_badges':
+      case 'story':
+        return renderStorySection();
+      case 'categories':
+        return renderCategoriesSection();
+      case 'promotions':
+        return renderPromotionsSection();
+      case 'featured_products':
+      case 'new_arrivals':
+        return renderProductsSection();
+      case 'contact_info':
+        return renderContactSection();
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div
+      style={{ backgroundColor: pageBgColor || undefined }}
+      className={`min-h-screen font-sans transition-colors duration-300 ${
+        !pageBgColor ? (isDark ? 'bg-amber-950/20 text-slate-100' : 'bg-amber-50/40 text-slate-800') : ''
+      }`}
+      dir={isAr ? 'rtl' : 'ltr'}
+    >
+      {activeSections.map((sec) => (
+        <React.Fragment key={sec.id}>
+          {renderSectionById(sec.id)}
+        </React.Fragment>
+      ))}
     </div>
   );
 };

@@ -69,7 +69,7 @@ class StorefrontController extends Controller
     }
 
     /**
-     * تسجيل طلب شراء من المتجر الإلكتروني مع دعم COD و InstaPay والخصم المباشر من المخزون
+     * تسجيل طلب شراء من المتجر الإلكتروني مع حجز مخزون المنتج النهائي حتى الشحن
      */
     public function placeOrder(Request $request, ?string $tenantId = null): JsonResponse
     {

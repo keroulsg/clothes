@@ -260,9 +260,15 @@ class ProductionService
 
         // التحقق من ملكية شجرة الخامات (BOM) إذا مررت
         if (!empty($data['bill_of_material_id'])) {
-            $bom = BillOfMaterial::where('tenant_id', $tenantId)->where('id', $data['bill_of_material_id'])->first();
+            $bom = BillOfMaterial::where('tenant_id', $tenantId)
+                ->where('garment_model_id', $model->id)
+                ->where('id', $data['bill_of_material_id'])
+                ->where('status', 'approved')
+                ->where('is_active', true)
+                ->first();
+
             if (!$bom) {
-                throw new InvalidArgumentException('أمان: شجرة الخامات (BOM) غير تابعة للشركة الحالية.');
+                throw new InvalidArgumentException('يجب اختيار نسخة BOM معتمدة ونشطة تابعة لنفس موديل الملابس والشركة الحالية.');
             }
         }
 

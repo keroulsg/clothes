@@ -16,7 +16,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE:-garmentos}
       POSTGRES_USER: ${DB_USERNAME:-garmentos_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set a unique DB_PASSWORD in the deployment environment}
     volumes:
       - garmentos_pg_data:/var/lib/postgresql/data
     networks:
@@ -36,13 +36,13 @@ services:
     image: redis:7-alpine
     container_name: garmentos-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-garmentos_redis_secret}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set a unique REDIS_PASSWORD in the deployment environment}"]
     volumes:
       - garmentos_redis_data:/data
     networks:
       - garmentos-internal
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-garmentos_redis_secret}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?Set a unique REDIS_PASSWORD in the deployment environment}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -59,19 +59,19 @@ services:
     environment:
       APP_NAME: "${APP_NAME:-GarmentOS Cloud}"
       APP_ENV: "${APP_ENV:-production}"
-      APP_KEY: "${APP_KEY:-base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=}"
+      APP_KEY: "${APP_KEY:?Set a unique APP_KEY in the deployment environment}"
       APP_DEBUG: "${APP_DEBUG:-false}"
-      APP_URL: "${APP_URL:-http://localhost}"
+      APP_URL: "${APP_URL:?Set APP_URL to the public HTTPS application URL}"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
       DB_DATABASE: ${DB_DATABASE:-garmentos}
       DB_USERNAME: ${DB_USERNAME:-garmentos_user}
-      DB_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      DB_PASSWORD: ${DB_PASSWORD:?Set a unique DB_PASSWORD in the deployment environment}
       REDIS_CLIENT: phpredis
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-garmentos_redis_secret}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique REDIS_PASSWORD in the deployment environment}
       QUEUE_CONNECTION: redis
       CACHE_STORE: redis
       SESSION_DRIVER: redis
@@ -100,18 +100,18 @@ services:
     environment:
       APP_NAME: "${APP_NAME:-GarmentOS Cloud}"
       APP_ENV: "${APP_ENV:-production}"
-      APP_KEY: "${APP_KEY:-base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=}"
+      APP_KEY: "${APP_KEY:?Set a unique APP_KEY in the deployment environment}"
       APP_DEBUG: "${APP_DEBUG:-false}"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
       DB_DATABASE: ${DB_DATABASE:-garmentos}
       DB_USERNAME: ${DB_USERNAME:-garmentos_user}
-      DB_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      DB_PASSWORD: ${DB_PASSWORD:?Set a unique DB_PASSWORD in the deployment environment}
       REDIS_CLIENT: phpredis
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-garmentos_redis_secret}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique REDIS_PASSWORD in the deployment environment}
       QUEUE_CONNECTION: redis
       CACHE_STORE: redis
     volumes:
@@ -137,18 +137,18 @@ services:
     environment:
       APP_NAME: "${APP_NAME:-GarmentOS Cloud}"
       APP_ENV: "${APP_ENV:-production}"
-      APP_KEY: "${APP_KEY:-base64:sO8K34pEwH7X/jR18O5E9u2+xXy3Z8e9fG4H5J6K7L8=}"
+      APP_KEY: "${APP_KEY:?Set a unique APP_KEY in the deployment environment}"
       APP_DEBUG: "${APP_DEBUG:-false}"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
       DB_DATABASE: ${DB_DATABASE:-garmentos}
       DB_USERNAME: ${DB_USERNAME:-garmentos_user}
-      DB_PASSWORD: ${DB_PASSWORD:-garmentos_secure_password}
+      DB_PASSWORD: ${DB_PASSWORD:?Set a unique DB_PASSWORD in the deployment environment}
       REDIS_CLIENT: phpredis
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-garmentos_redis_secret}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a unique REDIS_PASSWORD in the deployment environment}
       CACHE_STORE: redis
     volumes:
       - garmentos_storage:/var/www/html/storage

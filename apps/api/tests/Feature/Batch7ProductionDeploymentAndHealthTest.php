@@ -78,6 +78,10 @@ class Batch7ProductionDeploymentAndHealthTest extends TestCase
      */
     public function test_backup_command_generates_dump_and_manifest_with_sha256(): void
     {
+        if (config('database.default') === 'mysql') {
+            $this->markTestSkipped('MySQL backup/restore round-trip is executed by the dedicated CI CLI step outside PHPUnit transactions.');
+        }
+
         Tenant::create([
             'name' => 'مصنع النيل للنسيج',
             'code' => 'T-NILE-' . uniqid(),
@@ -111,6 +115,10 @@ class Batch7ProductionDeploymentAndHealthTest extends TestCase
      */
     public function test_verify_backup_command_validates_checksum_and_file_size(): void
     {
+        if (config('database.default') === 'mysql') {
+            $this->markTestSkipped('MySQL backup/restore round-trip is executed by the dedicated CI CLI step outside PHPUnit transactions.');
+        }
+
         // تشغيل التحقق من أحدث نسخة تم إنشاؤها
         $exitCode = Artisan::call('garmentos:verify-backup');
         $this->assertEquals(0, $exitCode);
@@ -125,6 +133,10 @@ class Batch7ProductionDeploymentAndHealthTest extends TestCase
      */
     public function test_restore_command_recovers_into_isolated_target_and_verifies_integrity(): void
     {
+        if (config('database.default') === 'mysql') {
+            $this->markTestSkipped('MySQL backup/restore round-trip is executed by the dedicated CI CLI step outside PHPUnit transactions.');
+        }
+
         $isolatedDbPath = storage_path('app/private/backups/isolated_verify_test_' . uniqid() . '.sqlite');
 
         $exitCode = Artisan::call('garmentos:restore', [
@@ -148,6 +160,10 @@ class Batch7ProductionDeploymentAndHealthTest extends TestCase
      */
     public function test_restore_never_allows_active_database_target_even_with_force(): void
     {
+        if (config('database.default') === 'mysql') {
+            $this->markTestSkipped('MySQL backup/restore round-trip is executed by the dedicated CI CLI step outside PHPUnit transactions.');
+        }
+
         Tenant::create([
             'name' => 'مصنع اختبار حماية الاستعادة',
             'code' => 'T-RESTORE-GUARD-' . uniqid(),

@@ -34,7 +34,7 @@ class RestoreDatabaseCommand extends Command
         } elseif (file_exists($target) && str_ends_with($target, '.manifest.json')) {
             $manifestPath = $target;
         } elseif (file_exists($target)) {
-            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
+            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sql|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
         } else {
             $manifestPath = "{$backupDir}/{$target}.manifest.json";
         }
@@ -56,7 +56,7 @@ class RestoreDatabaseCommand extends Command
             || !preg_match('/^[a-f0-9]{64}$/i', $manifest['sha256'])
             || !is_int($manifest['file_size_bytes'])
             || $manifest['file_size_bytes'] <= 0
-            || !in_array($manifest['database_driver'], ['sqlite', 'pgsql'], true)
+            || !in_array($manifest['database_driver'], ['sqlite', 'pgsql', 'mysql'], true)
         ) {
             $this->error('Invalid or unsafe backup manifest; refusing restore.');
             return Command::FAILURE;
@@ -91,7 +91,7 @@ class RestoreDatabaseCommand extends Command
 
         // Step 2: Safety Guard - Determine Isolated Target Database
         $driver = $manifest['database_driver'];
-        $defaultIsolatedTarget = $driver === 'pgsql'
+        $defaultIsolatedTarget = in_array($driver, ['pgsql', 'mysql'], true)
             ? 'garmentos_restore_test_' . time()
             : storage_path('app/private/backups/restore_test_' . time() . '.sqlite');
 
@@ -100,7 +100,13 @@ class RestoreDatabaseCommand extends Command
         // Hard safety boundary: --force must NEVER permit overwriting the active database.
         // A restore is only allowed into a separately named/path-isolated target.
         $currentDb = config("database.connections.{$driver}.database");
-        $sameRestoreTarget = $targetDb === $currentDb;
+        $sameRestoreTarget = $driver === 'mysql'
+            ? (is_string($targetDb) && is_string($currentDb) && strcasecmp($targetDb, $currentDb) === 0)
+            : $targetDb === $currentDb;
+        if ($driver === 'mysql' && (!is_string($targetDb) || !preg_match('/\\A[a-zA-Z0-9_]+\\z/', $targetDb) || in_array(strtolower($targetDb), ['mysql', 'sys', 'performance_schema', 'information_schema'], true))) {
+            $this->error('Invalid MySQL restore target. Use a new isolated database name containing only letters, numbers, and underscores.');
+            return Command::FAILURE;
+        }
         if ($driver === 'sqlite' && is_string($currentDb) && $currentDb !== ':memory:' && file_exists($targetDb) && file_exists($currentDb)) {
             $sameRestoreTarget = realpath($targetDb) !== false && realpath($targetDb) === realpath($currentDb);
         }
@@ -129,6 +135,8 @@ class RestoreDatabaseCommand extends Command
                 $this->restoreSqlite($workingDump, $targetDb);
             } elseif ($driver === 'pgsql') {
                 $this->restorePostgres($workingDump, $targetDb);
+            } elseif ($driver === 'mysql') {
+                $this->restoreMysql($workingDump, $targetDb);
             }
 
             if (isset($decryptedPart) && file_exists($decryptedPart)) {
@@ -210,6 +218,74 @@ class RestoreDatabaseCommand extends Command
         }
     }
 
+
+    private function restoreMysql(string $dumpPath, string $targetDb): void
+    {
+        if (!preg_match('/\\A[a-zA-Z0-9_]+\\z/', $targetDb)) {
+            throw new \RuntimeException('Unsafe MySQL restore database name.');
+        }
+
+        $config = config('database.connections.mysql', []);
+        $host = $config['host'] ?? '127.0.0.1';
+        $port = $config['port'] ?? 3306;
+        $username = $config['username'] ?? '';
+        $password = $config['password'] ?? '';
+
+        if ($username === '') {
+            throw new \RuntimeException('MySQL restore requires a configured database username.');
+        }
+
+        // MySQL restore requires CREATE DATABASE privilege. The target must be a new,
+        // separately named database; never import into an existing database.
+        putenv("MYSQL_PWD={$password}");
+        $stderrPath = sys_get_temp_dir() . '/garmentos_mysql_restore_' . bin2hex(random_bytes(6)) . '.stderr';
+
+        try {
+            $createSql = sprintf('CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci', $targetDb);
+            $createCmd = sprintf(
+                'mysql --host=%s --port=%s --user=%s --default-character-set=utf8mb4 --execute=%s 2> %s',
+                escapeshellarg($host),
+                escapeshellarg((string) $port),
+                escapeshellarg($username),
+                escapeshellarg($createSql),
+                escapeshellarg($stderrPath)
+            );
+
+            exec($createCmd, $createOutput, $createCode);
+            $createError = is_file($stderrPath) ? trim((string) file_get_contents($stderrPath)) : '';
+            if (is_file($stderrPath)) {
+                @unlink($stderrPath);
+            }
+            if ($createCode !== 0) {
+                throw new \RuntimeException("Could not create isolated MySQL restore database [{$targetDb}]: {$createError}");
+            }
+
+            $importCmd = sprintf(
+                'mysql --host=%s --port=%s --user=%s --database=%s --default-character-set=utf8mb4 < %s 2> %s',
+                escapeshellarg($host),
+                escapeshellarg((string) $port),
+                escapeshellarg($username),
+                escapeshellarg($targetDb),
+                escapeshellarg($dumpPath),
+                escapeshellarg($stderrPath)
+            );
+
+            exec($importCmd, $importOutput, $importCode);
+            $importError = is_file($stderrPath) ? trim((string) file_get_contents($stderrPath)) : '';
+            if (is_file($stderrPath)) {
+                @unlink($stderrPath);
+            }
+            if ($importCode !== 0) {
+                throw new \RuntimeException("MySQL backup import failed with exit code {$importCode}: {$importError}");
+            }
+        } finally {
+            putenv('MYSQL_PWD');
+            if (is_file($stderrPath)) {
+                @unlink($stderrPath);
+            }
+        }
+    }
+
     private function decryptFile(string $encryptedPath, string $outputPath, string $passphrase): void
     {
         $cipher = 'aes-256-cbc';
@@ -248,21 +324,32 @@ class RestoreDatabaseCommand extends Command
         $tenantCount = $conn->table('tenants')->count();
         $salesOrdersCount = $conn->table('sales_orders')->count();
         $journalEntriesCount = $conn->table('journal_entries')->count();
+        $inventoryItemsCount = $conn->table('inventory_items')->count();
+        $inventoryTransactionsCount = $conn->table('inventory_transactions')->count();
+        $purchaseOrdersCount = $conn->table('purchase_orders')->count();
+        $productionOrdersCount = $conn->table('production_orders')->count();
+        $salesInvoicesCount = $conn->table('sales_invoices')->count();
+        $migrationsCount = $conn->table('migrations')->count();
 
         $expectedSnap = $manifest['integrity_snapshot'] ?? [];
-        $expectedTenants = $expectedSnap['tenants_count'] ?? null;
-        $expectedOrders = $expectedSnap['sales_orders_count'] ?? null;
+        $actualCounts = [
+            'tenants_count' => $tenantCount,
+            'sales_orders_count' => $salesOrdersCount,
+            'journal_entries_count' => $journalEntriesCount,
+            'inventory_items_count' => $inventoryItemsCount,
+            'inventory_transactions_count' => $inventoryTransactionsCount,
+            'purchase_orders_count' => $purchaseOrdersCount,
+            'production_orders_count' => $productionOrdersCount,
+            'sales_invoices_count' => $salesInvoicesCount,
+            'migrations_count' => $migrationsCount,
+        ];
 
         $passed = true;
-        if ($expectedTenants !== null && $tenantCount !== $expectedTenants) {
-            $passed = false;
-        }
-        if ($expectedOrders !== null && $salesOrdersCount !== $expectedOrders) {
-            $passed = false;
-        }
-        $expectedJournalEntries = $expectedSnap['journal_entries_count'] ?? null;
-        if ($expectedJournalEntries !== null && $journalEntriesCount !== $expectedJournalEntries) {
-            $passed = false;
+        foreach ($actualCounts as $key => $actualCount) {
+            $expectedCount = $expectedSnap[$key] ?? null;
+            if ($expectedCount !== null && $actualCount !== $expectedCount) {
+                $passed = false;
+            }
         }
 
         return [
@@ -270,6 +357,12 @@ class RestoreDatabaseCommand extends Command
             'tenant_count' => $tenantCount,
             'sales_orders_count' => $salesOrdersCount,
             'journal_entries_count' => $journalEntriesCount,
+            'inventory_items_count' => $inventoryItemsCount,
+            'inventory_transactions_count' => $inventoryTransactionsCount,
+            'purchase_orders_count' => $purchaseOrdersCount,
+            'production_orders_count' => $productionOrdersCount,
+            'sales_invoices_count' => $salesInvoicesCount,
+            'migrations_count' => $migrationsCount,
             'integrity_passed' => $passed,
         ];
     }

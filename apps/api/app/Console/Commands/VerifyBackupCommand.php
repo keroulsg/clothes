@@ -27,7 +27,7 @@ class VerifyBackupCommand extends Command
             $manifestPath = $target;
         } elseif (file_exists($target)) {
             // Target is a dump file
-            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
+            $manifestPath = dirname($target) . '/' . preg_replace('/\.(sql\.gz|sql|sqlite)(\.enc)?$/', '', basename($target)) . '.manifest.json';
         } else {
             // Target is a backup ID
             $manifestPath = "{$backupDir}/{$target}.manifest.json";

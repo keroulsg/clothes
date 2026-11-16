@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import {
   Layers,
   AlertTriangle,
@@ -178,16 +178,13 @@ export function App() {
     });
   };
 
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-      document.documentElement.setAttribute('data-coreui-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.removeAttribute('data-theme');
-      document.documentElement.setAttribute('data-coreui-theme', 'light');
-    }
+  // Apply the theme before paint so the UI never flashes or briefly mixes palettes.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDark);
+    root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    root.setAttribute('data-coreui-theme', isDark ? 'dark' : 'light');
+    root.style.colorScheme = isDark ? 'dark' : 'light';
   }, [isDark]);
 
   const isAr = lang === 'ar';

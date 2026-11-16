@@ -21,6 +21,7 @@ use App\Models\SalesOrder;
 use App\Models\Size;
 use App\Models\StoreOrder;
 use App\Models\Tenant;
+use App\Models\TenantStoreSetting;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\AccountingService;
@@ -133,6 +134,15 @@ class BusinessModulesPhases7to10Test extends TestCase
             'average_cost' => 75.0000,
             'is_customer_owned' => false,
         ]);
+
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenantA->id,
+            'store_name' => 'El-Nasr Factory Store',
+            'is_store_enabled' => true,
+            'allow_cod' => true,
+            'allow_card_payment' => false,
+            'allow_instapay' => false,
+        ]);
     }
 
     /**
@@ -225,7 +235,7 @@ class BusinessModulesPhases7to10Test extends TestCase
         ]);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('رصيد المخزن غير كافٍ');
+        $this->expectExceptionMessage('المخزون غير كافٍ للصنف');
         $salesService->reserveOrderStock($salesOrder->id);
     }
 
@@ -281,7 +291,7 @@ class BusinessModulesPhases7to10Test extends TestCase
         $accountingService = app(AccountingService::class);
         $accountingService->initializeDefaultChartOfAccounts($this->tenantA->id);
 
-        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $revenueAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '4010')->first();
 
         // قيد متوازن سليم (مدين 5000 = دائن 5000)

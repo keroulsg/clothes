@@ -7,6 +7,8 @@ use App\Models\PaymentSubmission;
 use App\Models\StoreOrder;
 use App\Services\DomainResolutionService;
 use App\Services\StorefrontService;
+use App\Services\SalesService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -15,7 +17,8 @@ class StorefrontController extends Controller
 {
     public function __construct(
         protected StorefrontService $storefrontService,
-        protected DomainResolutionService $domainResolver
+        protected DomainResolutionService $domainResolver,
+        protected SalesService $salesService
     ) {}
 
     /**
@@ -93,7 +96,7 @@ class StorefrontController extends Controller
             'customer_phone' => 'required|string|max:50',
             'shipping_address' => 'required|string',
             'city' => 'nullable|string|max:100',
-            'payment_method' => 'required|string|in:cod,card_mock,instapay',
+            'payment_method' => 'required|string|in:cod,instapay',
             'instapay_reference' => 'nullable|string|max:100',
             'instapay_receipt_url' => 'nullable|string',
             'shipping_fee' => 'nullable|numeric|min:0',
@@ -252,8 +255,10 @@ class StorefrontController extends Controller
     public function orders(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $orders = StoreOrder::where('tenant_id', $tenantId)
-            ->with(['items', 'paymentReviewer'])
+        $orders = $this->scopeStoreOrdersToAssignedBranches(
+            StoreOrder::where('tenant_id', $tenantId),
+            request()
+        )->with(['items', 'paymentReviewer', 'salesOrder.warehouse'])
             ->latest()
             ->paginate(20);
 
@@ -266,40 +271,90 @@ class StorefrontController extends Controller
     public function updateStatus(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $order = StoreOrder::where('tenant_id', $tenantId)->findOrFail($id);
-
         $validated = $request->validate([
             'status' => 'required|string|in:new,confirmed,preparing,shipped,delivered,cancelled',
         ]);
-
         $nextStatus = $validated['status'];
 
-        // Integrity check: If order was already delivered, it cannot be cancelled
-        if ($order->status === 'delivered' && $nextStatus === 'cancelled') {
+        try {
+            return DB::transaction(function () use ($id, $tenantId, $nextStatus, $request) {
+                $order = $this->scopeStoreOrdersToAssignedBranches(
+                    StoreOrder::where('tenant_id', $tenantId),
+                    $request
+                )->lockForUpdate()->findOrFail($id);
+
+                $currentStatus = (string) $order->status;
+                if ($currentStatus === $nextStatus) {
+                    return response()->json([
+                        'message' => 'حالة الطلب محدثة بالفعل.',
+                        'order' => $order->load(['items', 'paymentReviewer']),
+                    ]);
+                }
+
+                $statusRank = [
+                    'new' => 0,
+                    'confirmed' => 1,
+                    'preparing' => 2,
+                    'shipped' => 3,
+                    'delivered' => 4,
+                ];
+
+                if ($currentStatus === 'cancelled' || !array_key_exists($currentStatus, $statusRank)) {
+                    return response()->json([
+                        'error' => 'InvalidStatusTransition',
+                        'message' => 'لا يمكن تغيير حالة هذا الطلب بعد إلغائه أو بسبب حالة تشغيلية غير معروفة.',
+                    ], 422);
+                }
+
+                if ($nextStatus === 'cancelled') {
+                    if ($statusRank[$currentStatus] >= $statusRank['shipped']) {
+                        return response()->json([
+                            'error' => 'InvalidStatusTransition',
+                            'message' => 'لا يمكن إلغاء طلب تم شحنه أو تسليمه. يجب تسجيل مرتجع مبيعات وإشعار دائن.',
+                        ], 422);
+                    }
+
+                    $this->storefrontService->restoreOrderInventory($order);
+                } else {
+                    if ($statusRank[$nextStatus] < $statusRank[$currentStatus]) {
+                        return response()->json([
+                            'error' => 'InvalidStatusTransition',
+                            'message' => 'لا يمكن إرجاع حالة الطلب إلى مرحلة تشغيلية سابقة.',
+                        ], 422);
+                    }
+
+                    if ($statusRank[$nextStatus] >= $statusRank['shipped']
+                        && $statusRank[$currentStatus] < $statusRank['shipped']) {
+                        if ($order->payment_method === 'instapay' && $order->payment_status !== 'verified_paid') {
+                            return response()->json([
+                                'error' => 'UnverifiedPayment',
+                                'message' => 'لا يمكن شحن أو تسليم طلب InstaPay قبل اعتماد وتأكيد التحويل البنكي من الإدارة.',
+                            ], 422);
+                        }
+
+                        if (!$order->sales_order_id) {
+                            throw new InvalidArgumentException('طلب المتجر غير مرتبط بأمر بيع ERP؛ لا يمكن شحنه قبل إصلاح الربط.');
+                        }
+
+                        // Shipment is the stock-issue boundary: consume the reservation through the
+                        // canonical sales workflow, create the invoice, and write the immutable stock ledger.
+                        $this->salesService->fulfillOrder((string) $order->sales_order_id);
+                    }
+                }
+
+                $order->update(['status' => $nextStatus]);
+
+                return response()->json([
+                    'message' => 'تم تحديث حالة طلب الشراء بنجاح',
+                    'order' => $order->fresh(['items', 'paymentReviewer']),
+                ]);
+            });
+        } catch (InvalidArgumentException $e) {
             return response()->json([
-                'error' => 'InvalidStatusTransition',
-                'message' => 'لا يمكن إلغاء طلب تم تسليمه للعميل بالفعل.',
+                'error' => 'StorefrontOrderTransitionFailed',
+                'message' => $e->getMessage(),
             ], 422);
         }
-
-        // Integrity check: InstaPay order cannot be dispatched or delivered without verified payment
-        if ($order->payment_method === 'instapay' && in_array($nextStatus, ['shipped', 'delivered'], true) && $order->payment_status !== 'verified_paid') {
-            return response()->json([
-                'error' => 'UnverifiedPayment',
-                'message' => 'لا يمكن شحن أو تسليم طلب InstaPay قبل اعتماد وتأكيد التحويل البنكي من الإدارة.',
-            ], 422);
-        }
-
-        if ($nextStatus === 'cancelled' && $order->status !== 'cancelled') {
-            $this->storefrontService->restoreOrderInventory($order);
-        }
-
-        $order->update(['status' => $nextStatus]);
-
-        return response()->json([
-            'message' => 'تم تحديث حالة طلب الشراء بنجاح',
-            'order' => $order->load(['items', 'paymentReviewer']),
-        ]);
     }
 
     /**
@@ -309,6 +364,16 @@ class StorefrontController extends Controller
     public function verifyPayment(Request $request, string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $allTenantBranchIds = \App\Models\Branch::where('tenant_id', $tenantId)->pluck('id')->all();
+            if (!empty($allTenantBranchIds) && array_diff($allTenantBranchIds, $user->assignedBranchIds()) !== []) {
+                return response()->json([
+                    'error' => 'InsufficientBranchCoverage',
+                    'message' => 'اعتماد تحويلات InstaPay وترحيلها محاسبيًا يتطلب صلاحية جميع فروع المنشأة.',
+                ], 403);
+            }
+        }
 
         $isRejectRoute = str_ends_with($request->path(), '/reject');
         $isApproveRoute = str_ends_with($request->path(), '/approve');
@@ -331,6 +396,13 @@ class StorefrontController extends Controller
         // Check if $id belongs to a PaymentSubmission or a StoreOrder
         $submission = PaymentSubmission::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($id);
         $orderId = $submission ? $submission->store_order_id : $id;
+        if (!$orderId) {
+            return response()->json(['error' => 'StoreOrderNotFound'], 404);
+        }
+        $this->scopeStoreOrdersToAssignedBranches(
+            StoreOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($orderId);
 
         try {
             $order = $this->storefrontService->verifyInstaPayPayment(
@@ -361,7 +433,9 @@ class StorefrontController extends Controller
     public function pendingPayments(): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId);
+        $user = request()->user();
+        $branchIds = $user && $user->role !== 'company_owner' ? $user->assignedBranchIds() : null;
+        $submissions = $this->storefrontService->getPendingPaymentSubmissions($tenantId, $branchIds);
 
         return response()->json([
             'submissions' => $submissions,
@@ -438,6 +512,13 @@ class StorefrontController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $submission = \App\Models\PaymentSubmission::where('tenant_id', $tenantId)->findOrFail($submissionId);
+        if (!$submission->store_order_id) {
+            return response()->json(['error' => 'StoreOrderNotFound'], 404);
+        }
+        $this->scopeStoreOrdersToAssignedBranches(
+            StoreOrder::where('tenant_id', $tenantId),
+            $request
+        )->findOrFail($submission->store_order_id);
 
         if (!$submission->receipt_file_path || !\Illuminate\Support\Facades\Storage::exists($submission->receipt_file_path)) {
             return response()->json([
@@ -562,5 +643,21 @@ class StorefrontController extends Controller
             ], 422);
         }
     }
+    private function scopeStoreOrdersToAssignedBranches($query, ?Request $request = null)
+    {
+        $user = ($request ?? request())->user();
+        if (!$user || !$user->shouldEnforceBranchScope()) {
+            return $query;
+        }
+
+        $branchIds = $user->assignedBranchIds();
+
+        return $query->where(function ($q) use ($branchIds) {
+            $q->whereNull('sales_order_id')
+                ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        });
+    }
+
+
 }
 

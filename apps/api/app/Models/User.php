@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -21,6 +22,7 @@ class User extends Authenticatable
         'phone',
         'role',
         'permissions',
+        'permissions_mode',
         'is_active',
         'password',
     ];
@@ -55,6 +57,7 @@ class User extends Authenticatable
                     ['key' => 'cutting.create', 'name_ar' => 'إنشاء أوامر وفرش جديد', 'name_en' => 'Create Cutting Lays'],
                     ['key' => 'cutting.issue', 'name_ar' => 'إذن صرف أقمشة ومستلزمات للقص', 'name_en' => 'Issue Fabric to Cutting'],
                     ['key' => 'production.manage', 'name_ar' => 'إدارة خطوط الإنتاج والتشغيل', 'name_en' => 'Manage Production Runs'],
+                    ['key' => 'production.work', 'name_ar' => 'تسجيل تنفيذ التشغيل والإنتاج', 'name_en' => 'Record Production Work'],
                 ],
             ],
             [
@@ -63,6 +66,7 @@ class User extends Authenticatable
                 'name_en' => 'Inventory & Storage',
                 'permissions' => [
                     ['key' => 'inventory.view', 'name_ar' => 'معاينة أرصدة الأقمشة والمخازن', 'name_en' => 'View Stock Balances'],
+                    ['key' => 'inventory.manage', 'name_ar' => 'إدارة كروت الأصناف ووحدات القياس', 'name_en' => 'Manage Inventory Items & Units'],
                     ['key' => 'inventory.receive', 'name_ar' => 'استلام خامات وتوريدات (GRN)', 'name_en' => 'Receive Raw Materials'],
                     ['key' => 'inventory.dispatch', 'name_ar' => 'صرف وتحويل بين المخازن', 'name_en' => 'Dispatch & Transfer Stock'],
                 ],
@@ -96,6 +100,7 @@ class User extends Authenticatable
                     ['key' => 'sales.view', 'name_ar' => 'عرض فواتير ومردودات البيع', 'name_en' => 'View Sales Invoices'],
                     ['key' => 'sales.create', 'name_ar' => 'إصدار أوامر وفواتير البيع للعملاء', 'name_en' => 'Issue Sales Invoices'],
                     ['key' => 'sales.discount', 'name_ar' => 'منح خصومات تجارية للعملاء', 'name_en' => 'Grant Customer Discounts'],
+                    ['key' => 'sales.payments.view', 'name_ar' => 'عرض سندات قبض العملاء', 'name_en' => 'View Customer Payment Receipts'],
                 ],
             ],
             [
@@ -109,6 +114,14 @@ class User extends Authenticatable
                 ],
             ],
             [
+                'module' => 'branches',
+                'name_ar' => 'الوصول إلى الفروع',
+                'name_en' => 'Branch Access',
+                'permissions' => [
+                    ['key' => 'branches.view', 'name_ar' => 'عرض الفروع المعيّنة للمستخدم', 'name_en' => 'View Assigned Branches'],
+                ],
+            ],
+            [
                 'module' => 'administration',
                 'name_ar' => 'إدارة النظام والأمان والنسخ الاحتياطي',
                 'name_en' => 'Admin & Security',
@@ -116,6 +129,55 @@ class User extends Authenticatable
                     ['key' => 'admin.users', 'name_ar' => 'إدارة حسابات المستخدمين ومصفوفة الصلاحيات', 'name_en' => 'Manage Users & Permissions'],
                     ['key' => 'admin.settings', 'name_ar' => 'تعديل بيانات المصنع والفروع والمخازن', 'name_en' => 'Edit Factory Settings & Branches'],
                     ['key' => 'admin.backup', 'name_ar' => 'تصدير وتحميل النسخ الاحتياطية للمصنع', 'name_en' => 'Export & Download Backups'],
+                ],
+            ],
+            [
+                'module' => 'hr',
+                'name_ar' => 'الموارد البشرية والرواتب',
+                'name_en' => 'HR & Payroll',
+                'permissions' => [
+                    ['key' => 'hr.view', 'name_ar' => 'عرض الموظفين والحضور', 'name_en' => 'View Employees & Attendance'],
+                    ['key' => 'hr.manage', 'name_ar' => 'إدارة الموظفين والحضور والإجازات', 'name_en' => 'Manage Employees & Attendance'],
+                    ['key' => 'hr.payroll', 'name_ar' => 'إعداد واعتماد الرواتب', 'name_en' => 'Manage Payroll'],
+                    ['key' => 'hr.objection', 'name_ar' => 'تقديم تظلم على تسوية عيب جودة', 'name_en' => 'Submit Defect Adjustment Objection'],
+                ],
+            ],
+            [
+                'module' => 'storefront',
+                'name_ar' => 'المتجر الإلكتروني',
+                'name_en' => 'Storefront',
+                'permissions' => [
+                    ['key' => 'storefront.view', 'name_ar' => 'عرض إعدادات المتجر والطلبات', 'name_en' => 'View Storefront'],
+                    ['key' => 'storefront.manage', 'name_ar' => 'إدارة تصميم وإعدادات المتجر', 'name_en' => 'Manage Storefront'],
+                ],
+            ],
+            [
+                'module' => 'maintenance',
+                'name_ar' => 'الصيانة والمعدات',
+                'name_en' => 'Maintenance',
+                'permissions' => [
+                    ['key' => 'maintenance.view', 'name_ar' => 'عرض المعدات وأوامر الصيانة', 'name_en' => 'View Maintenance'],
+                    ['key' => 'maintenance.manage', 'name_ar' => 'إدارة المعدات وأوامر الصيانة', 'name_en' => 'Manage Maintenance'],
+                ],
+            ],
+            [
+                'module' => 'waslat_worsh',
+                'name_ar' => 'وصلة ورش',
+                'name_en' => 'Waslat Worsh Marketplace',
+                'permissions' => [
+                    ['key' => 'waslat_worsh.view', 'name_ar' => 'عرض طلبات وعروض وصلة ورش', 'name_en' => 'View Marketplace Requests'],
+                    ['key' => 'waslat_worsh.manage', 'name_ar' => 'إنشاء وإدارة طلبات وعروض وصلة ورش', 'name_en' => 'Manage Marketplace Requests'],
+                    ['key' => 'waslat_worsh.payments', 'name_ar' => 'إدارة مدفوعات وعمولات وصلة ورش', 'name_en' => 'Manage Marketplace Payments'],
+                ],
+            ],
+            [
+                'module' => 'subcontracting',
+                'name_ar' => 'التشغيل للغير والمقاولات',
+                'name_en' => 'Subcontracting',
+                'permissions' => [
+                    ['key' => 'subcontracting.view', 'name_ar' => 'عرض أوامر التشغيل للغير', 'name_en' => 'View Subcontracting'],
+                    ['key' => 'subcontracting.manage', 'name_ar' => 'إدارة أوامر التشغيل للغير', 'name_en' => 'Manage Subcontracting'],
+                    ['key' => 'subcontracting.payments', 'name_ar' => 'سداد واعتماد فواتير التشغيل للغير', 'name_en' => 'Pay Subcontracting Invoices'],
                 ],
             ],
         ];
@@ -130,33 +192,38 @@ class User extends Authenticatable
         if ($tenantId) {
             $tenant = Tenant::find($tenantId);
             $customRoles = $tenant?->settings['custom_role_permissions'] ?? [];
-            if (!empty($customRoles[$role]) && is_array($customRoles[$role])) {
-                return $customRoles[$role];
+            if (array_key_exists($role, $customRoles) && is_array($customRoles[$role])) {
+                return array_values(array_unique($customRoles[$role]));
             }
         }
 
         switch ($role) {
             case 'company_owner':
                 return ['*'];
+            case 'tenant_admin':
+                return ['admin.settings'];
             case 'production_manager':
             case 'production_engineer':
-                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'qc.inspect', 'costing.view'];
+                return ['cutting.view', 'cutting.create', 'cutting.issue', 'production.manage', 'inventory.view', 'inventory.manage', 'inventory.dispatch', 'qc.inspect', 'costing.view', 'sales.view', 'sales.create', 'branches.view', 'maintenance.view', 'maintenance.manage', 'hr.view', 'hr.manage', 'hr.objection', 'storefront.view', 'storefront.manage', 'waslat_worsh.view', 'waslat_worsh.manage', 'subcontracting.view', 'subcontracting.manage', 'production.work'];
             case 'inventory_custodian':
             case 'warehouse':
             case 'storekeeper':
             case 'warehouse_manager':
-                return ['inventory.view', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'procurement.view'];
+                return ['inventory.view', 'inventory.manage', 'inventory.receive', 'inventory.dispatch', 'cutting.view', 'branches.view', 'procurement.view', 'procurement.create'];
             case 'accountant':
+                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.manage', 'hr.payroll', 'hr.objection', 'subcontracting.view', 'subcontracting.payments'];
             case 'financial_accountant':
-                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'sales.view'];
+                return ['accounting.view', 'accounting.post', 'reports.export', 'costing.view', 'costing.manage', 'procurement.view', 'procurement.create', 'sales.view', 'sales.payments.view', 'branches.view', 'inventory.view', 'inventory.manage', 'hr.view', 'hr.payroll', 'subcontracting.view', 'subcontracting.payments'];
             case 'quality_controller':
             case 'qc':
-                return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'inventory.view'];
+                return ['qc.inspect', 'qc.approve', 'qc.reject', 'cutting.view', 'branches.view', 'inventory.view'];
             case 'sales_rep':
-                return ['sales.view', 'sales.create', 'sales.discount', 'inventory.view'];
+            case 'sales_manager':
+            case 'sales_officer':
+                return ['sales.view', 'sales.create', 'sales.discount', 'branches.view', 'inventory.view', 'storefront.view'];
             case 'worker':
             case 'operator':
-                return ['cutting.view', 'production.manage'];
+                return ['cutting.view', 'production.manage', 'production.work', 'hr.objection'];
             default:
                 return [];
         }
@@ -171,10 +238,41 @@ class User extends Authenticatable
             return ['*'];
         }
 
-        $defaults = self::getDefaultPermissionsForRole($this->role, $this->tenant_id);
-        $custom = is_array($this->permissions) ? $this->permissions : [];
+        if ($this->permissions_mode === 'custom') {
+            return array_values(array_unique(is_array($this->permissions) ? $this->permissions : []));
+        }
 
-        return array_values(array_unique(array_merge($defaults, $custom)));
+        return self::getDefaultPermissionsForRole($this->role, $this->tenant_id);
+    }
+
+    /**
+     * قائمة المفاتيح المعتمدة فقط؛ يمنع تخزين صلاحيات مجهولة أو نجمة عامة للأدوار غير المالكة.
+     */
+    public static function getAllPermissionKeys(): array
+    {
+        $keys = [];
+        foreach (self::getPermissionsCatalog() as $module) {
+            foreach ($module['permissions'] ?? [] as $permission) {
+                if (isset($permission['key'])) {
+                    $keys[] = $permission['key'];
+                }
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    public function hasExplicitPermissionConfiguration(): bool
+    {
+        if ($this->permissions_mode === 'custom') {
+            return true;
+        }
+
+        $customRoles = $this->tenant?->settings['custom_role_permissions'] ?? [];
+
+        return is_array($customRoles)
+            && array_key_exists($this->role, $customRoles)
+            && is_array($customRoles[$this->role]);
     }
 
     /**
@@ -182,8 +280,12 @@ class User extends Authenticatable
      */
     public function hasPermission(string $permission): bool
     {
-        if ($this->role === 'company_owner' || $this->role === 'platform_admin') {
+        if ($this->role === 'company_owner') {
             return true;
+        }
+
+        if ($this->role === 'platform_admin') {
+            return false;
         }
 
         $effective = $this->getEffectivePermissions();
@@ -193,6 +295,29 @@ class User extends Authenticatable
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function branches(): BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class, 'branch_user', 'user_id', 'branch_id')
+            ->withTimestamps();
+    }
+
+    public function assignedBranchIds(): array
+    {
+        return $this->branches()
+            ->where('branches.tenant_id', $this->tenant_id)
+            ->pluck('branches.id')
+            ->all();
+    }
+
+    public function shouldEnforceBranchScope(): bool
+    {
+        if ($this->role === 'company_owner' || !$this->tenant_id) {
+            return false;
+        }
+
+        return Branch::where('tenant_id', $this->tenant_id)->exists();
     }
 
     protected static function boot(): void

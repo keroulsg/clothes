@@ -44,10 +44,27 @@ class RestoreDatabaseCommand extends Command
             return Command::FAILURE;
         }
 
-        $manifest = json_decode(file_get_contents($manifestPath), true);
-        $dumpPath = dirname($manifestPath) . '/' . $manifest['dump_file'];
+        $manifestContents = file_get_contents($manifestPath);
+        $manifest = $manifestContents === false ? null : json_decode($manifestContents, true);
+        if (
+            !is_array($manifest)
+            || !isset($manifest['backup_id'], $manifest['dump_file'], $manifest['sha256'], $manifest['database_driver'], $manifest['file_size_bytes'])
+            || !is_string($manifest['backup_id'])
+            || !is_string($manifest['dump_file'])
+            || basename($manifest['dump_file']) !== $manifest['dump_file']
+            || !is_string($manifest['sha256'])
+            || !preg_match('/^[a-f0-9]{64}$/i', $manifest['sha256'])
+            || !is_int($manifest['file_size_bytes'])
+            || $manifest['file_size_bytes'] <= 0
+            || !in_array($manifest['database_driver'], ['sqlite', 'pgsql'], true)
+        ) {
+            $this->error('Invalid or unsafe backup manifest; refusing restore.');
+            return Command::FAILURE;
+        }
 
-        if (!file_exists($dumpPath)) {
+        $dumpPath = dirname($manifestPath) . DIRECTORY_SEPARATOR . $manifest['dump_file'];
+
+        if (!file_exists($dumpPath) || !is_file($dumpPath)) {
             $this->error("Dump file not found: {$dumpPath}");
             return Command::FAILURE;
         }
@@ -55,8 +72,13 @@ class RestoreDatabaseCommand extends Command
         $this->info("==> [DISASTER RECOVERY] Validating Backup: {$manifest['backup_id']}");
 
         // Step 1: Pre-restore Checksum Verification
+        $actualSize = filesize($dumpPath);
+        if ($actualSize === false || $actualSize !== $manifest['file_size_bytes']) {
+            $this->error('CRITICAL: Backup file size does not match its manifest.');
+            return Command::FAILURE;
+        }
         $actualSha = hash_file('sha256', $dumpPath);
-        if (!hash_equals($manifest['sha256'], $actualSha)) {
+        if (!is_string($actualSha) || !hash_equals($manifest['sha256'], $actualSha)) {
             $this->error("CRITICAL: Checksum verification failed before restore!");
             return Command::FAILURE;
         }
@@ -75,10 +97,15 @@ class RestoreDatabaseCommand extends Command
 
         $targetDb = $this->option('target-db') ?: $defaultIsolatedTarget;
 
-        // Prevent restoring over production database
+        // Hard safety boundary: --force must NEVER permit overwriting the active database.
+        // A restore is only allowed into a separately named/path-isolated target.
         $currentDb = config("database.connections.{$driver}.database");
-        if ($targetDb === $currentDb && !$this->option('force')) {
-            $this->error("CRITICAL SAFETY BLOCK: Restoring directly over the active database [{$currentDb}] is blocked without explicit isolated target.");
+        $sameRestoreTarget = $targetDb === $currentDb;
+        if ($driver === 'sqlite' && is_string($currentDb) && $currentDb !== ':memory:' && file_exists($targetDb) && file_exists($currentDb)) {
+            $sameRestoreTarget = realpath($targetDb) !== false && realpath($targetDb) === realpath($currentDb);
+        }
+        if ($sameRestoreTarget) {
+            $this->error("CRITICAL SAFETY BLOCK: Restore target matches the active database [{$currentDb}]. Choose a separate isolated target; --force cannot bypass this protection.");
             return Command::FAILURE;
         }
 
@@ -137,10 +164,15 @@ class RestoreDatabaseCommand extends Command
     private function restoreSqlite(string $dumpPath, string $targetDb): void
     {
         $dir = dirname($targetDb);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0750, true);
+        if (file_exists($targetDb)) {
+            throw new \RuntimeException("Restore target already exists; refusing to overwrite existing data: {$targetDb}");
         }
-        copy($dumpPath, $targetDb);
+        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Unable to create isolated restore directory: {$dir}");
+        }
+        if (!copy($dumpPath, $targetDb)) {
+            throw new \RuntimeException("Unable to copy verified backup into isolated target: {$targetDb}");
+        }
     }
 
     private function restorePostgres(string $dumpPath, string $targetDb): void
@@ -153,8 +185,12 @@ class RestoreDatabaseCommand extends Command
 
         putenv("PGPASSWORD={$password}");
 
-        // Create target test database if not exists
-        exec(sprintf('createdb -h %s -p %s -U %s %s 2>&1', escapeshellarg($host), escapeshellarg((string)$port), escapeshellarg($username), escapeshellarg($targetDb)));
+        // Create a brand-new isolated database. Never continue against a pre-existing target.
+        exec(sprintf('createdb -h %s -p %s -U %s %s 2>&1', escapeshellarg($host), escapeshellarg((string)$port), escapeshellarg($username), escapeshellarg($targetDb)), $createOutput, $createCode);
+        if ($createCode !== 0) {
+            putenv("PGPASSWORD");
+            throw new \RuntimeException("Could not create a new isolated restore database [{$targetDb}]; the target may already exist or database creation failed: " . implode("\n", $createOutput));
+        }
 
         $cmd = sprintf(
             'pg_restore -h %s -p %s -U %s -d %s --clean --if-exists %s 2>&1',
@@ -168,7 +204,8 @@ class RestoreDatabaseCommand extends Command
         exec($cmd, $output, $returnCode);
         putenv("PGPASSWORD");
 
-        if ($returnCode > 1) { // pg_restore returns 1 on minor warnings
+        // pg_restore exit code 1 indicates at least one restore error; never treat it as success.
+        if ($returnCode !== 0) {
             throw new \RuntimeException("pg_restore failed with exit code {$returnCode}: " . implode("\n", $output));
         }
     }
@@ -193,16 +230,18 @@ class RestoreDatabaseCommand extends Command
 
     private function verifyRestoredDatabase(string $driver, string $targetDb, array $manifest): array
     {
-        // Dynamically configure a temporary connection to inspect the restored database
-        config([
-            'database.connections.restore_verification' => [
-                'driver' => $driver,
-                'database' => $targetDb,
-                'prefix' => '',
-                'foreign_key_constraints' => true,
-            ]
-        ]);
+        // Reuse the configured driver's connection details, but point every verification
+        // query at the isolated restore target (never at the active database).
+        $verificationConfig = config("database.connections.{$driver}", []);
+        if (empty($verificationConfig) || ($verificationConfig['driver'] ?? null) !== $driver) {
+            throw new \RuntimeException("Unsupported or unconfigured restore verification driver: {$driver}");
+        }
+        $verificationConfig['database'] = $targetDb;
+        $verificationConfig['prefix'] = '';
+        unset($verificationConfig['read'], $verificationConfig['write']);
 
+        config(['database.connections.restore_verification' => $verificationConfig]);
+        DB::purge('restore_verification');
         $conn = DB::connection('restore_verification');
 
         $migrationCount = $conn->table('migrations')->count();
@@ -219,6 +258,10 @@ class RestoreDatabaseCommand extends Command
             $passed = false;
         }
         if ($expectedOrders !== null && $salesOrdersCount !== $expectedOrders) {
+            $passed = false;
+        }
+        $expectedJournalEntries = $expectedSnap['journal_entries_count'] ?? null;
+        if ($expectedJournalEntries !== null && $journalEntriesCount !== $expectedJournalEntries) {
             $passed = false;
         }
 

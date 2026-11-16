@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\GoodsReceiptNote;
+use App\Models\GoodsReceiptNoteItem;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\ProcessedWebhookEvent;
@@ -13,6 +14,7 @@ use App\Models\Supplier;
 use App\Models\SupplierInvoice;
 use App\Models\Tenant;
 use App\Models\Warehouse;
+use App\Services\AccountingService;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -107,6 +109,7 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         ]);
 
         app()->instance('current_tenant_id', $this->tenant->id);
+        app(AccountingService::class)->initializeDefaultChartOfAccounts($this->tenant->id);
     }
 
     protected function tearDown(): void
@@ -437,12 +440,15 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('grn', $grnPayload1, $grnPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses);
+        $this->assertContains(201, $statuses, 'GRN concurrent worker responses: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->count());
-        $this->assertEquals(40.0, (float)$poItem->fresh()->received_quantity);
-        $this->assertEquals(60.0, (float)$poItem->fresh()->remaining_quantity);
+        $winningGrn = GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->firstOrFail();
+        $winningAcceptedQuantity = (float) $winningGrn->items()->sum('accepted_quantity');
+        $this->assertContains($winningAcceptedQuantity, [30.0, 40.0]);
+        $this->assertEquals($winningAcceptedQuantity, (float) $poItem->fresh()->received_quantity);
+        $this->assertEquals(100.0 - $winningAcceptedQuantity, (float) $poItem->fresh()->remaining_quantity);
     }
 
     /**
@@ -470,12 +476,46 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             'status' => 'approved',
         ]);
 
+        $poItem = PurchaseOrderItem::create([
+            'tenant_id' => $this->tenant->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $this->item->id,
+            'ordered_quantity' => 100.0,
+            'unit_price' => 100.0,
+            'total_price' => 10000.0,
+            'received_quantity' => 100.0,
+            'remaining_quantity' => 0.0,
+        ]);
+
+        $grn = GoodsReceiptNote::create([
+            'tenant_id' => $this->tenant->id,
+            'grn_number' => 'GRN-INV-CONC-' . uniqid(),
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouse->id,
+            'receipt_date' => date('Y-m-d'),
+            'status' => 'posted',
+            'inspection_status' => 'passed',
+        ]);
+
+        GoodsReceiptNoteItem::create([
+            'tenant_id' => $this->tenant->id,
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'inventory_item_id' => $this->item->id,
+            'delivered_quantity' => 100.0,
+            'accepted_quantity' => 100.0,
+            'rejected_quantity' => 0.0,
+            'unit_cost' => 100.0,
+        ]);
+
         $invKey = 'INV-CONC-KEY-' . uniqid();
         $invoiceNum = 'INV-CONC-NUM-' . uniqid();
 
         $invPayload1 = [
             'tenant_id' => $this->tenant->id,
             'purchase_order_id' => $po->id,
+            'goods_receipt_note_id' => $grn->id,
             'invoice_number' => $invoiceNum,
             'subtotal' => 10000.0,
             'tax_amount' => 1400.0,
@@ -488,11 +528,33 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('invoice', $invPayload1, $invPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses);
+        $this->assertTrue(
+            in_array(201, $statuses, true) || in_array(202, $statuses, true),
+            'Exactly one invoice request must win and be either posted (201) or held for variance review (202): ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE)
+        );
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->count());
-        $this->assertEquals(11400.0, (float)$supplier->fresh()->current_balance);
+        $invoice = SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->firstOrFail();
+
+        if ($invoice->matching_status === 'matched') {
+            $this->assertTrue((bool) $invoice->is_posted);
+            $this->assertEquals(11400.0, (float) $supplier->fresh()->current_balance);
+            $this->assertSame(1, DB::table('journal_entries')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('reference_type', 'supplier_invoice')
+                ->where('reference_id', $invoice->id)
+                ->count());
+        } else {
+            $this->assertSame('price_variance', $invoice->matching_status);
+            $this->assertFalse((bool) $invoice->is_posted);
+            $this->assertEquals(0.0, (float) $supplier->fresh()->current_balance);
+            $this->assertSame(0, DB::table('journal_entries')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('reference_type', 'supplier_invoice')
+                ->where('reference_id', $invoice->id)
+                ->count());
+        }
     }
 
     /**

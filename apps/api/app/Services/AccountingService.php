@@ -12,7 +12,10 @@ use App\Models\FinancialAccount;
 use App\Models\FinancialAccountTransfer;
 use App\Models\FiscalPeriod;
 use App\Models\FiscalYear;
+use App\Models\ExternalOperation;
+use App\Models\ExternalOperationReceipt;
 use App\Models\GarmentModel;
+use App\Models\InventoryTransaction;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\PaymentVoucher;
@@ -57,7 +60,8 @@ class AccountingService
             ['code' => '1111', 'name' => 'عملاء جملة وتوكيلات ملابس كبرى', 'name_en' => 'Wholesale Commercial Clients', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
             ['code' => '1112', 'name' => 'عملاء تجزئة ومعارض أفراد', 'name_en' => 'Retail Customers', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
             ['code' => '1113', 'name' => 'عملاء تشغيل وقص للغير (CMT)', 'name_en' => 'CMT Subcontracting Clients', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1110'],
-            
+            ['code' => '1120', 'name' => 'ضريبة قيمة مضافة مدخلات قابلة للخصم', 'name_en' => 'Recoverable Input VAT', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '11'],
+
             // 1200: المخزون والمستودعات
             ['code' => '1200', 'name' => 'مخزون المستودعات والمهمات', 'name_en' => 'Inventory & Stock Warehouses', 'type' => 'asset', 'category' => 'current_asset', 'level' => 3, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => '11'],
             ['code' => '1210', 'name' => 'مخزون الأقمشة والخامات وتريكو قطن', 'name_en' => 'Raw Fabrics & Knits Inventory', 'type' => 'asset', 'category' => 'current_asset', 'level' => 4, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '1200'],
@@ -105,6 +109,7 @@ class AccountingService
             ['code' => '4010', 'name' => 'إيراد مبيعات الملابس والإنتاج التام', 'name_en' => 'Finished Goods Sales Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
             ['code' => '4012', 'name' => 'إيراد مبيعات استوكات وتصفيات', 'name_en' => 'Stock Clearance Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
             ['code' => '4020', 'name' => 'إيراد خدمات التشغيل والقص للغير (CMT)', 'name_en' => 'CMT Service Revenue', 'type' => 'revenue', 'category' => 'sales_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
+            ['code' => '4040', 'name' => 'أرباح فروق الجرد والتسويات المخزنية', 'name_en' => 'Inventory Count Gains', 'type' => 'revenue', 'category' => 'other_revenue', 'level' => 2, 'normal_balance' => 'credit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '4'],
 
             // 5: تكاليف الإنتاج المباشرة
             ['code' => '5', 'name' => 'تكاليف الإنتاج المباشرة', 'name_en' => 'Direct Production Costs', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
@@ -113,6 +118,7 @@ class AccountingService
             ['code' => '5012', 'name' => 'تكلفة مستلزمات الإنتاج والإكسسوار المستهلك', 'name_en' => 'Direct Accessories & Trims Cost', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
             ['code' => '5020', 'name' => 'أجور عمال الإنتاج المباشرة (أجر القطعة)', 'name_en' => 'Direct Labor Expense (Piece-Rate)', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
             ['code' => '5030', 'name' => 'مصاريف تشغيل صناعي خارجي (تطريز/طباعة)', 'name_en' => 'Outwork & Subcontracting Services', 'type' => 'expense', 'category' => 'direct_cost', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
+            ['code' => '5040', 'name' => 'خسائر وعجز فروق الجرد المخزني', 'name_en' => 'Inventory Count Shortage Losses', 'type' => 'expense', 'category' => 'operating_expense', 'level' => 2, 'normal_balance' => 'debit', 'is_control_account' => false, 'is_postable' => true, 'parent_code' => '5'],
 
             // 6: المصروفات غير المباشرة والتشغيلية
             ['code' => '6', 'name' => 'المصروفات الصناعية والتشغيلية', 'name_en' => 'Operating & Overhead Expenses', 'type' => 'expense', 'category' => 'indirect_cost', 'level' => 1, 'normal_balance' => 'debit', 'is_control_account' => true, 'is_postable' => false, 'parent_code' => null],
@@ -145,7 +151,7 @@ class AccountingService
                     'is_control_account' => $acc['is_control_account'] ?? false,
                     'is_cash_bank' => $acc['is_cash_bank'] ?? false,
                     'is_postable' => $acc['is_postable'] ?? true,
-                    'current_balance' => 0,
+                    // Preserve live ledger balances when account metadata is re-seeded.
                     'is_active' => true,
                 ]
             );
@@ -156,8 +162,8 @@ class AccountingService
         $defaultMappings = [
             'ar_control' => '1110',
             'ap_control' => '2010',
-            'default_cash' => isset($createdMap['1011']) ? '1011' : '1010',
-            'default_bank' => isset($createdMap['1021']) ? '1021' : '1020',
+            'default_cash' => '1011',
+            'default_bank' => '1021',
             'sales_revenue' => '4010',
             'cmt_revenue' => '4020',
             'cogs' => '5010',
@@ -165,9 +171,11 @@ class AccountingService
             'wip_inventory' => '1220',
             'finished_goods_inventory' => '1230',
             'direct_labor_expense' => '5020',
-            'payroll_payable' => isset($createdMap['2021']) ? '2021' : '2020',
+            'payroll_payable' => '2021',
             'retained_earnings' => '3020',
             'sales_tax_payable' => '2030',
+            'input_tax' => '1120',
+            'accessories_inventory' => '1213',
         ];
 
         foreach ($defaultMappings as $key => $code) {
@@ -197,16 +205,58 @@ class AccountingService
             }])
             ->first();
 
-        if ($mapping && $mapping->account && $mapping->account->is_active) {
+        if (
+            $mapping
+            && $mapping->account
+            && $mapping->account->is_active
+            && $mapping->account->is_postable
+        ) {
             return $mapping->account;
+        }
+
+        // Ensure the recoverable input VAT control account exists for tenants initialized before this mapping was introduced.
+        if ($mappingKey === 'input_tax') {
+            $parent = ChartOfAccount::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('code', '11')
+                ->first();
+
+            if (!$parent) {
+                throw ValidationException::withMessages([
+                    'account_mapping' => ['تعذر تهيئة حساب ضريبة المدخلات: حساب الأصول المتداولة الرئيسي غير موجود.'],
+                ]);
+            }
+
+            $inputTaxAccount = ChartOfAccount::withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $tenantId, 'code' => '1120'],
+                [
+                    'name' => 'ضريبة قيمة مضافة مدخلات قابلة للخصم',
+                    'type' => 'asset',
+                    'category' => 'current_asset',
+                    'parent_id' => $parent->id,
+                    'level' => 3,
+                    'normal_balance' => 'debit',
+                    'is_control_account' => false,
+                    'is_postable' => true,
+                    'current_balance' => 0,
+                    'is_active' => true,
+                ]
+            );
+
+            TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'mapping_key' => 'input_tax'],
+                ['account_id' => $inputTaxAccount->id]
+            );
+
+            return $inputTaxAccount;
         }
 
         // Fallback to standard code if initialized
         $fallbackCodes = [
             'ar_control' => '1110',
             'ap_control' => '2010',
-            'default_cash' => '1010',
-            'default_bank' => '1020',
+            'default_cash' => '1011',
+            'default_bank' => '1021',
             'sales_revenue' => '4010',
             'cmt_revenue' => '4020',
             'cogs' => '5010',
@@ -217,17 +267,55 @@ class AccountingService
             'payroll_payable' => '2020',
             'retained_earnings' => '3020',
             'sales_tax_payable' => '2030',
+            'input_tax' => '1120',
+            'accessories_inventory' => '1213',
         ];
 
-        if (isset($fallbackCodes[$mappingKey])) {
-            $account = ChartOfAccount::withoutGlobalScopes()
+        if ((!$mapping || !$mapping->account || !$mapping->account->is_active || !$mapping->account->is_postable) && isset($fallbackCodes[$mappingKey])) {
+            $accountQuery = fn () => ChartOfAccount::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
                 ->where('code', $fallbackCodes[$mappingKey])
                 ->where('is_active', true)
+                ->where('is_postable', true)
                 ->first();
 
+            $account = $accountQuery();
+
+            if (!$account) {
+                // Only auto-complete a genuinely partial legacy chart. A missing account in an
+                // otherwise initialized chart is a configuration/integrity failure and must fail closed.
+                $chartAccountCount = ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->count();
+
+                if ($chartAccountCount <= 5) {
+                    $existingMappings = TenantAccountMapping::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->get(['mapping_key', 'account_id']);
+
+                    $this->initializeDefaultChartOfAccounts($tenantId);
+
+                    foreach ($existingMappings as $existingMapping) {
+                        $existingAccount = ChartOfAccount::withoutGlobalScopes()
+                            ->where('tenant_id', $tenantId)
+                            ->whereKey($existingMapping->account_id)
+                            ->where('is_active', true)
+                            ->where('is_postable', true)
+                            ->first();
+
+                        if ($existingAccount) {
+                            TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
+                                ['tenant_id' => $tenantId, 'mapping_key' => $existingMapping->mapping_key],
+                                ['account_id' => $existingAccount->id]
+                            );
+                        }
+                    }
+
+                    $account = $accountQuery();
+                }
+            }
+
             if ($account) {
-                // Auto-persist the mapping to ensure deterministic behavior
                 TenantAccountMapping::withoutGlobalScopes()->updateOrCreate(
                     ['tenant_id' => $tenantId, 'mapping_key' => $mappingKey],
                     ['account_id' => $account->id]
@@ -335,15 +423,16 @@ class AccountingService
                 'entry_number' => $data['entry_number'] ?? ('JE-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
                 'entry_date' => $entryDate,
                 'reference_type' => $data['reference_type'] ?? 'manual',
-                'reference_id' => $data['reference_id'] ?? null,
+                'reference_id' => !empty($data['reference_id']) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', (string) $data['reference_id']) ? $data['reference_id'] : null,
+                'reference_key' => isset($data['reference_id']) ? (string) $data['reference_id'] : null,
                 'description' => $data['description'],
                 'total_debit' => $totalDebit,
                 'total_credit' => $totalCredit,
                 'status' => 'posted',
                 'fiscal_period_id' => $period?->id ?? ($data['fiscal_period_id'] ?? null),
                 'branch_id' => $data['branch_id'] ?? null,
-                'created_by' => auth()->id() ?? ($data['created_by'] ?? null),
-                'posted_by' => auth()->id() ?? ($data['posted_by'] ?? null),
+                'created_by_user_id' => auth()->id() ?? ($data['created_by'] ?? null),
+                'posted_by_user_id' => auth()->id() ?? ($data['posted_by'] ?? null),
             ]);
 
             foreach ($lines as $line) {
@@ -438,14 +527,15 @@ class AccountingService
                 'entry_date' => $entryDate,
                 'reference_type' => 'reversal',
                 'reference_id' => $originalEntry->id,
+                'reference_key' => (string) $originalEntry->id,
                 'description' => "عكس القيد المحاسبي {$originalEntry->entry_number}: {$reversalReason}",
                 'total_debit' => $originalEntry->total_credit,
                 'total_credit' => $originalEntry->total_debit,
                 'status' => 'posted',
                 'fiscal_period_id' => $period?->id,
                 'branch_id' => $originalEntry->branch_id,
-                'created_by' => $userId ?? auth()->id(),
-                'posted_by' => $userId ?? auth()->id(),
+                'created_by_user_id' => $userId ?? auth()->id(),
+                'posted_by_user_id' => $userId ?? auth()->id(),
                 'reversed_entry_id' => $originalEntry->id,
                 'reversal_reason' => $reversalReason,
             ]);
@@ -582,7 +672,7 @@ class AccountingService
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'journal_entry_id' => $je->id,
-                'created_by' => auth()->id(),
+                'created_by_user_id' => auth()->id(),
             ]);
 
             return $transfer->load(['fromAccount', 'toAccount', 'journalEntry']);
@@ -685,31 +775,44 @@ class AccountingService
     public function closeFiscalPeriod(string $periodId, ?string $userId = null): FiscalPeriod
     {
         $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
-        $period = FiscalPeriod::where('tenant_id', $tenantId)->findOrFail($periodId);
-
-        if ($period->status === 'closed') {
-            return $period;
+        if (empty($tenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
         }
 
-        $period->status = 'closed';
-        $period->closed_at = now();
-        $period->closed_by = $userId ?? auth()->id();
-        $period->save();
+        return DB::transaction(function () use ($periodId, $userId, $tenantId) {
+            $period = FiscalPeriod::where('tenant_id', $tenantId)
+                ->whereKey($periodId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        try {
-            AuditLog::create([
-                'tenant_id' => $tenantId,
-                'user_id' => $userId ?? auth()->id(),
-                'action' => 'fiscal_period.closed',
-                'auditable_type' => FiscalPeriod::class,
-                'auditable_id' => $period->id,
-                'old_values' => ['status' => 'open'],
-                'new_values' => ['status' => 'closed'],
-                'ip_address' => request()->ip(),
-            ]);
-        } catch (\Throwable $e) {}
+            if ($period->status === 'closed') {
+                return $period;
+            }
+            if ($period->status !== 'open') {
+                throw new InvalidArgumentException("لا يمكن إغلاق فترة بحالة [{$period->status}].");
+            }
 
-        return $period;
+            $actorId = $userId ?? auth()->id();
+            $period->status = 'closed';
+            $period->closed_at = now();
+            $period->closed_by_user_id = $actorId;
+            $period->save();
+
+            try {
+                AuditLog::create([
+                    'tenant_id' => $tenantId,
+                    'user_id' => $actorId,
+                    'action' => 'fiscal_period.closed',
+                    'auditable_type' => FiscalPeriod::class,
+                    'auditable_id' => $period->id,
+                    'old_values' => ['status' => 'open'],
+                    'new_values' => ['status' => 'closed'],
+                    'ip_address' => request()->ip(),
+                ]);
+            } catch (\Throwable $e) {}
+
+            return $period;
+        });
     }
 
     /**
@@ -718,32 +821,48 @@ class AccountingService
     public function reopenFiscalPeriod(string $periodId, string $reason, ?string $userId = null): FiscalPeriod
     {
         $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
-        $period = FiscalPeriod::where('tenant_id', $tenantId)->findOrFail($periodId);
-
+        if (empty($tenantId)) {
+            throw new InvalidArgumentException('أمان: سياق الشركة غير محدد.');
+        }
         if (empty(trim($reason))) {
             throw new InvalidArgumentException('يجب تقديم سبب معتمد لإعادة فتح الفترة المالية المقفلة.');
         }
 
-        $period->status = 'open';
-        $period->reopened_at = now();
-        $period->reopened_by = $userId ?? auth()->id();
-        $period->reopening_reason = $reason;
-        $period->save();
+        return DB::transaction(function () use ($periodId, $reason, $userId, $tenantId) {
+            $period = FiscalPeriod::where('tenant_id', $tenantId)
+                ->whereKey($periodId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        try {
-            AuditLog::create([
-                'tenant_id' => $tenantId,
-                'user_id' => $userId ?? auth()->id(),
-                'action' => 'fiscal_period.reopened',
-                'auditable_type' => FiscalPeriod::class,
-                'auditable_id' => $period->id,
-                'old_values' => ['status' => 'closed'],
-                'new_values' => ['status' => 'open', 'reopening_reason' => $reason],
-                'ip_address' => request()->ip(),
-            ]);
-        } catch (\Throwable $e) {}
+            if ($period->status === 'open') {
+                return $period;
+            }
+            if ($period->status !== 'closed') {
+                throw new InvalidArgumentException("لا يمكن إعادة فتح فترة بحالة [{$period->status}].");
+            }
 
-        return $period;
+            $actorId = $userId ?? auth()->id();
+            $period->status = 'open';
+            $period->reopened_at = now();
+            $period->reopened_by_user_id = $actorId;
+            $period->reopening_reason = trim($reason);
+            $period->save();
+
+            try {
+                AuditLog::create([
+                    'tenant_id' => $tenantId,
+                    'user_id' => $actorId,
+                    'action' => 'fiscal_period.reopened',
+                    'auditable_type' => FiscalPeriod::class,
+                    'auditable_id' => $period->id,
+                    'old_values' => ['status' => 'closed'],
+                    'new_values' => ['status' => 'open', 'reopening_reason' => trim($reason)],
+                    'ip_address' => request()->ip(),
+                ]);
+            } catch (\Throwable $e) {}
+
+            return $period;
+        });
     }
 
     /**
@@ -763,7 +882,7 @@ class AccountingService
             // إغلاق كافة الفترات
             FiscalPeriod::where('tenant_id', $tenantId)
                 ->where('fiscal_year_id', $year->id)
-                ->update(['status' => 'closed', 'closed_at' => now(), 'closed_by' => $userId ?? auth()->id()]);
+                ->update(['status' => 'closed', 'closed_at' => now(), 'closed_by_user_id' => $userId ?? auth()->id()]);
 
             // إقفال الإيرادات والمصروفات إلى حساب الأرباح المحتجزة
             $retainedEarningsAccount = $this->getMappedAccount($tenantId, 'retained_earnings');
@@ -839,11 +958,110 @@ class AccountingService
 
             $year->status = 'closed';
             $year->closed_at = now();
-            $year->closed_by = $userId ?? auth()->id();
+            $year->closed_by_user_id = $userId ?? auth()->id();
             $year->save();
 
             return $year->load('periods');
         });
+    }
+
+    /**
+     * Post an approved stock-count adjustment to the general ledger exactly once.
+     * Positive differences debit the relevant inventory account and credit gains;
+     * shortages debit losses and credit the relevant inventory account.
+     */
+    public function postStockCountAdjustment(InventoryTransaction $transaction): ?JournalEntry
+    {
+        $tenantId = $transaction->tenant_id;
+        $referenceType = 'inventory_stock_count_adjustment';
+        $existing = $this->findJournalEntryByReference($tenantId, $referenceType, $transaction->id);
+        if ($existing) {
+            return $existing;
+        }
+
+        $item = $transaction->item;
+        if (!$item) {
+            throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد دون الصنف المخزني المرتبط.');
+        }
+
+        // A tenant may perform its first stock count before opening the accounting screen.
+        // Initialize the standard chart only when the tenant has no accounts at all;
+        // never re-seed over a partially configured or customized live chart.
+        if (!ChartOfAccount::where('tenant_id', $tenantId)->exists()) {
+            $this->initializeDefaultChartOfAccounts($tenantId);
+        }
+
+        if (!in_array($transaction->direction, ['IN', 'OUT'], true)) {
+            throw new InvalidArgumentException('اتجاه حركة تسوية الجرد غير صالح للترحيل المحاسبي.');
+        }
+
+        $type = strtolower((string) $item->item_type);
+        $inventoryCode = match (true) {
+            in_array($type, ['finished_good', 'finished_product'], true) => '1230',
+            in_array($type, ['accessory_raw', 'accessory', 'packaging', 'thread', 'trims'], true) => '1213',
+            in_array($type, ['spare_part', 'machine_spare_part', 'maintenance_spare'], true) => '1240',
+            default => '1210',
+        };
+
+        $amount = round((float) $transaction->total_cost, 4);
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('لا يمكن ترحيل تسوية جرد بتكلفة صفرية أو سالبة.');
+        }
+
+        $inventory = ChartOfAccount::where('tenant_id', $tenantId)
+            ->where('code', $inventoryCode)
+            ->first();
+        $offset = ChartOfAccount::where('tenant_id', $tenantId)
+            ->where('code', $transaction->direction === 'IN' ? '4040' : '5040')
+            ->first();
+
+        if (!$inventory || !$offset || !$inventory->is_active || !$inventory->is_postable || !$offset->is_active || !$offset->is_postable) {
+            throw ValidationException::withMessages([
+                'accounting' => ['تعذر ترحيل تسوية الجرد: حساب المخزون أو حساب فرق الجرد غير موجود أو غير نشط أو غير قابل للترحيل. راجع شجرة الحسابات.'],
+            ]);
+        }
+
+        $lines = $transaction->direction === 'IN'
+            ? [
+                ['account_id' => $inventory->id, 'debit' => $amount, 'credit' => 0, 'description' => 'زيادة مخزون حسب محضر الجرد'],
+                ['account_id' => $offset->id, 'debit' => 0, 'credit' => $amount, 'description' => 'أرباح فروق الجرد'],
+            ]
+            : [
+                ['account_id' => $offset->id, 'debit' => $amount, 'credit' => 0, 'description' => 'خسائر وعجز فروق الجرد'],
+                ['account_id' => $inventory->id, 'debit' => 0, 'credit' => $amount, 'description' => 'تخفيض قيمة المخزون حسب محضر الجرد'],
+            ];
+
+        return $this->createJournalEntry([
+            'tenant_id' => $tenantId,
+            'reference_type' => $referenceType,
+            'reference_id' => $transaction->id,
+            'branch_id' => $transaction->warehouse?->branch_id,
+            'description' => 'تسوية جرد مخزني - ' . ($transaction->reference_number ?? $transaction->id),
+            'entry_date' => now()->toDateString(),
+            'lines' => $lines,
+        ]);
+    }
+
+    /**
+     * Find an existing journal by its polymorphic reference without comparing
+     * numeric identifiers against the legacy UUID column on PostgreSQL.
+     */
+    private function findJournalEntryByReference(string $tenantId, string $referenceType, $referenceId): ?JournalEntry
+    {
+        $referenceId = (string) $referenceId;
+        $query = JournalEntry::where('tenant_id', $tenantId)
+            ->where('reference_type', $referenceType)
+            ->where('reference_key', $referenceId);
+
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $referenceId)) {
+            $query->orWhere(function ($legacy) use ($tenantId, $referenceType, $referenceId) {
+                $legacy->where('tenant_id', $tenantId)
+                    ->where('reference_type', $referenceType)
+                    ->where('reference_id', $referenceId);
+            });
+        }
+
+        return $query->first();
     }
 
     /**
@@ -854,10 +1072,7 @@ class AccountingService
         $tenantId = $invoice->tenant_id;
 
         // التحقق من عدم الترحيل المسبق
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'sales_invoice')
-            ->where('reference_id', $invoice->id)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'sales_invoice', $invoice->id);
 
         if ($existing) {
             return $existing;
@@ -939,11 +1154,18 @@ class AccountingService
                 }
             }
 
+            $partyType = $data['party_type'] ?? 'customer';
+            $voucherType = $data['voucher_type'];
+
+            if (!$account->is_active || !$account->is_postable) {
+                throw new InvalidArgumentException('حساب الصرف/القبض غير نشط أو غير قابل للترحيل.');
+            }
+
             $voucher = PaymentVoucher::create([
                 'tenant_id' => $tenantId,
                 'voucher_number' => $data['voucher_number'] ?? ('PV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
-                'voucher_type' => $data['voucher_type'], // receipt or payment
-                'party_type' => $data['party_type'] ?? 'customer',
+                'voucher_type' => $voucherType, // receipt or payment
+                'party_type' => $partyType,
                 'party_id' => $data['party_id'] ?? null,
                 'party_name' => $data['party_name'],
                 'payment_method' => $data['payment_method'] ?? 'cash',
@@ -953,81 +1175,75 @@ class AccountingService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            // ترحيل قيد اليومية التلقائي للسند إذا توفرت حسابات الربط، أو تحديث الرصيد مباشرة
-            $journalPosted = false;
-            try {
-                $contraAccountId = null;
-                if ($voucher->party_type === 'customer') {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'ar_control')->id;
-                } elseif ($voucher->party_type === 'supplier') {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'ap_control')->id;
-                } elseif ($voucher->party_type === 'employee') {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'payroll_payable')->id;
-                } else {
-                    $contraAccountId = $this->getMappedAccount($tenantId, 'cogs')->id;
+            // The voucher and its GL journal are one atomic operation. Never mutate balances outside the ledger.
+            if ($partyType === 'customer') {
+                $contraAccountId = $this->getMappedAccount($tenantId, 'ar_control')->id;
+            } elseif ($partyType === 'supplier') {
+                $contraAccountId = $this->getMappedAccount($tenantId, 'ap_control')->id;
+            } elseif ($partyType === 'employee') {
+                $contraAccountId = $this->getMappedAccount($tenantId, 'payroll_payable')->id;
+            } elseif ($partyType === 'other' && !empty($data['contra_account_id'])) {
+                $contraAccount = ChartOfAccount::where('tenant_id', $tenantId)
+                    ->whereKey($data['contra_account_id'])
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$contraAccount) {
+                    throw new InvalidArgumentException('الحساب المقابل لسند الطرف الآخر غير موجود أو غير نشط أو غير قابل للترحيل.');
                 }
 
-                $lines = [];
-                if ($voucher->voucher_type === 'receipt') {
-                    // قبض: الصندوق/البنك مدين، والعميل/الطرف الآخر دائن
-                    $lines = [
-                        [
-                            'account_id' => $account->id,
-                            'debit' => $amount,
-                            'credit' => 0,
-                            'description' => "قبض نقدي/بنكي بسند رقم {$voucher->voucher_number}",
-                        ],
-                        [
-                            'account_id' => $contraAccountId,
-                            'debit' => 0,
-                            'credit' => $amount,
-                            'description' => "سداد لحساب الطرف: {$voucher->party_name}",
-                            'party_type' => $voucher->party_type,
-                            'party_id' => $voucher->party_id,
-                        ],
-                    ];
-                } else {
-                    // صرف: المورد/المستحق مدين، والصندوق/البنك دائن
-                    $lines = [
-                        [
-                            'account_id' => $contraAccountId,
-                            'debit' => $amount,
-                            'credit' => 0,
-                            'description' => "صرف لحساب الطرف: {$voucher->party_name}",
-                            'party_type' => $voucher->party_type,
-                            'party_id' => $voucher->party_id,
-                        ],
-                        [
-                            'account_id' => $account->id,
-                            'debit' => 0,
-                            'credit' => $amount,
-                            'description' => "صرف نقدي/بنكي بسند رقم {$voucher->voucher_number}",
-                        ],
-                    ];
-                }
-
-                $this->createJournalEntry([
-                    'tenant_id' => $tenantId,
-                    'entry_number' => 'JE-VOUCH-' . $voucher->voucher_number,
-                    'entry_date' => $voucher->voucher_date,
-                    'reference_type' => 'payment_voucher',
-                    'reference_id' => $voucher->id,
-                    'description' => "قيد سند " . ($voucher->voucher_type === 'receipt' ? 'قبض' : 'صرف') . " رقم {$voucher->voucher_number} - {$voucher->party_name}",
-                    'lines' => $lines,
-                ]);
-                $journalPosted = true;
-            } catch (\Throwable $e) {
-                // في حال عدم اكتمال ضبط حسابات الربط المقابلة، يتم تحديث رصيد حساب السند مباشرة
+                $contraAccountId = $contraAccount->id;
+            } else {
+                throw new InvalidArgumentException('يجب تحديد حساب مقابل فرعي قابل للترحيل لسند الطرف الآخر قبل الترحيل.');
             }
 
-            if (!$journalPosted) {
-                if ($voucher->voucher_type === 'receipt') {
-                    $account->current_balance += $amount;
-                } else {
-                    $account->current_balance -= $amount;
-                }
-                $account->save();
+            if ($voucherType === 'receipt') {
+                $lines = [
+                    [
+                        'account_id' => $account->id,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "قبض نقدي/بنكي بسند رقم {$voucher->voucher_number}",
+                    ],
+                    [
+                        'account_id' => $contraAccountId,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "سداد لحساب الطرف: {$voucher->party_name}",
+                        'party_type' => $voucher->party_type,
+                        'party_id' => $voucher->party_id,
+                    ],
+                ];
+            } else {
+                $lines = [
+                    [
+                        'account_id' => $contraAccountId,
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'description' => "صرف لحساب الطرف: {$voucher->party_name}",
+                        'party_type' => $voucher->party_type,
+                        'party_id' => $voucher->party_id,
+                    ],
+                    [
+                        'account_id' => $account->id,
+                        'debit' => 0,
+                        'credit' => $amount,
+                        'description' => "صرف نقدي/بنكي بسند رقم {$voucher->voucher_number}",
+                    ],
+                ];
             }
+
+            $this->createJournalEntry([
+                'tenant_id' => $tenantId,
+                'entry_number' => 'JE-VOUCH-' . $voucher->voucher_number,
+                'entry_date' => $voucher->voucher_date,
+                'reference_type' => 'payment_voucher',
+                'reference_id' => $voucher->id,
+                'description' => "قيد سند " . ($voucherType === 'receipt' ? 'قبض' : 'صرف') . " رقم {$voucher->voucher_number} - {$voucher->party_name}",
+                'lines' => $lines,
+            ]);
 
             return $voucher->load('account');
         });
@@ -1054,12 +1270,12 @@ class AccountingService
                 ->where('production_order_id', $order->id)
                 ->first();
 
-            // الحفاظ على القيم التاريخية لبطاقات التكلفة المعتمدة
-            if ($existingCostSheet && $existingCostSheet->status === 'approved' && empty($overrides['force_recalculate'])) {
+            // Approved cost sheets are immutable; corrections require a separate audited revision workflow.
+            if ($existingCostSheet && $existingCostSheet->status === 'approved') {
                 return $existingCostSheet->load(['productionOrder', 'garmentModel']);
             }
 
-            if (in_array($order->status, ['closed', 'archived']) && empty($overrides['force_recalculate'])) {
+            if (in_array($order->status, ['closed', 'archived'], true)) {
                 throw ValidationException::withMessages([
                     'production_order' => ['أمر الإنتاج مغلق نهائياً، ولا يمكن إعادة احتساب التكلفة إلا بإذن استثنائي معتمد.'],
                 ]);
@@ -1104,20 +1320,23 @@ class AccountingService
             if (isset($overrides['direct_labor_cost'])) {
                 $laborCost = (float)$overrides['direct_labor_cost'];
             } else {
-                $approvedLabor = (float)PieceWorkLog::where('tenant_id', $tenantId)
+                // Only approved/settled piece-work is an actual manufacturing cost.
+                // Pending, submitted, or rejected logs must never be capitalized into WIP.
+                $laborCost = (float) PieceWorkLog::where('tenant_id', $tenantId)
                     ->where('production_order_id', $order->id)
                     ->whereIn('status', ['approved', 'settled'])
                     ->sum('total_amount');
-
-                $laborCost = $approvedLabor > 0
-                    ? $approvedLabor
-                    : (float)PieceWorkLog::where('tenant_id', $tenantId)
-                        ->where('production_order_id', $order->id)
-                        ->where('status', '!=', 'rejected')
-                        ->sum('total_amount');
             }
 
-            $subcontractCost = (float)($overrides['subcontracted_services_cost'] ?? 0);
+            // Include only subcontract work actually returned in receipt batches.
+            // Dispatch quantities are commitments, not incurred manufacturing cost.
+            $subcontractCost = isset($overrides['subcontracted_services_cost'])
+                ? (float) $overrides['subcontracted_services_cost']
+                : (float) ExternalOperationReceipt::where('tenant_id', $tenantId)
+                    ->whereIn('external_operation_id', ExternalOperation::where('tenant_id', $tenantId)
+                        ->where('production_order_id', $order->id)
+                        ->select('id'))
+                    ->sum('total_cost');
 
             // 3. احتساب التكاليف غير المباشرة وطريقة التحميل
             $allocationMethod = $overrides['overhead_allocation_method'] ?? 'direct_labor_cost_pct';
@@ -1132,7 +1351,7 @@ class AccountingService
             if (isset($overrides['allocated_overhead_cost'])) {
                 $overheadCost = (float)$overrides['allocated_overhead_cost'];
             } else {
-                if (!empty($overrides['overhead_allocation_method']) && $allocationMethod === 'direct_labor_cost_pct') {
+                if ($allocationMethod === 'direct_labor_cost_pct') {
                     $overheadCost = round($laborCost * $overheadRate, 4);
                 } elseif ($allocationMethod === 'per_unit') {
                     $unitRate = (float)($overrides['per_unit_overhead_rate'] ?? 2.5);
@@ -1311,7 +1530,9 @@ class AccountingService
                 ->where('payment_status', '!=', 'paid')
                 ->sum(DB::raw('total_amount - paid_amount'));
             $currBal = (float)($s->current_balance ?? 0);
-            $totalSupplierDue = round(max($invoicesDue, $currBal), 2);
+            // The supplier subledger balance is authoritative. Using max(invoice due, balance)
+            // masks differences instead of reconciling them.
+            $totalSupplierDue = round($currBal, 2);
 
             if (abs($totalSupplierDue) > 0.001) {
                 $subledgerSum += $totalSupplierDue;
@@ -1508,72 +1729,133 @@ class AccountingService
             ->get()
             ->keyBy('code');
 
-        $glFabrics = $glAccounts->has('1210') ? (float)$glAccounts->get('1210')->current_balance : 0;
-        $glAccessories = $glAccounts->has('1213') ? (float)$glAccounts->get('1213')->current_balance : 0;
-        $glWip = $glAccounts->has('1220') ? (float)$glAccounts->get('1220')->current_balance : 0;
-        $glFinished = $glAccounts->has('1230') ? (float)$glAccounts->get('1230')->current_balance : 0;
-
-        $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
+        $glFabrics = $glAccounts->has('1210') ? (float) $glAccounts->get('1210')->current_balance : 0;
+        $glAccessories = $glAccounts->has('1213') ? (float) $glAccounts->get('1213')->current_balance : 0;
+        $glWip = $glAccounts->has('1220') ? (float) $glAccounts->get('1220')->current_balance : 0;
+        $glFinished = $glAccounts->has('1230') ? (float) $glAccounts->get('1230')->current_balance : 0;
 
         $inventoryItems = \App\Models\InventoryItem::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->get();
+            ->get(['item_type', 'average_cost', 'current_balance']);
 
-        $warehouseFabricsValuation = 0;
-        $warehouseAccessoriesValuation = 0;
-        $warehouseFinishedValuation = 0;
+        $warehouseFabricsValuation = 0.0;
+        $warehouseAccessoriesValuation = 0.0;
+        $warehouseFinishedValuation = 0.0;
 
         foreach ($inventoryItems as $item) {
-            $cost = (float)($item->unit_cost ?? $item->cost_price ?? 0);
-            $qty = (float)($item->current_stock ?? $item->quantity ?? 0);
-            $val = $cost * $qty;
-            $cat = strtolower($item->category ?? '');
+            $value = (float) $item->average_cost * (float) $item->current_balance;
+            $type = strtolower((string) $item->item_type);
 
-            if (str_contains($cat, 'fabric') || str_contains($cat, 'قماش')) {
-                $warehouseFabricsValuation += $val;
-            } elseif (str_contains($cat, 'access') || str_contains($cat, 'مستلزم') || str_contains($cat, 'خيط') || str_contains($cat, 'زرار')) {
-                $warehouseAccessoriesValuation += $val;
-            } else {
-                $warehouseFinishedValuation += $val;
+            if (in_array($type, ['fabric_raw', 'fabric', 'yarn'], true)) {
+                $warehouseFabricsValuation += $value;
+            } elseif (in_array($type, ['accessory_raw', 'accessory', 'packaging', 'raw_material', 'thread', 'trims'], true)) {
+                $warehouseAccessoriesValuation += $value;
+            } elseif (in_array($type, ['finished_good', 'finished_product', 'finished_goods'], true)) {
+                $warehouseFinishedValuation += $value;
             }
         }
 
-        $totalWarehouseValuation = round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation + $glWip, 2);
+        // Materials enter WIP at cutting-order issue. Cost-sheet postings therefore add
+        // conversion costs only; counting total_cost here would capitalize materials twice.
+        $materialIssueDebit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_issue')
+            ->where('status', 'posted')
+            ->sum('total_debit');
+        $materialReversalCredit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_reversal')
+            ->where('status', 'posted')
+            ->sum('total_credit');
+
+        $postedCostSheetIds = JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'production_cost_sheet')
+            ->where('status', 'posted')
+            ->pluck('reference_key')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $approvedCostSheets = ProductionCostSheet::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'approved')
+            ->get(['id', 'production_order_id', 'total_cost', 'direct_materials_cost']);
+        $postedConversionCostSheets = $approvedCostSheets->whereIn('id', $postedCostSheetIds);
+        $approvedConversionCost = (float) $postedConversionCostSheets->sum(
+            fn ($sheet) => max(0, (float) $sheet->total_cost - (float) $sheet->direct_materials_cost)
+        );
+        // Include approved materials-only sheets too: they have no conversion journal,
+        // but their final QC receipts still transfer the already-posted cutting WIP into FG.
+        $postedProductionOrderIds = $approvedCostSheets->pluck('production_order_id')->unique()->values();
+        $postedReceiptInspectionIds = DB::table('quality_inspections')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('production_order_id', $postedProductionOrderIds)
+            ->pluck('id');
+        $capitalizedFinishedGoods = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'production_receipt')
+            ->where('status', 'posted')
+            ->whereIn('reference_key', $postedReceiptInspectionIds)
+            ->sum('total_debit');
+
+        $wipSubledgerValuation = round(
+            $materialIssueDebit - $materialReversalCredit + $approvedConversionCost - $capitalizedFinishedGoods,
+            2
+        );
+        $wipVariance = round($glWip - $wipSubledgerValuation, 2);
+
+        $warehouseFabricsValuation = round($warehouseFabricsValuation, 2);
+        $warehouseAccessoriesValuation = round($warehouseAccessoriesValuation, 2);
+        $warehouseFinishedValuation = round($warehouseFinishedValuation, 2);
+        $totalWarehouseValuation = round(
+            $warehouseFabricsValuation + $warehouseAccessoriesValuation + $wipSubledgerValuation + $warehouseFinishedValuation,
+            2
+        );
+        $totalGlInventory = round($glFabrics + $glAccessories + $glWip + $glFinished, 2);
         $variance = round($totalGlInventory - $totalWarehouseValuation, 2);
 
         return [
             'tenant_id' => $tenantId,
             'gl_inventory_total' => $totalGlInventory,
             'warehouse_valuation_total' => $totalWarehouseValuation,
+            'warehouse_known_categories_total' => round($warehouseFabricsValuation + $warehouseAccessoriesValuation + $warehouseFinishedValuation, 2),
             'variance' => $variance,
-            'is_matched' => abs($variance) < 0.01,
+            'is_matched' => abs($variance) < 0.01 && abs($wipVariance) < 0.01,
+            'wip_valuation_available' => true,
+            'reconciliation_status' => abs($variance) < 0.01 && abs($wipVariance) < 0.01 ? 'matched' : 'variance_detected',
             'breakdown' => [
                 [
                     'category' => 'الأقمشة والغزول والمنسوجات',
                     'gl_code' => '1210',
                     'gl_balance' => $glFabrics,
-                    'warehouse_valuation' => round($warehouseFabricsValuation, 2),
+                    'warehouse_valuation' => $warehouseFabricsValuation,
                     'variance' => round($glFabrics - $warehouseFabricsValuation, 2),
                 ],
                 [
                     'category' => 'مستلزمات الإنتاج (إكسسوار، خيوط، حشو)',
                     'gl_code' => '1213',
                     'gl_balance' => $glAccessories,
-                    'warehouse_valuation' => round($warehouseAccessoriesValuation, 2),
+                    'warehouse_valuation' => $warehouseAccessoriesValuation,
                     'variance' => round($glAccessories - $warehouseAccessoriesValuation, 2),
                 ],
                 [
                     'category' => 'الإنتاج تحت التشغيل (WIP)',
                     'gl_code' => '1220',
                     'gl_balance' => $glWip,
-                    'warehouse_valuation' => $glWip,
-                    'variance' => 0,
+                    'warehouse_valuation' => $wipSubledgerValuation,
+                    'variance' => $wipVariance,
+                    'status' => abs($wipVariance) < 0.01 ? 'matched' : 'variance_detected',
+                    'cutting_material_issues_total' => round($materialIssueDebit, 2),
+                    'cutting_material_reversals_total' => round($materialReversalCredit, 2),
+                    'approved_conversion_cost_total' => round($approvedConversionCost, 2),
+                    'finished_goods_receipts_total' => round($capitalizedFinishedGoods, 2),
                 ],
                 [
                     'category' => 'المنتجات التامة الجاهزة للبيع',
                     'gl_code' => '1230',
                     'gl_balance' => $glFinished,
-                    'warehouse_valuation' => round($warehouseFinishedValuation, 2),
+                    'warehouse_valuation' => $warehouseFinishedValuation,
                     'variance' => round($glFinished - $warehouseFinishedValuation, 2),
                 ],
             ],
@@ -1765,10 +2047,7 @@ class AccountingService
         $orderNumber = is_object($cuttingOrder) ? ($cuttingOrder->order_number ?? $orderId) : $orderId;
 
         // التحقق من الترحيل المسبق
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'cutting_order_issue')
-            ->where('reference_id', $orderId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'cutting_order_issue', $orderId);
         if ($existing) return $existing;
 
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
@@ -1809,10 +2088,7 @@ class AccountingService
         $orderId = is_object($cuttingOrder) ? $cuttingOrder->id : $cuttingOrder;
         $orderNumber = is_object($cuttingOrder) ? ($cuttingOrder->order_number ?? $orderId) : $orderId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'cutting_order_reversal')
-            ->where('reference_id', $orderId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'cutting_order_reversal', $orderId);
         if ($existing) return $existing;
 
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
@@ -1846,18 +2122,30 @@ class AccountingService
     /**
      * ترحيل استلام الإنتاج التام من خط التشغيل إلى مخزن التام (من WIP إلى Finished Goods)
      */
-    public function postFinishedGoodsReceipt(string $tenantId, $order, float $totalCost, int $quantity, ?string $entryDate = null): ?JournalEntry
+    public function postFinishedGoodsReceipt(string $tenantId, $order, $receipt, float $totalCost, int $quantity, ?string $entryDate = null): ?JournalEntry
     {
-        if ($totalCost <= 0) return null;
+        if ($totalCost <= 0 || !is_object($receipt) || empty($receipt->id)) {
+            return null;
+        }
 
         $orderId = is_object($order) ? $order->id : $order;
         $orderNumber = is_object($order) ? ($order->order_number ?? $orderId) : $orderId;
+        $receiptId = (string) $receipt->id;
+        $receiptNumber = $receipt->inspection_number ?? $receiptId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'production_receipt')
-            ->where('reference_id', $orderId)
-            ->first();
-        if ($existing) return $existing;
+        // Idempotency is scoped to the individual accepted QC receipt, not the production order.
+        $existing = $this->findJournalEntryByReference($tenantId, 'production_receipt', $receiptId);
+        if ($existing) {
+            $expectedQuantity = isset($receipt->passed_quantity) ? (int) $receipt->passed_quantity : $quantity;
+            if (
+                abs((float) $existing->total_debit - round($totalCost, 4)) > 0.0001
+                || $expectedQuantity !== $quantity
+            ) {
+                throw new InvalidArgumentException('تعارض Idempotency: محضر الجودة نفسه مرتبط مسبقاً بقيد استلام بتكلفة أو كمية مختلفة.');
+            }
+
+            return $existing;
+        }
 
         $finishedAccount = $this->getMappedAccount($tenantId, 'finished_goods_inventory');
         $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
@@ -1867,22 +2155,146 @@ class AccountingService
                 'account_id' => $finishedAccount->id,
                 'debit' => $totalCost,
                 'credit' => 0,
-                'description' => "استلام إنتاج تام لأمر التشغيل {$orderNumber} بواقع {$quantity} قطعة",
+                'description' => "استلام إنتاج تام لمحضر الجودة {$receiptNumber} لأمر التشغيل {$orderNumber} بواقع {$quantity} قطعة",
             ],
             [
                 'account_id' => $wipAccount->id,
                 'debit' => 0,
                 'credit' => $totalCost,
-                'description' => "إقفال تكاليف التشغيل تحت التنفيذ لأمر الإنتاج {$orderNumber}",
+                'description' => "تحويل تكلفة الدفعة المقبولة من تحت التنفيذ لأمر الإنتاج {$orderNumber}",
             ]
         ];
 
         return $this->createJournalEntry([
-            'entry_number' => 'JE-FG-' . substr(md5($orderId), 0, 8),
+            'tenant_id' => $tenantId,
+            'entry_number' => 'JE-FG-' . substr(md5($receiptId), 0, 12),
             'entry_date' => $entryDate ?? now()->toDateString(),
-            'description' => "استلام إنتاج تام أمر التشغيل {$orderNumber}",
+            'description' => "استلام إنتاج تام لمحضر الجودة {$receiptNumber} لأمر التشغيل {$orderNumber}",
             'reference_type' => 'production_receipt',
-            'reference_id' => $orderId,
+            'reference_id' => $receiptId,
+            'lines' => $lines,
+        ]);
+    }
+
+    /**
+     * Capitalize an approved production cost sheet into WIP with a balanced,
+     * idempotent journal entry. The cost components are credited to their
+     * originating inventory/expense/liability control accounts.
+     */
+    public function postProductionCostSheetToWip(ProductionCostSheet $sheet): ?JournalEntry
+    {
+        $tenantId = (string) $sheet->tenant_id;
+        $cuttingOrderIds = DB::table('cutting_orders')
+            ->where('tenant_id', $tenantId)
+            ->where('production_order_id', $sheet->production_order_id)
+            ->pluck('id');
+
+        // Raw materials already enter WIP when each factory-owned cutting issue is posted.
+        // Never capitalize the same material cost a second time from the cost sheet.
+        $materialIssueDebit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_issue')
+            ->where('status', 'posted')
+            ->whereIn('reference_key', $cuttingOrderIds)
+            ->sum('total_debit');
+        $materialReversalCredit = (float) JournalEntry::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_type', 'cutting_order_reversal')
+            ->where('status', 'posted')
+            ->whereIn('reference_key', $cuttingOrderIds)
+            ->sum('total_credit');
+        $netMaterialIssue = round($materialIssueDebit - $materialReversalCredit, 4);
+        $sheetMaterialCost = round((float) $sheet->direct_materials_cost, 4);
+
+        if (abs($netMaterialIssue - $sheetMaterialCost) > 0.01) {
+            throw new InvalidArgumentException(
+                "لا يمكن اعتماد ترحيل بطاقة التكلفة: تكلفة الخامات [{$sheetMaterialCost}] لا تطابق صافي قيود صرف القص إلى WIP [{$netMaterialIssue}]. راجع أذون القص والمرتجعات أولاً."
+            );
+        }
+
+        $conversionCost = round((float) $sheet->total_cost - $sheetMaterialCost, 4);
+        if ($conversionCost < -0.0001) {
+            throw new InvalidArgumentException('إجمالي تكلفة بطاقة الإنتاج أقل من تكلفة الخامات المثبتة في WIP.');
+        }
+        $conversionCost = max(0.0, $conversionCost);
+
+        $existing = $this->findJournalEntryByReference($tenantId, 'production_cost_sheet', $sheet->id);
+        if ($existing) {
+            if (abs((float) $existing->total_debit - $conversionCost) > 0.0001) {
+                throw new InvalidArgumentException('تعارض Idempotency: بطاقة التكلفة مرتبطة مسبقاً بقيد تحويل تكاليف صناعية بقيمة مختلفة.');
+            }
+
+            return $existing;
+        }
+
+        if ($sheet->status !== 'approved' || (float) $sheet->total_cost <= 0) {
+            throw new InvalidArgumentException('لا يمكن ترحيل تكلفة تحت التشغيل إلا من بطاقة تكلفة معتمدة وبقيمة موجبة.');
+        }
+
+        // A materials-only order is already fully represented in WIP by its cutting issue journal.
+        if ($conversionCost <= 0.0001) {
+            return null;
+        }
+
+        $wipAccount = $this->getMappedAccount($tenantId, 'wip_inventory');
+        $lines = [[
+            'account_id' => $wipAccount->id,
+            'debit' => $conversionCost,
+            'credit' => 0,
+            'description' => "رسملة أجور وتحميل وتشغيل خارجي لأمر الإنتاج {$sheet->production_order_id} إلى WIP",
+        ]];
+
+        $components = [
+            ['amount' => (float) $sheet->direct_labor_cost, 'account' => $this->getMappedAccount($tenantId, 'direct_labor_expense'), 'description' => 'رسملة أجور الإنتاج المباشرة'],
+            [
+                'amount' => (float) $sheet->subcontracted_services_cost,
+                'account' => ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('code', '5030')
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->firstOrFail(),
+                'description' => 'رسملة مصروف خدمات التشغيل الخارجي المقبولة',
+            ],
+            [
+                'amount' => (float) $sheet->allocated_overhead_cost,
+                'account' => ChartOfAccount::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('code', '6010')
+                    ->where('is_active', true)
+                    ->where('is_postable', true)
+                    ->firstOrFail(),
+                'description' => 'رسملة التحميل الصناعي غير المباشر',
+            ],
+        ];
+
+        $creditedTotal = 0.0;
+        foreach ($components as $component) {
+            $amount = round((float) $component['amount'], 4);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $lines[] = [
+                'account_id' => $component['account']->id,
+                'debit' => 0,
+                'credit' => $amount,
+                'description' => $component['description'],
+            ];
+            $creditedTotal += $amount;
+        }
+
+        if (abs(round($creditedTotal, 4) - $conversionCost) > 0.0001) {
+            throw new InvalidArgumentException('مكونات التحويل الصناعي لا تتطابق مع تكلفة العمالة والمقاولين والتحميل؛ تم إيقاف ترحيل WIP.');
+        }
+
+        return $this->createJournalEntry([
+            'tenant_id' => $tenantId,
+            'entry_number' => 'JE-WIP-' . substr(md5((string) $sheet->id), 0, 12),
+            'entry_date' => now()->toDateString(),
+            'description' => "رسملة تكاليف التحويل الصناعي لبطاقة الإنتاج {$sheet->production_order_id}",
+            'reference_type' => 'production_cost_sheet',
+            'reference_id' => $sheet->id,
             'lines' => $lines,
         ]);
     }
@@ -1897,10 +2309,7 @@ class AccountingService
         $dnId = is_object($deliveryNote) ? $deliveryNote->id : $deliveryNote;
         $dnNumber = is_object($deliveryNote) ? ($deliveryNote->delivery_number ?? $dnId) : $dnId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'sales_delivery_cogs')
-            ->where('reference_id', $dnId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'sales_delivery_cogs', $dnId);
         if ($existing) return $existing;
 
         $cogsAccount = $this->getMappedAccount($tenantId, 'cogs');
@@ -1941,10 +2350,7 @@ class AccountingService
         $dnId = is_object($deliveryNote) ? $deliveryNote->id : $deliveryNote;
         $dnNumber = is_object($deliveryNote) ? ($deliveryNote->delivery_number ?? $dnId) : $dnId;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'sales_delivery_cogs_reversal')
-            ->where('reference_id', $dnId)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'sales_delivery_cogs_reversal', $dnId);
         if ($existing) return $existing;
 
         $cogsAccount = $this->getMappedAccount($tenantId, 'cogs');
@@ -1984,10 +2390,7 @@ class AccountingService
         $amount = (float)$cn->total_amount;
         if ($amount <= 0) return null;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'credit_note')
-            ->where('reference_id', $cn->id)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'credit_note', $cn->id);
         if ($existing) return $existing;
 
         $revenueAccount = $this->getMappedAccount($tenantId, 'sales_revenue');
@@ -2040,10 +2443,7 @@ class AccountingService
         $totalCost = (float) $wo->total_cost;
         if ($totalCost <= 0) return null;
 
-        $existing = JournalEntry::where('tenant_id', $tenantId)
-            ->where('reference_type', 'maintenance_work_order')
-            ->where('reference_id', $wo->id)
-            ->first();
+        $existing = $this->findJournalEntryByReference($tenantId, 'maintenance_work_order', $wo->id);
         if ($existing) return $existing;
 
         $machine = $wo->machine;

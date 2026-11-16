@@ -28,6 +28,10 @@ class JournalEntry extends Model
         'created_by',
         'approved_by',
         'posted_by',
+        'created_by_user_id',
+        'approved_by_user_id',
+        'posted_by_user_id',
+        'reference_key',
         'reversed_entry_id',
         'reversal_reason',
     ];

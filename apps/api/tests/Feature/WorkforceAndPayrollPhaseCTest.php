@@ -100,6 +100,9 @@ class WorkforceAndPayrollPhaseCTest extends TestCase
             'password' => bcrypt('password123'),
         ]);
 
+        $this->accountantA->branches()->sync([$this->branchA->id]);
+        $this->prodMgrA->branches()->sync([$this->branchA->id]);
+
         // Users Tenant B
         $this->ownerB = User::create([
             'tenant_id' => $this->tenantB->id,
@@ -345,8 +348,8 @@ class WorkforceAndPayrollPhaseCTest extends TestCase
         ]);
 
         $payroll = $this->payrollService->generatePayroll($this->tenantA->id, '2026-10', '2026-10-01', '2026-10-31', $this->accountantA->id);
-        $this->payrollService->approvePayroll($payroll->id, $this->tenantA->id, $this->ownerA->id);
-        $this->payrollService->finalizePayroll($payroll->id, $this->tenantA->id, $this->ownerA->id);
+        $this->payrollService->approvePayroll($payroll->id, $this->ownerA->id);
+        $this->payrollService->finalizePayroll($payroll->id, $this->ownerA->id);
 
         $this->assertEquals('finalized', $payroll->fresh()->status);
         $originalNet = (float) $payroll->fresh()->total_net;
@@ -370,6 +373,7 @@ class WorkforceAndPayrollPhaseCTest extends TestCase
 
         $worker = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-QC-01',
             'name' => 'Kareem QC Worker',
             'department' => 'sewing',
@@ -493,6 +497,7 @@ class WorkforceAndPayrollPhaseCTest extends TestCase
 
         $worker = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-DUP-01',
             'name' => 'Duplicate Prevention Worker',
             'department' => 'sewing',

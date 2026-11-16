@@ -25,6 +25,7 @@ class StoreOrder extends Model
         'instapay_reference',
         'instapay_receipt_url',
         'payment_reviewed_by',
+        'payment_reviewed_by_user_id',
         'payment_reviewed_at',
         'payment_rejection_reason',
         'status',
@@ -49,7 +50,7 @@ class StoreOrder extends Model
 
     public function paymentReviewer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsTo(User::class, 'payment_reviewed_by');
+        return $this->belongsTo(User::class, 'payment_reviewed_by_user_id');
     }
 
     public function salesOrder(): \Illuminate\Database\Eloquent\Relations\BelongsTo

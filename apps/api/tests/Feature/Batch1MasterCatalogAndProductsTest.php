@@ -336,5 +336,43 @@ class Batch1MasterCatalogAndProductsTest extends TestCase
         $deleteColorRes->assertStatus(422);
         $this->assertDatabaseHas('colors', ['id' => $color->id]);
     }
-}
 
+    /**
+     * Missing season must remain unset instead of receiving a fabricated calendar value.
+     */
+    public function test_garment_model_creation_does_not_invent_a_season_when_omitted(): void
+    {
+        Sanctum::actingAs($this->ownerA);
+        app()->instance('current_tenant_id', $this->tenantA->id);
+
+        $size = Size::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => '4-5 سنوات',
+            'category' => 'kids',
+            'sort_order' => 1,
+        ]);
+        $color = Color::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'أحمر',
+            'color_code' => '#ff0000',
+        ]);
+
+        $response = $this->postJson('/api/v1/models', [
+            'code' => 'MODEL-NO-SEASON-01',
+            'name' => 'موديل بدون موسم محدد',
+            'category' => 'kids',
+            'size_ids' => [$size->id],
+            'color_ids' => [$color->id],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('model.season', null);
+
+        $this->assertDatabaseHas('garment_models', [
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'MODEL-NO-SEASON-01',
+            'season' => null,
+        ]);
+    }
+
+}

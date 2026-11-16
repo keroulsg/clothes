@@ -22,6 +22,7 @@ class JobOrder extends Model
         'garment_model_id',
         'assigned_employee_id',
         'production_order_id',
+        'branch_id',
         'fabric_source',
         'trims_responsibility',
         'status',

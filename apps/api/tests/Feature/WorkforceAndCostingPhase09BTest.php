@@ -143,6 +143,10 @@ class WorkforceAndCostingPhase09BTest extends TestCase
             'is_main' => true,
         ]);
 
+        $this->prodMgrA->branches()->sync([$this->branchA->id]);
+        $this->accountantA->branches()->sync([$this->branchA->id]);
+        $this->workerA->branches()->sync([$this->branchA->id]);
+
         $this->colorA = Color::create([
             'tenant_id' => $this->tenantA->id,
             'name' => 'Navy Blue',
@@ -178,6 +182,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
 
         $this->employeeA1 = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-001',
             'name' => 'Ahmed Sewing Worker',
             'department' => 'sewing',
@@ -189,6 +194,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
 
         $this->employeeA2 = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-002',
             'name' => 'Mahmoud Overlock Worker',
             'department' => 'sewing',
@@ -455,7 +461,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
 
         // Attempt to regenerate or recalculate paid payroll must fail
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('مدفوع مسبقاً ولا يمكن تعديله');
+        $this->expectExceptionMessage('مقفل مالياً بحالة');
 
         $this->payrollService->generatePayroll(
             $this->tenantA->id,
@@ -533,6 +539,7 @@ class WorkforceAndCostingPhase09BTest extends TestCase
             'direct_materials_cost' => 1000.0,
             'direct_labor_cost' => 500.0,
             'subcontracted_services_cost' => 0.0,
+            'overhead_allocation_method' => 'materials_and_labor_pct',
         ]);
 
         $this->assertEquals(0.18, (float)$costSheet->applied_overhead_rate);

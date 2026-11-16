@@ -72,24 +72,8 @@ class InventoryItem extends Model
 
     public function getReservedQuantityAttribute(): float
     {
-        $specs = $this->technical_specs;
-        if (isset($specs['reserved_quantity'])) {
-            return (float) $specs['reserved_quantity'];
-        }
-
-        // Check if there are reserved quantities in sales orders
-        try {
-            if ($this->variant_id) {
-                return (float) \Illuminate\Support\Facades\DB::table('sales_order_items')
-                    ->join('sales_orders', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-                    ->where('sales_orders.tenant_id', $this->tenant_id)
-                    ->where('sales_orders.status', 'confirmed')
-                    ->where('sales_order_items.variant_id', $this->variant_id)
-                    ->sum('sales_order_items.quantity');
-            }
-        } catch (\Throwable $e) {}
-
-        return 0.0;
+        // InventoryItem.reserved_balance is the authoritative, transactionally maintained reservation total.
+        return max(0.0, (float) ($this->reserved_balance ?? 0));
     }
 
     public function getAvailableQuantityAttribute(): float

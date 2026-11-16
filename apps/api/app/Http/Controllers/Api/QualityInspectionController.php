@@ -23,6 +23,19 @@ class QualityInspectionController extends Controller
         $tenantId = app('current_tenant_id');
         $query = QualityInspection::where('tenant_id', $tenantId)
             ->with(['productionOrder.garmentModel', 'cuttingBundle', 'productionStage', 'defects']);
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds))
+                ->where(function ($bundleQuery) use ($branchIds) {
+                    $bundleQuery->whereDoesntHave('cuttingBundle.productionOrder')
+                        ->orWhereHas('cuttingBundle.productionOrder', fn ($productionQuery) => $productionQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($bundleQuery) use ($branchIds) {
+                    $bundleQuery->whereDoesntHave('cuttingBundle.cuttingOrder.warehouse')
+                        ->orWhereHas('cuttingBundle.cuttingOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                });
+        }
 
         if ($request->has('production_order_id')) {
             $query->where('production_order_id', $request->query('production_order_id'));
@@ -67,6 +80,17 @@ class QualityInspectionController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner';
+        if ($enforceBranchScope && !in_array($prodOrder->branch_id, $assignedBranchIds, true)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك فحص أمر إنتاج تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
+
         if (!empty($validated['cutting_bundle_id'])) {
             $bundle = CuttingBundle::withoutGlobalScopes()->find($validated['cutting_bundle_id']);
             if (!$bundle || $bundle->tenant_id !== $tenantId) {
@@ -75,6 +99,31 @@ class QualityInspectionController extends Controller
                     'error' => 'CrossTenantAccessDenied',
                     'message' => 'أمان: بطاقة الحزمة غير تابعة لشركتك.',
                 ], 403);
+            }
+            if ($bundle->production_order_id !== $prodOrder->id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'ProductionOrderMismatch',
+                    'message' => 'حزمة القص لا تتبع أمر الإنتاج المحدد للفحص.',
+                ], 422);
+            }
+            if ($enforceBranchScope) {
+                $bundle->loadMissing('cuttingOrder');
+                $bundleWarehouse = $bundle->cuttingOrder
+                    ? \App\Models\Warehouse::withoutGlobalScopes()->find($bundle->cuttingOrder->warehouse_id)
+                    : null;
+                if (
+                    !$bundleWarehouse
+                    || !$prodOrder->branch_id
+                    || $bundleWarehouse->branch_id !== $prodOrder->branch_id
+                    || !in_array($bundleWarehouse->branch_id, $assignedBranchIds, true)
+                ) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'BranchAccessDenied',
+                        'message' => 'لا يمكنك فحص حزمة تابعة لفرع غير معيّن لحسابك.',
+                    ], 403);
+                }
             }
         }
 
@@ -87,6 +136,16 @@ class QualityInspectionController extends Controller
                     'message' => 'أمان: صنف المنتج التام غير تابع لشركتك.',
                 ], 403);
             }
+            if ($enforceBranchScope) {
+                $fgWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->find($fgItem->warehouse_id);
+                if (!$fgWarehouse || $fgWarehouse->branch_id !== $prodOrder->branch_id || !in_array($fgWarehouse->branch_id, $assignedBranchIds, true)) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'BranchAccessDenied',
+                        'message' => 'لا يمكنك استخدام مخزن منتج تام تابع لفرع غير معيّن لحسابك.',
+                    ], 403);
+                }
+            }
         }
 
         if (!empty($validated['scrap_inventory_item_id'])) {
@@ -97,6 +156,16 @@ class QualityInspectionController extends Controller
                     'error' => 'CrossTenantAccessDenied',
                     'message' => 'أمان: صنف مخزن الهالك/الخردة غير تابع لشركتك.',
                 ], 403);
+            }
+            if ($enforceBranchScope) {
+                $scrapWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->find($scrapItem->warehouse_id);
+                if (!$scrapWarehouse || $scrapWarehouse->branch_id !== $prodOrder->branch_id || !in_array($scrapWarehouse->branch_id, $assignedBranchIds, true)) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'BranchAccessDenied',
+                        'message' => 'لا يمكنك استخدام مخزن هالك تابع لفرع غير معيّن لحسابك.',
+                    ], 403);
+                }
             }
         }
 

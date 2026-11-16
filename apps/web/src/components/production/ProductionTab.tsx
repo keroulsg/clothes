@@ -230,29 +230,18 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
       : `Mark production order [${order.order_number}] as completed?`;
     if (!window.confirm(confirmMsg)) return;
 
-    const cutQty = Number(
-      (order as any).total_cut_quantity ??
-      order.cut_quantity ??
-      (order as any).total_planned_quantity ??
-      180
-    );
-
-    const updated: ProductionOrder = {
-      ...order,
-      status: 'completed' as const,
-      completed_quantity: cutQty,
-      total_completed_quantity: cutQty,
-      actual_completion_date: new Date().toISOString().split('T')[0],
-    };
-
     try {
-      await api.production.completeProductionOrder(order.id);
-    } catch (e) {
-      console.warn('API error completing order:', e);
-    }
+      const response = await api.production.completeProductionOrder(order.id);
+      if (!response?.success || !response.data) {
+        throw new Error(response?.message || (isAr ? 'لم يؤكد الخادم إتمام أمر الإنتاج.' : 'The server did not confirm production completion.'));
+      }
 
-    if (onProductionOrderUpdated) {
-      onProductionOrderUpdated(updated);
+      // Use the persisted server record only; do not synthesize completion quantities or timestamps locally.
+      onProductionOrderUpdated?.(response.data as ProductionOrder);
+    } catch (error: any) {
+      window.alert(error?.message || (isAr
+        ? 'فشل اعتماد إتمام أمر الإنتاج. لم يتم تغيير الحالة.'
+        : 'Production completion failed. The order status was not changed.'));
     }
   };
 
@@ -421,7 +410,7 @@ export const ProductionTab: React.FC<ProductionTabProps> = ({
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-slate-300 border border-white/10">
                 <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                {isAr ? 'تتبع الباركود الذكي للحزم والراقات' : 'Smart QR Bundle Tracking'}
+                {isAr ? 'متابعة الحزم بأكواد التعريف' : 'Bundle ID Tracking'}
               </span>
             </div>
 

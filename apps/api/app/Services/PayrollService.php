@@ -95,8 +95,8 @@ class PayrollService
                 'unit_rate' => $rate,
                 'total_amount' => $totalAmount,
                 'status' => $status,
-                'approved_by' => $data['approved_by'] ?? null,
-                'approved_at' => !empty($data['approved_by']) ? now() : null,
+                'approved_by' => $status === 'approved' ? auth()->id() : null,
+                'approved_at' => $status === 'approved' ? now() : null,
             ]);
 
             return $log->load('employee');
@@ -166,7 +166,7 @@ class PayrollService
         }
 
         return DB::transaction(function () use ($data, $userId, $tenantId) {
-            $employee = Employee::where('tenant_id', $tenantId)->findOrFail($data['employee_id']);
+            $employee = Employee::where('tenant_id', $tenantId)->whereKey($data['employee_id'])->lockForUpdate()->firstOrFail();
             $date = $data['attendance_date'] ?? now()->toDateString();
 
             // فحص التكرار (Unique per employee and date)
@@ -211,23 +211,8 @@ class PayrollService
                 $isPayable = (bool)$data['is_payable'];
             }
 
-            // إذا كان مسجلاً بالفعل، يتم التحديث الفوري (Upsert) بدلاً من إلقاء خطأ لمنع تعطيل المستخدم
             if ($existing) {
-                $existing->update([
-                    'branch_id' => $data['branch_id'] ?? $existing->branch_id ?? $employee->branch_id,
-                    'check_in' => $checkIn ?? $existing->check_in,
-                    'check_out' => $checkOut ?? $existing->check_out,
-                    'status' => $status,
-                    'working_hours' => $workingHours >= 0 ? $workingHours : $existing->working_hours,
-                    'overtime_hours' => $overtimeHours >= 0 ? $overtimeHours : $existing->overtime_hours,
-                    'late_minutes' => isset($data['late_minutes']) ? (int)$data['late_minutes'] : $existing->late_minutes,
-                    'early_departure_minutes' => isset($data['early_departure_minutes']) ? (int)$data['early_departure_minutes'] : $existing->early_departure_minutes,
-                    'is_payable' => $isPayable,
-                    'notes' => $data['notes'] ?? $existing->notes,
-                    'created_by' => $userId,
-                ]);
-
-                return $existing->fresh();
+                throw new InvalidArgumentException('تم تسجيل حضور هذا العامل لهذا اليوم بالفعل. استخدم مسار تصحيح الحضور مع سبب موثق بدلاً من إنشاء سجل مكرر.');
             }
 
             return Attendance::create([
@@ -244,7 +229,7 @@ class PayrollService
                 'early_departure_minutes' => (int)($data['early_departure_minutes'] ?? 0),
                 'is_payable' => $isPayable,
                 'notes' => $data['notes'] ?? null,
-                'created_by' => $userId,
+                'created_by_user_id' => $userId,
             ]);
         });
     }
@@ -293,7 +278,7 @@ class PayrollService
             if (isset($data['late_minutes'])) $attendance->late_minutes = (int)$data['late_minutes'];
             if (isset($data['is_payable'])) $attendance->is_payable = (bool)$data['is_payable'];
             $attendance->notes = $newNotes;
-            $attendance->updated_by = $userId;
+            $attendance->updated_by_user_id = $userId;
             $attendance->save();
 
             return $attendance->load('employee');
@@ -334,7 +319,7 @@ class PayrollService
                 'reason' => $data['reason'],
                 'notes' => $data['notes'] ?? null,
                 'status' => 'pending_approval',
-                'created_by' => $userId,
+                'created_by_user_id' => $userId,
             ]);
         });
     }
@@ -353,7 +338,7 @@ class PayrollService
             }
 
             $adj->status = 'approved';
-            $adj->approved_by = $userId;
+            $adj->approved_by_user_id = $userId;
             $adj->approved_at = now();
             $adj->save();
 
@@ -613,7 +598,7 @@ class PayrollService
 
             // قاعدة الحصانة التاريخية: المسيرات المقفلة والمدفوعة نهائياً لا يعاد احتسابها
             if ($existing) {
-                if (in_array($existing->status, ['finalized', 'paid'], true) || (float)$existing->total_paid > 0) {
+                if (in_array($existing->status, ['approved', 'finalized', 'paid', 'partially_paid'], true) || (float)$existing->total_paid > 0) {
                     throw new InvalidArgumentException("مسير الرواتب للفترة {$period} مقفل مالياً بحالة ({$existing->status}) أو تم صرف دفعات منه ولا يمكن تعديله.");
                 }
 
@@ -960,7 +945,7 @@ class PayrollService
             }
 
             $payroll->status = 'approved';
-            $payroll->approved_by = $userId;
+            $payroll->approved_by_user_id = $userId;
             $payroll->approved_at = now();
             $payroll->rejection_reason = null;
             $payroll->save();
@@ -1007,7 +992,7 @@ class PayrollService
             }
 
             $payroll->status = 'finalized';
-            $payroll->finalized_by = $userId;
+            $payroll->finalized_by_user_id = $userId;
             $payroll->finalized_at = now();
             $payroll->save();
 
@@ -1051,7 +1036,7 @@ class PayrollService
                 'payment_method' => $data['payment_method'] ?? 'cash',
                 'reference_number' => $data['reference_number'] ?? ('PAY-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4))),
                 'notes' => $data['notes'] ?? 'صرف مستحقات أجور عمال',
-                'paid_by' => $userId,
+                'paid_by_user_id' => $userId,
             ]);
 
             $payroll->total_paid = round((float)$payroll->total_paid + $amount, 4);

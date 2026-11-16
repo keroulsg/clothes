@@ -17,6 +17,12 @@ class BranchController extends Controller
     {
         $tenantId = app('current_tenant_id');
         $query = Branch::where('tenant_id', $tenantId)->withCount('warehouses');
+        $user = $request->user();
+
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereIn('id', $branchIds);
+        }
 
         if ($request->has('is_active')) {
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
@@ -88,7 +94,12 @@ class BranchController extends Controller
     public function show(string $id): JsonResponse
     {
         $tenantId = app('current_tenant_id');
-        $branch = Branch::where('tenant_id', $tenantId)->with('warehouses')->findOrFail($id);
+        $query = Branch::where('tenant_id', $tenantId);
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereIn('id', $user->assignedBranchIds());
+        }
+        $branch = $query->with('warehouses')->findOrFail($id);
 
         return response()->json([
             'branch' => $branch,

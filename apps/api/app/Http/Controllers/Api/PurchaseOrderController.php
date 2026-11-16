@@ -23,6 +23,11 @@ class PurchaseOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = PurchaseOrder::with(['supplier', 'warehouse', 'items.item'])->withCount('items');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
 
         if ($request->has('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
@@ -74,6 +79,14 @@ class PurchaseOrderController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner' && !in_array($warehouse->branch_id, $user->assignedBranchIds(), true)) {
+            return response()->json([
+                'error' => 'BranchAccessDenied',
+                'message' => 'لا يمكنك إنشاء أمر شراء لمخزن تابع لفرع غير معيّن لحسابك.',
+            ], 403);
+        }
+
         foreach ($validated['items'] as $itemData) {
             $item = \App\Models\InventoryItem::withoutGlobalScopes()->find($itemData['inventory_item_id']);
             if (!$item || $item->tenant_id !== $tenantId) {
@@ -99,7 +112,13 @@ class PurchaseOrderController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $po = PurchaseOrder::with(['items.item', 'supplier', 'warehouse', 'receipts.items', 'invoices'])->findOrFail($id);
+        $query = PurchaseOrder::with(['items.item', 'supplier', 'warehouse', 'receipts.items', 'invoices']);
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $po = $query->findOrFail($id);
 
         return response()->json([
             'purchase_order' => $po,
@@ -111,7 +130,14 @@ class PurchaseOrderController extends Controller
      */
     public function approve(string $id): JsonResponse
     {
-        $po = $this->procurementService->approvePurchaseOrder($id);
+        $query = PurchaseOrder::query();
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $branchIds = $user->assignedBranchIds();
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+        }
+        $po = $query->findOrFail($id);
+        $po = $this->procurementService->approvePurchaseOrder($po->id);
 
         return response()->json([
             'message' => 'تم اعتماد أمر الشراء وأصبح جاهزاً للتوريد والاستلام.',

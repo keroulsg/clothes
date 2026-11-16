@@ -12,8 +12,11 @@ use App\Models\CuttingOrder;
 use App\Models\CustomerMaterial;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
+use App\Models\InventoryTransaction;
+use App\Models\JournalEntry;
 use App\Models\Pattern;
 use App\Models\ProductionOrder;
+use App\Models\ProductionCostSheet;
 use App\Models\ProductionOrderItem;
 use App\Models\ProductionStage;
 use App\Models\QualityDefect;
@@ -456,39 +459,28 @@ class ProductionService
             $fabricItemId = $data['fabric_inventory_item_id'] ?? null;
             $customerMaterialId = $data['customer_material_id'] ?? null;
 
-            // صرف القماش نظامياً من خلال خدمة المخزون أو رصيد أمانة العميل
+            // Validate the source before creating the cutting document; stock movement follows document creation.
+            $fabricItem = null;
             $fabricItemCost = 0.0;
             if ($fabricSource === 'factory_owned') {
                 if (!$fabricItemId) {
                     throw new InvalidArgumentException('يجب تحديد صنف القماش عند الصرف من خامات المصنع.');
                 }
 
-                // التحقق من ملكية الصنف للشركة
-                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)->where('id', $fabricItemId)->first();
+                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)
+                    ->whereKey($fabricItemId)
+                    ->lockForUpdate()
+                    ->first();
+
                 if (!$fabricItem) {
                     throw new InvalidArgumentException('أمان: صنف القماش غير تابع للشركة الحالية.');
                 }
-                $fabricItemCost = (float) $fabricItem->average_cost;
-
-                // استدعاء خدمة المخزون لصرف كمية القماش الفعلية مع حظر السالب والتحقق من التزامن
-                $this->inventoryService->recordTransaction([
-                    'tenant_id' => $contextTenantId,
-                    'inventory_item_id' => $fabricItemId,
-                    'warehouse_id' => $warehouseId,
-                    'quantity' => $actualMeters,
-                    'direction' => 'OUT',
-                    'transaction_type' => 'production_issue',
-                    'reference_type' => 'cutting_order',
-                    'notes' => "صرف قماش لأمر القص وتغذية أمر الإنتاج [{$prodOrder->order_number}]",
-                ]);
-            } elseif ($fabricSource === 'customer_deposit') {
-                if (!$customerMaterialId) {
-                    throw new InvalidArgumentException('يجب تحديد محضر أمانة خامة العميل عند الصرف من خامات العملاء.');
+                if ((string) $fabricItem->warehouse_id !== (string) $warehouseId) {
+                    throw new InvalidArgumentException('المخزن المحدد لا يطابق مخزن صنف القماش.');
                 }
-
-                // استدعاء consumeCustomerMaterial الآمنة مع قفل السجل ومنع الأرصدة السالبة
-                $waste = ($endLoss * $layersCount) + $remnant;
-                $this->inventoryService->consumeCustomerMaterial($customerMaterialId, $theoreticalMeters, $waste);
+                $fabricItemCost = (float) $fabricItem->average_cost;
+            } elseif ($fabricSource === 'customer_deposit' && !$customerMaterialId) {
+                throw new InvalidArgumentException('يجب تحديد محضر أمانة خامة العميل عند الصرف من خامات العملاء.');
             }
 
             $totalCutPieces = (int) ($data['total_cut_pieces'] ?? ($layersCount * count($prodOrder->items)));
@@ -527,6 +519,28 @@ class ProductionService
                 'status' => 'cut_completed',
                 'notes' => $data['notes'] ?? null,
             ]);
+
+            // Record the material issue after the cutting document exists. This preserves the
+            // immutable stock reference and makes actual material cost available to WIP costing.
+            if ($fabricSource === 'factory_owned') {
+                $this->inventoryService->recordTransaction([
+                    'tenant_id' => $contextTenantId,
+                    'inventory_item_id' => $fabricItem->id,
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => $actualMeters,
+                    'direction' => 'OUT',
+                    'transaction_type' => 'production_issue',
+                    'unit_cost' => $fabricItemCost,
+                    'reference_type' => 'cutting_order',
+                    'reference_id' => (string) $cuttingOrder->id,
+                    'reference_number' => $cuttingOrder->cutting_order_number,
+                    'idempotency_key' => 'CUTTING-ISSUE-' . $cuttingOrder->id,
+                    'notes' => "صرف قماش لأمر القص وتغذية أمر الإنتاج [{$prodOrder->order_number}]",
+                ]);
+            } elseif ($fabricSource === 'customer_deposit') {
+                $waste = ($endLoss * $layersCount) + $remnant;
+                $this->inventoryService->consumeCustomerMaterial($customerMaterialId, $theoreticalMeters, $waste);
+            }
 
             // احتساب وقيد أجر القطعة آلياً للمقصدار المسؤول
             if (!empty($assignedCutterId) && $totalCutPieces > 0) {
@@ -572,17 +586,14 @@ class ProductionService
                 }
             }
 
-            // إثبات صرف الخامات محاسبياً (Debit WIP 1220, Credit Raw Materials 1210)
+            // Keep stock issue and WIP journal posting atomic; never hide accounting failures.
             if ($fabricSource === 'factory_owned' && $actualMeters > 0 && $fabricItemCost > 0) {
-                try {
-                    $rawMatAmount = round($actualMeters * $fabricItemCost, 4);
-                    app(\App\Services\AccountingService::class)->postRawMaterialsIssue(
-                        $contextTenantId,
-                        $cuttingOrder,
-                        $rawMatAmount,
-                        (bool)($prodOrder->is_cmt ?? false)
-                    );
-                } catch (\Throwable) {}
+                $rawMatAmount = round($actualMeters * $fabricItemCost, 4);
+                app(\App\Services\AccountingService::class)->postRawMaterialsIssue(
+                    $contextTenantId,
+                    $cuttingOrder,
+                    $rawMatAmount
+                );
             }
 
             // التأكد من توفر مراحل الإنتاج
@@ -868,8 +879,16 @@ class ProductionService
             throw new InvalidArgumentException('أمان: تعارض في سياق الشركة.');
         }
         $tenantId = $contextTenantId;
+        $idempotencyKey = trim((string) ($data['idempotency_key'] ?? ''));
+        $fingerprintPayload = $data;
+        unset($fingerprintPayload['tenant_id'], $fingerprintPayload['idempotency_key']);
+        ksort($fingerprintPayload);
+        $idempotencyFingerprint = hash('sha256', json_encode(
+            [$fingerprintPayload, $defects],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
 
-        return DB::transaction(function () use ($data, $defects, $tenantId) {
+        return DB::transaction(function () use ($data, $defects, $tenantId, $idempotencyKey, $idempotencyFingerprint) {
             $inspectedQty = (int) $data['inspected_quantity'];
             $passedQty = (int) $data['passed_quantity'];
             $rejectedQty = (int) ($data['rejected_quantity'] ?? 0);
@@ -884,11 +903,37 @@ class ProductionService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($idempotencyKey !== '') {
+                $existingInspection = QualityInspection::where('tenant_id', $tenantId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existingInspection) {
+                    if (!hash_equals((string) $existingInspection->idempotency_fingerprint, $idempotencyFingerprint)) {
+                        throw new InvalidArgumentException('تعارض Idempotency: مفتاح فحص الجودة مستخدم مسبقاً لبيانات فحص مختلفة.');
+                    }
+
+                    return $existingInspection->load('defects');
+                }
+            }
+
+            // Final-audit receipts must never push accepted finished goods beyond the order's remaining planned quantity.
+            // The production-order row is already locked above, so concurrent inspections serialize this check.
+            if (($data['inspection_type'] ?? 'inline') === 'final_audit' && $passedQty > 0) {
+                $remainingPlanned = max(0, (int) $prodOrder->total_planned_quantity - (int) $prodOrder->total_completed_quantity);
+                if ($passedQty > $remainingPlanned) {
+                    throw new InvalidArgumentException("كمية الاستلام النهائي تتجاوز الكمية المتبقية لأمر الإنتاج. المتبقي: {$remainingPlanned}، المطلوب استلامه: {$passedQty}.");
+                }
+            }
+
             $decision = $data['decision'] ?? ($rejectedQty > 0 ? 'rejected' : ($reworkQty > 0 ? 'rework_required' : 'passed'));
 
             $inspection = QualityInspection::create([
                 'tenant_id' => $tenantId,
                 'inspection_number' => $data['inspection_number'] ?? ('QC-' . date('Ym') . '-' . rand(1000, 9999)),
+                'idempotency_key' => $idempotencyKey !== '' ? $idempotencyKey : null,
+                'idempotency_fingerprint' => $idempotencyKey !== '' ? $idempotencyFingerprint : null,
                 'production_order_id' => $prodOrder->id,
                 'cutting_bundle_id' => $data['cutting_bundle_id'] ?? null,
                 'production_stage_id' => $data['production_stage_id'] ?? null,
@@ -987,23 +1032,41 @@ class ProductionService
                         throw new InvalidArgumentException('أمان: صنف المنتج التام غير تابع للشركة الحالية.');
                     }
 
+                    // Finished goods must use an approved production cost, not the moving average of the stock item.
+                    $costSheet = ProductionCostSheet::where('tenant_id', $tenantId)
+                        ->where('production_order_id', $prodOrder->id)
+                        ->where('status', 'approved')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$costSheet || (int) $costSheet->total_produced_pieces <= 0 || (float) $costSheet->cost_per_piece <= 0) {
+                        throw new InvalidArgumentException('يجب اعتماد بطاقة التكلفة الصناعية الفعلية لأمر الإنتاج قبل استلام المنتج التام محاسبياً.');
+                    }
+
+                    $unitCost = round((float) $costSheet->cost_per_piece, 4);
+                    $receiptCost = round($passedQty * $unitCost, 4);
+
                     $this->inventoryService->recordTransaction([
                         'tenant_id' => $tenantId,
                         'inventory_item_id' => $data['finished_goods_inventory_item_id'],
                         'quantity' => $passedQty,
+                        'unit_cost' => $unitCost,
                         'direction' => 'IN',
                         'transaction_type' => 'production_receipt',
-                        'reference_type' => 'production_order',
-                        'notes' => "إضافة منتج تام جاهز للتوزيع بعد الفحص النهائي لأمر الإنتاج [{$prodOrder->order_number}]",
+                        'reference_type' => 'quality_inspection',
+                        'reference_id' => $inspection->id,
+                        'reference_number' => $inspection->inspection_number,
+                        'idempotency_key' => 'QC-FG-RECEIPT-' . $inspection->id,
+                        'notes' => "استلام منتج تام لمحضر الجودة [{$inspection->inspection_number}] لأمر الإنتاج [{$prodOrder->order_number}]",
                     ]);
 
-                    // إثبات قيد استلام الإنتاج التام محاسبياً (Debit Finished Goods 1230, Credit WIP 1220)
-                    if ((float)$fgItem->average_cost > 0) {
-                        try {
-                            $fgAmount = round($passedQty * (float)$fgItem->average_cost, 4);
-                            app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt($tenantId, $prodOrder, $fgAmount);
-                        } catch (\Throwable) {}
-                    }
+                    app(\App\Services\AccountingService::class)->postFinishedGoodsReceipt(
+                        $tenantId,
+                        $prodOrder,
+                        $inspection,
+                        $receiptCost,
+                        $passedQty
+                    );
                 }
             }
 
@@ -1086,29 +1149,56 @@ class ProductionService
                 throw new InvalidArgumentException('لا يمكن إلغاء أمر القص نظراً لانتقال بعض الحزم إلى مراحل تشغيل متقدمة بخطوط الإنتاج.');
             }
 
-            // استرجاع القماش المصروف إلى المخزون (Factory Owned)
+            // Reverse the exact immutable issue snapshot; current average cost may have changed since dispatch.
             if ($cuttingOrder->fabric_source === 'factory_owned' && (float)$cuttingOrder->actual_fabric_meters_used > 0 && $cuttingOrder->fabric_inventory_item_id) {
-                $fabricItem = InventoryItem::where('tenant_id', $contextTenantId)->where('id', $cuttingOrder->fabric_inventory_item_id)->first();
+                $originalIssue = InventoryTransaction::where('tenant_id', $contextTenantId)
+                    ->where('reference_type', 'cutting_order')
+                    ->where('reference_id', $cuttingOrder->id)
+                    ->where('direction', 'OUT')
+                    ->where('transaction_type', 'production_issue')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$originalIssue) {
+                    throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: حركة صرف الخامة الأصلية غير مرتبطة بسجل الأمر. يلزم إجراء مطابقة مخزنية أولاً.');
+                }
+
+                if (abs((float) $originalIssue->quantity - (float) $cuttingOrder->actual_fabric_meters_used) > 0.0001) {
+                    throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: كمية حركة الصرف الأصلية لا تطابق كمية الأمر.');
+                }
+
+                $originalJournal = JournalEntry::where('tenant_id', $contextTenantId)
+                    ->where('reference_type', 'cutting_order_issue')
+                    ->where('reference_id', $cuttingOrder->id)
+                    ->where('status', 'posted')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$originalJournal || abs((float) $originalJournal->total_debit - (float) $originalIssue->total_cost) > 0.01) {
+                    throw new InvalidArgumentException('لا يمكن إلغاء أمر القص بأمان: قيد تكلفة الخامات الأصلي غير موجود أو لا يطابق دفتر المخزون. يلزم إجراء مطابقة محاسبية أولاً.');
+                }
+
                 $this->inventoryService->recordTransaction([
                     'tenant_id' => $contextTenantId,
-                    'inventory_item_id' => $cuttingOrder->fabric_inventory_item_id,
-                    'warehouse_id' => $cuttingOrder->warehouse_id,
-                    'quantity' => (float) $cuttingOrder->actual_fabric_meters_used,
+                    'inventory_item_id' => $originalIssue->inventory_item_id,
+                    'warehouse_id' => $originalIssue->warehouse_id,
+                    'quantity' => (float) $originalIssue->quantity,
                     'direction' => 'IN',
                     'transaction_type' => 'cutting_reversal',
+                    'unit_cost' => (float) $originalIssue->unit_cost,
                     'reference_type' => 'cutting_order',
-                    'reference_id' => $cuttingOrder->id,
+                    'reference_id' => (string) $cuttingOrder->id,
                     'reference_number' => $cuttingOrder->cutting_order_number,
+                    'idempotency_key' => 'CUTTING-REVERSAL-' . $cuttingOrder->id,
                     'notes' => "استرجاع قماش لإلغاء أمر القص [{$cuttingOrder->cutting_order_number}]. سبب الإلغاء: {$reason}",
                 ]);
 
-                // عكس القيد المحاسبي لصرف الخامات
-                if ($fabricItem && (float)$fabricItem->average_cost > 0) {
-                    try {
-                        $reversalAmount = round((float)$cuttingOrder->actual_fabric_meters_used * (float)$fabricItem->average_cost, 4);
-                        app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal($contextTenantId, $cuttingOrder, $reversalAmount);
-                    } catch (\Throwable) {}
-                }
+                app(\App\Services\AccountingService::class)->postRawMaterialsIssueReversal(
+                    $contextTenantId,
+                    $cuttingOrder,
+                    (float) $originalJournal->total_debit,
+                    $reason
+                );
             } elseif ($cuttingOrder->fabric_source === 'customer_deposit' && $cuttingOrder->customer_material_id) {
                 // استرجاع رصيد أمانة العميل
                 $custMaterial = CustomerMaterial::where('tenant_id', $contextTenantId)

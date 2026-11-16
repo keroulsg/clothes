@@ -26,6 +26,7 @@ class FinancialAccountTransfer extends Model
         'reversed_transfer_id',
         'reversal_reason',
         'created_by',
+        'created_by_user_id',
     ];
 
     protected $casts = [

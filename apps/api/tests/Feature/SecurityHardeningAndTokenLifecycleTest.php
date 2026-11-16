@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Tenant;
+use App\Models\TenantStoreSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
@@ -34,6 +35,13 @@ class SecurityHardeningAndTokenLifecycleTest extends TestCase
             'password' => bcrypt('StrongSecret123!'),
             'role' => 'company_owner',
             'is_active' => true,
+        ]);
+
+        TenantStoreSetting::create([
+            'tenant_id' => $this->tenant->id,
+            'store_name' => 'متجر مصنع الأمان',
+            'is_store_enabled' => true,
+            'allow_cod' => true,
         ]);
     }
 

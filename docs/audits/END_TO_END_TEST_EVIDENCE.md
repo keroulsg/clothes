@@ -100,15 +100,17 @@ $$\begin{array}{|l|c|c|c|c|}
 \text{SaaS Subscription, Meters \& Plans} & 19 & 136 & 19 & 0 \\
 \text{Waslat Worsh Core \& Identity Tests} & 32 & 166 & 32 & 0 \\
 \text{Waslat Worsh Commercial \& Acceptance Tests} & 42 & 272 & 42 & 0 \\
+\text{Waslat Worsh 60-Min Timer \& Financial Suite} & 7 & 37 & 7 & 0 \\
 \text{Storefront, Themes, BOM \& Wholesale} & 36 & 180 & 36 & 0 \\
 \text{ERP Batches 1-5 (Manufacturing, Payroll, Costing)} & 48 & 407 & 48 & 0 \\
 \text{Tenant Isolation, Security \& Platform Admin} & 65 & 402 & 65 & 0 \\
+\text{Additional Repositories Feature \& Integration Tests} & 343 & 2,036 & 337 & 0\text{ (6 skipped)} \\
 \hline
-\textbf{Grand Total Executed Backend Tests} & \mathbf{242} & \mathbf{1,563} & \mathbf{242} & \mathbf{0} \\
+\textbf{Repository-Wide Full Test Suite Total} & \mathbf{592} & \mathbf{3,636} & \mathbf{586} & \mathbf{0} \\
 \hline
 \end{array}$$
 
-**Overall Backend Pass Rate:** **100% (242 / 242 tests passed, 0 failures, 0 errors)**.
+**Overall Backend Pass Rate:** **100% (586 / 586 executed tests passed, 0 failures, 0 errors, 6 SQLite concurrency skips)**.
 
 ---
 
@@ -122,11 +124,16 @@ $$\begin{array}{|l|c|c|c|c|}
 - **Fix:** Seeded 3 ERP plans, 36 meters, 17 canonical features. Added dual-key alias in controller, added permanent calls in seeders, upgraded frontend pricing view with category toggle.
 - **Verification:** Verified by `UnifiedSaasPlansAndEntitlementsAcceptanceTest` (10 tests, 78 assertions) and `SubscriptionAndUsageMeterTest` (9 tests, 58 assertions).
 
-### Scenario 2: Waslat Worsh 12-Step Business Flow
-- **Verification:** 74 tests passed covering requester isolation, package purchase, RFQ publication, Enterprise eligibility, 60-min timer, 3% commission, InstaPay receipt approval, and order completion.
+### Scenario 2: Waslat Worsh 12-Step Business Flow & 60-Minute Mandatory Window
+- **Verification:** Verified by `WaslatWorshTimerAndFinancialAcceptanceTest` (7 tests, 37 assertions), `WaslatWorshCommercialAcceptanceTest` (6 tests, 36 assertions), and `WaslatWorshIntegrationTest` (4 tests, 20 assertions). Requesters cannot award contracts before 60 minutes have elapsed from `published_at`; platform generates separate 3% requester and 3% provider commissions with complete tenant isolation.
 
-### Scenario 3: Manufacturing to Storefront Flow
+### Scenario 3: Storefront Multi-Tenant Tracking Security Fix
+- **Issue:** Cross-tenant fallback in `StorefrontService::trackOrder` leaked order details when queried under a different tenant.
+- **Fix:** Removed the unscoped `$buildQuery(null)` fallback when `$tenantId` is supplied.
+- **Verification:** `PhaseACurrentSystemAcceptanceTest::test_cross_tenant_isolation_is_strictly_enforced` returns HTTP 404 on cross-tenant order lookups.
+
+### Scenario 4: Manufacturing to Storefront Flow
 - **Verification:** Verified by `ProductionBomInventoryLifecycleTest::test_full_lifecycle_bom_to_storefront_order`. Finished variants correctly allocated without affecting raw fabric inventory.
 
-### Scenario 4: Overselling & Stock Protection
+### Scenario 5: Overselling & Stock Protection
 - **Verification:** Concurrent order tests confirmed zero overselling, strict reservation matching, and negative balance prevention.

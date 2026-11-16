@@ -12,6 +12,7 @@ import {
   XCircle,
   DollarSign,
   Check,
+  Clock,
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -535,74 +536,101 @@ export const CuttingRequestDetailsModal: React.FC<CuttingRequestDetailsModalProp
             {/* Received Bids Listing for Owner */}
             {isOwner && (
               <>
-                {(!rfq.bids || rfq.bids.length === 0) ? (
-                  <p className="text-slate-400 text-xs py-3 text-center">
-                    {isAr ? 'لم تتلق هذا الطلب أي عروض أسعار بعد.' : 'No offers received yet.'}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {rfq.bids.map((b: any) => {
-                      const isAwardedBid = rfq.awarded_bid_id === b.id || b.status === 'accepted';
-                      const canAccept = (rfq.status === 'open' || rfq.status === 'published') && b.status === 'submitted';
-                      return (
-                        <div
-                          key={b.id}
-                          className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                            isAwardedBid
-                              ? 'border-emerald-500/50 bg-emerald-50/15 dark:bg-emerald-950/20'
-                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30'
-                          }`}
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-white text-xs">
-                                {b.workshop?.workshop_name || (isAr ? 'ورشة تصنيع معتمدة' : 'Verified Workshop')}
-                              </span>
-                              {isAwardedBid && (
-                                <Badge variant="success" className="text-[10px]">
-                                  {isAr ? 'العرض المعتمد الفائز' : 'Awarded Winner'}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                              <span>
-                                {isAr ? 'سعر القطعة:' : 'Unit Rate:'}{' '}
-                                <strong className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{b.unit_rate} ج.م</strong>
-                              </span>
-                              <span>•</span>
-                              <span>
-                                {isAr ? 'إجمالي العرض:' : 'Total:'}{' '}
-                                <strong className="font-mono text-slate-800 dark:text-slate-200 font-bold">
-                                  {(Math.round(Number(b.unit_rate) * Number(rfq.target_quantity) * 100) / 100).toLocaleString()} ج.م
-                                </strong>
-                              </span>
-                              <span>•</span>
-                              <span>
-                                {isAr ? 'مدة التوريد:' : 'Lead:'}{' '}
-                                <strong className="font-mono text-slate-700 dark:text-slate-300">{b.promised_lead_days} {isAr ? 'أيام' : 'days'}</strong>
-                              </span>
-                            </div>
-                            {b.notes && (
-                              <p className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">{b.notes}</p>
-                            )}
-                          </div>
+                {(() => {
+                  const publishedDate = rfq.published_at ? new Date(rfq.published_at) : (rfq.created_at ? new Date(rfq.created_at) : null);
+                  const offerWindowEnd = publishedDate ? new Date(publishedDate.getTime() + 60 * 60 * 1000) : null;
+                  const isOfferWindowActive = (rfq.status === 'open' || rfq.status === 'published') && offerWindowEnd ? (new Date().getTime() < offerWindowEnd.getTime()) : false;
+                  const remainingMinutes = offerWindowEnd ? Math.max(1, Math.ceil((offerWindowEnd.getTime() - new Date().getTime()) / 60000)) : 0;
 
-                          {canAccept && onAcceptBid && (
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              onClick={() => onAcceptBid(rfq.id, b.id)}
-                              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-bold"
-                            >
-                              <Check className="w-3.5 h-3.5 me-1" />
-                              <span>{isAr ? 'قبول هذا العرض' : 'Accept Offer'}</span>
-                            </Button>
-                          )}
+                  return (
+                    <>
+                      {isOfferWindowActive && (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 mb-3">
+                          <Clock className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
+                          <div className="space-y-0.5">
+                            <div className="font-bold">
+                              {isAr ? `نافذة استقبال العروض مستمرة (متبقي ${remainingMinutes} دقيقة)` : `Offer window active (${remainingMinutes} mins remaining)`}
+                            </div>
+                            <div className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
+                              {isAr
+                                ? 'يُفتح باب الترسية والاختيار تلقائياً بعد مرور 60 دقيقة من نشر الطلب لضمان تكافؤ الفرص وعدالة المنافسة بين الورش.'
+                                : 'Offers can be accepted once the 60-minute window closes.'}
+                            </div>
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      )}
+
+                      {(!rfq.bids || rfq.bids.length === 0) ? (
+                        <p className="text-slate-400 text-xs py-3 text-center">
+                          {isAr ? 'لم يتلق هذا الطلب أي عروض أسعار بعد.' : 'No offers received yet.'}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {rfq.bids.map((b: any) => {
+                            const isAwardedBid = rfq.awarded_bid_id === b.id || b.status === 'accepted';
+                            const canAccept = (rfq.status === 'open' || rfq.status === 'published') && b.status === 'submitted' && !isOfferWindowActive;
+                            return (
+                              <div
+                                key={b.id}
+                                className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                                  isAwardedBid
+                                    ? 'border-emerald-500/50 bg-emerald-50/15 dark:bg-emerald-950/20'
+                                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30'
+                                }`}
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900 dark:text-white text-xs">
+                                      {b.workshop?.workshop_name || (isAr ? 'ورشة تصنيع معتمدة' : 'Verified Workshop')}
+                                    </span>
+                                    {isAwardedBid && (
+                                      <Badge variant="success" className="text-[10px]">
+                                        {isAr ? 'العرض المعتمد الفائز' : 'Awarded Winner'}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                                    <span>
+                                      {isAr ? 'سعر القطعة:' : 'Unit Rate:'}{' '}
+                                      <strong className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{b.unit_rate} ج.م</strong>
+                                    </span>
+                                    <span>•</span>
+                                    <span>
+                                      {isAr ? 'إجمالي العرض:' : 'Total:'}{' '}
+                                      <strong className="font-mono text-slate-800 dark:text-slate-200 font-bold">
+                                        {(Math.round(Number(b.unit_rate) * Number(rfq.target_quantity) * 100) / 100).toLocaleString()} ج.م
+                                      </strong>
+                                    </span>
+                                    <span>•</span>
+                                    <span>
+                                      {isAr ? 'مدة التوريد:' : 'Lead:'}{' '}
+                                      <strong className="font-mono text-slate-700 dark:text-slate-300">{b.promised_lead_days} {isAr ? 'أيام' : 'days'}</strong>
+                                    </span>
+                                  </div>
+                                  {b.notes && (
+                                    <p className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">{b.notes}</p>
+                                  )}
+                                </div>
+
+                                {canAccept && onAcceptBid && (
+                                  <Button
+                                    size="sm"
+                                    variant="primary"
+                                    onClick={() => onAcceptBid(rfq.id, b.id)}
+                                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-bold"
+                                  >
+                                    <Check className="w-3.5 h-3.5 me-1" />
+                                    <span>{isAr ? 'قبول هذا العرض' : 'Accept Offer'}</span>
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>

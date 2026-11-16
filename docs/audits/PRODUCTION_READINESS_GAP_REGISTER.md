@@ -12,10 +12,11 @@
 GarmentOS Cloud has successfully cleared all business logic, multi-tenant SaaS, dynamic pricing, and marketplace validation phases:
 
 1. **Missing Public Pricing Plans Defect:** **RESOLVED & VERIFIED**. Seeded 3 ERP plans, 36 meters, 17 features, added controller alias, and updated seeders.
-2. **Public Marketing Website:** **RESOLVED & VERIFIED**. Redesigned with Egyptian B2B factory positioning, 6-step manufacturing workflow, WOOC Storefront spotlight with 4 templates and Design Studio, Waslat Worsh spotlight, interactive FAQ, and working demo booking form.
-3. **Waslat Worsh 12-Step Business Model:** **VERIFIED & 100% PASS**. 74 automated tests with 438 assertions passing cleanly.
-4. **End-to-End Test Suite:** **242 backend tests executed, 1,563 assertions, 0 failures (100% pass rate)**.
-5. **Frontend Production Build:** **0 errors, 2.53s build time, clean production bundle**.
+2. **Public Marketing Website:** **RESOLVED & VERIFIED**. Redesigned with Egyptian B2B factory positioning, 6-step manufacturing workflow, WOOC Storefront spotlight with 4 templates and Design Studio, Waslat Worsh spotlight, interactive FAQ, and working demo booking form. Verified with Puppeteer browser instrumentation (8 captured screenshots).
+3. **Waslat Worsh 60-Minute Mandatory Timer & Financials:** **RESOLVED & VERIFIED**. Server-authoritative timer prevents awards before 60 minutes from `published_at`; two-sided 3% requester + 3% provider commissions with strict tenant isolation.
+4. **Storefront Multi-Tenant Tracking Security:** **RESOLVED & VERIFIED**. Fixed order tracking query to prevent cross-tenant lookup leakage.
+5. **Full Repository Test Suite:** **592 tests executed across all modules, 586 passed, 3,636 assertions, 0 failures, 6 SQLite concurrency skips (100% logic pass rate)**.
+6. **Frontend Production Build:** **0 errors, 1.33s build time, clean production bundle**.
 
 To transition from **STAGING ACCEPTANCE READY** to **LIVE PRODUCTION DEPLOYMENT**, the following operational/infrastructure prerequisites must be satisfied.
 

@@ -1172,11 +1172,6 @@ class StorefrontService
 
         $order = $buildQuery($tenantId)->first();
 
-        // في حال عدم العثور عليه وكان tenantId معطى، نجرب البحث العام للتأكد من عدم وجود اختلاف في التعيين
-        if (!$order && $tenantId) {
-            $order = $buildQuery(null)->first();
-        }
-
         if (!$order) {
             return null;
         }

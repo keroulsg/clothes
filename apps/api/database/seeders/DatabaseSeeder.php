@@ -15,7 +15,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Seed canonical SaaS plans, meters, and 17 features
+        app(\App\Services\SubscriptionUsageService::class)->seedDefaultPlans();
 
         User::factory()->create([
             'name' => 'Test User',

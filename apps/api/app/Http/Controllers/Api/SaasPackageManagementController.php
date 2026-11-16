@@ -651,6 +651,7 @@ class SaasPackageManagementController extends Controller
         return response()->json([
             'category' => $category,
             'plans' => $formattedPlans,
+            'features_catalog' => $publicFeatures,
             'comparison_features' => $publicFeatures,
             'payment_instructions' => [
                 'instapay_address' => 'garmentos@instapay',

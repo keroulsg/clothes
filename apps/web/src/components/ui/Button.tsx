@@ -26,17 +26,17 @@ export const Button: React.FC<ButtonProps> = ({
     primary:
       'bg-[var(--brand-primary)] hover:brightness-110 text-white shadow-xs border border-transparent font-bold hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0',
     secondary:
-      'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700',
+      'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold dark:bg-[var(--bg-muted)] dark:hover:bg-[var(--bg-hover)] dark:text-[var(--text-primary)] dark:border-[var(--border-subtle)]',
     outline:
-      'bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] font-semibold dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:border-[var(--brand-primary)] dark:hover:text-[#F87171] shadow-2xs',
+      'bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] font-semibold dark:bg-[var(--bg-surface)] dark:border-[var(--border-strong)] dark:text-[var(--text-primary)] dark:hover:border-[var(--brand-primary-light)] dark:hover:text-[#F0A0AA] shadow-2xs',
     accent:
-      'bg-[var(--brand-subtle)] border border-[var(--brand-border)] text-[var(--brand-primary)] hover:opacity-90 font-bold dark:text-[#F87171]',
+      'bg-[var(--brand-subtle)] border border-[var(--brand-border)] text-[var(--brand-primary)] hover:opacity-90 font-bold dark:text-[#F0A0AA]',
     success:
       'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-semibold border border-transparent',
     danger:
       'bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold border border-transparent',
     ghost:
-      'bg-transparent hover:bg-slate-100 text-slate-700 hover:text-slate-950 font-semibold dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white',
+      'bg-transparent hover:bg-slate-100 text-slate-700 hover:text-slate-950 font-semibold dark:text-[var(--text-secondary)] dark:hover:bg-[var(--bg-muted)] dark:hover:text-[var(--text-primary)]',
   };
 
   const sizes = {

@@ -73,6 +73,9 @@ class GarmentOSQaSeeder extends Seeder
 
         DB::beginTransaction();
         try {
+            // Seed canonical SaaS plans, meters, and 17 features
+            app(\App\Services\SubscriptionUsageService::class)->seedDefaultPlans();
+
             // 2. Platform Super Admin Test Account
             User::firstOrCreate(
                 ['email' => 'qa.superadmin@garmentos.test'],

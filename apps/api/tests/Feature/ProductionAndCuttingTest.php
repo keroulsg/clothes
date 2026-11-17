@@ -3,21 +3,31 @@
 namespace Tests\Feature;
 
 use App\Models\BillOfMaterial;
+use App\Models\ChartOfAccount;
 use App\Models\Branch;
+use App\Models\Customer;
 use App\Models\Color;
 use App\Models\CustomerMaterial;
 use App\Models\CuttingBundle;
 use App\Models\CuttingOrder;
 use App\Models\GarmentModel;
 use App\Models\InventoryItem;
+use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
+use App\Models\InventoryTransaction;
 use App\Models\ProductionOrder;
 use App\Models\ProductionStage;
+use App\Models\ProductVariant;
 use App\Models\QualityInspection;
 use App\Models\Size;
+use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\AccountingService;
 use App\Services\InventoryService;
+use App\Services\ProcurementService;
+use App\Services\SalesService;
 use App\Services\ProductionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -234,6 +244,56 @@ class ProductionAndCuttingTest extends TestCase
      */
     public function test_full_production_cycle_from_order_to_cutting_bundles_and_qc(): void
     {
+        // Start with zero raw-material stock: the material used below must come from a real PO + GRN flow.
+        $this->fabricItemA->current_balance = 0.0;
+        $this->fabricItemA->average_cost = 0.0;
+        $this->fabricItemA->save();
+
+        $supplier = Supplier::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'SUP-E2E-' . uniqid(),
+            'name' => 'مورد خامات رحلة المصنع المتكاملة',
+            'payment_terms' => 'net_30',
+            'is_active' => true,
+        ]);
+
+        $procurementService = app(ProcurementService::class);
+        $purchaseOrder = $procurementService->createPurchaseOrder([
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouseFabA->id,
+            'po_number' => 'PO-E2E-' . strtoupper(substr(uniqid(), -8)),
+            'order_date' => date('Y-m-d'),
+            'items' => [
+                [
+                    'inventory_item_id' => $this->fabricItemA->id,
+                    'ordered_quantity' => 110.0,
+                    'unit_price' => 120.0,
+                ],
+            ],
+        ]);
+        $procurementService->approvePurchaseOrder($purchaseOrder->id, $this->userA->id);
+        $goodsReceipt = $procurementService->receiveGoods([
+            'purchase_order_id' => $purchaseOrder->id,
+            'warehouse_id' => $this->warehouseFabA->id,
+            'receipt_date' => date('Y-m-d'),
+            'inspection_status' => 'passed',
+            'idempotency_key' => 'E2E-GRN-' . $purchaseOrder->id,
+            'items' => [
+                [
+                    'purchase_order_item_id' => $purchaseOrder->items->first()->id,
+                    'delivered_quantity' => 110.0,
+                    'accepted_quantity' => 110.0,
+                    'rejected_quantity' => 0.0,
+                ],
+            ],
+        ]);
+
+        $this->assertSame('received', $purchaseOrder->fresh()->status);
+        $this->assertEquals(110.0, (float) $this->fabricItemA->fresh()->current_balance);
+        $this->assertEquals(120.0, (float) $this->fabricItemA->fresh()->average_cost);
+        $this->assertSame('posted', $goodsReceipt->status);
+        $this->fabricItemA->refresh();
+
         // 1. إنشاء أمر الإنتاج
         $orderPayload = [
             'garment_model_id' => $this->modelA->id,
@@ -289,6 +349,36 @@ class ProductionAndCuttingTest extends TestCase
 
         $cutRes->assertStatus(201);
         $cutOrderId = $cutRes->json('data.id');
+
+        // The stock issue must point to the cutting document and retain its real unit cost.
+        $materialIssue = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order')
+            ->where('reference_id', $cutOrderId)
+            ->where('direction', 'OUT')
+            ->firstOrFail();
+        $this->assertEquals(105.0, (float) $materialIssue->quantity);
+        $this->assertEquals((float) $this->fabricItemA->average_cost, (float) $materialIssue->unit_cost);
+
+        // Actual WIP material cost must be reproducible from the immutable inventory subledger.
+        app()->instance('current_tenant_id', $this->tenantA->id);
+        $costSheet = app(AccountingService::class)->calculateProductionCost($orderId, [
+            'direct_labor_cost' => 1000,
+            'applied_overhead_rate' => 0.10,
+        ]);
+        $this->assertEquals(
+            round(105.0 * (float) $this->fabricItemA->average_cost, 4),
+            (float) $costSheet->direct_materials_cost
+        );
+        // Finished-goods receipts may only capitalize a reviewed, approved unit cost.
+        $costSheet->status = 'approved';
+        $costSheet->save();
+        $wipJournal = app(AccountingService::class)->postProductionCostSheetToWip($costSheet);
+        $this->assertSame('production_cost_sheet', $wipJournal->reference_type);
+        $this->assertSame((string) $costSheet->id, (string) $wipJournal->reference_key);
+        $expectedConversionCost = round((float) $costSheet->total_cost - (float) $costSheet->direct_materials_cost, 4);
+        $this->assertEquals($expectedConversionCost, (float) $wipJournal->total_debit);
+        $this->assertEquals($expectedConversionCost, (float) $wipJournal->total_credit);
+        $this->assertSame($wipJournal->id, app(AccountingService::class)->postProductionCostSheetToWip($costSheet)->id);
 
         // التحقق من خصم القماش من المخزن الفعلي عبر InventoryService
         $this->fabricItemA->refresh();
@@ -349,14 +439,180 @@ class ProductionAndCuttingTest extends TestCase
         $this->finishedGoodItemA->refresh();
         $this->assertEquals(98.0, (float) $this->finishedGoodItemA->current_balance);
 
+        $inspectionId = $qcRes->json('data.id');
+        $receiptMovement = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'quality_inspection')
+            ->where('reference_id', $inspectionId)
+            ->where('transaction_type', 'production_receipt')
+            ->firstOrFail();
+        $this->assertEquals('QC-FG-RECEIPT-' . $inspectionId, $receiptMovement->idempotency_key);
+        $this->assertEquals((float) $costSheet->cost_per_piece, (float) $receiptMovement->unit_cost);
+
+        $receiptJournal = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'production_receipt')
+            ->where('reference_key', $inspectionId)
+            ->firstOrFail();
+        $expectedReceiptCost = round(98 * (float) $costSheet->cost_per_piece, 4);
+        $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_debit);
+        $this->assertEquals($expectedReceiptCost, (float) $receiptJournal->total_credit);
+
+        // Reposting the exact same QC receipt must return the existing journal entry without changing GL balances.
+        $finishedGoodsAccount = app(AccountingService::class)->getMappedAccount($this->tenantA->id, 'finished_goods_inventory');
+        $balanceBeforeDuplicate = (float) $finishedGoodsAccount->fresh()->current_balance;
+        $duplicateJournal = app(AccountingService::class)->postFinishedGoodsReceipt(
+            $this->tenantA->id,
+            ProductionOrder::findOrFail($orderId),
+            QualityInspection::findOrFail($inspectionId),
+            $expectedReceiptCost,
+            98
+        );
+        $this->assertSame($receiptJournal->id, $duplicateJournal->id);
+        $this->assertEquals($balanceBeforeDuplicate, (float) $finishedGoodsAccount->fresh()->current_balance);
+
+        try {
+            app(AccountingService::class)->postFinishedGoodsReceipt(
+                $this->tenantA->id,
+                ProductionOrder::findOrFail($orderId),
+                QualityInspection::findOrFail($inspectionId),
+                $expectedReceiptCost + 1,
+                98
+            );
+            $this->fail('A duplicate QC receipt with a different cost must be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('تعارض Idempotency', $exception->getMessage());
+        }
+
+        // The remaining two accepted pieces are a distinct partial QC receipt for the same order.
+        $secondQcRes = $this->actingAs($this->userA)
+            ->postJson('/api/v1/quality-inspections', [
+                'production_order_id' => $orderId,
+                'inspector_name' => 'م. نادية سمير',
+                'inspection_type' => 'final_audit',
+                'inspected_quantity' => 2,
+                'passed_quantity' => 2,
+                'rework_quantity' => 0,
+                'rejected_quantity' => 0,
+                'finished_goods_inventory_item_id' => $this->finishedGoodItemA->id,
+            ]);
+        $secondQcRes->assertStatus(201);
+        $secondInspectionId = $secondQcRes->json('data.id');
+        $this->assertNotSame($inspectionId, $secondInspectionId);
+
+        $secondReceiptJournal = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'production_receipt')
+            ->where('reference_key', $secondInspectionId)
+            ->firstOrFail();
+        $this->assertEquals(round(2 * (float) $costSheet->cost_per_piece, 4), (float) $secondReceiptJournal->total_debit);
+        $this->assertEquals((float) $receiptJournal->total_debit + (float) $secondReceiptJournal->total_debit,
+            (float) JournalEntry::where('tenant_id', $this->tenantA->id)->where('reference_type', 'production_receipt')->whereIn('reference_key', [$inspectionId, $secondInspectionId])->sum('total_debit'));
+        $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+
+        $wipAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1220')->firstOrFail();
+        $expectedWipCredits = (float) $receiptJournal->total_debit + (float) $secondReceiptJournal->total_debit;
+        $actualWipCredits = (float) JournalEntryLine::whereIn('journal_entry_id', [$receiptJournal->id, $secondReceiptJournal->id])
+            ->where('account_id', $wipAccount->id)
+            ->sum('credit');
+        $this->assertEquals($expectedWipCredits, $actualWipCredits, 'Each QC receipt journal must credit the same WIP control account.');
+        $this->assertEquals($expectedConversionCost, (float) JournalEntryLine::where('journal_entry_id', $wipJournal->id)
+            ->where('account_id', $wipAccount->id)->sum('debit'));
+        $wipLedgerLines = JournalEntryLine::where('account_id', $wipAccount->id)->get();
+        $wipLedgerEntries = JournalEntry::whereIn('id', $wipLedgerLines->pluck('journal_entry_id'))->get()->keyBy('id');
+        $wipLedgerEvidence = $wipLedgerLines->map(function ($line) use ($wipLedgerEntries) {
+            $entry = $wipLedgerEntries->get($line->journal_entry_id);
+            return [
+                'reference_type' => $entry?->reference_type,
+                'reference_key' => $entry?->reference_key,
+                'debit' => (float) $line->debit,
+                'credit' => (float) $line->credit,
+            ];
+        })->values()->all();
+        $this->assertEquals(0.0, (float) $wipAccount->fresh()->current_balance,
+            'Fully received approved production cost must leave no WIP balance. Ledger: ' . json_encode($wipLedgerEvidence));
+        $wipReconciliation = app(AccountingService::class)->reconcileInventory($this->tenantA->id);
+        $this->assertTrue($wipReconciliation['wip_valuation_available']);
+        $this->assertEquals(0.0, (float) $wipReconciliation['breakdown'][2]['variance']);
+        $this->assertEquals('matched', $wipReconciliation['breakdown'][2]['status']);
+
+        // A further final-audit receipt cannot overproduce the completed order.
+        $overReceipt = $this->actingAs($this->userA)
+            ->postJson('/api/v1/quality-inspections', [
+                'production_order_id' => $orderId,
+                'inspector_name' => 'م. نادية سمير',
+                'inspection_type' => 'final_audit',
+                'inspected_quantity' => 3,
+                'passed_quantity' => 3,
+                'rework_quantity' => 0,
+                'rejected_quantity' => 0,
+                'finished_goods_inventory_item_id' => $this->finishedGoodItemA->id,
+            ]);
+        $overReceipt->assertStatus(422);
+        $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+        $this->assertEquals(100, (int) ProductionOrder::findOrFail($orderId)->total_completed_quantity);
+
         // التحقق من إحصائيات أمر الإنتاج (Metrics)
         $metricsRes = $this->actingAs($this->userA)
             ->getJson("/api/v1/production-orders/{$orderId}/metrics");
 
         $metricsRes->assertStatus(200);
-        $this->assertEquals(98, $metricsRes->json('data.total_completed_quantity'));
+        $this->assertEquals(100, $metricsRes->json('data.total_completed_quantity'));
         $this->assertEquals(2, $metricsRes->json('data.total_rework_quantity'));
         $this->assertArrayHasKey('skip_stitch', $metricsRes->json('data.defects_breakdown'));
+
+        // 6. Sell the produced finished goods through the real reservation and fulfillment services.
+        $variant = ProductVariant::create([
+            'tenant_id' => $this->tenantA->id,
+            'garment_model_id' => $this->modelA->id,
+            'size_id' => $this->size2Y->id,
+            'color_id' => $this->colorRed->id,
+            'sku' => 'SKU-E2E-' . strtoupper(substr(uniqid(), -8)),
+            'barcode' => 'BC-E2E-' . strtoupper(substr(uniqid(), -10)),
+            'wholesale_price' => 250.0,
+            'retail_price' => 350.0,
+        ]);
+        $this->finishedGoodItemA->variant_id = $variant->id;
+        $this->finishedGoodItemA->save();
+
+        $customer = Customer::create([
+            'tenant_id' => $this->tenantA->id,
+            'code' => 'CUST-E2E-' . strtoupper(substr(uniqid(), -8)),
+            'name' => 'عميل رحلة المصنع المتكاملة',
+            'is_active' => true,
+        ]);
+
+        $salesService = app(SalesService::class);
+        $salesOrder = $salesService->createSalesOrder([
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'warehouse_id' => $this->warehouseFGA->id,
+            'order_type' => 'wholesale',
+            'items' => [
+                [
+                    'variant_id' => $variant->id,
+                    'ordered_quantity' => 100.0,
+                    'unit_price' => 250.0,
+                ],
+            ],
+        ]);
+        $reservedOrder = $salesService->reserveOrderStock($salesOrder->id);
+        $this->assertSame('reserved', $reservedOrder->status);
+        $this->assertEquals(100.0, (float) $this->finishedGoodItemA->fresh()->reserved_balance);
+
+        $salesInvoice = $salesService->fulfillOrder($salesOrder->id);
+        $this->assertSame('issued', $salesInvoice->status);
+        $this->assertSame(1, $salesInvoice->items->count());
+        $this->assertEquals(100.0, (float) $salesInvoice->items->first()->quantity);
+        $this->assertSame('fulfilled', $salesOrder->fresh()->status);
+        $this->assertEquals(0.0, (float) $this->finishedGoodItemA->fresh()->current_balance);
+        $this->assertEquals(0.0, (float) $this->finishedGoodItemA->fresh()->reserved_balance);
+
+        $salesDelivery = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'sales_orders')
+            ->where('reference_id', $salesOrder->id)
+            ->where('transaction_type', 'sales_delivery')
+            ->firstOrFail();
+        $this->assertEquals(100.0, (float) $salesDelivery->quantity);
+        $this->assertEquals(100.0, (float) $salesDelivery->balance_before);
+        $this->assertEquals(0.0, (float) $salesDelivery->balance_after);
     }
 
     /**
@@ -555,4 +811,120 @@ class ProductionAndCuttingTest extends TestCase
         $resList->assertStatus(200);
         $this->assertCount(0, $resList->json('data'));
     }
+
+    public function test_production_completion_requires_recorded_output_and_completed_cutting_orders(): void
+    {
+        $order = ProductionOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'order_number' => 'PO-COMPLETE-GATE-' . uniqid(),
+            'garment_model_id' => $this->modelA->id,
+            'planned_start_date' => date('Y-m-d'),
+            'target_delivery_date' => date('Y-m-d', strtotime('+7 days')),
+            'total_planned_quantity' => 20,
+            'total_cut_quantity' => 20,
+            'total_completed_quantity' => 0,
+            'status' => 'in_progress',
+        ]);
+
+        $response = $this->actingAs($this->userA)
+            ->postJson("/api/v1/production-orders/{$order->id}/complete");
+        $response->assertStatus(422);
+        $this->assertSame('in_progress', $order->fresh()->status);
+        $this->assertSame(0.0, (float) $order->fresh()->total_completed_quantity);
+
+        $order->total_completed_quantity = 20;
+        $order->save();
+
+        $cuttingOrder = CuttingOrder::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenantA->id,
+            'cutting_order_number' => 'CUT-COMPLETE-GATE-' . uniqid(),
+            'production_order_id' => $order->id,
+            'warehouse_id' => $this->warehouseFabA->id,
+            'lay_length_meters' => 1.0,
+            'layers_count' => 20,
+            'status' => 'in_progress',
+        ]);
+
+        $unfinishedCutResponse = $this->actingAs($this->userA)
+            ->postJson("/api/v1/production-orders/{$order->id}/complete");
+        $unfinishedCutResponse->assertStatus(422);
+        $this->assertSame('in_progress', $order->fresh()->status);
+
+        $cuttingOrder->status = 'cut_completed';
+        $cuttingOrder->save();
+
+        $completedResponse = $this->actingAs($this->userA)
+            ->postJson("/api/v1/production-orders/{$order->id}/complete");
+        $completedResponse->assertOk();
+        $this->assertSame('completed', $order->fresh()->status);
+        $this->assertSame(20.0, (float) $order->fresh()->total_completed_quantity);
+    }
+
+
+    public function test_cutting_cancellation_reverses_original_material_cost_not_current_average_cost(): void
+    {
+        $order = ProductionOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'garment_model_id' => $this->modelA->id,
+            'order_number' => 'PO-CANCEL-COST-01',
+            'planned_start_date' => now()->toDateString(),
+            'target_delivery_date' => now()->addDays(5)->toDateString(),
+            'total_planned_quantity' => 10,
+            'status' => 'approved',
+        ]);
+
+        $cut = $this->actingAs($this->userA)
+            ->postJson('/api/v1/cutting-orders', [
+                'production_order_id' => $order->id,
+                'warehouse_id' => $this->warehouseFabA->id,
+                'fabric_inventory_item_id' => $this->fabricItemA->id,
+                'fabric_source' => 'factory_owned',
+                'lay_length_meters' => 2,
+                'layers_count' => 2,
+                'end_loss_meters' => 0,
+                'remnant_meters' => 0,
+                'total_cut_pieces' => 10,
+            ]);
+
+        $cut->assertStatus(201);
+        $cuttingOrderId = $cut->json('data.id');
+
+        $issue = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order')
+            ->where('reference_id', $cuttingOrderId)
+            ->where('direction', 'OUT')
+            ->firstOrFail();
+
+        // Simulate a later weighted-average change before cancellation.
+        $this->fabricItemA->refresh();
+        $this->fabricItemA->average_cost = 180;
+        $this->fabricItemA->save();
+
+        $cancel = $this->actingAs($this->userA)
+            ->postJson("/api/v1/cutting-orders/{$cuttingOrderId}/cancel", [
+                'cancellation_reason' => 'اختبار عكس التكلفة الأصلية',
+            ]);
+
+        $cancel->assertStatus(200)->assertJsonPath('data.status', 'cancelled');
+
+        $reversal = InventoryTransaction::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order')
+            ->where('reference_id', $cuttingOrderId)
+            ->where('direction', 'IN')
+            ->where('transaction_type', 'cutting_reversal')
+            ->firstOrFail();
+
+        $this->assertEquals((float) $issue->unit_cost, (float) $reversal->unit_cost);
+        $this->assertEquals((float) $issue->total_cost, (float) $reversal->total_cost);
+        $this->assertEquals(1000.0, (float) $this->fabricItemA->fresh()->current_balance);
+
+        $journal = JournalEntry::where('tenant_id', $this->tenantA->id)
+            ->where('reference_type', 'cutting_order_reversal')
+            ->where('reference_id', $cuttingOrderId)
+            ->firstOrFail();
+
+        $this->assertEquals((float) $issue->total_cost, (float) $journal->total_debit);
+        $this->assertEquals((float) $issue->total_cost, (float) $journal->total_credit);
+    }
+
 }

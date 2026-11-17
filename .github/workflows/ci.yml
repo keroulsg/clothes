@@ -2,7 +2,9 @@ name: GarmentOS Cloud CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'garmentos/**'
   pull_request:
     branches: [ main ]
 
@@ -58,6 +60,25 @@ jobs:
       - name: Install Composer Dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Prepare PostgreSQL 16 client utilities
+        run: |
+          for tool in pg_dump pg_restore createdb; do
+            cat > "$RUNNER_TEMP/$tool" <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          tool="${0##*/}"
+          docker run --rm --network host \
+            -e PGPASSWORD="${PGPASSWORD:-}" \
+            -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+            -w "${PWD}" \
+            postgres:16 "$tool" "$@"
+          WRAPPER
+            chmod +x "$RUNNER_TEMP/$tool"
+          done
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          pg_dump --version
+          pg_restore --version
+
       - name: Prepare Test Environment
         run: |
           printf "%s\n" \
@@ -96,6 +117,38 @@ jobs:
             echo "::error title=Backend Tests Failed::$(grep -E '(FAIL|Failed|Error|Exception)' /tmp/full_test.log | head -n 30 | tr '\r\n' ' ')"
             exit $exit_code
           fi
+
+      - name: Seed committed data for PostgreSQL backup verification
+        env:
+          DB_CONNECTION: pgsql
+        run: |
+          php artisan tinker --execute='app("db")->table("tenants")->insert(["id" => "00000000-0000-4000-8000-000000000001", "name" => "PostgreSQL Backup Verification Tenant", "code" => "BACKUP-VERIFY-PG", "subdomain" => "backup-verify-pg", "status" => "active", "created_at" => now(), "updated_at" => now()]);'
+
+      - name: Create and verify a real PostgreSQL backup
+        env:
+          DB_CONNECTION: pgsql
+        run: |
+          php artisan garmentos:backup --destination=local
+          BACKUP_ID="$(php -r '$files=glob("storage/app/private/backups/database/*.manifest.json"); rsort($files); $m=$files ? json_decode(file_get_contents($files[0]), true) : []; echo $m["backup_id"] ?? "";')"
+          test -n "$BACKUP_ID"
+          php artisan garmentos:verify-backup "$BACKUP_ID"
+          echo "GARMENTOS_PG_BACKUP_ID=$BACKUP_ID" >> "$GITHUB_ENV"
+
+      - name: Restore PostgreSQL backup into a new isolated database
+        env:
+          DB_CONNECTION: pgsql
+          RESTORE_DB: garmentos_restore_test_${{ github.run_id }}_${{ github.run_attempt }}
+        run: php artisan garmentos:restore "$GARMENTOS_PG_BACKUP_ID" --target-db="$RESTORE_DB" --force
+
+      - name: Prove PostgreSQL restore refuses the active database
+        env:
+          DB_CONNECTION: pgsql
+        run: |
+          set +e
+          php artisan garmentos:restore "$GARMENTOS_PG_BACKUP_ID" --target-db=garmentos_test --force
+          RESTORE_EXIT=$?
+          set -e
+          test "$RESTORE_EXIT" -eq 1
 
   frontend-build:
     name: Frontend TypeScript & Vite Build

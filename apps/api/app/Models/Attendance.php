@@ -27,7 +27,9 @@ class Attendance extends Model
         'is_payable',
         'notes',
         'created_by',
+        'created_by_user_id',
         'updated_by',
+        'updated_by_user_id',
     ];
 
     protected $casts = [
@@ -58,11 +60,11 @@ class Attendance extends Model
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     public function updater(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'updated_by');
+        return $this->belongsTo(User::class, 'updated_by_user_id');
     }
 }

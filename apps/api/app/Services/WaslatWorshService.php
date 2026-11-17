@@ -9,6 +9,7 @@ use App\Models\RfqBid;
 use App\Models\Tenant;
 use App\Models\WorkshopProfile;
 use App\Models\WorkshopReview;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -481,7 +482,7 @@ class WaslatWorshService
             'full_path' => Storage::disk('local')->path($target['storage_path']),
             'storage_path' => $target['storage_path'],
             'mime_type' => $target['mime_type'] ?? 'application/octet-stream',
-            'filename' => $target['name'] ?? 'attachment',
+            'filename' => $target['file_name'] ?? $target['name'] ?? 'attachment',
         ];
     }
 
@@ -622,20 +623,41 @@ class WaslatWorshService
     }
 
     /**
-     * قبول العرض الفائز وترسيته مع تحويله تلقائياً إلى أمر تشغيل JobOrder واحتساب العمولة
+     * قبول العرض الفائز وترسيته مع تحويله تلقائياً إلى أمر تشغيل JobOrder واحتساب العمولة للطرفين
      */
-    public function acceptBid(string $rfqId, string $bidId, string $seekerTenantId): array
+    public function acceptBid(string $rfqId, string $bidId, string $seekerTenantId, bool $enforceOfferWindow = true): array
     {
         app()->instance('current_tenant_id', $seekerTenantId);
 
-        return DB::transaction(function () use ($rfqId, $bidId, $seekerTenantId) {
-            $rfq = Rfq::where('tenant_id', $seekerTenantId)->findOrFail($rfqId);
+        return DB::transaction(function () use ($rfqId, $bidId, $seekerTenantId, $enforceOfferWindow) {
+            $rfq = Rfq::where('tenant_id', $seekerTenantId)->lockForUpdate()->findOrFail($rfqId);
 
             if (!in_array($rfq->status, ['open', 'published'], true)) {
                 throw new InvalidArgumentException('لا يمكن قبول عرض على طلب غير مفتوح.');
             }
 
-            $bid = RfqBid::where('rfq_id', $rfq->id)->findOrFail($bidId);
+            if (!empty($rfq->awarded_bid_id) || $rfq->status === 'offer_selected') {
+                throw new InvalidArgumentException('تمت ترسية هذا الطلب بالفعل ولا يمكن إعادة قبوله.');
+            }
+
+            // إنفاذ نافذة العروض الإجبارية (60 دقيقة من تاريخ النشر الرسمي حصراً published_at)
+            if ($enforceOfferWindow) {
+                if (empty($rfq->published_at)) {
+                    throw new InvalidArgumentException('لا يمكن قبول العرض على طلب لم يتم نشره رسمياً أو تنقصه بيانات تاريخ النشر.');
+                }
+                $publishedAt = Carbon::parse($rfq->published_at);
+                if (now()->lt($publishedAt->copy()->addMinutes(60))) {
+                    $remainingSeconds = now()->diffInSeconds($publishedAt->copy()->addMinutes(60), false);
+                    throw new InvalidArgumentException("نافذة استقبال العروض مستمرة لمدة 60 دقيقة من نشر الطلب لضمان تكافؤ الفرص وعدالة المنافسة. يتبقى {$remainingSeconds} ثانية قبل فتح باب الترسية.");
+                }
+            }
+
+            $bid = RfqBid::where('rfq_id', $rfq->id)->lockForUpdate()->findOrFail($bidId);
+
+            if ($bid->status !== 'submitted') {
+                throw new InvalidArgumentException('لا يمكن قبول عرض غير متاح للترسية أو تمت معالجته مسبقاً.');
+            }
+
             $workshop = WorkshopProfile::findOrFail($bid->workshop_profile_id);
 
             // ترقية العرض الفائز ورفض العروض الأخرى وتعيين حالة اختيار العرض (P3: Offer Selected Lifecycle)
@@ -669,10 +691,11 @@ class WaslatWorshService
             $bid->save();
             $rfq->save();
 
-            // 2. احتساب عمولة المنصة (Marketplace Commission: 3%)
+            // 2. احتساب عمولة المنصة لطالب الخدمة والمنفذ (Two-Sided Commission: 3% + 3%)
             $commissionRate = 3.00;
             $commissionAmount = round(($grossAmount * $commissionRate) / 100, 4);
 
+            // عمولة طالب الخدمة (Requester Commission)
             $commission = MarketplaceCommission::create([
                 'tenant_id' => $seekerTenantId,
                 'rfq_id' => $rfq->id,
@@ -684,11 +707,27 @@ class WaslatWorshService
                 'status' => 'pending',
             ]);
 
+            // عمولة مزود الخدمة (Provider Commission) إذا كانت الورشة تتبع مستأجراً مسجلاً
+            $providerCommission = null;
+            if (!empty($workshop->tenant_id)) {
+                $providerCommission = MarketplaceCommission::create([
+                    'tenant_id' => $workshop->tenant_id,
+                    'rfq_id' => $rfq->id,
+                    'rfq_bid_id' => $bid->id,
+                    'job_order_id' => $jobOrder->id,
+                    'gross_amount' => $grossAmount,
+                    'commission_rate' => $commissionRate,
+                    'commission_amount' => $commissionAmount,
+                    'status' => 'pending',
+                ]);
+            }
+
             return [
                 'rfq' => $rfq->fresh(['bids.workshop', 'awardedBid']),
                 'awarded_bid' => $bid->fresh(),
                 'job_order' => $jobOrder,
                 'commission' => $commission,
+                'provider_commission' => $providerCommission,
             ];
         });
     }

@@ -8,6 +8,9 @@ import {
   Users,
   Store,
   ShieldCheck,
+  Palette,
+  Truck,
+  CreditCard,
 } from 'lucide-react';
 import type { Language } from '../../../types';
 
@@ -249,23 +252,150 @@ export const WorkforcePage: React.FC<FeaturePageProps> = ({ lang }) => {
   );
 };
 
-export const StorefrontPage: React.FC<FeaturePageProps> = ({ lang }) => {
+export const StorefrontPage: React.FC<FeaturePageProps> = ({ lang, onOpenRegister }) => {
   const isAr = lang === 'ar';
+
+  const templates = [
+    {
+      name: 'Modern Boutique',
+      category: isAr ? 'براندات الأزياء والموضة' : 'Retail & Fashion Brands',
+      desc: isAr ? 'تصميم عصري جذاب مخصص للماركات الراقية والمستهلك النهائي، مع عرض صور تفاعلي واختيار الألوان والمقاسات بسهولة.' : 'Sleek luxury design for fashion apparel and D2C brands with interactive color & size selectors.',
+      color: 'border-indigo-500/30 bg-indigo-50/30 dark:bg-indigo-950/20',
+      badge: 'B2C / D2C',
+    },
+    {
+      name: 'Clean Wholesale',
+      category: isAr ? 'تجارة الجملة والموزعين' : 'Wholesale & B2B Distribution',
+      desc: isAr ? 'واجهة مخصصة لتجار الجملة مع إمكانية الشراء السريع بالكرتونة والدستة، وجدول المقاسات والألوان المجمعة.' : 'Engineered for bulk carton and dozen ordering with matrix bulk add-to-cart.',
+      color: 'border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/20',
+      badge: 'B2B Wholesale',
+    },
+    {
+      name: 'Streetwear / Activewear',
+      category: isAr ? 'الملابس الرياضية والكاجوال' : 'Athleisure & Streetwear',
+      desc: isAr ? 'طابع شبابي جريء وبانرات عريضة تبرز خامات الأقمشة وتفاصيل التشطيب والطباعة.' : 'High-energy layout with immersive visuals emphasizing technical fabrics and prints.',
+      color: 'border-rose-500/30 bg-rose-50/30 dark:bg-rose-950/20',
+      badge: 'Active & Street',
+    },
+    {
+      name: 'Industrial & Uniform Supply',
+      category: isAr ? 'الزي الموحد واليونيفورم' : 'Workwear & Institutional Uniforms',
+      desc: isAr ? 'مخصص للمصانع والشركات والزي الطبي والفندقي، مع خيارات طلب كميات وتخصيص الشعارات والتطريز.' : 'Structured catalogue for institutional RFQs, corporate workwear, and medical scrubs.',
+      color: 'border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20',
+      badge: 'Corporate B2B',
+    },
+  ];
+
   return (
-    <div className="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-8">
+    <div className="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-12">
       <div className="text-center space-y-4 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold font-sans">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold font-sans">
           <Store className="w-4 h-4" />
-          <span>{isAr ? 'المتجر الإلكتروني B2B' : 'B2B Wholesale Portal'}</span>
+          <span>{isAr ? 'منظومة المتاجر الإلكترونية المتصلة (WOOC Storefront)' : 'Integrated B2B & B2C Storefront Engine'}</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white font-sans">
-          {isAr ? 'كتالوج المبيعات بالجملة وتلقي طلبات العملاء' : 'B2B Wholesale Storefront & Direct Orders'}
+          {isAr ? 'متجرك الإلكتروني مربوط لحظياً بصالة الإنتاج والمخازن' : 'Online Storefront Wired Live to Production & Inventory'}
         </h1>
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
           {isAr
-            ? 'متجر إلكتروني مستقل لكل مصنع، عرض الموديلات بأسعار الجملة ونصف الجملة، وحجز الطلبات مباشرة في خطة الإنتاج مع خيار الدفع عند الاستلام (COD).'
-            : 'Branded online storefront for each factory tenant with wholesale tiers, direct order reservations, and Cash on Delivery.'}
+            ? 'لا داعي لشراء منصات تجارة إلكترونية منفصلة أو إدخال رصيد المخزون يدوياً. يوفر لك GarmentOS متجراً إلكترونياً متكاملاً لكل مصنع، مربوط مباشرة برصيد الموديلات الجاهزة والكراتين في المخزن.'
+            : 'Eliminate separate e-commerce platforms and manual inventory synchronization. Each factory tenant gets an instant high-performance storefront connected directly to warehouse finished goods.'}
         </p>
+      </div>
+
+      {/* 3 Pillars */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+            <Palette className="w-5 h-5" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white font-sans">
+            {isAr ? 'محرر المظهر المرئي (Design Studio)' : 'Live Visual Design Studio'}
+          </h3>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {isAr
+              ? 'تخصيص كامل للهيدر واللوجو والألوان وبانرات العروض الترويجية بدون أي سطر برمجي، مع حفظ ونشر فوري.'
+              : 'Customize logos, typography, accent colors, and promotional banners with zero code and instantaneous publishing.'}
+          </p>
+        </div>
+
+        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+            <CreditCard className="w-5 h-5" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white font-sans">
+            {isAr ? 'دفع آمن بالإنستاباي وعند الاستلام' : 'InstaPay Transfer & COD'}
+          </h3>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {isAr
+              ? 'دعم وسائل الدفع الأكثر استخداماً في مصر: التحويل البنكي الفوري عبر InstaPay مع رفع إيصال التحويل، أو الدفع نقداً عند استلام الشحنة.'
+              : 'Built for Egypt with native InstaPay receipt verification and Cash on Delivery order processing.'}
+          </p>
+        </div>
+
+        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+            <Truck className="w-5 h-5" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white font-sans">
+            {isAr ? 'تتبع فوري لحالة الشحنات' : 'Live Order & Shipment Tracking'}
+          </h3>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {isAr
+              ? 'صفحة تتبع عامة تمكن المشتري من متابعة حالة طلبه برقم الطلب ورقم الهاتف فور خروجه من المخزن.'
+              : 'Dedicated public tracking portal where buyers verify dispatch status by order number and phone.'}
+          </p>
+        </div>
+      </div>
+
+      {/* 4 Templates Grid */}
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-sans">
+            {isAr ? '4 قوالب احترافية جاهزة للاستخدام' : '4 Industry-Tailored Storefront Templates'}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            {isAr ? 'اختر القالب الأنسب لطبيعة مبيعات مصنعك وبدّل بينها بضغطة زر واحدة من لوحة التحكم.' : 'Switch between templates anytime from your admin dashboard.'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {templates.map((tpl, i) => (
+            <div
+              key={i}
+              className={`p-6 rounded-2xl border ${tpl.color} space-y-3 shadow-xs`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-base text-slate-900 dark:text-white">{tpl.name}</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                  {tpl.badge}
+                </span>
+              </div>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{tpl.category}</div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                {tpl.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA Box */}
+      <div className="p-8 rounded-3xl bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+        <div className="space-y-2 text-center md:text-start">
+          <h3 className="text-lg sm:text-xl font-black font-sans">
+            {isAr ? 'ابدأ في بيع منتجاتك مباشرة من المصنع' : 'Start Selling Directly From Your Factory'}
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-300">
+            {isAr ? 'ميزة المتجر الإلكتروني متوفرة ومدمجة في باقتي Pro و Enterprise بدون أي رسوم إضافية.' : 'Included in Pro and Enterprise plans with zero added transaction commissions.'}
+          </p>
+        </div>
+        <button
+          onClick={() => onOpenRegister?.('professional')}
+          className="btn-brand-primary px-6 py-3 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer shrink-0"
+        >
+          {isAr ? 'بدء التجربة المجانية' : 'Start 14-Day Free Trial'}
+        </button>
       </div>
     </div>
   );

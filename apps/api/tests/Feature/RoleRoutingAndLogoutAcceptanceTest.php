@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -170,6 +171,8 @@ class RoleRoutingAndLogoutAcceptanceTest extends TestCase
             ]);
         $workerVoucherRes->assertStatus(403);
 
+        $this->app['auth']->forgetGuards();
+
         // Login as Accountant
         $acctLogin = $this->postJson('/api/v1/auth/login', [
             'email' => 'accountant@nilegarment.com',
@@ -177,9 +180,15 @@ class RoleRoutingAndLogoutAcceptanceTest extends TestCase
         ]);
         $acctToken = $acctLogin->json('access_token');
 
+        // Accounting access is tenant-wide: grant the accountant every current tenant branch.
+        // The endpoint intentionally denies partial branch coverage.
+        $this->accountant->branches()->sync(
+            Branch::where('tenant_id', $this->tenant->id)->pluck('id')->all()
+        );
+
         // Accountant can read accounting accounts
         $acctAccountsRes = $this->withHeader('Authorization', 'Bearer ' . $acctToken)
             ->getJson('/api/v1/accounting/accounts');
-        $acctAccountsRes->assertStatus(200);
+        $acctAccountsRes->assertStatus(200, $acctAccountsRes->getContent());
     }
 }

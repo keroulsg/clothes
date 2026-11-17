@@ -55,6 +55,7 @@ class MachineAndMaintenanceTest extends TestCase
             'role' => 'production_manager',
             'is_active' => true,
         ]);
+        $this->userA->branches()->sync([$this->branchA->id]);
 
         $this->userB = User::create([
             'tenant_id' => $this->tenantB->id,

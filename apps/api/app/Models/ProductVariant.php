@@ -23,11 +23,13 @@ class ProductVariant extends Model
         'barcode',
         'wholesale_price',
         'retail_price',
+        'moq',
     ];
 
     protected $casts = [
         'wholesale_price' => 'decimal:4',
         'retail_price' => 'decimal:4',
+        'moq' => 'integer',
     ];
 
     public function getEffectivePosPriceAttribute(): float
@@ -66,5 +68,10 @@ class ProductVariant extends Model
     public function inventoryItems(): HasMany
     {
         return $this->hasMany(InventoryItem::class, 'variant_id');
+    }
+
+    public function wholesaleTiers(): HasMany
+    {
+        return $this->hasMany(ProductVariantWholesaleTier::class, 'variant_id')->orderBy('min_quantity');
     }
 }

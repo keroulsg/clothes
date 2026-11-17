@@ -80,22 +80,27 @@ export const AboutPage: React.FC<InfoPageProps> = ({ lang }) => {
 
 export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) => {
   const isAr = lang === 'ar';
+  const [productCategory, setProductCategory] = useState<'erp' | 'waslat_worsh'>('erp');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [plans, setPlans] = useState<any[]>([]);
   const [featuresCatalog, setFeaturesCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     const fetchPlans = async () => {
+      setLoading(true);
+      setLoadError(false);
       try {
-        const res = await api.saas.getPublicPlans('erp');
+        const res = await api.saas.getPublicPlans(productCategory);
         if (mounted && res && res.plans) {
           setPlans(res.plans);
-          setFeaturesCatalog(res.features_catalog || []);
+          setFeaturesCatalog(res.features_catalog || (res as any).comparison_features || []);
         }
       } catch (err) {
-        console.error('Failed to load ERP pricing plans:', err);
+        console.error('Failed to load pricing plans:', err);
+        if (mounted) setLoadError(true);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -104,73 +109,10 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [productCategory]);
 
-  const fallbackPlans = [
-    {
-      id: 'starter',
-      code: 'starter',
-      name_ar: 'باقة الورش والمشاغل',
-      name_en: 'Starter Workshop',
-      monthly_price: 1450,
-      annual_price: 14500,
-      description_ar: 'مثالية للورش وصالات القص الصغيرة (حتى خطين إنتاج).',
-      description_en: 'Ideal for small cutting workshops and independent sewing units.',
-      features: ['erp.inventory', 'erp.cutting', 'erp.purchasing', 'erp.sales'],
-      is_popular: false,
-    },
-    {
-      id: 'pro',
-      code: 'pro',
-      name_ar: 'باقة المصانع المتكاملة',
-      name_en: 'Professional Factory',
-      monthly_price: 3850,
-      annual_price: 38500,
-      description_ar: 'الخيار الأكثر طلباً لمصانع الملابس المتوسطة والمتكاملة.',
-      description_en: 'Most popular choice for medium full-cycle apparel plants.',
-      features: [
-        'erp.inventory',
-        'erp.cutting',
-        'erp.purchasing',
-        'erp.sales',
-        'erp.production',
-        'erp.costing',
-        'erp.accounting',
-        'erp.payroll',
-        'erp.storefront',
-        'erp.subcontracting',
-      ],
-      is_popular: true,
-    },
-    {
-      id: 'enterprise',
-      code: 'enterprise',
-      name_ar: 'باقة كبرى المجموعات',
-      name_en: 'Enterprise Scale',
-      monthly_price: 7900,
-      annual_price: 79000,
-      description_ar: 'للمصانع الكبرى متعددة الفروع والمخازن وخطوط التصدير.',
-      description_en: 'For large industrial groups with multi-branch production.',
-      features: [
-        'erp.inventory',
-        'erp.cutting',
-        'erp.purchasing',
-        'erp.sales',
-        'erp.production',
-        'erp.costing',
-        'erp.accounting',
-        'erp.payroll',
-        'erp.storefront',
-        'erp.subcontracting',
-        'erp.advanced_reports',
-        'erp.maintenance',
-        'waslat_worsh.marketplace_provider',
-      ],
-      is_popular: false,
-    },
-  ];
-
-  const displayedPlans = plans.length > 0 ? plans : fallbackPlans;
+  // Pricing cards are rendered only from the authoritative plans API.
+  const displayedPlans = plans;
 
   // Feature keys and human labels
   const featureLabel = (key: string) => {
@@ -224,28 +166,56 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
             : 'Start with a 14-day free trial. No credit card required. Upgrade or adapt anytime.'}
         </p>
 
-        {/* Monthly vs Annual Toggle */}
-        <div className="pt-4 flex items-center justify-center gap-3">
-          <span className={`text-xs font-bold ${billingCycle === 'monthly' ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
-            {isAr ? 'فوترة شهرية' : 'Monthly Billing'}
-          </span>
-          <button
-            onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
-            className="w-14 h-7 rounded-full bg-slate-200 dark:bg-slate-700 p-1 flex items-center transition-colors cursor-pointer relative"
-          >
-            <div
-              className={`w-5 h-5 rounded-full bg-[var(--brand-primary)] text-white shadow-md transform transition-transform ${
-                billingCycle === 'annual' ? (isAr ? '-translate-x-7' : 'translate-x-7') : 'translate-x-0'
+        {/* Product Category Selector */}
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <div className="inline-flex p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setProductCategory('erp')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                productCategory === 'erp'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
-            />
-          </button>
-          <span className={`text-xs font-bold flex items-center gap-1.5 ${billingCycle === 'annual' ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
-            <span>{isAr ? 'فوترة سنوية' : 'Annual Billing'}</span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black border border-emerald-500/20">
-              {isAr ? 'وفر شهرين مجاناً' : '2 Months Free'}
-            </span>
-          </span>
+            >
+              {isAr ? 'باقات المصانع (GarmentOS ERP)' : 'Factory ERP Plans'}
+            </button>
+            <button
+              onClick={() => setProductCategory('waslat_worsh')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                productCategory === 'waslat_worsh'
+                  ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              {isAr ? 'باقات طالبي القص (سوق وصلة ورش)' : 'Waslat Worsh Requester Packs'}
+            </button>
+          </div>
         </div>
+
+        {/* Monthly vs Annual Toggle */}
+        {productCategory === 'erp' && (
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <span className={`text-xs font-bold ${billingCycle === 'monthly' ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+              {isAr ? 'فوترة شهرية' : 'Monthly Billing'}
+            </span>
+            <button
+              onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
+              className="w-14 h-7 rounded-full bg-slate-200 dark:bg-slate-700 p-1 flex items-center transition-colors cursor-pointer relative"
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-[var(--brand-primary)] text-white shadow-md transform transition-transform ${
+                  billingCycle === 'annual' ? (isAr ? '-translate-x-7' : 'translate-x-7') : 'translate-x-0'
+                }`}
+              />
+            </button>
+            <span className={`text-xs font-bold flex items-center gap-1.5 ${billingCycle === 'annual' ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+              <span>{isAr ? 'فوترة سنوية' : 'Annual Billing'}</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black border border-emerald-500/20">
+                {isAr ? 'وفر شهرين مجاناً' : '2 Months Free'}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Package Cards */}
@@ -253,6 +223,12 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
         <div className="py-16 text-center text-xs text-slate-400">
           <Sparkles className="w-6 h-6 animate-spin mx-auto mb-3 text-rose-600" />
           <span>{isAr ? 'جارِ تحميل باقات الاشتراك المعتمدة...' : 'Loading verified SaaS packages...'}</span>
+        </div>
+      ) : displayedPlans.length === 0 ? (
+        <div role="alert" className="py-16 px-6 text-center rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200">
+          <p className="font-bold">{isAr ? 'تعذر تحميل الأسعار المعتمدة' : 'Verified pricing is unavailable'}</p>
+          <p className="mt-2 text-sm">{isAr ? 'لا نعرض أسعاراً تجريبية أو قديمة. يرجى المحاولة لاحقاً أو التواصل مع المبيعات.' : 'Demo or stale prices are hidden. Please retry later or contact sales.'}</p>
+          {loadError && <button type="button" onClick={() => window.location.reload()} className="mt-4 underline font-semibold">{isAr ? 'إعادة المحاولة' : 'Retry'}</button>}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
@@ -323,18 +299,28 @@ export const PricingPage: React.FC<InfoPageProps> = ({ lang, onOpenRegister }) =
 
               <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800/60">
                 <button
-                  onClick={() => onOpenRegister?.(planCode as any)}
+                  onClick={() => {
+                    if (productCategory === 'waslat_worsh') {
+                      window.location.hash = '#/waslat-worsh';
+                    } else {
+                      onOpenRegister?.(planCode as any);
+                    }
+                  }}
                   className={`w-full py-3 rounded-2xl font-black text-xs transition-all cursor-pointer shadow-sm ${
                     isPopular
                       ? 'btn-brand-primary text-white shadow-md hover:opacity-95'
                       : 'border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
                   }`}
                 >
-                  {isAr ? 'بدء التجربة المجانية (14 يوماً)' : 'Start 14-Day Free Trial'}
+                  {productCategory === 'waslat_worsh'
+                    ? (isAr ? 'اختيار باقة وصلة ورش وطرح الطلب' : 'Choose Waslat Worsh Pack')
+                    : (isAr ? 'بدء التجربة المجانية (14 يوماً)' : 'Start 14-Day Free Trial')}
                 </button>
                 <div className="text-center mt-2">
                   <span className="text-[10px] text-slate-400">
-                    {isAr ? 'لا حاجة لبطاقة ائتمان مسبقة' : 'No credit card required'}
+                    {productCategory === 'waslat_worsh'
+                      ? (isAr ? `تتيح نشر ${p.quota_rfq_count || 5} طلبات قص وتشغيل` : `Includes ${p.quota_rfq_count || 5} RFQs quota`)
+                      : (isAr ? 'لا حاجة لبطاقة ائتمان مسبقة' : 'No credit card required')}
                   </span>
                 </div>
               </div>

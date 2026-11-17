@@ -137,6 +137,22 @@ class Batch4SalesAndReceivablesTest extends TestCase
             'is_active' => true,
         ]);
 
+        $branchB = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الإسكندرية',
+            'code' => 'BR-B-' . uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->warehouseB = Warehouse::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $branchB->id,
+            'name' => 'مستودع المنتج التام B',
+            'code' => 'WH-FG-B-' . uniqid(),
+            'type' => 'finished_goods',
+            'is_active' => true,
+        ]);
+
         // موديل ومتغير لـ Tenant A
         $modelA = GarmentModel::create([
             'tenant_id' => $this->tenantA->id,
@@ -200,6 +216,56 @@ class Batch4SalesAndReceivablesTest extends TestCase
     /**
      * 1. إدارة العملاء، التحقق من تفرد الكود، والرقم الضريبي، وعزل المستأجرين
      */
+    public function test_sales_order_listing_and_creation_are_restricted_to_assigned_branches(): void
+    {
+        app()->instance('current_tenant_id', $this->tenantA->id);
+        $order = app(\App\Services\SalesService::class)->createSalesOrder([
+            'customer_name' => 'عميل اختبار الفرع',
+            'warehouse_id' => $this->warehouseA->id,
+            'items' => [[
+                'variant_id' => $this->variantA->id,
+                'ordered_quantity' => 1,
+                'unit_price' => 100,
+            ]],
+        ]);
+
+        $staff = User::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'موظف مبيعات غير معيّن',
+            'email' => 'sales-unassigned-' . uniqid() . '@alnoor.com',
+            'password' => bcrypt('password123'),
+            'role' => 'sales_manager',
+            'is_active' => true,
+        ]);
+
+        $unassignedList = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->getJson('/api/v1/sales/orders');
+
+        $unassignedList->assertOk()->assertJsonCount(0, 'data');
+
+        $staff->branches()->sync([$this->warehouseA->branch_id]);
+        $assignedList = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->getJson('/api/v1/sales/orders');
+
+        $assignedList->assertOk()->assertJsonCount(1, 'data');
+
+        $deniedCreate = $this->actingAs($staff)
+            ->withHeader('X-Tenant-Id', $this->tenantA->id)
+            ->postJson('/api/v1/sales/orders', [
+                'customer_name' => 'محاولة فرع غير معيّن',
+                'warehouse_id' => $this->warehouseB->id,
+                'items' => [[
+                    'variant_id' => $this->variantA->id,
+                    'ordered_quantity' => 1,
+                    'unit_price' => 100,
+                ]],
+            ]);
+
+        $deniedCreate->assertStatus(403);
+    }
+
     public function test_customer_management_crud_and_duplicate_prevention_and_tenancy(): void
     {
         // إنشاء عميل شركة مع كافة البيانات التجارية

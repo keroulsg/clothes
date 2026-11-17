@@ -1381,6 +1381,8 @@ export interface StoreOrder {
   payment_reviewed_at?: string;
   payment_rejection_reason?: string;
   status: 'new' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled';
+  order_type?: 'retail' | 'wholesale' | string;
+  customer_id?: string;
   subtotal: number;
   shipping_fee: number;
   total_amount: number;

@@ -30,54 +30,84 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sizesList, setSizesList] = useState<any[]>([]);
   const [colorsList, setColorsList] = useState<any[]>([]);
+  const [approvedBoms, setApprovedBoms] = useState<any[]>([]);
+  const [selectedBomId, setSelectedBomId] = useState('');
+  const [isLoadingBoms, setIsLoadingBoms] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   React.useEffect(() => {
     if (isOpen) {
-      Promise.all([
-        api.models.getSizes().catch(() => ({ sizes: [] })),
-        api.models.getColors().catch(() => ({ colors: [] })),
-      ]).then(([sRes, cRes]) => {
-        if (sRes.sizes) setSizesList(sRes.sizes);
-        if (cRes.colors) setColorsList(cRes.colors);
-      });
+      setErrorMsg('');
+      Promise.all([api.models.getSizes(), api.models.getColors()])
+        .then(([sRes, cRes]) => {
+          setSizesList(sRes.sizes || []);
+          setColorsList(cRes.colors || []);
+          if (!(sRes.sizes || []).length || !(cRes.colors || []).length) {
+            setErrorMsg(isAr
+              ? 'لا يمكن تخطيط الإنتاج قبل تسجيل المقاسات والألوان الفعلية في بيانات المصنع.'
+              : 'Production planning requires real sizes and colors configured in factory data.');
+          }
+        })
+        .catch((error: any) => {
+          setSizesList([]);
+          setColorsList([]);
+          setErrorMsg(error?.message || (isAr ? 'تعذر تحميل المقاسات والألوان من الخادم.' : 'Could not load sizes and colors from the server.'));
+        });
     }
   }, [isOpen]);
 
-  const [items, setItems] = useState<ProductionOrderItem[]>([
-    {
-      id: 'poi-' + Date.now(),
-      color_id: 'col-1',
-      color_name: isAr ? 'أحمر زاهي' : 'Bright Red',
-      size_id: 'sz-1',
-      size_name: isAr ? '2Y (سنتين)' : '2Y',
-      planned_quantity: 150,
-      cut_quantity: 0,
-      completed_quantity: 0,
-    },
-    {
-      id: 'poi-' + (Date.now() + 1),
-      color_id: 'col-2',
-      color_name: isAr ? 'كحلي غامق' : 'Dark Navy',
-      size_id: 'sz-2',
-      size_name: isAr ? '4Y (4 سنوات)' : '4Y',
-      planned_quantity: 150,
-      cut_quantity: 0,
-      completed_quantity: 0,
-    },
-  ]);
+  React.useEffect(() => {
+    let cancelled = false;
+    setApprovedBoms([]);
+    setSelectedBomId('');
+    if (!isOpen || !selectedModelId) {
+      setIsLoadingBoms(false);
+      return () => { cancelled = true; };
+    }
+
+    setIsLoadingBoms(true);
+    api.production.getBoms({ garment_model_id: selectedModelId })
+      .then((response) => {
+        if (cancelled) return;
+        const approved = (response?.data || []).filter((bom: any) =>
+          bom.status === 'approved' && bom.is_active === true
+        );
+        setApprovedBoms(approved);
+        setSelectedBomId(approved[0]?.id || '');
+      })
+      .catch((error: any) => {
+        if (!cancelled) {
+          setApprovedBoms([]);
+          setSelectedBomId('');
+          setErrorMsg(error?.message || (isAr ? 'تعذر تحميل إصدارات BOM المعتمدة لهذا الموديل.' : 'Could not load approved BOM versions for this model.'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingBoms(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [isOpen, selectedModelId, isAr]);
+
+  const [items, setItems] = useState<ProductionOrderItem[]>([]);
 
   const totalPlannedQuantity = items.reduce((sum, it) => sum + (Number(it.planned_quantity) || 0), 0);
 
   const handleAddItem = () => {
+    if (!colorsList.length || !sizesList.length) {
+      setErrorMsg(isAr
+        ? 'أضف الألوان والمقاسات الحقيقية أولاً من إعدادات المصنع.'
+        : 'Configure real factory colors and sizes before adding a production line.');
+      return;
+    }
     setItems((prev) => [
       ...prev,
       {
-        id: 'poi-' + Date.now() + Math.random(),
-        color_id: colorsList[0]?.id || 'col-1',
-        color_name: colorsList[0]?.name || (isAr ? 'أحمر زاهي' : 'Bright Red'),
-        size_id: sizesList[0]?.id || 'sz-3',
-        size_name: sizesList[0]?.name || (isAr ? '6Y (6 سنوات)' : '6Y'),
+        id: 'poi-' + Date.now() + '-' + prev.length,
+        color_id: colorsList[0].id,
+        color_name: colorsList[0].name,
+        size_id: sizesList[0].id,
+        size_name: sizesList[0].name,
         planned_quantity: 100,
         cut_quantity: 0,
         completed_quantity: 0,
@@ -98,6 +128,21 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedModelId || !models.some((model) => model.id === selectedModelId)) {
+      setErrorMsg(isAr ? 'اختر موديل ملابس صحيحاً.' : 'Select a valid garment model.');
+      return;
+    }
+    if (!items.length || items.some((item) =>
+      !colorsList.some((color) => color.id === item.color_id) ||
+      !sizesList.some((size) => size.id === item.size_id) ||
+      !Number.isInteger(Number(item.planned_quantity)) ||
+      Number(item.planned_quantity) <= 0
+    )) {
+      setErrorMsg(isAr
+        ? 'أضف سطراً واحداً على الأقل واختر لوناً ومقاساً مسجلين وكمية صحيحة لكل سطر.'
+        : 'Add at least one line with configured color, size, and a positive whole-number quantity.');
+      return;
+    }
     if (totalPlannedQuantity <= 0) return;
 
     setIsSubmitting(true);
@@ -107,6 +152,7 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
     try {
       const res = await api.production.createProductionOrder({
         garment_model_id: selectedModel?.id,
+        bill_of_material_id: selectedBomId || undefined,
         planned_start_date: new Date().toISOString().split('T')[0],
         target_delivery_date: targetDeliveryDate,
         priority,
@@ -119,9 +165,11 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
         })),
       });
 
-      if (res.data) {
+      if (res?.success && res.data) {
         onSuccess(res.data);
         onClose();
+      } else {
+        throw new Error(res?.message || (isAr ? 'لم يؤكد الخادم إنشاء أمر الإنتاج.' : 'The server did not confirm production order creation.'));
       }
     } catch (err: any) {
       setErrorMsg(err.message || (isAr ? 'تعذر إصدار أمر الإنتاج على الخادم.' : 'Failed to issue production order on server.'));
@@ -176,6 +224,34 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
               <option value="urgent">{isAr ? 'عاجلة جداً (Urgent)' : 'Urgent'}</option>
             </select>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {isAr ? 'نسخة BOM المعتمدة للموديل' : 'Approved BOM Version'}
+          </label>
+          <select
+            value={selectedBomId}
+            onChange={(e) => setSelectedBomId(e.target.value)}
+            disabled={isLoadingBoms || approvedBoms.length === 0}
+            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs p-2.5 text-slate-900 dark:text-slate-100"
+          >
+            <option value="">
+              {isLoadingBoms
+                ? (isAr ? 'جارٍ تحميل نسخ BOM...' : 'Loading BOM versions...')
+                : (isAr ? 'لا توجد نسخة BOM معتمدة — سيُنشأ الأمر دون ربط BOM' : 'No approved BOM — order will be created without BOM')}
+            </option>
+            {approvedBoms.map((bom) => (
+              <option key={bom.id} value={bom.id}>
+                {bom.name || 'BOM'} · {bom.version || '1.0'} · {bom.bom_code || ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {isAr
+              ? 'سيتم حفظ نسخة BOM المختارة مع أمر الإنتاج. لا يتم صرف الخامات في هذه الخطوة.'
+              : 'The selected BOM version is stored with the production order. Materials are not issued at this step.'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -238,23 +314,42 @@ export const CreateProductionOrderModal: React.FC<CreateProductionOrderModalProp
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 bg-white dark:bg-slate-950/40">
+                {!items.length && (
+                  <tr><td colSpan={4} className="py-6 px-3 text-center text-slate-500">
+                    {isAr ? 'لم تتم إضافة مقاسات وألوان للإنتاج بعد. اضغط «إضافة مقاس/لون» بعد تحميل البيانات الفعلية.' : 'No production lines yet. Add a size/color line after real factory data loads.'}
+                  </td></tr>
+                )}
                 {items.map((it) => (
                   <tr key={it.id}>
                     <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        value={it.color_name}
-                        onChange={(e) => handleItemChange(it.id, 'color_name', e.target.value)}
+                      <select
+                        value={it.color_id}
+                        onChange={(e) => {
+                          const color = colorsList.find((option) => option.id === e.target.value);
+                          setItems((prev) => prev.map((item) => item.id === it.id
+                            ? { ...item, color_id: color?.id || '', color_name: color?.name || '' }
+                            : item));
+                        }}
                         className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
-                      />
+                      >
+                        <option value="">{isAr ? 'اختر اللون' : 'Select color'}</option>
+                        {colorsList.map((color) => <option key={color.id} value={color.id}>{color.name}</option>)}
+                      </select>
                     </td>
                     <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        value={it.size_name}
-                        onChange={(e) => handleItemChange(it.id, 'size_name', e.target.value)}
+                      <select
+                        value={it.size_id}
+                        onChange={(e) => {
+                          const size = sizesList.find((option) => option.id === e.target.value);
+                          setItems((prev) => prev.map((item) => item.id === it.id
+                            ? { ...item, size_id: size?.id || '', size_name: size?.name || '' }
+                            : item));
+                        }}
                         className="w-full bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded px-2 py-1 text-slate-900 dark:text-slate-200 text-xs"
-                      />
+                      >
+                        <option value="">{isAr ? 'اختر المقاس' : 'Select size'}</option>
+                        {sizesList.map((size) => <option key={size.id} value={size.id}>{size.name}</option>)}
+                      </select>
                     </td>
                     <td className="py-2 px-3">
                       <input

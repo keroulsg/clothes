@@ -174,6 +174,9 @@ class WaslatWorshCommercialAcceptanceTest extends TestCase
             'promised_lead_days' => 15,
         ]);
 
+        // انقضاء مهلة نافذة الـ 60 دقيقة الإجبارية
+        $rfq->update(['published_at' => now()->subMinutes(65)]);
+
         // ترسية العرض
         $awardResult = $this->wwService->acceptBid($rfq->id, $bid->id, $this->seekerTenant->id);
 

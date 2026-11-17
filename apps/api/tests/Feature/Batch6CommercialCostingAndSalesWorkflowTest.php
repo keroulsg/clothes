@@ -205,7 +205,7 @@ class Batch6CommercialCostingAndSalesWorkflowTest extends TestCase
         ]);
 
         // تنفيذ احتساب التكلفة الفعلية
-        $costSheet = $this->accountingService->calculateProductionCost($order->id);
+        $costSheet = $this->accountingService->calculateProductionCost($order->id, ['overhead_allocation_method' => 'materials_and_labor_pct']);
 
         // التحقق من الحسابات:
         // صافي الخامات: 5000 - 500 = 4500

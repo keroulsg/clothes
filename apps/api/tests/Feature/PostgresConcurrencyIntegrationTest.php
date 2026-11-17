@@ -2,17 +2,26 @@
 
 namespace Tests\Feature;
 
+use App\Models\Color;
+use App\Models\Customer;
+use App\Models\GarmentModel;
 use App\Models\GoodsReceiptNote;
+use App\Models\GoodsReceiptNoteItem;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\ProcessedWebhookEvent;
+use App\Models\ProductVariant;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\SubscriptionPaymentOrder;
 use App\Models\Supplier;
+use App\Models\SalesOrder;
+use App\Models\Size;
 use App\Models\SupplierInvoice;
 use App\Models\Tenant;
 use App\Models\Warehouse;
+use App\Services\AccountingService;
+use App\Services\SalesService;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -25,15 +34,19 @@ use Tests\TestCase;
  * It proves that under real concurrent requests:
  * 1. Only ONE stock mutation is committed and the concurrent duplicate replays cleanly.
  * 2. Conflicting payloads under concurrency return a deterministic 409 IdempotencyConflict.
- * 3. Concurrent GRN creations do not double-decrement PO quantities.
- * 4. Concurrent supplier invoices do not duplicate financial postings.
- * 5. Concurrent duplicate webhooks do not duplicate subscription activations.
+ * 3. Two different sales orders cannot reserve the same available stock twice.
+ * 4. Concurrent GRN creations do not double-decrement PO quantities.
+ * 5. Concurrent supplier invoices do not duplicate financial postings.
+ * 6. Concurrent duplicate webhooks do not duplicate subscription activations.
  */
 class PostgresConcurrencyIntegrationTest extends TestCase
 {
     private Tenant $tenant;
     private Warehouse $warehouse;
     private InventoryItem $item;
+    private Warehouse $finishedWarehouse;
+    private InventoryItem $finishedItem;
+    private ProductVariant $finishedVariant;
     private ?string $tempDir = null;
     private static ?bool $hasPostgres = null;
 
@@ -107,6 +120,56 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         ]);
 
         app()->instance('current_tenant_id', $this->tenant->id);
+        app(AccountingService::class)->initializeDefaultChartOfAccounts($this->tenant->id);
+
+        $this->finishedWarehouse = Warehouse::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'مخزن المنتج التام لاختبار التزامن',
+            'code' => 'WH-FG-CONC',
+            'type' => 'finished_goods',
+            'allow_negative_stock' => false,
+        ]);
+
+        $color = Color::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'Navy',
+            'hex_code' => '#000080',
+        ]);
+        $size = Size::create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'L',
+            'code' => 'L-CONC',
+        ]);
+        $garmentModel = GarmentModel::create([
+            'tenant_id' => $this->tenant->id,
+            'code' => 'MODEL-CONC-' . uniqid(),
+            'name' => 'Concurrent Finished Polo',
+            'category' => 'kids_clothing',
+            'status' => 'active',
+        ]);
+        $this->finishedVariant = ProductVariant::create([
+            'tenant_id' => $this->tenant->id,
+            'garment_model_id' => $garmentModel->id,
+            'size_id' => $size->id,
+            'color_id' => $color->id,
+            'sku' => 'SKU-CONC-' . uniqid(),
+            'barcode' => 'BC' . strtoupper(substr(uniqid(), -10)),
+            'wholesale_price' => 100.0,
+            'retail_price' => 150.0,
+        ]);
+        $this->finishedItem = InventoryItem::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $this->finishedWarehouse->id,
+            'variant_id' => $this->finishedVariant->id,
+            'item_type' => 'finished_good',
+            'code' => 'FG-CONC-' . uniqid(),
+            'name' => 'Concurrent Finished Polo L',
+            'unit_of_measure' => 'piece',
+            'current_balance' => 100.0,
+            'reserved_balance' => 0.0,
+            'average_cost' => 50.0,
+            'is_customer_owned' => false,
+        ]);
     }
 
     protected function tearDown(): void
@@ -220,6 +283,9 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         try {
             $conn = DB::connection('pgsql');
             $conn->table('audit_logs')->delete();
+            $conn->table('sales_order_items')->delete();
+            $conn->table('sales_orders')->delete();
+            $conn->table('customers')->delete();
             $conn->table('processed_webhook_events')->delete();
             $conn->table('subscription_payment_orders')->delete();
             $conn->table('supplier_invoices')->delete();
@@ -230,6 +296,10 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             $conn->table('suppliers')->delete();
             $conn->table('inventory_transactions')->delete();
             $conn->table('inventory_items')->delete();
+            $conn->table('product_variants')->delete();
+            $conn->table('garment_models')->delete();
+            $conn->table('sizes')->delete();
+            $conn->table('colors')->delete();
             $conn->table('warehouses')->delete();
             $conn->table('tenants')->delete();
         } catch (\Throwable $e) {
@@ -379,7 +449,64 @@ class PostgresConcurrencyIntegrationTest extends TestCase
     }
 
     /**
-     * 3. فحص التزامن الحقيقي: استلام خامات متزامن (GRN Concurrency) مع حماية الكميات المتبقية في أمر الشراء
+     * 3. Genuine PostgreSQL race: two different sales orders compete for the final stock.
+     */
+    public function test_concurrent_sales_reservations_cannot_reserve_the_same_available_stock_twice(): void
+    {
+        $customer = Customer::create([
+            'tenant_id' => $this->tenant->id,
+            'code' => 'CUST-CONC-' . uniqid(),
+            'name' => 'عميل اختبار حجز المبيعات المتزامن',
+            'is_active' => true,
+        ]);
+
+        $salesService = app(SalesService::class);
+        $orderPayload = [
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'warehouse_id' => $this->finishedWarehouse->id,
+            'order_type' => 'wholesale',
+            'items' => [
+                [
+                    'variant_id' => $this->finishedVariant->id,
+                    'ordered_quantity' => 70,
+                    'unit_price' => 100.0,
+                ],
+            ],
+        ];
+
+        $orderA = $salesService->createSalesOrder($orderPayload);
+        $orderB = $salesService->createSalesOrder($orderPayload);
+
+        [$responseA, $responseB] = $this->runTwoConcurrentWorkers(
+            'sales_reservation',
+            ['sales_order_id' => $orderA->id],
+            ['sales_order_id' => $orderB->id],
+            [],
+            [],
+            0
+        );
+
+        $statuses = [$responseA['status'] ?? null, $responseB['status'] ?? null];
+        $this->assertContains(200, $statuses, 'Exactly one competing reservation must succeed: ' . json_encode([$responseA, $responseB], JSON_UNESCAPED_UNICODE));
+        $this->assertContains(422, $statuses, 'The second reservation must fail closed when only 30 pieces remain.');
+
+        $this->finishedItem->refresh();
+        $this->assertSame(100.0, (float) $this->finishedItem->current_balance);
+        $this->assertSame(70.0, (float) $this->finishedItem->reserved_balance);
+
+        $orders = SalesOrder::whereIn('id', [$orderA->id, $orderB->id])->get();
+        $this->assertSame(1, $orders->where('status', 'reserved')->count());
+        $this->assertSame(1, $orders->where('status', 'confirmed')->count());
+
+        $reservedQuantity = (float) DB::table('sales_order_items')
+            ->whereIn('sales_order_id', [$orderA->id, $orderB->id])
+            ->sum('reserved_quantity');
+        $this->assertSame(70.0, $reservedQuantity);
+    }
+
+    /**
+     * 4. فحص التزامن الحقيقي: استلام خامات متزامن (GRN Concurrency) مع حماية الكميات المتبقية في أمر الشراء
      */
     public function test_concurrent_grn_creation_prevents_duplicate_material_receipts(): void
     {
@@ -437,16 +564,19 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('grn', $grnPayload1, $grnPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses);
+        $this->assertContains(201, $statuses, 'GRN concurrent worker responses: ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE));
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->count());
-        $this->assertEquals(40.0, (float)$poItem->fresh()->received_quantity);
-        $this->assertEquals(60.0, (float)$poItem->fresh()->remaining_quantity);
+        $winningGrn = GoodsReceiptNote::where('tenant_id', $this->tenant->id)->where('idempotency_key', $grnKey)->firstOrFail();
+        $winningAcceptedQuantity = (float) $winningGrn->items()->sum('accepted_quantity');
+        $this->assertContains($winningAcceptedQuantity, [30.0, 40.0]);
+        $this->assertEquals($winningAcceptedQuantity, (float) $poItem->fresh()->received_quantity);
+        $this->assertEquals(100.0 - $winningAcceptedQuantity, (float) $poItem->fresh()->remaining_quantity);
     }
 
     /**
-     * 4. فحص التزامن الحقيقي: فواتير الموردين المتزامنة تمنع مضاعفة الالتزام المالي
+     * 5. فحص التزامن الحقيقي: فواتير الموردين المتزامنة تمنع مضاعفة الالتزام المالي
      */
     public function test_concurrent_supplier_invoices_prevent_duplicate_financial_postings(): void
     {
@@ -470,12 +600,46 @@ class PostgresConcurrencyIntegrationTest extends TestCase
             'status' => 'approved',
         ]);
 
+        $poItem = PurchaseOrderItem::create([
+            'tenant_id' => $this->tenant->id,
+            'purchase_order_id' => $po->id,
+            'inventory_item_id' => $this->item->id,
+            'ordered_quantity' => 100.0,
+            'unit_price' => 100.0,
+            'total_price' => 10000.0,
+            'received_quantity' => 100.0,
+            'remaining_quantity' => 0.0,
+        ]);
+
+        $grn = GoodsReceiptNote::create([
+            'tenant_id' => $this->tenant->id,
+            'grn_number' => 'GRN-INV-CONC-' . uniqid(),
+            'purchase_order_id' => $po->id,
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $this->warehouse->id,
+            'receipt_date' => date('Y-m-d'),
+            'status' => 'posted',
+            'inspection_status' => 'passed',
+        ]);
+
+        GoodsReceiptNoteItem::create([
+            'tenant_id' => $this->tenant->id,
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'inventory_item_id' => $this->item->id,
+            'delivered_quantity' => 100.0,
+            'accepted_quantity' => 100.0,
+            'rejected_quantity' => 0.0,
+            'unit_cost' => 100.0,
+        ]);
+
         $invKey = 'INV-CONC-KEY-' . uniqid();
         $invoiceNum = 'INV-CONC-NUM-' . uniqid();
 
         $invPayload1 = [
             'tenant_id' => $this->tenant->id,
             'purchase_order_id' => $po->id,
+            'goods_receipt_note_id' => $grn->id,
             'invoice_number' => $invoiceNum,
             'subtotal' => 10000.0,
             'tax_amount' => 1400.0,
@@ -488,15 +652,37 @@ class PostgresConcurrencyIntegrationTest extends TestCase
         [$res1, $res2] = $this->runTwoConcurrentWorkers('invoice', $invPayload1, $invPayload2);
 
         $statuses = [$res1['status'] ?? null, $res2['status'] ?? null];
-        $this->assertContains(201, $statuses);
+        $this->assertTrue(
+            in_array(201, $statuses, true) || in_array(202, $statuses, true),
+            'Exactly one invoice request must win and be either posted (201) or held for variance review (202): ' . json_encode([$res1, $res2], JSON_UNESCAPED_UNICODE)
+        );
         $this->assertContains(409, $statuses);
 
         $this->assertEquals(1, SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->count());
-        $this->assertEquals(11400.0, (float)$supplier->fresh()->current_balance);
+        $invoice = SupplierInvoice::where('tenant_id', $this->tenant->id)->where('idempotency_key', $invKey)->firstOrFail();
+
+        if ($invoice->matching_status === 'matched') {
+            $this->assertTrue((bool) $invoice->is_posted);
+            $this->assertEquals(11400.0, (float) $supplier->fresh()->current_balance);
+            $this->assertSame(1, DB::table('journal_entries')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('reference_type', 'supplier_invoice')
+                ->where('reference_id', $invoice->id)
+                ->count());
+        } else {
+            $this->assertSame('price_variance', $invoice->matching_status);
+            $this->assertFalse((bool) $invoice->is_posted);
+            $this->assertEquals(0.0, (float) $supplier->fresh()->current_balance);
+            $this->assertSame(0, DB::table('journal_entries')
+                ->where('tenant_id', $this->tenant->id)
+                ->where('reference_type', 'supplier_invoice')
+                ->where('reference_id', $invoice->id)
+                ->count());
+        }
     }
 
     /**
-     * 5. فحص التزامن الحقيقي: إشعارين Webhook متزامنين بنفس event_id -> تفعيل واحد فقط و 200 Replay
+     * 6. فحص التزامن الحقيقي: إشعارين Webhook متزامنين بنفس event_id -> تفعيل واحد فقط و 200 Replay
      */
     public function test_concurrent_payment_webhooks_prevent_duplicate_subscription_activation(): void
     {

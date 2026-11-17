@@ -240,6 +240,9 @@ class WaslatWorshIntegrationTest extends TestCase
             'promised_lead_days' => 20,
         ]);
 
+        // انقضاء نافذة الـ 60 دقيقة الإجبارية
+        $rfq->update(['published_at' => now()->subMinutes(65)]);
+
         // قبول العرض وترسيته بواسطة صاحب المصنع الباحث
         $response = $this->actingAs($this->seekerUser, 'sanctum')
             ->postJson("/api/v1/waslat-worsh/rfqs/{$rfq->id}/bids/{$bid->id}/accept");

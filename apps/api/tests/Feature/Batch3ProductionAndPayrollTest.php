@@ -49,6 +49,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
     protected User $ownerB;
     protected string $tokenB;
 
+    protected Branch $branchA;
     protected Warehouse $warehouseA;
     protected GarmentModel $modelA;
     protected Color $colorBlue;
@@ -70,6 +71,15 @@ class Batch3ProductionAndPayrollTest extends TestCase
             'plan_tier' => 'professional',
         ]);
 
+        $this->branchA = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'الفرع الرئيسي',
+            'code' => 'BR-BATCH3-MAIN',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
         $this->ownerA = User::create([
             'tenant_id' => $this->tenantA->id,
             'name' => 'أحمد مالك المصنع A',
@@ -89,6 +99,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
             'is_active' => true,
         ]);
         $this->tokenProdA = $this->prodManagerA->createToken('test')->plainTextToken;
+        $this->prodManagerA->branches()->sync([$this->branchA->id]);
 
         $this->accountantA = User::create([
             'tenant_id' => $this->tenantA->id,
@@ -99,6 +110,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
             'is_active' => true,
         ]);
         $this->tokenAccountantA = $this->accountantA->createToken('test')->plainTextToken;
+        $this->accountantA->branches()->sync([$this->branchA->id]);
 
         // 2. إعداد الشركة B لاختبار العزل التام للبيانات (Multi-Tenant Isolation)
         $this->tenantB = Tenant::withoutGlobalScopes()->create([
@@ -122,6 +134,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // مستودع وموديل وألوان وأصناف خام للشركة A
         $this->warehouseA = Warehouse::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'name' => 'مستودع الأقمشة المركزي A',
             'code' => 'WH-FAB-A',
             'type' => 'fabric',
@@ -179,12 +192,106 @@ class Batch3ProductionAndPayrollTest extends TestCase
     /**
      * Stage 3A: Production Orders CRUD, Search, Filter, Lifecycle, and Cancellation with Audit Log
      */
+    public function test_hr_employee_records_are_restricted_to_assigned_branches(): void
+    {
+        $otherBranch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الموارد البشرية الآخر',
+            'code' => 'BR-HR-OTHER-' . uniqid(),
+            'type' => 'factory',
+            'is_active' => true,
+        ]);
+
+        $assignedEmployee = Employee::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
+            'employee_code' => 'EMP-A-' . uniqid(),
+            'name' => 'عامل الفرع الرئيسي',
+            'department' => 'sewing',
+            'job_title' => 'sewing_operator',
+            'pay_type' => 'piece_rate',
+            'hire_date' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+        $otherEmployee = Employee::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $otherBranch->id,
+            'employee_code' => 'EMP-B-' . uniqid(),
+            'name' => 'عامل الفرع الآخر',
+            'department' => 'sewing',
+            'job_title' => 'sewing_operator',
+            'pay_type' => 'piece_rate',
+            'hire_date' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $list = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
+            ->getJson('/api/v1/hr/employees');
+
+        $list->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $assignedEmployee->id);
+
+        $hidden = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
+            ->getJson("/api/v1/hr/employees/{$otherEmployee->id}");
+
+        $hidden->assertNotFound();
+    }
+
+    public function test_production_orders_are_visible_only_in_assigned_branches(): void
+    {
+        $otherBranch = Branch::create([
+            'tenant_id' => $this->tenantA->id,
+            'name' => 'فرع الإنتاج الآخر',
+            'code' => 'BR-BATCH3-OTHER',
+            'type' => 'factory',
+            'is_active' => true,
+        ]);
+
+        $assignedOrder = ProductionOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
+            'order_number' => 'PO-BRANCH-A-' . uniqid(),
+            'garment_model_id' => $this->modelA->id,
+            'planned_start_date' => date('Y-m-d'),
+            'target_delivery_date' => date('Y-m-d', strtotime('+7 days')),
+            'total_planned_quantity' => 10,
+            'status' => 'draft',
+            'priority' => 'normal',
+        ]);
+
+        $otherOrder = ProductionOrder::create([
+            'tenant_id' => $this->tenantA->id,
+            'branch_id' => $otherBranch->id,
+            'order_number' => 'PO-BRANCH-B-' . uniqid(),
+            'garment_model_id' => $this->modelA->id,
+            'planned_start_date' => date('Y-m-d'),
+            'target_delivery_date' => date('Y-m-d', strtotime('+7 days')),
+            'total_planned_quantity' => 20,
+            'status' => 'draft',
+            'priority' => 'normal',
+        ]);
+
+        $list = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
+            ->getJson('/api/v1/production-orders?page=1&per_page=20');
+
+        $list->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $assignedOrder->id);
+
+        $hidden = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
+            ->getJson("/api/v1/production-orders/{$otherOrder->id}");
+
+        $hidden->assertNotFound();
+    }
+
     public function test_production_orders_complete_lifecycle_and_cancellation(): void
     {
         // 1. إنشاء أمر إنتاج جديد
         $res = $this->withHeader('Authorization', "Bearer {$this->tokenProdA}")
             ->postJson('/api/v1/production-orders', [
                 'garment_model_id' => $this->modelA->id,
+                'branch_id' => $this->branchA->id,
                 'planned_start_date' => date('Y-m-d'),
                 'target_delivery_date' => date('Y-m-d', strtotime('+10 days')),
                 'priority' => 'high',
@@ -274,6 +381,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // تجهيز أمر إنتاج معتمد
         $prodOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-PRD-TEST-CUT',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -322,8 +430,8 @@ class Batch3ProductionAndPayrollTest extends TestCase
                 ],
             ]);
 
-        $cutRes->assertStatus(201)
-            ->assertJsonPath('success', true);
+        $this->assertSame(201, $cutRes->status(), $cutRes->getContent());
+        $cutRes->assertJsonPath('success', true);
 
         $cuttingOrder = CuttingOrder::where('tenant_id', $this->tenantA->id)->latest()->first();
         $this->assertNotNull($cuttingOrder);
@@ -355,7 +463,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
                 'cancellation_reason' => 'خطأ في فرد القماش وتلف في البداية',
             ]);
 
-        $cancelCutRes->assertStatus(200)
+        $cancelCutRes->assertStatus(200, $cancelCutRes->getContent())
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'cancelled');
 
@@ -405,6 +513,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         $prodOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-CMT-01',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -461,6 +570,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
     {
         $employee = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-SEW-01',
             'name' => 'خالد عبد الرحمن - خياط ماهر',
             'department' => 'production',
@@ -473,6 +583,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         $dummyProd = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-PRD-DUMMY',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -681,6 +792,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
     {
         $employee = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-Q-01',
             'name' => 'عصام عبد الله - خياط',
             'department' => 'production',
@@ -712,6 +824,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         $prodOrder = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-DEFECT-01',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),
@@ -773,6 +886,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // 1. عامل أسبوعي (1000 جنيه للأسبوع)
         $empWeekly = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-P-WK',
             'name' => 'ياسر ممدوح',
             'department' => 'cutting',
@@ -785,6 +899,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // 2. عامل وردية (150 جنيه للوردية، حضر يومين = 300 جنيه)
         $empShift = Employee::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_code' => 'EMP-P-SH',
             'name' => 'أنس إبراهيم',
             'department' => 'packing',
@@ -796,6 +911,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         Attendance::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_id' => $empShift->id,
             'attendance_date' => '2026-11-01',
             'status' => 'present',
@@ -804,6 +920,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
 
         Attendance::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'employee_id' => $empShift->id,
             'attendance_date' => '2026-11-02',
             'status' => 'present',
@@ -854,7 +971,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
                 'period_end' => '2026-11-07',
             ]);
 
-        $blockedGenRes->assertStatus(500); // InvalidArgumentException thrown
+        $blockedGenRes->assertStatus(422)->assertJsonPath('error', 'PayrollPeriodLocked');
     }
 
     /**
@@ -865,6 +982,7 @@ class Batch3ProductionAndPayrollTest extends TestCase
         // إنشاء أمر إنتاج في الشركة A
         $orderA = ProductionOrder::create([
             'tenant_id' => $this->tenantA->id,
+            'branch_id' => $this->branchA->id,
             'order_number' => 'PO-ISO-A',
             'garment_model_id' => $this->modelA->id,
             'planned_start_date' => date('Y-m-d'),

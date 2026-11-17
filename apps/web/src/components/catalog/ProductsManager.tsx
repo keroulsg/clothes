@@ -855,7 +855,7 @@ export const ProductsManager: React.FC<{ isAr?: boolean }> = ({ isAr = true }) =
                 <div className="relative aspect-[16/10] bg-slate-100 dark:bg-slate-800 overflow-hidden border-b border-slate-100 dark:border-slate-800">
                   {p.main_image ? (
                     <img
-                      src={p.main_image}
+                      src={api.getMediaUrl(p.main_image)}
                       alt={p.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       onError={(e) => {
@@ -1061,7 +1061,7 @@ export const ProductsManager: React.FC<{ isAr?: boolean }> = ({ isAr = true }) =
                       <div className="flex items-center gap-2.5">
                         <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shrink-0 text-slate-400">
                           {p.main_image ? (
-                            <img src={p.main_image} alt={p.name} className="w-full h-full object-cover" />
+                            <img src={api.getMediaUrl(p.main_image)} alt={p.name} className="w-full h-full object-cover" />
                           ) : (
                             <ShoppingBag className="w-4 h-4" />
                           )}
@@ -1258,7 +1258,7 @@ export const ProductsManager: React.FC<{ isAr?: boolean }> = ({ isAr = true }) =
                   <div className="flex flex-col items-center gap-2 w-full sm:w-48 shrink-0">
                     <div className="w-full h-48 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center relative">
                       {activeViewImage ? (
-                        <img src={activeViewImage} alt={viewingProduct.name} className="w-full h-full object-cover" />
+                        <img src={api.getMediaUrl(activeViewImage)} alt={viewingProduct.name} className="w-full h-full object-cover" />
                       ) : (
                         <ShoppingBag className="w-10 h-10 text-slate-300 dark:text-slate-600" />
                       )}
@@ -1276,7 +1276,7 @@ export const ProductsManager: React.FC<{ isAr?: boolean }> = ({ isAr = true }) =
                                 : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100'
                             }`}
                           >
-                            <img src={imgUrl} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                            <img src={api.getMediaUrl(imgUrl)} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
                           </button>
                         ))}
                       </div>
@@ -1656,7 +1656,7 @@ export const ProductsManager: React.FC<{ isAr?: boolean }> = ({ isAr = true }) =
                     }`}
                   >
                     <img
-                      src={img.url}
+                      src={api.getMediaUrl(img.url)}
                       alt={`Product image ${idx + 1}`}
                       className="w-full h-full object-cover"
                       onError={(e) => {

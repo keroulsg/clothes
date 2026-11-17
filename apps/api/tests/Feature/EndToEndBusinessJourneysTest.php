@@ -74,6 +74,7 @@ class EndToEndBusinessJourneysTest extends TestCase
         ]);
 
         app()->instance('current_tenant_id', $this->tenant->id);
+        app(AccountingService::class)->initializeDefaultChartOfAccounts($this->tenant->id);
 
         $this->manager = User::create([
             'tenant_id' => $this->tenant->id,
@@ -431,15 +432,11 @@ class EndToEndBusinessJourneysTest extends TestCase
         $this->assertEquals('matched', $invoice->matching_status);
 
         // 4. Issue Payment Voucher in Accounting
-        $account = ChartOfAccount::create([
-            'tenant_id' => $this->tenant->id,
-            'code' => '1020',
-            'name' => 'National Bank of Egypt',
-            'type' => 'asset',
-            'category' => 'current_asset',
-            'current_balance' => 100000.0,
-            'is_active' => true,
-        ]);
+        $account = ChartOfAccount::where('tenant_id', $this->tenant->id)
+            ->where('code', '1021')
+            ->firstOrFail();
+        $account->current_balance = 100000.0;
+        $account->save();
 
         $accountingService = app(AccountingService::class);
         $voucher = $accountingService->createPaymentVoucher([

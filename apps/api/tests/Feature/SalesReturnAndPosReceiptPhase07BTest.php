@@ -742,7 +742,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
 
         // 3. المحاسب المالي المعتمد ينفذ الصرف النقدي الفعلي بنجاح (200)
         Sanctum::actingAs($this->accountantA);
-        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1010')->first();
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->first();
         $initialCash = (float) $cashAccount->current_balance;
 
         $refundRes = $this->postJson("/api/v1/sales/returns/{$returnId}/refund", [
@@ -750,7 +750,7 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
             'payment_method' => 'cash',
         ]);
 
-        $refundRes->assertStatus(200);
+        $this->assertSame(200, $refundRes->status(), json_encode($refundRes->json(), JSON_UNESCAPED_UNICODE));
         $refundRes->assertJsonPath('sales_return.refund_status', 'refunded');
 
         // تحقق من حالة الفاتورة بعد الصرف الفعلي
@@ -1805,7 +1805,16 @@ class SalesReturnAndPosReceiptPhase07BTest extends TestCase
         $initialJournals = JournalEntry::count();
 
         // محاكاة فشل خدمة المحاسبة أثناء إنشاء قيد اليومية
-        $this->mock(AccountingService::class, function ($mock) {
+        $cashAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1011')->firstOrFail();
+        $arAccount = ChartOfAccount::where('tenant_id', $this->tenantA->id)->where('code', '1110')->firstOrFail();
+
+        $this->mock(AccountingService::class, function ($mock) use ($cashAccount, $arAccount) {
+            $mock->shouldReceive('getMappedAccount')
+                ->with($this->tenantA->id, 'default_cash')
+                ->andReturn($cashAccount);
+            $mock->shouldReceive('getMappedAccount')
+                ->with($this->tenantA->id, 'ar_control')
+                ->andReturn($arAccount);
             $mock->shouldReceive('createJournalEntry')
                 ->andThrow(new InvalidArgumentException('فشل محاكاة قيد اليومية غير المتوازن'));
         });

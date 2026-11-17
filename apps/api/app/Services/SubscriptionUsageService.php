@@ -686,7 +686,7 @@ class SubscriptionUsageService
 
         if ($spec['period_type'] === 'current_count') {
             return match ($meterKey) {
-                'active_users' => User::withoutGlobalScopes()->where('tenant_id', $tenantId)->count(),
+                'active_users' => User::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('is_active', true)->count(),
                 'active_branches' => Branch::withoutGlobalScopes()->where('tenant_id', $tenantId)->count(),
                 'active_warehouses' => Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->count(),
                 'active_employees' => Employee::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('is_active', true)->count(),

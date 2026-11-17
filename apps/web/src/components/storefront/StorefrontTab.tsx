@@ -11,7 +11,6 @@ import {
   AlertCircle,
   Palette,
   Settings,
-  CreditCard,
   QrCode,
   Eye,
   Check,
@@ -20,6 +19,9 @@ import {
   Baby,
   Crown,
   Layers,
+  Building2,
+  Ban,
+  MessageCircle,
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -99,7 +101,21 @@ const THEME_OPTIONS: Array<{
 
 export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr: propIsAr, variants }) => {
   const isAr = propIsAr !== undefined ? propIsAr : lang === 'ar';
-  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'themes' | 'design_studio' | 'preview' | 'settings' | 'pending_payments'>('orders');
+  const [activeSubTab, setActiveSubTab] = useState<'orders' | 'themes' | 'design_studio' | 'preview' | 'settings' | 'pending_payments' | 'wholesale_applications'>(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const sub = searchParams.get('subtab');
+      if (sub && ['orders', 'themes', 'design_studio', 'preview', 'settings', 'pending_payments', 'wholesale_applications'].includes(sub)) {
+        return sub as any;
+      }
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      const hashSub = hashParams.get('subtab');
+      if (hashSub && ['orders', 'themes', 'design_studio', 'preview', 'settings', 'pending_payments', 'wholesale_applications'].includes(hashSub)) {
+        return hashSub as any;
+      }
+    } catch {}
+    return 'orders';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -108,6 +124,14 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
   const [selectedSubmissionForReview, setSelectedSubmissionForReview] = useState<any | null>(null);
   const [submissionRejectReason, setSubmissionRejectReason] = useState('');
+
+  // Wholesale Applications State
+  const [wholesaleApplications, setWholesaleApplications] = useState<any[]>([]);
+  const [wholesaleFilter, setWholesaleFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended'>('all');
+  const [selectedAppForAction, setSelectedAppForAction] = useState<any | null>(null);
+  const [actionType, setActionType] = useState<'reject' | 'suspend'>('reject');
+  const [appActionReason, setAppActionReason] = useState('');
+  const [selectedAppDetails, setSelectedAppDetails] = useState<any | null>(null);
 
   const [storeSettings, setStoreSettings] = useState<TenantStoreSetting>({
     id: '',
@@ -151,21 +175,31 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [ordersRes, settingsRes, pendingRes] = await Promise.allSettled([
+      const [ordersRes, settingsRes, pendingRes, wholesaleRes] = await Promise.allSettled([
         api.storefront.getOrders(1),
         api.storefront.getSettings(),
         api.storefront.getPendingPayments(1),
+        api.storefront.getWholesaleApplications(),
       ]);
 
-      if (ordersRes.status === 'fulfilled' && ordersRes.value?.data) {
-        setOrders(ordersRes.value.data);
+      if (ordersRes.status === 'fulfilled') {
+        const oVal = ordersRes.value as any;
+        const oList = oVal?.data || oVal?.orders || (Array.isArray(oVal) ? oVal : []);
+        setOrders(oList);
       }
-      if (settingsRes.status === 'fulfilled' && settingsRes.value?.store_settings) {
-        setStoreSettings(settingsRes.value.store_settings);
-        setPreviewThemeId(settingsRes.value.store_settings.theme_id || 'modern_fashion');
+      if (settingsRes.status === 'fulfilled' && (settingsRes.value as any)?.store_settings) {
+        setStoreSettings((settingsRes.value as any).store_settings);
+        setPreviewThemeId((settingsRes.value as any).store_settings.theme_id || 'modern_fashion');
       }
-      if (pendingRes.status === 'fulfilled' && pendingRes.value?.data) {
-        setPendingPayments(pendingRes.value.data);
+      if (pendingRes.status === 'fulfilled') {
+        const pVal = pendingRes.value as any;
+        const pList = pVal?.submissions || pVal?.data || (Array.isArray(pVal) ? pVal : []);
+        setPendingPayments(pList);
+      }
+      if (wholesaleRes.status === 'fulfilled') {
+        const wVal = wholesaleRes.value as any;
+        const wList = wVal?.data || wVal?.applications || (Array.isArray(wVal) ? wVal : []);
+        setWholesaleApplications(wList);
       }
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'تعذر جلب بيانات المتجر' : 'Failed to load storefront data'));
@@ -178,6 +212,56 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
     loadData();
   }, []);
 
+  const handleApproveWholesale = async (id: string) => {
+    try {
+      setIsLoading(true);
+      await api.storefront.approveWholesaleApplication(id);
+      setSuccessMsg(isAr ? 'تم اعتماد حساب تاجر الجملة وتفعيل صلاحيات الأسعار المباشرة.' : 'Wholesale account approved successfully.');
+      await loadData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل اعتماد الحساب' : 'Failed to approve account'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleActionWholesale = async () => {
+    if (!selectedAppForAction || !appActionReason.trim()) {
+      setErrorMsg(isAr ? 'يرجى إدخال سبب الإجراء' : 'Please provide reason');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      if (actionType === 'reject') {
+        await api.storefront.rejectWholesaleApplication(selectedAppForAction.id, appActionReason.trim());
+        setSuccessMsg(isAr ? 'تم رفض طلب حساب الجملة وتسجيل السبب.' : 'Application rejected.');
+      } else {
+        await api.storefront.suspendWholesaleApplication(selectedAppForAction.id, appActionReason.trim());
+        setSuccessMsg(isAr ? 'تم إيقاف حساب تاجر الجملة مؤقتاً.' : 'Account suspended.');
+      }
+      setSelectedAppForAction(null);
+      setAppActionReason('');
+      await loadData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل تنفيذ الإجراء' : 'Failed to execute action'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReactivateWholesale = async (id: string) => {
+    try {
+      setIsLoading(true);
+      await api.storefront.reactivateWholesaleApplication(id);
+      setSuccessMsg(isAr ? 'تمت إعادة تفعيل حساب تاجر الجملة بنجاح.' : 'Account reactivated.');
+      await loadData();
+    } catch (err: any) {
+      setErrorMsg(err?.message || (isAr ? 'فشل إعادة التفعيل' : 'Failed to reactivate account'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleUpdateOrderStatus = async (orderId: string, nextStatus: StoreOrder['status']) => {
     try {
       const res = await api.storefront.updateOrderStatus(orderId, nextStatus);
@@ -186,10 +270,31 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
       } else {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
       }
-      setSuccessMsg(isAr ? `تم تحديث حالة الطلب إلى: ${nextStatus}` : `Order status updated to: ${nextStatus}`);
+      const statusLabels: Record<string, string> = {
+        confirmed: isAr ? 'مؤكد وموافق عليه' : 'Confirmed',
+        preparing: isAr ? 'جاري التجهيز والتعبئة' : 'Preparing',
+        shipped: isAr ? 'تم الشحن مع مندوب التوصيل' : 'Shipped',
+        delivered: isAr ? 'تم التسليم بنجاح للعميل' : 'Delivered',
+        cancelled: isAr ? 'ملغي' : 'Cancelled',
+      };
+      setSuccessMsg(isAr ? `تم تحديث حالة الطلب إلى: ${statusLabels[nextStatus] || nextStatus}` : `Order status updated to: ${nextStatus}`);
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل تحديث حالة الطلب' : 'Failed to update order status'));
     }
+  };
+
+  const handleSendOrderWhatsApp = (order: StoreOrder) => {
+    const cleanPhone = (order.customer_phone || '').replace(/[^0-9]/g, '');
+    const intlPhone = cleanPhone.startsWith('0') ? `20${cleanPhone.slice(1)}` : cleanPhone;
+    const currentHost = window.location.origin;
+    const tenantSlug = (storeSettings as any)?.tenant_id || (order as any)?.tenant_id || '';
+    const trackingUrl = `${currentHost}/#/store/${tenantSlug}/track?order_number=${encodeURIComponent(order.order_number)}&customer_phone=${encodeURIComponent(order.customer_phone)}`;
+
+    const text = isAr
+      ? `مرحباً بك يا ${order.customer_name} 🌸\n\nنود إعلامك بتفاصيل طلبك من متجر مصنعنا:\n📦 رقم الطلب: ${order.order_number}\n📱 رقم الهاتف المسجل: ${order.customer_phone}\n💰 إجمالي الطلب: ${Number(order.total_amount).toLocaleString()} ج.م\n💳 طريقة الدفع: ${order.payment_method === 'instapay' ? 'إنستاباي (InstaPay)' : 'الدفع عند الاستلام (COD)'}\n\n🔍 يمكنك تتبع خط سير الشحنة ومراحل التجهيز لحظة بلحظة عبر الرابط التالي:\n${trackingUrl}\n\nشكراً لثقتكم بمصنعنا!`
+      : `Hello ${order.customer_name},\n\nYour order details:\n📦 Order #: ${order.order_number}\n📱 Phone: ${order.customer_phone}\n💰 Total: ${order.total_amount} EGP\n\n🔍 Track order status:\n${trackingUrl}`;
+
+    window.open(`https://wa.me/${intlPhone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleVerifyPayment = async (approved: boolean) => {
@@ -213,6 +318,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
       );
       setSelectedOrderForReview(null);
       setRejectionReason('');
+      await loadData();
     } catch (err: any) {
       setErrorMsg(err?.message || (isAr ? 'فشل التحقق من التحويل' : 'Failed to verify payment'));
     } finally {
@@ -497,18 +603,18 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                {isAr ? 'حالة المتجر وبوابات الدفع' : 'Store & Payment Gateways'}
+                {isAr ? 'حسابات وتجار الجملة (B2B)' : 'Wholesale Trade Accounts'}
               </p>
-              <p className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {storeSettings.is_store_enabled ? (isAr ? 'المتجر نشط' : 'Store Active') : (isAr ? 'مغلق' : 'Disabled')}
+              <p className="text-base font-black text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                {wholesaleApplications.filter((a) => a.status === 'approved').length} {isAr ? 'تاجر معتمد' : 'Approved Merchants'}
               </p>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1 inline-block">
-                COD {storeSettings.allow_cod ? '✓' : '✗'} | InstaPay {storeSettings.allow_instapay ? '✓' : '✗'}
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-1 inline-block">
+                {wholesaleApplications.filter((a) => a.status === 'pending').length} {isAr ? 'طلب اعتماد قيد المراجعة' : 'Pending review'}
               </span>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-              <CreditCard className="w-5 h-5" />
+              <Building2 className="w-5 h-5" />
             </div>
           </div>
         </div>
@@ -519,6 +625,7 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
         <div className="flex flex-wrap items-center gap-1">
           {[
             { id: 'orders', icon: Truck, labelAr: 'إدارة الطلبات والشحن', labelEn: 'Store Orders', count: orders.length },
+            { id: 'wholesale_applications', icon: Building2, labelAr: 'اعتمادات تجار الجملة', labelEn: 'Wholesale Trade Accounts', count: wholesaleApplications.length, highlight: wholesaleApplications.filter((a) => a.status === 'pending').length },
             { id: 'design_studio', icon: Sparkles, labelAr: 'استوديو التصميم ومحرر المتجر', labelEn: 'Design Studio & Themes', count: null, badge: 'STUDIO' },
             { id: 'themes', icon: Palette, labelAr: 'ثيمات وهوية المتجر (4 ثيمات)', labelEn: 'Theme Architecture (4 Themes)', count: 4 },
             { id: 'preview', icon: Eye, labelAr: 'معاينة متجر المصنع المباشر', labelEn: 'Live Storefront Preview', count: null },
@@ -645,7 +752,20 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                 ) : (
                   orders.map((o) => (
                     <tr key={o.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">{o.order_number}</td>
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <span>{o.order_number}</span>
+                          {o.order_type === 'wholesale' ? (
+                            <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                              {isAr ? 'جملة' : 'B2B'}
+                            </span>
+                          ) : (
+                            <span className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 text-[10px] px-1.5 py-0.5 rounded">
+                              {isAr ? 'قطاعي' : 'Retail'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3">
                         <p className="font-medium text-slate-900 dark:text-white">{o.customer_name}</p>
                         <p className="text-xs text-slate-400 font-mono">{o.customer_phone}</p>
@@ -667,30 +787,29 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                         )}
                       </td>
                       <td className="p-3">
-                        {o.payment_status === 'pending_review' && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 animate-pulse">
-                              {isAr ? 'بانتظار المراجعة' : 'Pending Review'}
+                        {o.payment_method === 'instapay' ? (
+                          o.payment_status === 'verified_paid' ? (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                              {isAr ? 'معتمد ومؤكد ✓' : 'Verified Paid'}
                             </span>
-                            <button
-                              onClick={() => setSelectedOrderForReview(o)}
-                              className="text-xs text-primary underline hover:text-primary/80"
-                            >
-                              {isAr ? 'تدقيق' : 'Review'}
-                            </button>
-                          </div>
-                        )}
-                        {o.payment_status === 'verified_paid' && (
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-                            {isAr ? 'معتمد ومؤكد ✓' : 'Verified Paid'}
-                          </span>
-                        )}
-                        {o.payment_status === 'rejected' && (
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300" title={o.payment_rejection_reason}>
-                            {isAr ? 'مرفوض ✗' : 'Rejected'}
-                          </span>
-                        )}
-                        {o.payment_status === 'cod_pending' && (
+                          ) : o.payment_status === 'rejected' ? (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300" title={o.payment_rejection_reason}>
+                              {isAr ? 'مرفوض ✗' : 'Rejected'}
+                            </span>
+                          ) : (
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 animate-pulse">
+                                {o.payment_status === 'pending_review' ? (isAr ? 'بانتظار المراجعة' : 'Pending Review') : (isAr ? 'بانتظار التحويل' : 'Pending Payment')}
+                              </span>
+                              <button
+                                onClick={() => setSelectedOrderForReview(o)}
+                                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 underline hover:text-amber-700"
+                              >
+                                {isAr ? 'تدقيق واعتماد التحويل' : 'Audit & Approve'}
+                              </button>
+                            </div>
+                          )
+                        ) : (
                           <span className="px-2 py-0.5 rounded text-xs font-medium text-slate-500">
                             {isAr ? 'تحصيل عند التسليم' : 'Collect on Delivery'}
                           </span>
@@ -700,36 +819,91 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                         {Number(o.total_amount).toLocaleString()} {isAr ? 'ج.م' : 'EGP'}
                       </td>
                       <td className="p-3">
-                        {o.status === 'new' && <Badge variant="warning">{isAr ? 'جديد' : 'New'}</Badge>}
-                        {o.status === 'confirmed' && <Badge variant="info">{isAr ? 'مؤكد' : 'Confirmed'}</Badge>}
-                        {o.status === 'shipped' && <Badge variant="brand">{isAr ? 'مشحون' : 'Shipped'}</Badge>}
-                        {o.status === 'delivered' && <Badge variant="success">{isAr ? 'مسلّم' : 'Delivered'}</Badge>}
+                        {o.status === 'new' && <Badge variant="warning">{isAr ? 'طلب جديد' : 'New'}</Badge>}
+                        {o.status === 'confirmed' && <Badge variant="info">{isAr ? 'مؤكد وموافق عليه' : 'Confirmed'}</Badge>}
+                        {o.status === 'preparing' && <Badge variant="brand">{isAr ? 'جاري التجهيز بالمصنع' : 'Preparing'}</Badge>}
+                        {o.status === 'shipped' && <Badge variant="brand">{isAr ? 'تم الشحن' : 'Shipped'}</Badge>}
+                        {o.status === 'delivered' && <Badge variant="success">{isAr ? 'مسلّم للعميل ✓' : 'Delivered'}</Badge>}
                         {o.status === 'cancelled' && <Badge variant="danger">{isAr ? 'ملغي' : 'Cancelled'}</Badge>}
                       </td>
                       <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {o.payment_method === 'instapay' && o.payment_status === 'pending_review' && (
-                            <Button size="sm" variant="outline" onClick={() => setSelectedOrderForReview(o)}>
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* 1. Quick WhatsApp Communication Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleSendOrderWhatsApp(o)}
+                            className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 transition"
+                            title={isAr ? 'إرسال رقم الطلب ورابط التتبع للعميل عبر واتساب' : 'Send Order & Tracking Link via WhatsApp'}
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 2. Direct InstaPay Audit Action */}
+                          {o.payment_method === 'instapay' && o.payment_status !== 'verified_paid' && (
+                            <Button size="sm" variant="outline" className="text-xs h-7 border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-50" onClick={() => setSelectedOrderForReview(o)}>
                               <CheckCircle className="w-3.5 h-3.5 me-1 text-amber-600" />
-                              {isAr ? 'مراجعة التحويل' : 'Verify'}
+                              {isAr ? 'اعتماد الدفع' : 'Verify'}
                             </Button>
                           )}
+
+                          {/* 3. Sequential Status Progression Buttons */}
                           {o.status === 'new' && (
-                            <Button size="sm" onClick={() => handleUpdateOrderStatus(o.id, 'shipped')}>
+                            <>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50" onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}>
+                                <Check className="w-3 h-3 me-1" />
+                                {isAr ? 'موافقة وتأكيد' : 'Confirm'}
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50" onClick={() => handleUpdateOrderStatus(o.id, 'preparing')}>
+                                <Package className="w-3 h-3 me-1" />
+                                {isAr ? 'بدء التجهيز' : 'Prepare'}
+                              </Button>
+                            </>
+                          )}
+
+                          {o.status === 'confirmed' && (
+                            <>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50" onClick={() => handleUpdateOrderStatus(o.id, 'preparing')}>
+                                <Package className="w-3 h-3 me-1" />
+                                {isAr ? 'بدء التجهيز' : 'Prepare'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="text-xs h-7"
+                                disabled={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid'}
+                                title={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid' ? (isAr ? 'يجب اعتماد تحويل إنستاباي أولاً قبل الشحن' : 'Must verify InstaPay before shipping') : undefined}
+                                onClick={() => handleUpdateOrderStatus(o.id, 'shipped')}
+                              >
+                                <Truck className="w-3 h-3 me-1" />
+                                {isAr ? 'شحن' : 'Ship'}
+                              </Button>
+                            </>
+                          )}
+
+                          {o.status === 'preparing' && (
+                            <Button
+                              size="sm"
+                              className="text-xs h-7 bg-blue-600 hover:bg-blue-700 text-white"
+                              disabled={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid'}
+                              title={o.payment_method === 'instapay' && o.payment_status !== 'verified_paid' ? (isAr ? 'يجب اعتماد تحويل إنستاباي أولاً قبل الشحن' : 'Must verify InstaPay before shipping') : undefined}
+                              onClick={() => handleUpdateOrderStatus(o.id, 'shipped')}
+                            >
                               <Truck className="w-3.5 h-3.5 me-1" />
-                              {isAr ? 'شحن' : 'Ship'}
+                              {isAr ? 'خروج للشحن' : 'Ship'}
                             </Button>
                           )}
+
                           {o.status === 'shipped' && (
-                            <Button size="sm" variant="outline" onClick={() => handleUpdateOrderStatus(o.id, 'delivered')}>
+                            <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-500 text-emerald-600 hover:bg-emerald-50" onClick={() => handleUpdateOrderStatus(o.id, 'delivered')}>
                               <CheckCircle className="w-3.5 h-3.5 me-1 text-emerald-600" />
                               {isAr ? 'تأكيد التسليم' : 'Deliver'}
                             </Button>
                           )}
+
                           {o.status !== 'cancelled' && o.status !== 'delivered' && (
                             <button
                               onClick={() => handleUpdateOrderStatus(o.id, 'cancelled')}
-                              className="text-xs text-rose-500 hover:text-rose-700 px-2 py-1"
+                              className="text-xs text-rose-500 hover:text-rose-700 px-1.5 py-1"
+                              title={isAr ? 'إلغاء الطلب' : 'Cancel'}
                             >
                               {isAr ? 'إلغاء' : 'Cancel'}
                             </button>
@@ -739,6 +913,217 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                     </tr>
                   ))
                 )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* 1.5. WHOLESALE TRADE APPLICATIONS VIEW */}
+      {activeSubTab === 'wholesale_applications' && (
+        <Card className="bg-white dark:bg-[#0f1523]/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-primary" />
+                <span>{isAr ? 'طلبات اعتمادات حسابات تجار الجملة والشركات (B2B)' : 'Wholesale Merchant Trade Applications'}</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isAr
+                  ? 'مراجعة وتدقيق بيانات الشركات والمحلات لمنحهم صلاحيات شراء الجملة والأسعار التفضيلية وجداول الخصم حسب الكميات.'
+                  : 'Review commercial registrations, tax IDs, and approve trade accounts for volume-tiered pricing.'}
+              </p>
+            </div>
+
+            {/* Filter pills */}
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
+              {[
+                { id: 'all', labelAr: 'الكل', labelEn: 'All' },
+                { id: 'pending', labelAr: 'قيد المراجعة', labelEn: 'Pending' },
+                { id: 'approved', labelAr: 'معتمد', labelEn: 'Approved' },
+                { id: 'rejected', labelAr: 'مرفوض', labelEn: 'Rejected' },
+                { id: 'suspended', labelAr: 'موقوف', labelEn: 'Suspended' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setWholesaleFilter(f.id as any)}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    wholesaleFilter === f.id
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {isAr ? f.labelAr : f.labelEn}
+                  {f.id === 'pending' && wholesaleApplications.filter((a) => a.status === 'pending').length > 0 && (
+                    <span className="ms-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px]">
+                      {wholesaleApplications.filter((a) => a.status === 'pending').length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-start">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="p-3 text-start">{isAr ? 'الشركة / المحل' : 'Company Name'}</th>
+                  <th className="p-3 text-start">{isAr ? 'المسؤول والتواصل' : 'Contact Person'}</th>
+                  <th className="p-3 text-start">{isAr ? 'نوع النشاط' : 'Business Type'}</th>
+                  <th className="p-3 text-start">{isAr ? 'المدينة / العنوان' : 'Location'}</th>
+                  <th className="p-3 text-start">{isAr ? 'السجل / الضريبي' : 'CR / Tax ID'}</th>
+                  <th className="p-3 text-start">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="p-3 text-start">{isAr ? 'تاريخ التقديم' : 'Date'}</th>
+                  <th className="p-3 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {(() => {
+                  const filtered = wholesaleApplications.filter(
+                    (app) => wholesaleFilter === 'all' || app.status === wholesaleFilter
+                  );
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-slate-400 text-sm">
+                          {isAr ? 'لا توجد طلبات اعتماد مطابقة لهذا الفلتر' : 'No wholesale applications match'}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return filtered.map((app) => (
+                    <tr key={app.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 font-bold text-slate-900 dark:text-white">
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-primary shrink-0" />
+                          <span>{app.company_name}</span>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-900 dark:text-white">{app.contact_person}</div>
+                        <div className="text-slate-400 font-mono text-[11px]">{app.customer?.phone || app.phone}</div>
+                        <div className="text-slate-400 text-[11px]">{app.customer?.email || app.email}</div>
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-medium text-[11px]">
+                          {app.business_type === 'retail_store'
+                            ? (isAr ? 'محل تجزئة' : 'Retail')
+                            : app.business_type === 'chain_stores'
+                            ? (isAr ? 'سلسلة متاجر' : 'Chain')
+                            : app.business_type === 'wholesale_distributor'
+                            ? (isAr ? 'موزع جملة' : 'Distributor')
+                            : app.business_type === 'corporate_buyer'
+                            ? (isAr ? 'توريدات / يونيفورم' : 'Corporate')
+                            : app.business_type === 'online_store'
+                            ? (isAr ? 'متجر إلكتروني' : 'Online Store')
+                            : app.business_type}
+                        </span>
+                      </td>
+                      <td className="p-3 text-[11px] max-w-xs truncate">
+                        <span className="font-bold">{app.city || '---'}</span>
+                        {app.address && <span className="text-slate-400 block truncate">{app.address}</span>}
+                      </td>
+                      <td className="p-3 font-mono text-[11px]">
+                        <div>CR: {app.commercial_register || '---'}</div>
+                        <div>TAX: {app.tax_id || '---'}</div>
+                      </td>
+                      <td className="p-3">
+                        {app.status === 'pending' && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 animate-pulse">
+                            {isAr ? 'قيد المراجعة' : 'Pending'}
+                          </span>
+                        )}
+                        {app.status === 'approved' && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                            {isAr ? 'معتمد ✓' : 'Approved'}
+                          </span>
+                        )}
+                        {app.status === 'rejected' && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300" title={app.rejection_reason}>
+                            {isAr ? 'مرفوض ✗' : 'Rejected'}
+                          </span>
+                        )}
+                        {app.status === 'suspended' && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" title={app.suspension_reason}>
+                            {isAr ? 'موقوف مؤقتاً' : 'Suspended'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-slate-400 font-mono text-[11px]">
+                        {app.created_at ? new Date(app.created_at).toLocaleDateString() : '---'}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2"
+                            onClick={() => setSelectedAppDetails(app)}
+                          >
+                            <Eye className="w-3.5 h-3.5 me-1" />
+                            {isAr ? 'تفاصيل' : 'Details'}
+                          </Button>
+
+                          {app.status === 'pending' && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700 px-2"
+                                onClick={() => handleApproveWholesale(app.id)}
+                              >
+                                <Check className="w-3.5 h-3.5 me-1" />
+                                {isAr ? 'اعتماد' : 'Approve'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7 text-rose-600 border-rose-300 px-2"
+                                onClick={() => {
+                                  setSelectedAppForAction(app);
+                                  setActionType('reject');
+                                  setAppActionReason('');
+                                }}
+                              >
+                                <X className="w-3.5 h-3.5 me-1" />
+                                {isAr ? 'رفض' : 'Reject'}
+                              </Button>
+                            </>
+                          )}
+
+                          {app.status === 'approved' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 text-amber-600 border-amber-300 px-2"
+                              onClick={() => {
+                                setSelectedAppForAction(app);
+                                setActionType('suspend');
+                                setAppActionReason('');
+                              }}
+                            >
+                              <Ban className="w-3.5 h-3.5 me-1" />
+                              {isAr ? 'إيقاف' : 'Suspend'}
+                            </Button>
+                          )}
+
+                          {(app.status === 'suspended' || app.status === 'rejected') && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 text-emerald-600 border-emerald-300 px-2"
+                              onClick={() => handleReactivateWholesale(app.id)}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 me-1" />
+                              {isAr ? 'تفعيل' : 'Reactivate'}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
@@ -1272,35 +1657,33 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
                     pendingPayments.map((sub: any) => (
                       <tr key={sub.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
                         <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
-                          {sub.customer_name || sub.store_order?.customer_name || (isAr ? 'عميل متجر' : 'Store Customer')}
+                          {sub.customer_name || sub.store_order?.customer_name || sub.storeOrder?.customer_name || (isAr ? 'عميل متجر' : 'Store Customer')}
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">
-                          {sub.customer_phone || sub.store_order?.customer_phone || '-'}
+                          {sub.customer_phone || sub.store_order?.customer_phone || sub.storeOrder?.customer_phone || '-'}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {(Number(sub.amount) || 0).toLocaleString()} {sub.currency || 'EGP'}
+                          {(Number(sub.submitted_amount || sub.expected_amount || sub.amount) || 0).toLocaleString()} {sub.currency || 'EGP'}
                         </td>
                         <td className="py-3 px-4 font-mono text-xs">
                           <span className="font-semibold text-purple-700 dark:text-purple-300">
-                            {sub.transfer_reference || sub.sender_instapay_identifier || '-'}
+                            {sub.transfer_reference || sub.sender_instapay_identifier || (isAr ? 'لم يحدد بعد' : 'Pending')}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-500">
                           {sub.transfer_time || sub.created_at?.slice(0, 16) || '-'}
                         </td>
                         <td className="py-3 px-4">
-                          {sub.receipt_path ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 text-purple-600 border-purple-300"
-                              onClick={() => {
-                                const url = `${api['baseUrl'] || '/api/v1'}/storefront/payments/${sub.id}/receipt`;
-                                window.open(url, '_blank');
-                              }}
+                          {sub.receipt_file_path || sub.receipt_path ? (
+                            <a
+                              href={sub.receipt_file_path || sub.receipt_path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 hover:underline"
                             >
+                              <ExternalLink className="w-3 h-3" />
                               {isAr ? 'عرض الإيصال' : 'View Receipt'}
-                            </Button>
+                            </a>
                           ) : (
                             <span className="text-slate-400">{isAr ? 'لا يوجد ملف' : 'No file'}</span>
                           )}
@@ -1615,6 +1998,145 @@ export const StorefrontTab: React.FC<StorefrontTabProps> = ({ lang = 'ar', isAr:
             </Button>
             <Button type="button" variant="danger" size="sm" onClick={handleRejectSubmission}>
               {isAr ? 'تأكيد الرفض' : 'Confirm Rejection'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* WHOLESALE APP DETAILS MODAL */}
+      <Modal
+        isOpen={Boolean(selectedAppDetails)}
+        onClose={() => setSelectedAppDetails(null)}
+        title={isAr ? 'بيانات طلب اعتماد تاجر الجملة' : 'Trade Application Details'}
+      >
+        {selectedAppDetails && (
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'اسم الشركة / المعرض:' : 'Company:'}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedAppDetails.company_name}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'نوع النشاط:' : 'Business Type:'}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedAppDetails.business_type}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'المسؤول / المفوض:' : 'Contact Person:'}</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{selectedAppDetails.contact_person}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'الهاتف:' : 'Phone:'}</span>
+                <span className="font-mono text-slate-900 dark:text-white">{selectedAppDetails.customer?.phone || selectedAppDetails.phone}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'البريد الإلكتروني:' : 'Email:'}</span>
+                <span className="font-mono text-slate-900 dark:text-white">{selectedAppDetails.customer?.email || selectedAppDetails.email}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'المدينة / المحافظة:' : 'City:'}</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{selectedAppDetails.city || '---'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'السجل التجاري:' : 'CR:'}</span>
+                <span className="font-mono text-slate-900 dark:text-white">{selectedAppDetails.commercial_register || '---'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">{isAr ? 'الرقم الضريبي:' : 'Tax ID:'}</span>
+                <span className="font-mono text-slate-900 dark:text-white">{selectedAppDetails.tax_id || '---'}</span>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-slate-400 block mb-0.5">{isAr ? 'العنوان بالتفصيل:' : 'Full Address:'}</span>
+              <p className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                {selectedAppDetails.address || (isAr ? 'غير محدد' : 'N/A')}
+              </p>
+            </div>
+
+            {selectedAppDetails.notes && (
+              <div>
+                <span className="text-slate-400 block mb-0.5">{isAr ? 'ملاحظات التاجر وحجم التوريد المتوقع:' : 'Notes / Expected Volume:'}</span>
+                <p className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  {selectedAppDetails.notes}
+                </p>
+              </div>
+            )}
+
+            {selectedAppDetails.rejection_reason && (
+              <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 text-rose-700 dark:text-rose-300">
+                <span className="font-bold block">{isAr ? 'سبب الرفض المسجل:' : 'Recorded Rejection Reason:'}</span>
+                <span>{selectedAppDetails.rejection_reason}</span>
+              </div>
+            )}
+
+            {selectedAppDetails.suspension_reason && (
+              <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 text-amber-700 dark:text-amber-300">
+                <span className="font-bold block">{isAr ? 'سبب الإيقاف المؤقت:' : 'Recorded Suspension Reason:'}</span>
+                <span>{selectedAppDetails.suspension_reason}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
+              <Button type="button" variant="outline" size="sm" onClick={() => setSelectedAppDetails(null)}>
+                {isAr ? 'إغلاق' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* WHOLESALE APP ACTION (REJECT/SUSPEND) MODAL */}
+      <Modal
+        isOpen={Boolean(selectedAppForAction)}
+        onClose={() => setSelectedAppForAction(null)}
+        title={
+          actionType === 'reject'
+            ? isAr
+              ? 'رفض طلب اعتماد حساب الجملة'
+              : 'Reject Wholesale Application'
+            : isAr
+            ? 'إيقاف حساب تاجر الجملة مؤقتاً'
+            : 'Suspend Wholesale Account'
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-600 dark:text-slate-400">
+            {isAr
+              ? `الرجاء تحديد سبب ${actionType === 'reject' ? 'رفض' : 'إيقاف'} حساب شركة (${selectedAppForAction?.company_name}):`
+              : `Please specify the reason for ${actionType === 'reject' ? 'rejecting' : 'suspending'} (${selectedAppForAction?.company_name}):`}
+          </p>
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {isAr ? 'السبب *' : 'Reason *'}
+            </label>
+            <textarea
+              rows={3}
+              value={appActionReason}
+              onChange={(e) => setAppActionReason(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              placeholder={
+                isAr
+                  ? actionType === 'reject'
+                    ? 'مثال: السجل التجاري غير ساري أو النشاط غير مطابق لتجارة الملابس'
+                    : 'مثال: تعليق التعامل مؤقتاً لحين تسوية المستحقات المالية'
+                  : 'Specify reason...'
+              }
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <Button type="button" variant="outline" size="sm" onClick={() => setSelectedAppForAction(null)}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button
+              type="button"
+              variant={actionType === 'reject' ? 'danger' : 'primary'}
+              size="sm"
+              onClick={handleActionWholesale}
+            >
+              {actionType === 'reject' ? (isAr ? 'تأكيد الرفض' : 'Confirm Reject') : (isAr ? 'تأكيد الإيقاف' : 'Confirm Suspend')}
             </Button>
           </div>
         </div>

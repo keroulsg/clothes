@@ -22,7 +22,13 @@ class GoodsReceiptController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = GoodsReceiptNote::with(['supplier', 'warehouse', 'purchaseOrder', 'items.inventoryItem'])->withCount('items');
+        $query = GoodsReceiptNote::where('tenant_id', app('current_tenant_id'))
+            ->with(['supplier', 'warehouse', 'purchaseOrder', 'items.inventoryItem'])
+            ->withCount('items');
+        $user = $request->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $user->assignedBranchIds()));
+        }
 
         if ($request->has('purchase_order_id')) {
             $query->where('purchase_order_id', $request->purchase_order_id);
@@ -66,6 +72,30 @@ class GoodsReceiptController extends Controller
             ], 403);
         }
 
+        $user = $request->user();
+        $assignedBranchIds = $user?->assignedBranchIds() ?? [];
+        $enforceBranchScope = $user && $user->role !== 'company_owner'
+            ;
+        $poWarehouse = \App\Models\Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($po->warehouse_id);
+        if (!$poWarehouse) {
+            return response()->json(['error' => 'WarehouseNotFound', 'message' => 'مخزن أمر الشراء غير متاح.'], 404);
+        }
+        if ($enforceBranchScope && !in_array($poWarehouse->branch_id, $assignedBranchIds, true)) {
+            return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك استلام أمر شراء تابع لفرع غير معيّن لحسابك.'], 403);
+        }
+        if (!empty($validated['warehouse_id'])) {
+            $receiptWarehouse = \App\Models\Warehouse::where('tenant_id', $tenantId)->find($validated['warehouse_id']);
+            if (!$receiptWarehouse) {
+                return response()->json(['error' => 'WarehouseNotFound', 'message' => 'مخزن الاستلام غير تابع لشركتك أو غير متاح.'], 404);
+            }
+            if ($enforceBranchScope && !in_array($receiptWarehouse->branch_id, $assignedBranchIds, true)) {
+                return response()->json(['error' => 'BranchAccessDenied', 'message' => 'لا يمكنك الاستلام في مخزن تابع لفرع غير معيّن لحسابك.'], 403);
+            }
+            if ($receiptWarehouse->branch_id !== $poWarehouse->branch_id) {
+                return response()->json(['error' => 'BranchMismatch', 'message' => 'يجب استلام أمر الشراء في نفس فرع المخزن المحدد بأمر الشراء.'], 422);
+            }
+        }
+
         $validated['tenant_id'] = $tenantId;
         $validated['idempotency_key'] = $request->header('X-Idempotency-Key') ?: ($validated['idempotency_key'] ?? null);
 
@@ -97,7 +127,13 @@ class GoodsReceiptController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $grn = GoodsReceiptNote::with(['items.inventoryItem', 'supplier', 'warehouse', 'purchaseOrder'])->findOrFail($id);
+        $query = GoodsReceiptNote::where('tenant_id', app('current_tenant_id'))
+            ->with(['items.inventoryItem', 'supplier', 'warehouse', 'purchaseOrder']);
+        $user = request()->user();
+        if ($user && $user->role !== 'company_owner') {
+            $query->whereHas('warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $user->assignedBranchIds()));
+        }
+        $grn = $query->findOrFail($id);
 
         return response()->json([
             'goods_receipt_note' => $grn,

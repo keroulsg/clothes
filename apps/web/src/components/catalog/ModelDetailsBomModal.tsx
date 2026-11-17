@@ -59,12 +59,25 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     },
   ]);
   const [isSubmittingBom, setIsSubmittingBom] = useState(false);
+  const [actualVariants, setActualVariants] = useState<any[]>([]);
+  const [isLoadingVariants, setIsLoadingVariants] = useState(false);
 
   // Fetch BOM for this model when opened
   useEffect(() => {
     if (isOpen && model?.id) {
       setBomName(isAr ? `شجرة مكونات ${model.name}` : `BOM for ${model.name}`);
       fetchBoms();
+      setIsLoadingVariants(true);
+      api.models.getModel(model.id)
+        .then((response) => {
+          const variants = response?.model?.variants;
+          setActualVariants(Array.isArray(variants) ? variants : []);
+        })
+        .catch((error) => {
+          setActualVariants([]);
+          setErrorMsg(error?.message || (isAr ? 'تعذر تحميل متغيرات الموديل' : 'Failed to load model variants'));
+        })
+        .finally(() => setIsLoadingVariants(false));
     }
   }, [isOpen, model, isAr]);
 
@@ -98,10 +111,14 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
   };
 
   const handleAddBomItemRow = () => {
+    if (!inventoryItems.length) {
+      setErrorMsg(isAr ? 'أضف أصناف الخامات والمستلزمات إلى المخزون أولاً.' : 'Add raw materials and accessories to inventory first.');
+      return;
+    }
     setBomItems((prev) => [
       ...prev,
       {
-        inventory_item_id: inventoryItems[0]?.id || '',
+        inventory_item_id: inventoryItems[0].id,
         component_type: 'accessory',
         consumption_per_unit: 1,
         unit_of_measure: 'piece',
@@ -115,9 +132,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     e.preventDefault();
     if (!model.id) return;
 
-    const validItems = bomItems.filter((i) => i.consumption_per_unit > 0);
-    if (validItems.length === 0) {
-      setErrorMsg(isAr ? 'يجب إضافة مكون واحد على الأقل باستهلاك سليم.' : 'At least one component with valid consumption is required.');
+    const validItems = bomItems.filter((i) => i.inventory_item_id && i.consumption_per_unit > 0);
+    if (validItems.length === 0 || validItems.length !== bomItems.length) {
+      setErrorMsg(isAr
+        ? 'اختر صنف مخزون حقيقيًا لكل مكوّن، وأدخل استهلاكًا أكبر من صفر.'
+        : 'Select a real inventory item for every component and enter consumption greater than zero.');
       return;
     }
 
@@ -131,7 +150,7 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
         name: bomName || `BOM ${model.name}`,
         items: validItems.map((it) => ({
           ...it,
-          inventory_item_id: it.inventory_item_id || inventoryItems[0]?.id || model.id,
+          inventory_item_id: it.inventory_item_id,
         })),
       });
 
@@ -146,22 +165,8 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
     }
   };
 
-  // Mocked variants calculation if model has variants_count
-  const generatedVariants = Array.from({ length: Math.max(1, model.variants_count || 4) }).map((_, idx) => {
-    const sizes = ['2Y', '4Y', '6Y', '8Y', '10Y'];
-    const colors = isAr ? ['كحلي', 'أحمر', 'أبيض', 'رمادي'] : ['Navy', 'Red', 'White', 'Grey'];
-    const size = sizes[idx % sizes.length];
-    const color = colors[idx % colors.length];
-    return {
-      id: `var-${model.id}-${idx + 1}`,
-      size,
-      color,
-      sku: `${model.code}-${color === 'كحلي' || color === 'Navy' ? 'NVY' : color === 'أحمر' || color === 'Red' ? 'RED' : 'WHT'}-${size}`,
-      barcode: `6221${Math.floor(100000 + idx * 1111)}`,
-      wholesale_price: model.wholesale_price,
-      retail_price: model.retail_price,
-    };
-  });
+  // Display only variants persisted by the backend; never synthesize sizes, colors, SKUs, or barcodes.
+  const generatedVariants = actualVariants;
 
   return (
     <Modal
@@ -343,7 +348,28 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                     {bomItems.map((item, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60 text-xs items-center">
                         <div className="col-span-4">
-                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'نوع المكون / الخامة' : 'Component Type / Item'}</label>
+                          <label className="text-[10px] text-zinc-500 block">{isAr ? 'صنف المخزون / الخامة' : 'Inventory Item / Material'}</label>
+                          <select
+                            required
+                            value={item.inventory_item_id}
+                            onChange={(e) => {
+                              const selectedItem = inventoryItems.find((candidate) => candidate.id === e.target.value);
+                              setBomItems((prev) => prev.map((it, i) => (i === idx ? {
+                                ...it,
+                                inventory_item_id: selectedItem?.id || '',
+                                unit_cost: Number(selectedItem?.average_cost ?? (selectedItem as any)?.unit_cost ?? it.unit_cost),
+                              } : it)));
+                            }}
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
+                          >
+                            <option value="">{isAr ? 'اختر صنفًا من المخزون' : 'Select an inventory item'}</option>
+                            {inventoryItems.map((inventoryItem) => (
+                              <option key={inventoryItem.id} value={inventoryItem.id}>
+                                {inventoryItem.name}{inventoryItem.code ? ` — ${inventoryItem.code}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="text-[10px] text-zinc-500 block mt-1">{isAr ? 'وصف المكوّن' : 'Component Type'}</label>
                           <input
                             type="text"
                             value={item.component_type}
@@ -351,8 +377,8 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                               const val = e.target.value;
                               setBomItems((prev) => prev.map((it, i) => (i === idx ? { ...it, component_type: val } : it)));
                             }}
-                            placeholder={isAr ? 'قماش أساسي / أزرار / تكت' : 'Main fabric / Buttons / Label'}
-                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100"
+                            placeholder={isAr ? 'قماش / أزرار / سوستة / تكت' : 'Fabric / Buttons / Zipper / Label'}
+                            className="w-full text-xs p-1.5 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-slate-900 dark:text-slate-100 mt-1"
                           />
                         </div>
 
@@ -539,7 +565,11 @@ export const ModelDetailsBomModal: React.FC<ModelDetailsBomModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-medium">
-                  {generatedVariants.map((v) => (
+                  {isLoadingVariants ? (
+                    <tr><td colSpan={6} className="py-6 text-center text-slate-500">{isAr ? 'جارٍ تحميل المتغيرات...' : 'Loading variants...'}</td></tr>
+                  ) : generatedVariants.length === 0 ? (
+                    <tr><td colSpan={6} className="py-6 text-center text-slate-500">{isAr ? 'لا توجد متغيرات مسجلة لهذا الموديل.' : 'No persisted variants are registered for this model.'}</td></tr>
+                  ) : generatedVariants.map((v) => (
                     <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="py-3 px-4 font-mono font-bold text-slate-950 dark:text-slate-100">{v.size}</td>
                       <td className="py-3 px-4">{v.color}</td>

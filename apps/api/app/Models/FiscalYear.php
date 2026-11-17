@@ -20,6 +20,7 @@ class FiscalYear extends Model
         'status', // open, closed
         'closed_at',
         'closed_by',
+        'closed_by_user_id',
     ];
 
     protected $casts = [

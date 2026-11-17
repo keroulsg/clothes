@@ -69,52 +69,40 @@ export const TenantSubscriptionView: React.FC<TenantSubscriptionViewProps> = ({
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [reportRes, plansRes, overridesRes] = await Promise.all([
-        api.subscription.getCurrentReport().catch(() => null),
-        api.subscription.getPlans().catch(() => ({ plans: [] })),
-        api.subscription.getActiveOverrides().catch(() => ({ overrides: [] })),
+      const [reportRes, plansRes, overridesRes] = await Promise.allSettled([
+        api.subscription.getCurrentReport(),
+        api.subscription.getPlans(),
+        api.subscription.getActiveOverrides(),
       ]);
 
-      if (reportRes) {
-        setReport(reportRes);
+      if (reportRes.status === 'fulfilled') {
+        setReport(reportRes.value);
       } else {
-        // Fallback demo report
-        setReport({
-          tenant_id: 'current',
-          subscription: {
-            plan_code: 'enterprise',
-            plan_name_ar: 'باقة المجموعات الصناعية الكبرى',
-            plan_name_en: 'Enterprise Factory Group',
-            monthly_price: 8900,
-            status: 'active',
-            billing_cycle: 'monthly',
-            current_period_start: '2026-11-04',
-            current_period_end: '2026-12-04',
-          },
-          meters: {
-            active_users: { meter_key: 'active_users', name_ar: 'عدد المستخدمين النشطين', name_en: 'Active Users', unit: 'seats', limit_type: 'hard', current_usage: 1, limit: 999, percent_used: 0.1, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            active_branches: { meter_key: 'active_branches', name_ar: 'الفروع والمعارض', name_en: 'Active Branches', unit: 'locations', limit_type: 'hard', current_usage: 2, limit: 20, percent_used: 10, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            active_warehouses: { meter_key: 'active_warehouses', name_ar: 'المستودعات والمخازن', name_en: 'Warehouses', unit: 'warehouses', limit_type: 'hard', current_usage: 3, limit: 50, percent_used: 6, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            active_employees: { meter_key: 'active_employees', name_ar: 'سجلات العمال والموظفين', name_en: 'Employees & Workers', unit: 'workers', limit_type: 'hard', current_usage: 8, limit: 1000, percent_used: 0.8, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            garment_models: { meter_key: 'garment_models', name_ar: 'الموديلات والتصميمات', name_en: 'Garment Models', unit: 'styles', limit_type: 'soft', current_usage: 2, limit: 1000, percent_used: 0.2, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            production_orders: { meter_key: 'production_orders', name_ar: 'أوامر التشغيل الشهرية', name_en: 'Production Orders', unit: 'orders', limit_type: 'soft', current_usage: 1, limit: 1500, percent_used: 0.1, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            cutting_lays: { meter_key: 'cutting_lays', name_ar: 'فرشات صالة القص', name_en: 'Cutting Lays', unit: 'lays', limit_type: 'soft', current_usage: 5, limit: 3000, percent_used: 0.2, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            purchase_orders: { meter_key: 'purchase_orders', name_ar: 'أوامر الشراء الشهرية', name_en: 'Purchase Orders', unit: 'orders', limit_type: 'soft', current_usage: 15, limit: 1000, percent_used: 1.5, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            sales_orders: { meter_key: 'sales_orders', name_ar: 'أوامر وفواتير البيع', name_en: 'Sales Orders', unit: 'orders', limit_type: 'soft', current_usage: 3, limit: 999999, percent_used: 0, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            subcontract_jobs: { meter_key: 'subcontract_jobs', name_ar: 'عقود التشغيل للغير', name_en: 'Subcontract Jobs', unit: 'jobs', limit_type: 'soft', current_usage: 6, limit: 300, percent_used: 2, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            storage_megabytes: { meter_key: 'storage_megabytes', name_ar: 'سعة تخزين المستندات', name_en: 'Storage Space', unit: 'MB', limit_type: 'hard', current_usage: 12, limit: 50000, percent_used: 0.02, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-            marketplace_bids: { meter_key: 'marketplace_bids', name_ar: 'عروض منصة وصلة ورش', name_en: 'Marketplace Bids', unit: 'bids', limit_type: 'soft', current_usage: 0, limit: 999999, percent_used: 0, is_warning_70: false, is_warning_85: false, is_exceeded: false },
-          },
-        });
+        setReport(null);
       }
 
-      setPlans(plansRes.plans && plansRes.plans.length > 0 ? plansRes.plans : [
-        { code: 'starter', name_ar: 'باقة الورش والمشاغل', name_en: 'Starter Workshop', monthly_price: 1450, annual_price: 14500, description_ar: 'مناسبة للورش الصغيرة والمشاغل المستقلة', description_en: 'Ideal for independent workshops' },
-        { code: 'pro', name_ar: 'باقة المصانع المتطورة', name_en: 'Pro Factory', monthly_price: 3850, annual_price: 38500, description_ar: 'للمصانع المتوسطة متعددة الأقسام وصالات القص', description_en: 'For medium manufacturing plants' },
-        { code: 'enterprise', name_ar: 'باقة المجموعات الصناعية الكبرى', name_en: 'Enterprise Group', monthly_price: 8900, annual_price: 89000, description_ar: 'سعات تشغيلية قصوى لشركات ومصانع الملابس الكبرى', description_en: 'Max capacity for industrial apparel brands' },
-      ]);
+      if (plansRes.status === 'fulfilled') {
+        setPlans(Array.isArray(plansRes.value?.plans) ? plansRes.value.plans : []);
+      } else {
+        setPlans([]);
+      }
 
-      setActiveOverrides(overridesRes.overrides || []);
+      if (overridesRes.status === 'fulfilled') {
+        setActiveOverrides(overridesRes.value?.overrides || []);
+      } else {
+        setActiveOverrides([]);
+      }
+
+      if ([reportRes, plansRes, overridesRes].some((result) => result.status === 'rejected')) {
+        setStatusMsg({
+          type: 'error',
+          text: isAr
+            ? 'تعذر تحميل بيانات الاشتراك الحقيقية. أعد المحاولة؛ لم نعرض بيانات تجريبية.'
+            : 'Subscription data could not be loaded. Retry; demo values are not displayed.',
+        });
+      } else {
+        setStatusMsg(null);
+      }
     } catch (err: any) {
       console.error('Failed to load subscription data:', err);
     } finally {
@@ -444,8 +432,8 @@ export const TenantSubscriptionView: React.FC<TenantSubscriptionViewProps> = ({
               </div>
 
               <div className="text-xs text-slate-400 flex flex-wrap items-center gap-4 font-mono">
-                <span>{isAr ? 'بداية الدورة:' : 'Period Start:'} {report.subscription.current_period_start || '2026-11-04'}</span>
-                <span>{isAr ? 'تاريخ التجديد:' : 'Renews on:'} {report.subscription.current_period_end || '2026-12-04'}</span>
+                <span>{isAr ? 'بداية الدورة:' : 'Period Start:'} {report.subscription.current_period_start || '—'}</span>
+                <span>{isAr ? 'تاريخ التجديد:' : 'Renews on:'} {report.subscription.current_period_end || '—'}</span>
               </div>
             </div>
 

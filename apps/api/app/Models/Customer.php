@@ -94,4 +94,9 @@ class Customer extends Model
     {
         return $this->hasMany(JobInvoice::class);
     }
+
+    public function wholesaleProfile(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(WholesaleCustomerProfile::class, 'customer_id');
+    }
 }

@@ -14,12 +14,19 @@ use App\Models\StoreOrder;
 use App\Models\StoreOrderItem;
 use App\Models\TenantStoreSetting;
 use App\Models\Warehouse;
+use App\Services\WholesaleService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class StorefrontService
 {
+    public function __construct(
+        protected ?WholesaleService $wholesaleService = null
+    ) {
+        $this->wholesaleService = $this->wholesaleService ?: app(WholesaleService::class);
+    }
+
     public const THEME_FASHION_BOUTIQUE = 'fashion_boutique';
     public const THEME_MODERN_CATALOG = 'modern_catalog';
     public const THEME_KIDS_FAMILY = 'kids_family';
@@ -133,9 +140,9 @@ class StorefrontService
     ];
 
     /**
-     * جلب إعدادات وكتالوج المتجر العام للمصنع بما فيها ثيمات العرض وبوابات الدفع
+     * جلب إعدادات وكتالوج المتجر العام للمصنع بما فيها ثيمات العرض وبوابات الدفع مع حماية أسعار الجملة
      */
-    public function getStoreDetails(string $tenantId, bool $preview = false): array
+    public function getStoreDetails(string $tenantId, bool $preview = false, ?string $wholesaleToken = null): array
     {
         $settings = TenantStoreSetting::withoutGlobalScopes()->firstOrCreate(
             ['tenant_id' => $tenantId],
@@ -147,13 +154,11 @@ class StorefrontService
                     'font_family' => 'Cairo, sans-serif',
                     'direction' => 'rtl',
                 ],
-                'is_store_enabled' => true,
-                'allow_cod' => true,
+                // A newly provisioned storefront remains unpublished until the tenant owner configures it.
+                'is_store_enabled' => false,
+                'allow_cod' => false,
                 'allow_card_payment' => false,
-                'allow_instapay' => true,
-                'instapay_account_name' => 'GarmentOS Factory Operations',
-                'instapay_handle' => 'factory@instapay',
-                'instapay_instructions' => 'يرجى تحويل قيمة الفاتورة عبر تطبيق InstaPay إلى المعرف أعلاه، ثم إرفاق رقم العملية المرجعي لتأكيد الشحن.',
+                'allow_instapay' => false,
                 'currency' => 'EGP',
                 'direction' => 'rtl',
                 'banner_title' => 'أرقى منتجات الملابس من المصنع مباشرة',
@@ -171,44 +176,107 @@ class StorefrontService
             }
         }
 
+        // عزل أسعار الجملة: يتم التحقق الصارم من توثيق حساب عميل الجملة واعتماده
+        $wholesaleCustomer = $this->wholesaleService->resolveCustomerFromToken($wholesaleToken, $tenantId);
+        $isApprovedWholesale = $wholesaleCustomer && $wholesaleCustomer->isApproved();
+
+        // Storefront availability is sourced only from an active finished-goods warehouse.
+        // Never expose raw-material or arbitrary warehouse stock as sellable finished products.
+        $stockWarehouse = Warehouse::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where('type', 'finished_goods')
+            ->orderBy('id')
+            ->first();
+        $firstWarehouseId = $stockWarehouse?->id;
+
         $variants = ProductVariant::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->with(['garmentModel', 'size', 'color', 'product'])
+            ->with(['garmentModel', 'size', 'color', 'product', 'wholesaleTiers'])
             ->get()
-            ->filter(function ($variant) {
-                // استبعاد مسودات والمنتجات المؤرشفة من الظهور في المتجر العام
-                if ($variant->product) {
-                    return $variant->product->status === 'active';
+            ->filter(function ($variant) use ($isApprovedWholesale) {
+                // استبعاد مسودات والمنتجات المؤرشفة من الظهور في المتجر العام.
+                if ($variant->product && $variant->product->status !== 'active') {
+                    return false;
                 }
-                return true;
-            })
-            ->map(function ($variant) use ($tenantId) {
-                $availableStock = (float) InventoryItem::withoutGlobalScopes()
-                    ->where('tenant_id', $tenantId)
-                    ->where('variant_id', $variant->id)
-                    ->where('is_customer_owned', false)
-                    ->sum('current_balance');
 
-                // سعر البيع المعتمد للمتجر الإلكتروني (Website Price)
-                $websitePrice = (float) (
+                $retailPrice = (float) (
                     $variant->product && (float) $variant->product->selling_price > 0
                         ? $variant->product->selling_price
-                        : ($variant->retail_price > 0 ? $variant->retail_price : $variant->wholesale_price)
+                        : ($variant->retail_price ?? 0)
                 );
 
-                return [
+                if ($isApprovedWholesale) {
+                    $wholesalePrice = (float) $variant->wholesale_price;
+                    return $retailPrice > 0 || $wholesalePrice > 0;
+                }
+
+                return $retailPrice > 0;
+            })
+            ->map(function ($variant) use ($tenantId, $firstWarehouseId, $isApprovedWholesale) {
+                $availableStock = $firstWarehouseId
+                    ? InventoryItem::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->where('variant_id', $variant->id)
+                        ->where('warehouse_id', $firstWarehouseId)
+                        ->where('is_customer_owned', false)
+                        ->get(['current_balance', 'reserved_balance'])
+                        ->sum(fn ($stockRow) => max(0, (float) $stockRow->current_balance - (float) $stockRow->reserved_balance))
+                    : 0.0;
+
+                // سعر البيع المعتمد للمتجر الإلكتروني (Website Price)
+                $retailPrice = (float) (
+                    $variant->product && (float) $variant->product->selling_price > 0
+                        ? $variant->product->selling_price
+                        : ($variant->retail_price ?? 0)
+                );
+
+                $productPayload = [
                     'id' => $variant->id,
                     'sku' => $variant->sku,
                     'barcode' => $variant->barcode,
+                    'name' => $variant->product?->name ?? ($variant->garmentModel?->name ?? 'Model'),
                     'model_name' => $variant->product?->name ?? ($variant->garmentModel?->name ?? 'Model'),
                     'model_code' => $variant->garmentModel?->code ?? '',
-                    'description' => $variant->product?->description ?? '',
+                    'category' => $variant->product?->category ?? ($variant->garmentModel?->category ?? 'General'),
+                    'description' => $variant->product?->description ?? ($variant->garmentModel?->description ?? ''),
                     'image' => $variant->product?->main_image ?? null,
+                    'image_url' => $variant->product?->main_image ?? null,
                     'gallery' => $variant->product?->gallery ?? [],
                     'size' => $variant->size?->name ?? '',
                     'color' => $variant->color?->name ?? '',
-                    'price' => $websitePrice,
+                    'price' => $retailPrice,
                     'in_stock' => $availableStock,
+                ];
+
+                // حماية أمنية صارمة: لا تخرج أسعار أو شرائح الجملة إلا لعميل جملة موثق ومعتمد
+                if ($isApprovedWholesale) {
+                    $productPayload['is_wholesale_eligible'] = true;
+                    $productPayload['wholesale_price'] = (float) $variant->wholesale_price;
+                    $productPayload['moq'] = (int) ($variant->moq ?: 1);
+                    $productPayload['wholesale_tiers'] = $variant->wholesaleTiers->map(fn ($tier) => [
+                        'id' => $tier->id,
+                        'min_quantity' => (int) $tier->min_quantity,
+                        'max_quantity' => $tier->max_quantity !== null ? (int) $tier->max_quantity : null,
+                        'unit_price' => (float) $tier->unit_price,
+                    ])->values();
+                }
+
+                return $productPayload;
+            })
+            ->values();
+
+        // استخراج التصنيفات الفعلية من قائمة الموديلات والمنتجات الجاهزة
+        $categories = $variants->pluck('category')
+            ->filter()
+            ->unique()
+            ->values()
+            ->map(function ($cat) use ($variants) {
+                return [
+                    'id' => $cat,
+                    'name' => $cat,
+                    'name_ar' => $cat,
+                    'count' => $variants->where('category', $cat)->count(),
                 ];
             })
             ->values();
@@ -219,6 +287,18 @@ class StorefrontService
             'has_draft_changes' => !empty($settings->draft_theme_id) || !empty($settings->draft_theme_config),
             'available_themes' => self::AVAILABLE_THEMES,
             'products' => $variants,
+            'variants' => $variants, // توافق كامل مع الكود السابق
+            'catalog' => [
+                'variants' => $variants,
+                'count' => $variants->count(),
+            ],
+            'categories' => $categories,
+            'wholesale_user' => $isApprovedWholesale ? [
+                'id' => $wholesaleCustomer->id,
+                'company_name' => $wholesaleCustomer->company_name,
+                'contact_person' => $wholesaleCustomer->contact_person,
+                'is_approved' => true,
+            ] : null,
         ];
     }
 
@@ -251,10 +331,14 @@ class StorefrontService
             'announcement_bar_enabled' => true,
             'announcement_bar_text' => 'شحن سريع لجميع المحافظات خلال 48 ساعة 🚚',
             'sections' => [
-                ['id' => 'hero_banner', 'enabled' => true, 'order' => 1, 'title' => 'تشكيلة الموسم الجديد'],
-                ['id' => 'featured_categories', 'enabled' => true, 'order' => 2, 'title' => 'الأقسام المميزة'],
-                ['id' => 'new_arrivals', 'enabled' => true, 'order' => 3, 'title' => 'وصل حديثاً'],
-                ['id' => 'brand_story', 'enabled' => true, 'order' => 4, 'title' => 'قصة الجودة والمصنع'],
+                ['id' => 'hero', 'enabled' => true, 'order' => 1, 'name_ar' => 'البانر الترويجي الرئيسي', 'name_en' => 'Hero Banner'],
+                ['id' => 'trust_badges', 'enabled' => true, 'order' => 2, 'name_ar' => 'شارات الجودة وثقة المصنع', 'name_en' => 'Trust & Quality Badges'],
+                ['id' => 'categories', 'enabled' => true, 'order' => 3, 'name_ar' => 'أقسام وتصنيفات الموديلات', 'name_en' => 'Category Filters'],
+                ['id' => 'featured_products', 'enabled' => true, 'order' => 4, 'name_ar' => 'الموديلات الجاهزة للشحن', 'name_en' => 'Ready to Dispatch Styles'],
+                ['id' => 'promotions', 'enabled' => true, 'order' => 5, 'name_ar' => 'العروض والخصومات الخاصة', 'name_en' => 'Special Promotions'],
+                ['id' => 'wholesale_cta', 'enabled' => true, 'order' => 6, 'name_ar' => 'دعوة تجار وشركات الجملة', 'name_en' => 'B2B Wholesale CTA'],
+                ['id' => 'story', 'enabled' => true, 'order' => 7, 'name_ar' => 'قصة المصنع والحرفية المصرية', 'name_en' => 'Brand Heritage Story'],
+                ['id' => 'contact_info', 'enabled' => true, 'order' => 8, 'name_ar' => 'بيانات التواصل المباشر', 'name_en' => 'Direct Contact Info'],
             ],
             'banners' => [
                 [
@@ -416,6 +500,7 @@ class StorefrontService
             'allow_cod',
             'allow_card_payment',
             'allow_instapay',
+            'instapay_account_verified',
             'instapay_account_name',
             'instapay_handle',
             'instapay_instructions',
@@ -425,6 +510,10 @@ class StorefrontService
             'banner_subtitle',
             'contact_whatsapp',
         ]));
+
+        if (!empty($fillableData['allow_instapay']) && (!empty($fillableData['instapay_handle']) || !empty($fillableData['instapay_account_name']) || !empty($settings->instapay_handle))) {
+            $fillableData['instapay_account_verified'] = true;
+        }
 
         $settings->update($fillableData);
 
@@ -438,6 +527,31 @@ class StorefrontService
     public function placeStoreOrder(string $tenantId, array $data): StoreOrder
     {
         return DB::transaction(function () use ($tenantId, $data) {
+            $storeSettings = TenantStoreSetting::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$storeSettings || !$storeSettings->is_store_enabled) {
+                throw new InvalidArgumentException('المتجر الإلكتروني غير منشور أو متوقف حالياً.');
+            }
+
+            $paymentMethod = $data['payment_method'] ?? 'cod';
+            $paymentAllowed = match ($paymentMethod) {
+                'cod' => (bool) $storeSettings->allow_cod,
+                // Card checkout is unavailable until a real, verified payment gateway is integrated.
+                'card_mock' => false,
+                'instapay' => (bool) $storeSettings->allow_instapay && (
+                    (bool) $storeSettings->instapay_account_verified ||
+                    !empty($storeSettings->instapay_handle) ||
+                    !empty($storeSettings->instapay_identifier)
+                ),
+                default => false,
+            };
+            if (!$paymentAllowed) {
+                throw new InvalidArgumentException('طريقة الدفع المختارة غير مفعلة أو غير معتمدة لهذا المتجر.');
+            }
+
             $items = $data['items'] ?? [];
             if (empty($items)) {
                 throw new InvalidArgumentException('يجب إضافة منتج واحد على الأقل لسلة الشراء.');
@@ -460,7 +574,35 @@ class StorefrontService
             $subtotal = 0;
             $orderItemsData = [];
             $inventoryItemsMap = [];
-            $firstWarehouseId = null;
+            $requestedQuantitiesByVariant = [];
+            $warehouse = Warehouse::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->where('type', 'finished_goods')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->first();
+            $firstWarehouseId = $warehouse?->id;
+
+            if (!$firstWarehouseId) {
+                throw new InvalidArgumentException('لا يوجد مخزن نشط مرتبط بهذا المتجر لاستلام الطلبات.');
+            }
+
+            // التحقق من قناة الطلب وهوية عميل الجملة
+            $isWholesaleRequested = ($data['channel'] ?? '') === 'wholesale' || !empty($data['wholesale_token']);
+            $wholesaleCustomer = null;
+
+            if ($isWholesaleRequested) {
+                $token = $data['wholesale_token'] ?? null;
+                $wholesaleCustomer = $this->wholesaleService->resolveCustomerFromToken($token, $tenantId);
+
+                if (!$wholesaleCustomer || !$wholesaleCustomer->isApproved()) {
+                    $status = $wholesaleCustomer ? $wholesaleCustomer->status : 'unauthenticated';
+                    throw new InvalidArgumentException("طلب الجملة متاح فقط لحسابات عملاء الجملة المعتمدة لدى المصنع (الحالة الحالية: {$status}).");
+                }
+            }
+
+            $orderChannel = $wholesaleCustomer ? 'wholesale' : 'retail';
 
             foreach ($items as $item) {
                 $variantId = $item['variant_id'] ?? null;
@@ -477,6 +619,7 @@ class StorefrontService
                 // Inventory Synchronization: check available balance accounting for existing reservations!
                 $invItem = InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
+                    ->where('warehouse_id', $firstWarehouseId)
                     ->where('variant_id', $variant->id)
                     ->where('is_customer_owned', false)
                     ->lockForUpdate()
@@ -486,29 +629,29 @@ class StorefrontService
                 $reservedBalance = $invItem ? (float)($invItem->reserved_balance ?? 0) : 0.0;
                 $availableStock = max(0, $currentBalance - $reservedBalance);
 
-                if ($availableStock < $qty) {
-                    throw new InvalidArgumentException("الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر للبيع: " . (int)$availableStock);
+                // Aggregate repeated cart lines for the same variant before checking stock.
+                // Otherwise two individually-valid lines could reserve more than the available quantity.
+                $requestedForVariant = ($requestedQuantitiesByVariant[$variant->id] ?? 0) + $qty;
+
+                if ($availableStock < $requestedForVariant) {
+                    throw new InvalidArgumentException(
+                        "الكمية المطلوبة للمنتج {$variant->sku} غير متوفرة حالياً بالمخزن. المتوفر للبيع: "
+                        . (int) $availableStock
+                        . "، إجمالي الكمية المطلوبة: "
+                        . (int) $requestedForVariant
+                    );
                 }
 
-                if (!$firstWarehouseId && $invItem) {
-                    $firstWarehouseId = $invItem->warehouse_id;
-                }
-
+                $requestedQuantitiesByVariant[$variant->id] = $requestedForVariant;
                 $inventoryItemsMap[$variant->id] = $invItem;
 
                 if ($variant->product && $variant->product->status !== 'active') {
                     throw new InvalidArgumentException("المنتج {$variant->sku} غير متاح للبيع في المتجر حالياً (مسودة أو مؤرشف).");
                 }
 
-                // Security P0: Compute unit price authoritatively using website price from commercial catalog or variant retail price
-                $authoritativeUnitPrice = (float) (
-                    $variant->product && (float) $variant->product->selling_price > 0
-                        ? $variant->product->selling_price
-                        : ($variant->retail_price > 0 ? $variant->retail_price : ($variant->wholesale_price > 0 ? $variant->wholesale_price : ($variant->price ?? 0)))
-                );
-                if ($authoritativeUnitPrice <= 0) {
-                    throw new InvalidArgumentException("سعر المنتج {$variant->sku} غير مهيأ بالمتجر.");
-                }
+                // احتساب السعر المعتمد حتمياً من الخادم مع مراعاة الجملة والقطاعي والـ MOQ
+                $priceResolution = $this->wholesaleService->resolveAuthoritativePrice($variant, $qty, $wholesaleCustomer);
+                $authoritativeUnitPrice = $priceResolution['unit_price'];
 
                 $authoritativeName = $variant->product?->name ?? ($variant->garmentModel?->name ?? 'منتج ملابس');
                 $authoritativeSku = $variant->sku;
@@ -527,20 +670,9 @@ class StorefrontService
                 ];
             }
 
-            // Fallback warehouse if needed
-            if (!$firstWarehouseId) {
-                $wh = Warehouse::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
-                $firstWarehouseId = $wh?->id;
-            }
-
             // Security P0: Calculate shipping authoritatively on the server. Never trust client-supplied shipping_fee!
             $shipping = $this->calculateAuthoritativeShipping($tenantId, $data['city'] ?? 'Cairo', $subtotal);
             $total = round($subtotal + $shipping, 4);
-
-            $paymentMethod = $data['payment_method'] ?? 'cod';
-            if (!in_array($paymentMethod, ['cod', 'card_mock', 'instapay'], true)) {
-                throw new InvalidArgumentException('طريقة الدفع المختارة غير مقبولة.');
-            }
 
             // Determine initial payment status
             $paymentStatus = match ($paymentMethod) {
@@ -574,22 +706,26 @@ class StorefrontService
             }
 
             // 2. Resolve / Create Customer in ERP Master
-            $customerPhone = $data['customer_phone'] ?? '01000000000';
-            $customer = Customer::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->where('phone', $customerPhone)
-                ->first();
+            if ($wholesaleCustomer && $wholesaleCustomer->customer_id) {
+                $customer = Customer::withoutGlobalScopes()->find($wholesaleCustomer->customer_id);
+            } else {
+                $customerPhone = $data['customer_phone'] ?? '01000000000';
+                $customer = Customer::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('phone', $customerPhone)
+                    ->first();
 
-            if (!$customer) {
-                $customer = Customer::withoutGlobalScopes()->create([
-                    'tenant_id' => $tenantId,
-                    'code' => 'CUST-SO-' . strtoupper(substr(md5($customerPhone . $tenantId), 0, 6)),
-                    'name' => $data['customer_name'] ?? 'عميل المتجر',
-                    'phone' => $customerPhone,
-                    'classification' => 'individual',
-                    'address' => ($data['shipping_address'] ?? '') . ', ' . ($data['city'] ?? ''),
-                    'is_active' => true,
-                ]);
+                if (!$customer) {
+                    $customer = Customer::withoutGlobalScopes()->create([
+                        'tenant_id' => $tenantId,
+                        'code' => 'CUST-SO-' . strtoupper(substr(md5($customerPhone . $tenantId), 0, 6)),
+                        'name' => $data['customer_name'] ?? 'عميل المتجر',
+                        'phone' => $customerPhone,
+                        'classification' => 'individual',
+                        'address' => ($data['shipping_address'] ?? '') . ', ' . ($data['city'] ?? ''),
+                        'is_active' => true,
+                    ]);
+                }
             }
 
             // 3. Bridge to ERP Sales Order (Primary Business Transaction)
@@ -599,7 +735,7 @@ class StorefrontService
                 'customer_id' => $customer->id,
                 'customer_name' => $customer->name,
                 'warehouse_id' => $firstWarehouseId,
-                'order_type' => 'retail',
+                'order_type' => $orderChannel,
                 'channel' => 'storefront',
                 'store_order_id' => $order->id,
                 'status' => 'confirmed', // Confirmed with stock reserved
@@ -610,7 +746,7 @@ class StorefrontService
                 'total_amount' => $total,
                 'expected_delivery_date' => now()->addDays(3)->toDateString(),
                 'delivery_address' => ($data['shipping_address'] ?? '') . ', ' . ($data['city'] ?? ''),
-                'notes' => "طلب متجر إلكتروني برقم {$order->order_number}",
+                'notes' => "طلب متجر إلكتروني ({$orderChannel}) برقم {$order->order_number}",
             ]);
 
             // Link SalesOrder ID to StoreOrder
@@ -696,7 +832,9 @@ class StorefrontService
 
             if ($approved) {
                 // 1. Resolve or Create Sales Invoice for the linked ERP Sales Order
-                $salesOrder = $order->sales_order_id ? SalesOrder::withoutGlobalScopes()->where('id', $order->sales_order_id)->first() : null;
+                $salesOrder = $order->sales_order_id
+                    ? SalesOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('id', $order->sales_order_id)->first()
+                    : null;
                 $invoice = null;
 
                 if ($salesOrder) {
@@ -710,6 +848,7 @@ class StorefrontService
                             'tenant_id' => $tenantId,
                             'invoice_number' => 'INV-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
                             'sales_order_id' => $salesOrder->id,
+                            'warehouse_id' => $salesOrder->warehouse_id,
                             'customer_id' => $salesOrder->customer_id,
                             'customer_name' => $salesOrder->customer_name,
                             'invoice_type' => 'standard',
@@ -800,7 +939,7 @@ class StorefrontService
                 $order->update([
                     'payment_status' => 'verified_paid',
                     'status' => 'confirmed',
-                    'payment_reviewed_by' => $userId,
+                                        'payment_reviewed_by_user_id' => (string) $userId,
                     'payment_reviewed_at' => now(),
                     'payment_rejection_reason' => null,
                 ]);
@@ -829,12 +968,16 @@ class StorefrontService
                 $order->update([
                     'payment_status' => 'rejected',
                     'payment_rejection_reason' => $reason,
-                    'payment_reviewed_by' => $userId,
+                                        'payment_reviewed_by_user_id' => (string) $userId,
                     'payment_reviewed_at' => now(),
                 ]);
             }
 
-            return $order->fresh(['items', 'paymentReviewer', 'salesOrder']);
+            $reviewedOrder = $order->fresh(['items', 'paymentReviewer', 'salesOrder']);
+            // Keep the legacy API response field without writing a numeric ID into its legacy UUID DB column.
+            $reviewedOrder->setAttribute('payment_reviewed_by', (string) $userId);
+
+            return $reviewedOrder;
         });
     }
 
@@ -866,6 +1009,7 @@ class StorefrontService
     {
         DB::transaction(function () use ($order) {
             $lockedOrder = StoreOrder::withoutGlobalScopes()
+                ->where('tenant_id', $order->tenant_id)
                 ->lockForUpdate()
                 ->find($order->id);
 
@@ -873,31 +1017,65 @@ class StorefrontService
                 return;
             }
 
-            // Release inventory reservation safely
-            foreach ($lockedOrder->items as $item) {
+            if (!$lockedOrder->sales_order_id) {
+                throw new InvalidArgumentException('طلب المتجر لا يحتوي على أمر بيع مرتبط؛ لا يمكن فك الحجز بأمان.');
+            }
+
+            $salesOrder = SalesOrder::withoutGlobalScopes()
+                ->where('tenant_id', $lockedOrder->tenant_id)
+                ->lockForUpdate()
+                ->find($lockedOrder->sales_order_id);
+
+            if (!$salesOrder) {
+                throw new InvalidArgumentException('أمر البيع المرتبط بطلب المتجر غير موجود؛ لم يتم تغيير المخزون.');
+            }
+
+            if (in_array($salesOrder->status, ['fulfilled', 'cancelled'], true)) {
+                throw new InvalidArgumentException('لا يمكن فك حجز طلب تم تسليمه أو إلغاؤه بالفعل من خلال مسار الحجز.');
+            }
+
+            // Release exactly the reservation rows created for this ERP order.
+            // Lock by inventory_item_id (not variant_id) to avoid releasing stock from another warehouse.
+            $salesLines = SalesOrderItem::withoutGlobalScopes()
+                ->where('tenant_id', $lockedOrder->tenant_id)
+                ->where('sales_order_id', $salesOrder->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($salesLines as $salesLine) {
+                $reservedForLine = (float) ($salesLine->reserved_quantity ?? 0);
+                if ($reservedForLine <= 0) {
+                    continue;
+                }
+
+                if (!$salesLine->inventory_item_id) {
+                    throw new InvalidArgumentException('سطر أمر البيع لا يحتوي على سجل مخزون محدد؛ لا يمكن فك الحجز بأمان.');
+                }
+
                 $invItem = InventoryItem::withoutGlobalScopes()
                     ->where('tenant_id', $lockedOrder->tenant_id)
-                    ->where('variant_id', $item->variant_id)
+                    ->where('warehouse_id', $salesOrder->warehouse_id)
+                    ->where('id', $salesLine->inventory_item_id)
                     ->where('is_customer_owned', false)
                     ->lockForUpdate()
                     ->first();
 
-                if ($invItem) {
-                    $invItem->decrement('reserved_balance', $item->quantity);
+                if (!$invItem || (float) $invItem->reserved_balance < $reservedForLine) {
+                    throw new InvalidArgumentException('رصيد الحجز لا يطابق سطر أمر البيع؛ أوقفنا الإلغاء لمنع فساد المخزون.');
                 }
+
+                $invItem->reserved_balance = round((float) $invItem->reserved_balance - $reservedForLine, 4);
+                $invItem->save();
+
+                $salesLine->reserved_quantity = 0;
+                $salesLine->save();
             }
 
-            // Cancel linked ERP sales order
-            if ($lockedOrder->sales_order_id) {
-                $salesOrder = SalesOrder::withoutGlobalScopes()->where('id', $lockedOrder->sales_order_id)->first();
-                if ($salesOrder && $salesOrder->status !== 'cancelled') {
-                    $salesOrder->update([
-                        'status' => 'cancelled',
-                        'cancelled_at' => now(),
-                        'cancellation_reason' => 'Storefront order cancelled',
-                    ]);
-                }
-            }
+            $salesOrder->update([
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'cancellation_reason' => 'Storefront order cancelled',
+            ]);
 
             $lockedOrder->update(['inventory_synced' => false]);
         });
@@ -909,12 +1087,35 @@ class StorefrontService
      */
     public function calculateAuthoritativeShipping(string $tenantId, ?string $city, float $subtotal): float
     {
+        $cityClean = mb_strtolower(trim($city ?? ''));
+
+        // Check if tenant has customized shipping rules in theme_config
+        $settings = TenantStoreSetting::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        if ($settings && !empty($settings->theme_config['shipping'])) {
+            $shippingConfig = $settings->theme_config['shipping'];
+            $freeThreshold = isset($shippingConfig['free_shipping_threshold']) ? (float)$shippingConfig['free_shipping_threshold'] : 1500.0;
+            if ($freeThreshold > 0 && $subtotal >= $freeThreshold) {
+                return 0.0;
+            }
+
+            if (!empty($shippingConfig['zones']) && is_array($shippingConfig['zones'])) {
+                foreach ($shippingConfig['zones'] as $zone) {
+                    $cities = array_map('mb_strtolower', array_map('trim', $zone['cities'] ?? []));
+                    if (in_array($cityClean, $cities, true)) {
+                        return (float)($zone['rate'] ?? 50.0);
+                    }
+                }
+            }
+
+            if (isset($shippingConfig['flat_rate']) && $shippingConfig['flat_rate'] !== null) {
+                return (float)$shippingConfig['flat_rate'];
+            }
+        }
+
         // شحن مجاني للطلبات الكبيرة بقيمة 1500 جنيه فأكثر
         if ($subtotal >= 1500.0) {
             return 0.0;
         }
-
-        $cityClean = mb_strtolower(trim($city ?? ''));
 
         // القاهرة الكبرى والجيزة
         if (in_array($cityClean, ['cairo', 'giza', 'القاهرة', 'الجيزة', 'october', 'أكتوبر', 'زايد', 'nasr city', 'new cairo'], true)) {
@@ -940,24 +1141,58 @@ class StorefrontService
      */
     public function trackOrder(string $orderNumber, string $phone, ?string $tenantId = null): ?StoreOrder
     {
+        $rawOrder = trim($orderNumber);
+        $upperOrder = strtoupper($rawOrder);
+
+        // مرونة معالجة رقم الطلب: مع أو بدون بادئة ORD-، حروف كبيرة/صغيرة، أو معرف UUID
+        $orderCandidates = array_unique(array_filter([
+            $rawOrder,
+            $upperOrder,
+            str_starts_with($upperOrder, 'ORD-') ? substr($upperOrder, 4) : 'ORD-' . $upperOrder,
+        ]));
+
         $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
 
-        $query = StoreOrder::withoutGlobalScopes()
-            ->with(['items.variant.garmentModel', 'items.variant.size', 'items.variant.color', 'tenant'])
-            ->where('order_number', trim($orderNumber));
+        $buildQuery = function (?string $tid = null) use ($orderCandidates, $rawOrder) {
+            $q = StoreOrder::withoutGlobalScopes()
+                ->with(['items.variant.garmentModel', 'items.variant.size', 'items.variant.color', 'tenant'])
+                ->where(function ($sub) use ($orderCandidates, $rawOrder) {
+                    $sub->whereIn('order_number', $orderCandidates);
+                    if (\Illuminate\Support\Str::isUuid($rawOrder)) {
+                        $sub->orWhere('id', $rawOrder);
+                    }
+                });
 
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        }
+            if ($tid) {
+                $q->where('tenant_id', $tid);
+            }
 
-        $order = $query->first();
+            return $q;
+        };
+
+        $order = $buildQuery($tenantId)->first();
 
         if (!$order) {
             return null;
         }
 
         $orderPhoneClean = preg_replace('/[^0-9]/', '', $order->customer_phone);
-        if ($orderPhoneClean !== $cleanPhone && !str_ends_with($orderPhoneClean, $cleanPhone) && !str_ends_with($cleanPhone, $orderPhoneClean)) {
+
+        // التحقق من رقم الهاتف بمرونة تامة (تطابق تام، لاحقة دولية/محلية، أو الأرقام الجوهرية بدون 0 أو كود الدولة)
+        $isPhoneMatch = ($orderPhoneClean === $cleanPhone)
+            || (strlen($cleanPhone) >= 7 && str_ends_with($orderPhoneClean, $cleanPhone))
+            || (strlen($orderPhoneClean) >= 7 && str_ends_with($cleanPhone, $orderPhoneClean));
+
+        if (!$isPhoneMatch) {
+            $sigOrder = ltrim(preg_replace('/^(20|0020)/', '', $orderPhoneClean), '0');
+            $sigInput = ltrim(preg_replace('/^(20|0020)/', '', $cleanPhone), '0');
+
+            if ($sigOrder !== '' && $sigInput !== '' && ($sigOrder === $sigInput || str_ends_with($sigOrder, $sigInput) || str_ends_with($sigInput, $sigOrder))) {
+                $isPhoneMatch = true;
+            }
+        }
+
+        if (!$isPhoneMatch) {
             return null;
         }
 
@@ -1043,14 +1278,36 @@ class StorefrontService
     /**
      * استرجاع قائمة التحويلات المعلقة بانتظار المراجعة والتدقيق المالي
      */
-    public function getPendingPaymentSubmissions(string $tenantId): \Illuminate\Database\Eloquent\Collection
+    public function getPendingPaymentSubmissions(string $tenantId, ?array $branchIds = null, ?string $statusFilter = null): \Illuminate\Database\Eloquent\Collection
     {
-        return PaymentSubmission::withoutGlobalScopes()
+        $query = PaymentSubmission::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->where('status', 'pending_review')
-            ->with(['storeOrder', 'salesOrder', 'reviewer'])
-            ->latest()
-            ->get();
+            ->with(['storeOrder.salesOrder.warehouse', 'salesOrder.warehouse', 'reviewer']);
+
+        if ($statusFilter && $statusFilter !== 'all') {
+            $query->where('status', $statusFilter);
+        } else {
+            // الافتراضي: كل التحويلات المعلقة بانتظار المراجعة أو بانتظار الإشعار
+            $query->whereIn('status', ['pending_review', 'pending_payment']);
+        }
+
+        if ($branchIds !== null) {
+            $query
+                ->where(function ($branchQuery) use ($branchIds) {
+                    $branchQuery->whereHas('storeOrder.salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds))
+                        ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($branchQuery) use ($branchIds) {
+                    $branchQuery->whereDoesntHave('storeOrder')
+                        ->orWhereHas('storeOrder.salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                })
+                ->where(function ($branchQuery) use ($branchIds) {
+                    $branchQuery->whereDoesntHave('salesOrder')
+                        ->orWhereHas('salesOrder.warehouse', fn ($warehouseQuery) => $warehouseQuery->whereIn('branch_id', $branchIds));
+                });
+        }
+
+        return $query->latest()->get();
     }
 
     /**
@@ -1096,6 +1353,8 @@ class StorefrontService
 
             if (array_key_exists('instapay_account_verified', $data)) {
                 $updateData['instapay_account_verified'] = (bool) $data['instapay_account_verified'];
+            } elseif (!empty($updateData['allow_instapay']) || !empty($updateData['instapay_identifier'])) {
+                $updateData['instapay_account_verified'] = true;
             }
 
             $settings->update($updateData);

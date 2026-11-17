@@ -23,8 +23,15 @@ return new class extends Migration
                 $table->softDeletes();
 
                 $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
-                $table->foreign('parent_id')->references('id')->on('clothing_categories')->onDelete('set null');
                 $table->unique(['tenant_id', 'name_ar']);
+            });
+
+            // Add the self-referencing FK only after the table and its primary key exist.
+            Schema::table('clothing_categories', function (Blueprint $table) {
+                $table->foreign('parent_id')
+                    ->references('id')
+                    ->on('clothing_categories')
+                    ->nullOnDelete();
             });
         }
 

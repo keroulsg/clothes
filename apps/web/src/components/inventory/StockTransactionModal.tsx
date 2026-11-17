@@ -57,10 +57,10 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
       return;
     }
 
-    if (direction === 'OUT' && currentBalance < quantity) {
+    if (direction === 'OUT' && availableQuantity < quantity) {
       setErrorMsg(isAr
-        ? `رصيد الصنف غير كافٍ للصرف! المتاح: ${currentBalance} ${item.unit_of_measure}.`
-        : `Insufficient stock for issuance! Available: ${currentBalance} ${item.unit_of_measure}.`);
+        ? `الرصيد المتاح غير المحجوز لا يكفي للصرف! المتاح بعد خصم المحجوز: ${availableQuantity} ${item.unit_of_measure}، والمطلوب: ${quantity}.`
+        : `Insufficient unreserved stock! Available after reservations: ${availableQuantity} ${item.unit_of_measure}; requested: ${quantity}.`);
       return;
     }
 

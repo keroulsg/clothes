@@ -138,49 +138,8 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
 
   // Bank Loans & Credit Facilities States
   const [finSectionView, setFinSectionView] = useState<'all' | 'accounts' | 'transfers' | 'loans'>('all');
-  const [bankLoans, setBankLoans] = useState<BankLoan[]>(() => {
-    try {
-      const saved = localStorage.getItem('garmentos_bank_loans');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return [
-      {
-        id: 'loan-nbe-01',
-        loan_number: 'LOAN-NBE-2026-001',
-        name: 'قرض تمويل ماكينات خياطة وقص وتحديث خطوط الإنتاج (مبادرة دعم الصناعة)',
-        bank_name: 'البنك الأهلي المصري - فرع المصانع',
-        contract_number: 'CTR-NBE-88921',
-        financial_account_id: 'BNK-01',
-        principal_amount: 360000,
-        interest_rate: 8,
-        interest_amount: 28800,
-        total_loan_amount: 388800,
-        paid_amount: 97200,
-        remaining_amount: 291600,
-        installments_count: 12,
-        frequency: 'monthly',
-        start_date: '2026-08-01',
-        maturity_date: '2027-07-01',
-        status: 'active',
-        notes: 'تمويل شراء 10 ماكينات سنجر ياباني كمبيوتر ومقص قماش رأسي 10 بوصة بضمان خطوط الإنتاج',
-        installments: [
-          { id: 'inst-1', installment_number: 1, due_date: '2026-09-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-09-01', payment_reference: 'TRF-NBE-0901' },
-          { id: 'inst-2', installment_number: 2, due_date: '2026-10-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-10-01', payment_reference: 'TRF-NBE-1001' },
-          { id: 'inst-3', installment_number: 3, due_date: '2026-11-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 32400, status: 'paid', paid_at: '2026-11-01', payment_reference: 'TRF-NBE-1101' },
-          { id: 'inst-4', installment_number: 4, due_date: '2026-12-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-5', installment_number: 5, due_date: '2027-01-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-6', installment_number: 6, due_date: '2027-02-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-7', installment_number: 7, due_date: '2027-03-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-8', installment_number: 8, due_date: '2027-04-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-9', installment_number: 9, due_date: '2027-05-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-10', installment_number: 10, due_date: '2027-06-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-11', installment_number: 11, due_date: '2027-07-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-          { id: 'inst-12', installment_number: 12, due_date: '2027-08-01', principal_amount: 30000, interest_amount: 2400, total_amount: 32400, paid_amount: 0, status: 'pending' },
-        ],
-      },
-    ];
-  });
-
+  // Loan records are not yet backed by a server API; never load fabricated/local-only contracts.
+  const [bankLoans] = useState<BankLoan[]>([]);
   const [selectedLoanForSchedule, setSelectedLoanForSchedule] = useState<BankLoan | null>(null);
   const [selectedLoanForPrint, setSelectedLoanForPrint] = useState<BankLoan | null>(null);
   const [isNewLoanModalOpen, setIsNewLoanModalOpen] = useState(false);
@@ -196,14 +155,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
   const [loanInstallmentsCount, setLoanInstallmentsCount] = useState<number>(12);
   const [loanFrequency, setLoanFrequency] = useState<'monthly' | 'quarterly'>('monthly');
   const [loanStartDate, setLoanStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [loanNotes, setLoanNotes] = useState('');
   const [loanFinancialAccId, setLoanFinancialAccId] = useState('');
 
   // Pay Installment Form State
   const [payInstDate, setPayInstDate] = useState(new Date().toISOString().split('T')[0]);
   const [payInstPaymentAccId, setPayInstPaymentAccId] = useState('');
   const [payInstRef, setPayInstRef] = useState('');
-  const [payInstNotes, setPayInstNotes] = useState('');
 
   const [selectedAccountForStatement, setSelectedAccountForStatement] = useState<ChartOfAccount | null>(null);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
@@ -909,214 +866,18 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
     }
   };
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('garmentos_bank_loans', JSON.stringify(bankLoans));
-    } catch (e) {}
-  }, [bankLoans]);
-
   const handleCreateLoan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loanName || loanPrincipal <= 0 || loanInstallmentsCount <= 0) return;
-
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    try {
-      const calculatedInterest = Math.round(loanPrincipal * (loanInterestRate / 100));
-      const totalAmount = loanPrincipal + calculatedInterest;
-      const principalPerInst = Math.round(loanPrincipal / loanInstallmentsCount);
-      const interestPerInst = Math.round(calculatedInterest / loanInstallmentsCount);
-      const totalPerInst = principalPerInst + interestPerInst;
-
-      const generatedInstallments: BankLoanInstallment[] = [];
-      const baseDate = new Date(loanStartDate || new Date());
-
-      for (let i = 1; i <= loanInstallmentsCount; i++) {
-        const instDate = new Date(baseDate);
-        if (loanFrequency === 'monthly') {
-          instDate.setMonth(instDate.getMonth() + i);
-        } else {
-          instDate.setMonth(instDate.getMonth() + i * 3);
-        }
-
-        generatedInstallments.push({
-          id: `inst-${Date.now()}-${i}`,
-          installment_number: i,
-          due_date: instDate.toISOString().split('T')[0],
-          principal_amount: i === loanInstallmentsCount ? (loanPrincipal - principalPerInst * (loanInstallmentsCount - 1)) : principalPerInst,
-          interest_amount: i === loanInstallmentsCount ? (calculatedInterest - interestPerInst * (loanInstallmentsCount - 1)) : interestPerInst,
-          total_amount: totalPerInst,
-          paid_amount: 0,
-          status: 'pending',
-        });
-      }
-
-      const maturity = generatedInstallments[generatedInstallments.length - 1]?.due_date || loanStartDate;
-
-      const newLoanObj: BankLoan = {
-        id: `loan-${Date.now()}`,
-        loan_number: `LOAN-${(loanBankName.includes('الأهلي') ? 'NBE' : loanBankName.includes('مصر') ? 'BM' : 'BNK')}-${new Date().getFullYear()}-${String(bankLoans.length + 1).padStart(3, '0')}`,
-        name: loanName,
-        bank_name: loanBankName,
-        contract_number: loanContractNum || `CTR-${Math.floor(10000 + Math.random() * 90000)}`,
-        financial_account_id: loanFinancialAccId || undefined,
-        principal_amount: loanPrincipal,
-        interest_rate: loanInterestRate,
-        interest_amount: calculatedInterest,
-        total_loan_amount: totalAmount,
-        paid_amount: 0,
-        remaining_amount: totalAmount,
-        installments_count: loanInstallmentsCount,
-        frequency: loanFrequency,
-        start_date: loanStartDate,
-        maturity_date: maturity,
-        status: 'active',
-        notes: loanNotes,
-        installments: generatedInstallments,
-      };
-
-      setBankLoans((prev) => [newLoanObj, ...prev]);
-
-      try {
-        const loanLiabilityAcc = accounts.find((a) => a.code === '2110' || a.code === '2210');
-        const selectedFinAcc = financialAccounts.find((fa) => fa.id === loanFinancialAccId);
-        const bankAssetAcc = accounts.find((a) => a.id === selectedFinAcc?.chart_of_account_id || a.code === '1021');
-
-        if (loanLiabilityAcc && bankAssetAcc) {
-          await api.accounting.createJournalEntry({
-            description: `إثبات استلام وتسييل تمويل بنكي: ${loanName} (${newLoanObj.loan_number})`,
-            entry_date: loanStartDate,
-            reference_type: 'bank_loan_disbursement',
-            lines: [
-              {
-                account_id: bankAssetAcc.id,
-                debit: Number(loanPrincipal),
-                credit: 0,
-                description: `إيداع مبلغ القرض بحساب ${bankAssetAcc.name}`,
-              },
-              {
-                account_id: loanLiabilityAcc.id,
-                debit: 0,
-                credit: Number(loanPrincipal),
-                description: `إثبات التزام قرض وتسهيل بنكي - ${loanBankName}`,
-              },
-            ],
-          });
-          await loadAccountingData();
-          await loadFinancialAccounts();
-        }
-      } catch (jeErr) {}
-
-      setIsNewLoanModalOpen(false);
-      setLoanName('');
-      setLoanContractNum('');
-      setLoanNotes('');
-      setSuccessMsg(isAr ? 'تم تسجيل القرض وتوليد جدول الأقساط الشهرية وترحيل القيد آلياً بنجاح' : 'Bank loan registered and amortization schedule generated successfully');
-      setTimeout(() => setSuccessMsg(null), 4000);
-    } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل القرض' : 'Failed to register loan'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    setErrorMsg(isAr
+      ? 'تسجيل القروض غير متاح حالياً لأن واجهة حفظ القروض وجدول الأقساط في الخادم لم تُنفذ بعد. لم يتم حفظ أي بيانات.'
+      : 'Loan registration is unavailable because server-side loan and installment persistence is not implemented. Nothing was saved.');
   };
 
-  const handlePayInstallment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedInstallmentForPay) return;
-
-    const { loan, installment } = selectedInstallmentForPay;
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    try {
-      const updatedLoans = bankLoans.map((l) => {
-        if (l.id !== loan.id) return l;
-        const updatedInsts = l.installments.map((inst) => {
-          if (inst.id !== installment.id) return inst;
-          return {
-            ...inst,
-            status: 'paid' as const,
-            paid_amount: inst.total_amount,
-            paid_at: payInstDate || new Date().toISOString().split('T')[0],
-            payment_account_id: payInstPaymentAccId || undefined,
-            payment_reference: payInstRef || undefined,
-            notes: payInstNotes || undefined,
-          };
-        });
-
-        const newPaid = updatedInsts.filter((i) => i.status === 'paid').reduce((sum, i) => sum + Number(i.total_amount), 0);
-        const newRemaining = Math.max(0, l.total_loan_amount - newPaid);
-
-        return {
-          ...l,
-          paid_amount: newPaid,
-          remaining_amount: newRemaining,
-          status: newRemaining <= 0 ? ('completed' as const) : ('active' as const),
-          installments: updatedInsts,
-        };
-      });
-
-      setBankLoans(updatedLoans);
-
-      try {
-        const loanLiabilityAcc = accounts.find((a) => a.code === '2110' || a.code === '2120' || a.code === '2210');
-        const interestAcc = accounts.find((a) => a.code === '6040' || a.category?.includes('interest') || a.code.startsWith('6'));
-        const payFinAcc = financialAccounts.find((fa) => fa.id === payInstPaymentAccId);
-        const payCoaAcc = accounts.find((a) => a.id === payFinAcc?.chart_of_account_id || a.code === '1021' || a.code === '1010');
-
-        if (loanLiabilityAcc && payCoaAcc) {
-          const lines: any[] = [
-            {
-              account_id: loanLiabilityAcc.id,
-              debit: Number(installment.principal_amount),
-              credit: 0,
-              description: `سداد أصل القسط رقم (${installment.installment_number}) - ${loan.loan_number}`,
-            },
-          ];
-
-          if (Number(installment.interest_amount) > 0 && interestAcc) {
-            lines.push({
-              account_id: interestAcc.id,
-              debit: Number(installment.interest_amount),
-              credit: 0,
-              description: `فائدة القسط رقم (${installment.installment_number}) - ${loan.bank_name}`,
-            });
-          }
-
-          lines.push({
-            account_id: payCoaAcc.id,
-            debit: 0,
-            credit: Number(installment.total_amount),
-            description: `خصم سداد القسط البنكي من: ${payCoaAcc.name}`,
-          });
-
-          await api.accounting.createJournalEntry({
-            description: `سداد قسط بنكي رقم ${installment.installment_number} لقرض [${loan.name}]`,
-            entry_date: payInstDate || new Date().toISOString().split('T')[0],
-            reference_type: 'bank_loan_repayment',
-            lines,
-          });
-
-          await loadAccountingData();
-          await loadFinancialAccounts();
-        }
-      } catch (jeErr) {}
-
-      const currLoan = updatedLoans.find((l) => l.id === loan.id);
-      if (currLoan && selectedLoanForSchedule?.id === loan.id) {
-        setSelectedLoanForSchedule(currLoan);
-      }
-
-      setIsPayInstallmentModalOpen(false);
-      setSelectedInstallmentForPay(null);
-      setPayInstRef('');
-      setPayInstNotes('');
-      setSuccessMsg(isAr ? 'تم سداد القسط البنكي بنجاح وترحيل القيد المحاسبي المزدوج وتحديث الأرصدة' : 'Installment paid successfully and journal entry posted');
-      setTimeout(() => setSuccessMsg(null), 4000);
-    } catch (err: any) {
-      setErrorMsg(err?.message || (isAr ? 'فشل تسجيل سداد القسط' : 'Failed to pay installment'));
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handlePayInstallment = async () => {
+    setErrorMsg(isAr
+      ? 'سداد الأقساط غير متاح حتى يتم ربط سجل القروض والأقساط بقاعدة البيانات.'
+      : 'Installment payment is unavailable until loans and installments are persisted by the backend.');
+    setIsPayInstallmentModalOpen(false);
   };
 
   const handleCreateCostCenter = async (e: React.FormEvent) => {
@@ -2725,11 +2486,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  onClick={() => setIsNewLoanModalOpen(true)}
-                  className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs"
+                  disabled
+                  title={isAr ? 'غير متاح حتى ربط القروض بقاعدة البيانات' : 'Unavailable until backend loan persistence is implemented'}
+                  className="bg-slate-400 text-white font-bold text-xs cursor-not-allowed"
                   icon={<CreditCard className="w-3.5 h-3.5" />}
                 >
-                  {isAr ? '+ تسجيل قرض بنكي جديد' : '+ New Loan'}
+                  {isAr ? 'تسجيل القروض غير متاح حالياً' : 'Loan registration unavailable'}
                 </Button>
               </div>
             </div>
@@ -3282,11 +3044,12 @@ export const AccountingTab: React.FC<AccountingTabProps> = ({ lang }) => {
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
-                      onClick={() => setIsNewLoanModalOpen(true)}
-                      className="bg-[#7F1625] hover:bg-[#961b2c] text-white font-bold text-xs shadow-xs"
+                      disabled
+                      title={isAr ? 'غير متاح حتى ربط القروض بقاعدة البيانات' : 'Unavailable until backend loan persistence is implemented'}
+                      className="bg-slate-400 text-white font-bold text-xs cursor-not-allowed"
                       icon={<Plus className="w-3.5 h-3.5" />}
                     >
-                      {isAr ? '+ تسجيل قرض أو تسهيل جديد' : '+ New Bank Loan'}
+                      {isAr ? 'القروض غير متاحة حالياً' : 'Loans unavailable'}
                     </Button>
                   </div>
                 </div>

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\InventoryItem;
+use App\Models\User;
 use App\Models\InventoryTransaction;
 use App\Models\Tenant;
 use App\Models\Warehouse;
@@ -27,6 +29,7 @@ class ConcurrencyIntegrationTest extends TestCase
     use RefreshDatabase;
 
     private Tenant $tenant;
+    private Branch $branch;
     private Warehouse $warehouse;
     private InventoryItem $item;
     private InventoryService $inventoryService;
@@ -42,8 +45,18 @@ class ConcurrencyIntegrationTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->branch = Branch::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tenant->id,
+            'name' => 'فرع التزامن',
+            'code' => 'BR-CONCURRENCY',
+            'type' => 'factory',
+            'is_main' => true,
+            'is_active' => true,
+        ]);
+
         $this->warehouse = Warehouse::withoutGlobalScopes()->create([
             'tenant_id' => $this->tenant->id,
+            'branch_id' => $this->branch->id,
             'name' => 'مخزن النزاهة المركزي',
             'code' => 'WH-CONC-01',
             'type' => 'fabric',
@@ -126,6 +139,7 @@ class ConcurrencyIntegrationTest extends TestCase
             'role' => 'warehouse_manager',
             'is_active' => true,
         ]);
+        $user->branches()->sync([$this->branch->id]);
         \Laravel\Sanctum\Sanctum::actingAs($user);
 
         $supplier = \App\Models\Supplier::withoutGlobalScopes()->create([
